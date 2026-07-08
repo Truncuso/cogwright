@@ -1,0 +1,13 @@
+{
+  "name": "cogwright",
+  "owner": {
+    "name": "Christoph Unger"
+  },
+  "plugins": [
+    {
+      "name": "goalforge",
+      "source": "./plugins/goalforge",
+      "description": "Spec-driven development chain — goal-object work packages, harden/execute/verify lifecycle for Claude Code."
+    }
+  ]
+}
