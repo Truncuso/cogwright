@@ -1,0 +1,5 @@
+{
+  "name": "goalforge",
+  "version": "0.1.0",
+  "description": "Spec-driven development chain — goal-object work packages, harden/execute/verify lifecycle for Claude Code."
+}
