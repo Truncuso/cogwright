@@ -43,6 +43,9 @@ jobs:
 
               plugin_manifest = load_json(plugin_json_path)
               assert "name" in plugin_manifest, f"{plugin_json_path} missing top-level 'name'"
+              assert plugin_manifest["name"] == entry["name"], (
+                  f"{plugin_json_path} name {plugin_manifest['name']!r} != marketplace entry {entry['name']!r}"
+              )
 
               hooks_path = os.path.join(source, "hooks", "hooks.json")
               if os.path.isfile(hooks_path):
