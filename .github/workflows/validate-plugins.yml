@@ -1,0 +1,52 @@
+name: Validate Plugins
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Validate marketplace and plugin manifests
+        run: |
+          python3 - <<'EOF'
+          import json
+          import os
+          import sys
+
+          def load_json(path):
+              with open(path, "r", encoding="utf-8") as f:
+                  return json.load(f)
+
+          marketplace_path = ".claude-plugin/marketplace.json"
+          marketplace = load_json(marketplace_path)
+
+          assert "name" in marketplace, f"{marketplace_path} missing top-level 'name'"
+          plugins = marketplace.get("plugins", [])
+          assert isinstance(plugins, list) and plugins, f"{marketplace_path} missing non-empty 'plugins' array"
+
+          for entry in plugins:
+              assert entry.get("name"), f"plugin entry missing 'name': {entry}"
+              source = entry.get("source")
+              assert source, f"plugin entry missing 'source': {entry}"
+
+              plugin_json_path = os.path.join(source, ".claude-plugin", "plugin.json")
+              assert os.path.isfile(plugin_json_path), f"missing {plugin_json_path}"
+
+              plugin_manifest = load_json(plugin_json_path)
+              assert "name" in plugin_manifest, f"{plugin_json_path} missing top-level 'name'"
+
+              hooks_path = os.path.join(source, "hooks", "hooks.json")
+              if os.path.isfile(hooks_path):
+                  load_json(hooks_path)
+
+          print("All plugin manifests valid.")
+          EOF
