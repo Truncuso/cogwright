@@ -5,7 +5,7 @@ A Claude Code plugin marketplace monorepo.
 ## Quickstart
 
 ```
-/plugin marketplace add cunger/cogwright
+/plugin marketplace add Truncuso/cogwright
 /plugin install goalforge@cogwright
 ```
 
