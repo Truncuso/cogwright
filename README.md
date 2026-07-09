@@ -9,6 +9,7 @@ The thesis: agentic coding gets reliable when the *process* is engineered — go
 ```
 /plugin marketplace add Truncuso/cogwright
 /plugin install goalforge@cogwright
+/plugin install xquik-x-data@cogwright
 ```
 
 Most systems install standalone: relations declared as `recommends` degrade gracefully — a missing companion produces a warning, not a failure. A declared `requires` edge is hard: goalforge hard-requires the interview plugin. This marketplace names the dependency's source repository; the version is resolved at install time from `interview--v<version>` git tags on that repository, matched against the declared range, and the matched tag's `ref`/`sha` override the marketplace entry's pin.
@@ -89,6 +90,7 @@ Full package→plugin pipeline, relations map, and the daily workflow:
 |---|---|---|
 | **goalforge** | **shipped** (v3.0.0) | Goal-and-verification-driven development chain: capture → spec → decompose → harden → execute → verify. Work packages are *goal objects* — outcome, verification strategy, constraints, boundaries — so "done" is machine-decidable wherever possible. 18 skills — 15 chain stages plus `wayfind`, `prototype`, and `brief`. |
 | **interview** | **shipped** (v1.0.3) | Interview engine plugin (source repo: [elicitforge](https://github.com/Truncuso/elicitforge)) — grills plans, specs, and ideas before they're acted on, via typed presets (`/interview` with `preset: <name>`) or a bare grill (`/grill`); goalforge's harden stage delegates to it. |
+| **xquik-x-data** | **shipped** (v0.1.0) | Source-backed Xquik REST API and remote MCP workflow guidance with read-only defaults and explicit approval gates. |
 | **project-onboard** | in development | One front door that sets up a new *or* existing project with the full agentic surface: git + guardrail hooks, intent interview, memory/doc spine, retrieval indexes — interactive for new projects, plan-only auto mode for existing ones. |
 | **agent-dispatch** | planned (next) | Route work to the right model/provider (Anthropic, DeepSeek, Z.AI, Ollama, OpenRouter) with explicit model+effort per dispatch. |
 | **agentic-memory** | planned *(working name — final name pending)* | File-backed typed memory vault with session injection, semantic recall, and distillation. |
