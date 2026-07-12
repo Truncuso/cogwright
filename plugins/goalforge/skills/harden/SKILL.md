@@ -226,7 +226,7 @@ grinding the interview — its LOGIC.md/UI.md findings come back as the answer.
 
 Treat an **incomplete goal block** as open questions and feed the missing facets
 to `interview-loop` so they are driven to zero. Schema:
-`~/.claude/skills/sdd/references/schema.md` §Goal object. A facet is incomplete when:
+`references/schema.md` §Goal object. A facet is incomplete when:
 
 - **`goal.outcome`** is vague, empty, or not a measurable end-state sentence.
 - **`goal.verification.strategy`** is unset or outside
@@ -448,7 +448,7 @@ For a WP outside the signal-scoped class, any automated action stops at
 ## Plans root
 
 The `<wp-path>` argument points to a WP folder inside `<PLANS_ROOT>/<feature>/`.
-Resolve `<PLANS_ROOT>` per `~/.claude/skills/sdd/references/schema.md`
+Resolve `<PLANS_ROOT>` per `references/schema.md`
 §PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
 global `~/.claude/plans/`.
 

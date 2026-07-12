@@ -5,6 +5,7 @@
 # We assert the documented guarantees of the full sub-cycle procedure.
 # The behavioral verification of actual task dispatch requires a live model.
 set -euo pipefail
+: "${COGWRIGHT_ROOT:=$HOME/10_projects/cogwright}"
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"

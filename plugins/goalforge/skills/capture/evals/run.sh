@@ -3,6 +3,7 @@
 # All checks are static-contract (skill transforms markdown via model;
 # behavioral output cannot be asserted without a model call).
 set -euo pipefail
+: "${COGWRIGHT_ROOT:=$HOME/10_projects/cogwright}"
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"

@@ -157,7 +157,7 @@ fi
 # pre-commit hook, which is likewise per-feature scoped.
 validate_feature() {  # $1 = slug
     if ! "$VALIDATE" --feature "$1" --strict "$ROOT" >/dev/null 2>&1; then
-        echo "sdd-archive: validator FAILED for $1 — run: sdd-validate.sh --feature $1 --strict --show $ROOT" >&2
+        echo "sdd-archive: validator FAILED for $1 — run: goalforge-validate.sh --feature $1 --strict --show $ROOT" >&2
         return 5
     fi
 }

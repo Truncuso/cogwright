@@ -20,7 +20,7 @@ requirements are met. Delegates to `superpowers:verification-before-completion`.
 ## Plans root
 
 The `<wp-path>` argument points to a WP folder inside `<PLANS_ROOT>/<feature>/`.
-Resolve `<PLANS_ROOT>` per `~/.claude/skills/sdd/references/schema.md`
+Resolve `<PLANS_ROOT>` per `references/schema.md`
 §PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
 global `~/.claude/plans/`.
 
@@ -37,7 +37,7 @@ Before any verification work begins, this skill performs a hard gate check.
 2. **`findings.md` exists** — the WP folder must contain a `findings.md` file.
 
 This is the structural precondition; the final invariant from
-`sdd/references/schema.md` — `verified` ⇒ all child tasks `verified` +
+`references/schema.md` — `verified` ⇒ all child tasks `verified` +
 `findings.md` exists — is satisfied by the promotion step in Completion below.
 
 If either condition is not met, the skill MUST:

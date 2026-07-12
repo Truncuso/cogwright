@@ -23,7 +23,7 @@ It is **advisory**. It reads, reconstructs, and reports — it never changes a
 status, never blocks the `executing → verified` transition, and never rewrites
 any plan file's authority fields. `goalforge-verify` remains the sole status authority.
 
-Schema reference: `~/.claude/skills/sdd/references/schema.md`.
+Schema reference: `references/schema.md`.
 
 ## Scope — semantic only (boundary)
 

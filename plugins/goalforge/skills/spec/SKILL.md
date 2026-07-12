@@ -25,8 +25,8 @@ goal block. Invoking goalforge-spec on a fast feature is the deliberate promotio
 path (the feature outgrew the fast route — e.g. 3+ WPs or a cross-WP
 contract): author the spec retroactively and flip `route: full` with a note.
 
-Schema reference: `~/.claude/skills/sdd/references/schema.md`.
-Templates: `~/.claude/skills/sdd/references/templates/`.
+Schema reference: `references/schema.md`.
+Templates: `references/templates/`.
 
 ## Unattended mode (`SDD_AUTONOMY=unattended`)
 
@@ -86,7 +86,7 @@ Conduct a design pass to produce the content of `spec.md`. This involves:
 
 Author the **feature-level goal block** in the `spec.md` frontmatter. This is
 the parent goal each WP may inherit unset fields from (via `inherits_from`).
-Schema: `~/.claude/skills/sdd/references/schema.md` §Goal object. Set:
+Schema: `references/schema.md` §Goal object. Set:
 
 - **`task_type`** — `code | research | ops | writing | optimization | analysis`.
   The dominant nature of the work; defaults to `code`. Picked here so dispatch
@@ -231,12 +231,12 @@ before approving.
 ## Plans root
 
 Resolve `<PLANS_ROOT>` at runtime per the priority rules in
-`~/.claude/skills/sdd/references/schema.md` §PLANS_ROOT resolution:
+`references/schema.md` §PLANS_ROOT resolution:
 env `SDD_PLANS_DIR` → project git-root `plans/` → global `~/.claude/plans/`.
 
 ## Template reference
 
-Templates at `~/.claude/skills/sdd/references/templates/`. Stamped files carry:
+Templates at `references/templates/`. Stamped files carry:
 
 ```
 <!-- Template: feature-spec v4 (frontmatter-first, flat layout) -->

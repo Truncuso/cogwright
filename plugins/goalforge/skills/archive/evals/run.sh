@@ -6,6 +6,7 @@
 #   FIXTURE:           asserts fixture files have the correct shape for the gate contract
 #   BEHAVIORAL-STATIC: asserts the refusal template is present (static proxy for behavioral refusal)
 set -euo pipefail
+: "${COGWRIGHT_ROOT:=$HOME/10_projects/cogwright}"
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"

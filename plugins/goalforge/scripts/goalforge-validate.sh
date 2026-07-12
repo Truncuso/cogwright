@@ -983,7 +983,7 @@ def check_evolved_goal(path, fm, status):
         err(path,
             f"evolved-goal-without-reharden: goal changed after approval "
             f"(recompute {recomputed or '<none>'} != approved {approved_s})",
-            f"Re-open for re-harden: sdd-transition.sh {path.parent.name} hardened "
+            f"Re-open for re-harden: goalforge-transition.sh {path.parent.name} hardened "
             f"--reason 'goal evolved'; re-approval re-stamps goal_approved_version")
 
 def check_goal_mandatory(path, fm, kind, status):

@@ -19,8 +19,8 @@ folder per work package, each containing `overview.md`, `todo.md`, and one or
 more `task-NN-*.md` files. Fills `depends_on` and `parallel` from the spec's WP
 table.
 
-Schema reference: `~/.claude/skills/sdd/references/schema.md`.
-Templates: `~/.claude/skills/sdd/references/templates/`.
+Schema reference: `references/schema.md`.
+Templates: `references/templates/`.
 
 ## Inputs
 
@@ -387,12 +387,12 @@ records the hash before the auto-advance — else wp-01's `→ready` gate refuse
 ## Plans root
 
 Resolve `<PLANS_ROOT>` at runtime per the priority rules in
-`~/.claude/skills/sdd/references/schema.md` §PLANS_ROOT resolution:
+`references/schema.md` §PLANS_ROOT resolution:
 env `SDD_PLANS_DIR` → project git-root `plans/` → global `~/.claude/plans/`.
 
 ## Template reference
 
-Templates at `~/.claude/skills/sdd/references/templates/`. Stamped files carry
+Templates at `references/templates/`. Stamped files carry
 the appropriate marker:
 
 ```

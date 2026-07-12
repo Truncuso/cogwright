@@ -56,7 +56,7 @@ python3 "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-plan-index.py \
 
 ## Source of truth
 
-The `relationships:` frontmatter (schema: `~/.claude/skills/sdd/references/schema.md`)
+The `relationships:` frontmatter (schema: `references/schema.md`)
 is canonical. If the generated index is wrong, fix the **frontmatter**, then
 regenerate -- never patch INDEX.md by hand. An unexpected orphan means a feature's
 edges are missing from its overview.

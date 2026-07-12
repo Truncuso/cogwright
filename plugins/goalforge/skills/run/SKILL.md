@@ -144,7 +144,7 @@ non-human-gated edge; same signal-scoped conditions as policy guard).
 
 ## Status machine (reference)
 
-Full schema: `~/.claude/skills/sdd/references/schema.md`.
+Full schema: `references/schema.md`.
 
 WP stage vocabulary used as preconditions in `chain.yaml`:
 
@@ -159,10 +159,10 @@ legal `spec → ready` edge via the deterministic gates instead of harden.
 
 ## Shared references
 
-- Schema + frontmatter: `~/.claude/skills/sdd/references/schema.md`
-- Templates: `~/.claude/skills/sdd/references/templates/`
-- Specialist routing: `~/.claude/skills/sdd/references/specialist-map.yaml`
-- PLANS_ROOT resolution: `~/.claude/skills/sdd/references/schema.md`
+- Schema + frontmatter: `references/schema.md`
+- Templates: `references/templates/`
+- Specialist routing: `references/specialist-map.yaml`
+- PLANS_ROOT resolution: `references/schema.md`
   §PLANS_ROOT resolution (env `SDD_PLANS_DIR` → project git-root `plans/` →
   global `~/.claude/plans/`)
 

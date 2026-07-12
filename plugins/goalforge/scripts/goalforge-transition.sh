@@ -11,7 +11,7 @@
 # FEATURE dir/overview.md (frontmatter has `work_packages:`/`feature:` and NO
 # `plan:` key). The `plan:` key is the discriminator. WP targets validate against
 # the `## Edges` table; FEATURE targets against `## Feature edges` — both in
-#   skills/sdd/references/state-machine.md.
+#   references/state-machine.md.
 # Feature-level `→ready` skips the WP-only goal-hash gate; `archived` is not a
 # feature edge target (that terminal move lives in sdd-archive.sh only).
 #
@@ -318,16 +318,16 @@ transition() {
             fi
             APPROVED="$(read_goal_approved "$OVERVIEW")"
             if [[ -n "$APPROVED" && "$APPROVED" != "null" ]]; then
-                echo "ready refused: goal_approved_version missing or != recomputed hash (run sdd-goal-hash.sh --record $(basename "$WP_DIR"))" >&2
+                echo "ready refused: goal_approved_version missing or != recomputed hash (run goalforge-goal-hash.sh --record $(basename "$WP_DIR"))" >&2
                 return 1
             fi
         elif [[ "$GH_RC" -ne 0 ]]; then
-            echo "ready refused: goal_approved_version missing or != recomputed hash (run sdd-goal-hash.sh --record $(basename "$WP_DIR"))" >&2
+            echo "ready refused: goal_approved_version missing or != recomputed hash (run goalforge-goal-hash.sh --record $(basename "$WP_DIR"))" >&2
             return 1
         else
             APPROVED="$(read_goal_approved "$OVERVIEW")"
             if [[ -z "$APPROVED" || "$APPROVED" == "null" || "$APPROVED" != "$RECOMPUTED" ]]; then
-                echo "ready refused: goal_approved_version missing or != recomputed hash (run sdd-goal-hash.sh --record $(basename "$WP_DIR"))" >&2
+                echo "ready refused: goal_approved_version missing or != recomputed hash (run goalforge-goal-hash.sh --record $(basename "$WP_DIR"))" >&2
                 return 1
             fi
         fi

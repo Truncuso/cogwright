@@ -57,7 +57,7 @@ Hook installation is fully delegated to the existing installer:
   `pending→in-progress→implemented→verified` (`implemented` is the interim
   post-eval+commit state; `verified` is written only at the WP gate by
   `goalforge-verify`). It does NOT reference the legacy GSD 10-state lifecycle. Keep the
-  stamped block in lockstep with `sdd/references/schema.md` — it is the canonical
+  stamped block in lockstep with `references/schema.md` — it is the canonical
   vocabulary onboarded repos inherit.
 - **Not a GitHub-issues setup.** This skill does not create GitHub issues,
   triage labels, milestones, or projects. That was the removed

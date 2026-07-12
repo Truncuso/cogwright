@@ -3,6 +3,7 @@
 #   STATIC-CONTRACT: SKILL.md declares the contract
 #   BEHAVIORAL:      the generator's exit-code + render contract on fixtures
 set -euo pipefail
+: "${COGWRIGHT_ROOT:=$HOME/10_projects/cogwright}"
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"

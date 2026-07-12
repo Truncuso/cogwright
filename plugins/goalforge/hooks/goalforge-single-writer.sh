@@ -409,7 +409,7 @@ main() {
 
     field="${result%%|*}"
     file="${result#*|}"
-    echo "goalforge-single-writer: direct mutation of '${field}:' in ${file} is blocked — use the sanctioned writers sdd-transition.sh / sdd-goal-hash.sh (Bash path)." >&2
+    echo "goalforge-single-writer: direct mutation of '${field}:' in ${file} is blocked — use the sanctioned writers goalforge-transition.sh / goalforge-goal-hash.sh (Bash path)." >&2
     exit 2
 }
 

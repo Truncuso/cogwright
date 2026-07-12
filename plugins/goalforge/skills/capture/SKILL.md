@@ -18,8 +18,8 @@ Reads free-text user intent, slugifies the feature name, and stamps the initial
 feature plan files. Entry point of the `capture → spec → decompose → harden →
 execute → verify` chain.
 
-Schema reference: `~/.claude/skills/sdd/references/schema.md`.
-Templates: `~/.claude/skills/sdd/references/templates/`.
+Schema reference: `references/schema.md`.
+Templates: `references/templates/`.
 
 ## Inputs
 
@@ -192,12 +192,12 @@ ceremony is skipped. After Step 5:
 ## Plans root
 
 Resolve `<PLANS_ROOT>` at runtime per the priority rules in
-`~/.claude/skills/sdd/references/schema.md` §PLANS_ROOT resolution:
+`references/schema.md` §PLANS_ROOT resolution:
 env `SDD_PLANS_DIR` → project git-root `plans/` → global `~/.claude/plans/`.
 
 ## Template reference
 
-Templates live at `~/.claude/skills/sdd/references/templates/`. Every stamped
+Templates live at `references/templates/`. Every stamped
 file must carry the template marker as its first body line:
 
 ```

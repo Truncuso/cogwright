@@ -30,7 +30,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 # ── session / model / provider via the existing extractor (reuse, not reinvent)
-ENV_SCRIPT="$HOME/.claude/scripts/handoff-env.sh"
+# handoff-env.sh is machine-specific dotfiles infra — NOT vendored into the plugin;
+# when it is absent (standalone install), the graceful degrade to "unknown" below
+# IS the standalone behavior. Ladder: HANDOFF_ENV_SCRIPT override → default path.
+ENV_SCRIPT="${HANDOFF_ENV_SCRIPT:-$HOME/.claude/scripts/handoff-env.sh}"
 SESSION="unknown"; MODEL="unknown"; PROVIDER="unknown"
 if [[ -f "$ENV_SCRIPT" ]]; then
     ENV_JSON="$(bash "$ENV_SCRIPT" --json 2>/dev/null || true)"

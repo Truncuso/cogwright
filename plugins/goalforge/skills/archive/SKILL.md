@@ -23,12 +23,12 @@ between a replacing feature and the one it replaced.
 `goalforge-verify` advances a feature to `completed` (last-WP rule) and then *offers*
 archival; this skill performs it on request.
 
-Schema reference: `~/.claude/skills/sdd/references/schema.md`.
+Schema reference: `references/schema.md`.
 
 ## Plans root
 
 `<feature>` (and `--supersedes <old>`) name folders inside `<PLANS_ROOT>/`.
-Resolve `<PLANS_ROOT>` per `~/.claude/skills/sdd/references/schema.md`
+Resolve `<PLANS_ROOT>` per `references/schema.md`
 §PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
 global `~/.claude/plans/`.
 

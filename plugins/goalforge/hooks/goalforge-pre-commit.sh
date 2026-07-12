@@ -15,7 +15,22 @@
 _sdd_pre_commit_main() {
     set -uo pipefail
 
-    local VALIDATE_SCRIPT="${SDD_VALIDATE_SCRIPT:-$HOME/.claude/skills/sdd/scripts/sdd-validate.sh}"
+    # ── Resolve validator via ladder ──────────────────────────────────────
+    #   1. SDD_VALIDATE_SCRIPT env override (tests)
+    #   2. $CLAUDE_PLUGIN_ROOT/scripts/goalforge-validate.sh (plugin runtime)
+    #   3. script-relative ../scripts/goalforge-validate.sh (BASH_SOURCE dir)
+    #   4. legacy dotfiles $HOME/.claude/skills/sdd/scripts/sdd-validate.sh
+    local _hook_dir VALIDATE_SCRIPT
+    _hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+    if [[ -n "${SDD_VALIDATE_SCRIPT:-}" ]]; then
+        VALIDATE_SCRIPT="$SDD_VALIDATE_SCRIPT"
+    elif [[ -n "${CLAUDE_PLUGIN_ROOT:-}" && -f "$CLAUDE_PLUGIN_ROOT/scripts/goalforge-validate.sh" ]]; then
+        VALIDATE_SCRIPT="$CLAUDE_PLUGIN_ROOT/scripts/goalforge-validate.sh"
+    elif [[ -f "$_hook_dir/../scripts/goalforge-validate.sh" ]]; then
+        VALIDATE_SCRIPT="$(cd "$_hook_dir/../scripts" && pwd)/goalforge-validate.sh"
+    else
+        VALIDATE_SCRIPT="$HOME/.claude/skills/sdd/scripts/sdd-validate.sh"
+    fi
 
     # ── Zero-breakage: validator absent or not executable ──────────────────
     if [[ ! -e "$VALIDATE_SCRIPT" ]]; then

@@ -17,7 +17,7 @@ hooks:
 ## Plans root
 
 `<wp-path>` points to a WP folder in `<PLANS_ROOT>/<feature>/`. Resolve
-`<PLANS_ROOT>` per `~/.claude/skills/sdd/references/schema.md` §PLANS_ROOT
+`<PLANS_ROOT>` per `references/schema.md` §PLANS_ROOT
 resolution (env `SDD_PLANS_DIR` → project git-root `plans/` → global
 `~/.claude/plans/`).
 
@@ -339,7 +339,7 @@ second-opinion are amortized to the WP boundary, Step 7 / `goalforge-verify`):
 
 **On failure:** loop back to Step 5 (re-dispatch via `implement`) with the full
 failure output as context. The retry cap is **`SDD_MAX_RETRIES`** (default 3;
-resolved per `sdd/references/schema.md` §Retry budget resolution). On hitting the
+resolved per `references/schema.md` §Retry budget resolution). On hitting the
 cap, append a blocker to `<wp>/findings.md` (the task name, all failure output
 from the final attempt, the retry count as `attempt N / SDD_MAX_RETRIES`) and
 escalate via `AskUserQuestion` — **never silent-pass** a failing eval.
