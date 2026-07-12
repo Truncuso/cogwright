@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-spec static-contract checks
+# evals/run.sh — goalforge-spec static-contract checks
 # All checks are static-contract (design pass + spec writing requires model).
 set -euo pipefail
 
@@ -21,10 +21,10 @@ check() {
   fi
 }
 
-echo "=== sdd-spec: static-contract checks ==="
+echo "=== goalforge-spec: static-contract checks ==="
 
 # Identity
-check "skill name declared" "name: sdd-spec"
+check "skill name declared" "name: goalforge-spec"
 
 # Input contract
 check "input is overview.md with status draft" "status: draft"

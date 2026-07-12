@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-verify checks
+# evals/run.sh — goalforge-verify checks
 #
 # Check types:
 #   STATIC-CONTRACT: asserts SKILL.md declares the correct contract
@@ -45,10 +45,10 @@ file_check() {
   fi
 }
 
-echo "=== sdd-verify: contract + fixture checks ==="
+echo "=== goalforge-verify: contract + fixture checks ==="
 
 # STATIC-CONTRACT: identity
-check STATIC-CONTRACT "skill name declared" "name: sdd-verify"
+check STATIC-CONTRACT "skill name declared" "name: goalforge-verify"
 
 # STATIC-CONTRACT: preconditions
 check STATIC-CONTRACT "precondition: all tasks implemented" "All child tasks are \`implemented\`"
@@ -80,7 +80,7 @@ check STATIC-CONTRACT "wp-02: executor-divergence cause named in refusal" "execu
 check STATIC-CONTRACT "wp-02: implement declares it never advances task status" "never advances task" "$IMPLEMENT_MD"
 
 # BEHAVIORAL-STATIC: refusal template present
-check BEHAVIORAL-STATIC "refusal template: sdd-verify REFUSED" "sdd-verify REFUSED"
+check BEHAVIORAL-STATIC "refusal template: goalforge-verify REFUSED" "goalforge-verify REFUSED"
 check BEHAVIORAL-STATIC "refusal lists unverified tasks by name" "task-01-foo"
 check BEHAVIORAL-STATIC "refusal reports findings.md presence" "findings.md: [present | MISSING]"
 
@@ -89,14 +89,14 @@ check STATIC-CONTRACT "do not advance status on failure" "Do **not** advance"
 
 # STATIC-CONTRACT: completion step 5 — commit-gate + ensure-committed
 check STATIC-CONTRACT "step 5 commits only feature artifacts" "git add <PLANS_ROOT>/<feature>"
-check STATIC-CONTRACT "step 5 ensure-committed gate references the script" "sdd-ensure-committed.sh"
+check STATIC-CONTRACT "step 5 ensure-committed gate references the script" "goalforge-ensure-committed.sh"
 check STATIC-CONTRACT "commit gate is path-scoped" "path-scoped (unrelated dirt"
 check STATIC-CONTRACT "commit gate passes on master (dotfiles exception)" "passes on \`master\` under the dotfiles exception"
 
 # STATIC-CONTRACT: completion step 6 — archive is gated, not automatic
-check STATIC-CONTRACT "step 6 archive offer via sdd-archive" "sdd-archive <feature> [--supersedes <old>]"
-check STATIC-CONTRACT "sdd-verify never writes feature status: archived" "sdd-verify never writes a feature to"
-check STATIC-CONTRACT "transition: completed → archived via sdd-archive" "feature: completed → archived (explicit user action only — via sdd-archive)"
+check STATIC-CONTRACT "step 6 archive offer via goalforge-archive" "goalforge-archive <feature> [--supersedes <old>]"
+check STATIC-CONTRACT "goalforge-verify never writes feature status: archived" "goalforge-verify never writes a feature to"
+check STATIC-CONTRACT "transition: completed → archived via goalforge-archive" "feature: completed → archived (explicit user action only — via goalforge-archive)"
 
 # FIXTURE: wp-executing directory
 WP_DIR="$SKILL_DIR/evals/fixtures/wp-executing"

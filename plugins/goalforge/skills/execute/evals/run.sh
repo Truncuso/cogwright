@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-execute static-contract checks
+# evals/run.sh — goalforge-execute static-contract checks
 #
 # All checks are STATIC-CONTRACT (no model calls, no network).
 # We assert the documented guarantees of the full sub-cycle procedure.
@@ -42,10 +42,10 @@ file_check() {
   fi
 }
 
-echo "=== sdd-execute: static-contract checks (WP-03) ==="
+echo "=== goalforge-execute: static-contract checks (WP-03) ==="
 
 # --- Identity ---
-check "skill name declared" "name: sdd-execute"
+check "skill name declared" "name: goalforge-execute"
 
 # --- Entry: state transition ---
 check "precondition is $SK ready" "$SK ready"
@@ -126,7 +126,7 @@ check "outer loop conditioned on goal strategy" "conditioned"
 check "deterministic runs once then gates (outer_max_iter = 1)" "outer_max_iter = 1"
 check "numeric not collapsed (Principle-6 loop)" "Do not collapse"
 check "reason → task re-open (Step 9.5)" "reopen_task_from_reason"
-check "re-open PARK / sdd-redecompose fallback" "sdd-redecompose"
+check "re-open PARK / goalforge-redecompose fallback" "goalforge-redecompose"
 check "WP exit reached when tasks implemented" "every task is \`implemented\`"
 
 # --- Fixture ---
@@ -139,7 +139,7 @@ fi
 # --- Goal layer: static-contract (WP-03 outer loop) ---
 check "outer goal-completion loop documented" "Outer goal-completion loop"
 check "resolve_effective_goal called at entry (single owner)" "resolve_effective_goal"
-check "pure sdd-goal-eval invoked each iteration" "sdd-goal-eval"
+check "pure goalforge-goal-eval invoked each iteration" "goalforge-goal-eval"
 check "outer_max_iter cap (default 3)" "outer_max_iter"
 check "outer cap independent of inner 3-retry" "independent of"
 check "agent acts on judge directive" "dispatch: judge"
@@ -147,17 +147,17 @@ check "judge met-mapping via block_on severities" "block_on"
 check "human strategy is non-blocking (pause/exit)" "non-blocking"
 check "reason-feedback carried into next iteration" "Reason-feedback"
 check "blocked_stop escalation path" "blocked_stop"
-check "single status-advance: sdd-verify sole authority" "sole authority"
+check "single status-advance: goalforge-verify sole authority" "sole authority"
 check "outer gate does not write $SK verified itself" "does **not** write"
 check "outer re-entry respects resume idempotency" "RESPECTS resume idempotency"
 
-# --- Goal layer: REAL behavioral (drives WP-02 sdd-goal-eval.py) ---
+# --- Goal layer: REAL behavioral (drives WP-02 goalforge-goal-eval.py) ---
 # Deterministic signal: the spine's decision logic is exercised, not just prose.
-echo "=== sdd-execute: goal-loop behavioral checks (real sdd-goal-eval.py) ==="
-GOAL_EVAL="$HOME/.claude/skills/sdd/scripts/sdd-goal-eval.py"
+echo "=== goalforge-execute: goal-loop behavioral checks (real goalforge-goal-eval.py) ==="
+GOAL_EVAL=""$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-goal-eval.py"
 GL="$SKILL_DIR/evals/fixtures/goal-loop"
 if [ ! -f "$GOAL_EVAL" ]; then
-  echo "  FAIL: sdd-goal-eval.py not found (WP-02 dependency) — $GOAL_EVAL"
+  echo "  FAIL: goalforge-goal-eval.py not found (WP-02 dependency) — $GOAL_EVAL"
   FAIL=$((FAIL+1))
 else
   BEHAVIOR=$(python3 - "$GOAL_EVAL" "$GL" <<'PYEOF'

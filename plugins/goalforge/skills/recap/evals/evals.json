@@ -1,5 +1,5 @@
 {
-  "skill_name": "sdd-recap",
+  "skill_name": "goalforge-recap",
   "evals": [
     {
       "id": 1,
@@ -7,14 +7,14 @@
       "expected_output": "Creates recap.md with header '# Recap — session-memory-pipeline' and maintenance comment.",
       "files": [],
       "expectations": [
-        "SKILL.md declares name: sdd-recap",
+        "SKILL.md declares name: goalforge-recap",
         "SKILL.md documents recap.md as the output file",
         "recap.sh init creates the file and is idempotent (running twice = no-op)"
       ]
     },
     {
       "id": 2,
-      "prompt": "After sdd-execute completes task 'implement-schema' in WP wp-02 with result ok, record it in the feature recap.",
+      "prompt": "After goalforge-execute completes task 'implement-schema' in WP wp-02 with result ok, record it in the feature recap.",
       "expected_output": "Appends a task row under ## wp-02 with the task slug, short commit hash, and result 'ok'. If wp-02 section is absent it is created.",
       "files": [],
       "expectations": [
@@ -25,7 +25,7 @@
     },
     {
       "id": 3,
-      "prompt": "sdd-execute re-ran task 'run-tests' in wp-03 for the second time because the first attempt failed with a timeout. Record this loop-back.",
+      "prompt": "goalforge-execute re-ran task 'run-tests' in wp-03 for the second time because the first attempt failed with a timeout. Record this loop-back.",
       "expected_output": "Adds a Loop-backs: entry: '- iter 2: timeout (re-executed run-tests)' under the wp-03 section.",
       "files": [],
       "expectations": [
@@ -47,7 +47,7 @@
     },
     {
       "id": 5,
-      "prompt": "All WPs for feature 'sdd-orchestration-layer' are finalized. Generate the feature rollup.",
+      "prompt": "All WPs for feature 'goalforge-orchestration-layer' are finalized. Generate the feature rollup.",
       "expected_output": "Rewrites ## Feature rollup with counts: e.g. '3 green, 1 yellow, 0 red (of 4 WPs)'. Running rollup twice produces the same section (idempotent).",
       "files": [],
       "expectations": [

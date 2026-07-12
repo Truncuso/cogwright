@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-archive checks
+# evals/run.sh — goalforge-archive checks
 #
 # Check types:
 #   STATIC-CONTRACT:   asserts SKILL.md declares the correct contract
@@ -40,10 +40,10 @@ file_check() {
   fi
 }
 
-echo "=== sdd-archive: contract + fixture checks ==="
+echo "=== goalforge-archive: contract + fixture checks ==="
 
 # STATIC-CONTRACT: identity
-check STATIC-CONTRACT "skill name declared" "name: sdd-archive"
+check STATIC-CONTRACT "skill name declared" "name: goalforge-archive"
 check STATIC-CONTRACT "version metadata present" "version: 1.4.0"
 
 # STATIC-CONTRACT: triggers (incl. negative — surface is constrained to archival)
@@ -64,8 +64,8 @@ check STATIC-CONTRACT "writes superseded_by: [[<feature>]] on replaced feature" 
 check STATIC-CONTRACT "verifies both slugs exist before writing" "verify **both** slugs resolve"
 
 # STATIC-CONTRACT: validator + ensure-committed gates
-check STATIC-CONTRACT "validator gate: sdd-validate --strict" "sdd-validate.sh --strict <PLANS_ROOT>"
-check STATIC-CONTRACT "ensure-committed gate references the script" "sdd-ensure-committed.sh"
+check STATIC-CONTRACT "validator gate: goalforge-validate --strict" "goalforge-validate.sh --strict <PLANS_ROOT>"
+check STATIC-CONTRACT "ensure-committed gate references the script" "goalforge-ensure-committed.sh"
 check STATIC-CONTRACT "ensure-committed is path-scoped + branch-agnostic" "path-scoped"
 check STATIC-CONTRACT "dotfiles exception (commit on master, no push)" "master"
 
@@ -89,7 +89,7 @@ check STATIC-CONTRACT "ref-gate flags path refs not wikilinks" "PATH refs, not w
 check STATIC-CONTRACT "ref-gate refuses with exit 6 under strict" "REFUSES with exit 6"
 
 # BEHAVIORAL-STATIC: refusal template present
-check BEHAVIORAL-STATIC "refusal template: sdd-archive REFUSED" "sdd-archive REFUSED"
+check BEHAVIORAL-STATIC "refusal template: goalforge-archive REFUSED" "goalforge-archive REFUSED"
 check BEHAVIORAL-STATIC "refusal prints required: completed" "(required: completed)"
 check BEHAVIORAL-STATIC "refusal for missing supersedes slug" "supersedes target not found"
 
@@ -115,7 +115,7 @@ if [ -f "$ARCHIVED" ]; then
 fi
 
 # BEHAVIORAL: --relocate gate logic on real fixtures (exit-code contract)
-SCRIPT="$HOME/.claude/skills/sdd/scripts/sdd-archive.sh"
+SCRIPT=""$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-archive.sh"
 if [ -x "$SCRIPT" ] || [ -f "$SCRIPT" ]; then
   TT="$(mktemp -d)"; mkdir -p "$TT/plans"
   cp -r "$SKILL_DIR/evals/fixtures/feature-archived"  "$TT/plans/feat-arch"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-capture static-contract checks
+# evals/run.sh — goalforge-capture static-contract checks
 # All checks are static-contract (skill transforms markdown via model;
 # behavioral output cannot be asserted without a model call).
 set -euo pipefail
@@ -41,10 +41,10 @@ check_order() {
   fi
 }
 
-echo "=== sdd-capture: static-contract checks ==="
+echo "=== goalforge-capture: static-contract checks ==="
 
 # Identity
-check "skill name declared" "name: sdd-capture"
+check "skill name declared" "name: goalforge-capture"
 
 # Output contract
 check "overview.md output declared" "plans/<feature>/overview.md"
@@ -68,22 +68,22 @@ check "stage_updated not applicable to feature overview" "stage_updated"
 check "slugification example documented" "user-auth-revamp"
 
 # Route classification (Step 4c) + fast path
-check "route classifier invoked (sdd-goal-route.sh)" "sdd-goal-route.sh"
+check "route classifier invoked (goalforge-route.sh)" "goalforge-route.sh"
 check "route stamped as frontmatter data" "route:"
 check "borderline verdict confirms with the human" "borderline"
 check "fast-path runbook present" "Fast path"
 check "fast path delegates WP authoring to add-wp" "Add-WP mode"
 check "fast path never skips verification" "never skips verification"
-check "fast path records goal hash (reconciles wp-01 ready-gate)" "sdd-goal-hash.sh --record"
+check "fast path records goal hash (reconciles wp-01 ready-gate)" "goalforge-goal-hash.sh --record"
 check_order "fast path records goal hash BEFORE spec->ready --mode auto" \
-  "sdd-goal-hash.sh --record" "sdd-transition.sh <wp> ready"
+  "goalforge-goal-hash.sh --record" "goalforge-transition.sh <wp> ready"
 
 # Route classifier self-test (deterministic regression)
-if bash "$HOME/.claude/skills/sdd/scripts/sdd-goal-route.sh" --self-test >/dev/null 2>&1; then
-  echo "  PASS: sdd-goal-route.sh --self-test green"
+if bash ""$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-route.sh" --self-test >/dev/null 2>&1; then
+  echo "  PASS: goalforge-route.sh --self-test green"
   PASS=$((PASS+1))
 else
-  echo "  FAIL: sdd-goal-route.sh --self-test failed"
+  echo "  FAIL: goalforge-route.sh --self-test failed"
   FAIL=$((FAIL+1))
 fi
 

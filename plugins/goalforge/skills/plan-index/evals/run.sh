@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# evals/run.sh -- sdd-plan-index checks
+# evals/run.sh -- goalforge-plan-index checks
 #   STATIC-CONTRACT: SKILL.md declares the contract
 #   BEHAVIORAL:      the generator's exit-code + render contract on fixtures
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"
-GEN="$HOME/.claude/skills/sdd/scripts/sdd-plan-index.py"
+GEN=""$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-plan-index.py"
 PASS=0; FAIL=0
 
 check() {  # type desc pattern [file]
@@ -17,8 +17,8 @@ check() {  # type desc pattern [file]
 ok() { if [ "$1" = "$2" ]; then echo "  PASS [BEHAVIORAL]: $3"; PASS=$((PASS+1));
        else echo "  FAIL [BEHAVIORAL]: $3 (got '$1' want '$2')"; FAIL=$((FAIL+1)); fi; }
 
-echo "=== sdd-plan-index: contract + behavioral checks ==="
-check STATIC-CONTRACT "skill name declared" "name: sdd-plan-index"
+echo "=== goalforge-plan-index: contract + behavioral checks ==="
+check STATIC-CONTRACT "skill name declared" "name: goalforge-plan-index"
 check STATIC-CONTRACT "version metadata present" "version: 1.0.0"
 check STATIC-CONTRACT "derives a DAG / build order" "build-order"
 check STATIC-CONTRACT "frontmatter is source of truth" "single source of truth"

@@ -1,5 +1,5 @@
 {
-  "skill_name": "sdd-decompose",
+  "skill_name": "goalforge-decompose",
   "evals": [
     {
       "id": 1,
@@ -10,7 +10,7 @@
         "evals/fixtures/overview.md"
       ],
       "expectations": [
-        "SKILL.md declares name: sdd-decompose",
+        "SKILL.md declares name: goalforge-decompose",
         "SKILL.md input is spec.md (must exist)",
         "SKILL.md output wp overview.md initial status is spec",
         "SKILL.md output task-*.md initial status is pending",
@@ -36,11 +36,11 @@
     {
       "id": 3,
       "prompt": "Approve the spec for the search-indexing-pipeline feature.",
-      "expected_output": "sdd-decompose should NOT trigger — approving a spec is a sdd-spec human-gate action, not a decompose action. The skill is not applicable here.",
+      "expected_output": "goalforge-decompose should NOT trigger — approving a spec is a goalforge-spec human-gate action, not a decompose action. The skill is not applicable here.",
       "files": [],
       "expectations": [
         "SKILL.md trigger requires user asking to decompose or break down a feature that has an approved spec.md",
-        "A spec-approval request is outside the trigger surface of sdd-decompose"
+        "A spec-approval request is outside the trigger surface of goalforge-decompose"
       ]
     },
     {

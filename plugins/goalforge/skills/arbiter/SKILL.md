@@ -1,26 +1,26 @@
 ---
-name: sdd-arbiter
-description: "Approach arbitration for SDD hardening. Invoked by sdd-harden when the spec marks decision-required OR when two or more approaches involve a hard-to-reverse bet. Normalizes each candidate approach into comparable claims along seven axes (objective, assumptions, files touched, sequencing, validation, rollback, cost), cross-reviews them dimension-by-dimension, and emits a decision memo — chosen direction, rejected alternatives with reasons, verification gates for the chosen path. Advisory input to sdd-harden; does NOT change the human-gated hardened→ready transition. Trigger: sdd-harden delegates a multi-approach arbitration for a WP, or a user asks to arbitrate competing implementation approaches."
+name: goalforge-arbiter
+description: "Approach arbitration for SDD hardening. Invoked by goalforge-harden when the spec marks decision-required OR when two or more approaches involve a hard-to-reverse bet. Normalizes each candidate approach into comparable claims along seven axes (objective, assumptions, files touched, sequencing, validation, rollback, cost), cross-reviews them dimension-by-dimension, and emits a decision memo — chosen direction, rejected alternatives with reasons, verification gates for the chosen path. Advisory input to goalforge-harden; does NOT change the human-gated hardened→ready transition. Trigger: goalforge-harden delegates a multi-approach arbitration for a WP, or a user asks to arbitrate competing implementation approaches."
 metadata:
   version: 1.1.0
 hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh sdd-arbiter"
+          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-arbiter"
         - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh sdd-arbiter:stop"
+          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-arbiter:stop"
 ---
 
-# sdd-arbiter
+# goalforge-arbiter
 
 Advisory approach arbitration for SDD work packages during the hardening phase.
-Invoked by `sdd-harden` when architectural approaches diverge and a structured
+Invoked by `goalforge-harden` when architectural approaches diverge and a structured
 comparison is needed before the human gate.
 
 ## Trigger
 
-`sdd-harden` invokes `sdd-arbiter` when either condition holds:
+`goalforge-harden` invokes `goalforge-arbiter` when either condition holds:
 
 1. The WP spec marks a section **decision-required** (explicit ambiguity flag).
 2. Two or more candidate approaches involve a **hard-to-reverse bet** — an
@@ -53,11 +53,11 @@ fast-path around rigor on a real bet.
 
 The N-approach × axis **normalization grid is mechanical** — it can be produced
 by a cheaper-tier sub-agent and consumed as typed DATA. Resolve its model tier
-from the canonical role→tier map — role **`arbiter-grid`** (`sdd-pick-agent.py`);
+from the canonical role→tier map — role **`arbiter-grid`** (`goalforge-pick-agent.py`);
 do not restate the tier. Keep the **cross-review judgment, the decisive-dimension
 call, and the memo in the main context** (they are the actual arbitration), and
 stamp the memo with a decision-attribution stamp when any part was
-subagent-produced (`sdd-attribution.sh`). This is optional — inline normalization
+subagent-produced (`goalforge-attribution.sh`). This is optional — inline normalization
 is fine; only offload when the grid is large enough to be worth a round-trip.
 
 ## Approach Normalization
@@ -117,23 +117,23 @@ Emit a **decision memo** structured as follows:
 ```
 
 The memo is written into the WP folder (e.g., `<wp>/arbiter-memo.md`) and
-surfaced to `sdd-harden` as advisory input. It does NOT alter the WP's
+surfaced to `goalforge-harden` as advisory input. It does NOT alter the WP's
 frontmatter status.
 
 ## Advisory Boundary
 
-`sdd-arbiter` is advisory input to `sdd-harden`. It produces a decision memo
+`goalforge-arbiter` is advisory input to `goalforge-harden`. It produces a decision memo
 and surfaces the reasoning, but it does NOT change the human-gated
 `hardened → ready` transition. The decision memo informs the human reviewer;
 it cannot approve or advance the WP on its own. All status authority remains
-exclusively with the human gate in `sdd-harden`.
+exclusively with the human gate in `goalforge-harden`.
 
 ## Gotchas
 
 - **Advisory, not a gate.** The decision memo is input to the human reviewer,
-  not a verdict. If you find yourself blocking `sdd-harden`'s status advance
+  not a verdict. If you find yourself blocking `goalforge-harden`'s status advance
   based on a memo finding, that is a bug in the wiring — record the memo and
-  return control to `sdd-harden`.
+  return control to `goalforge-harden`.
 - **Normalization before comparison.** Never compare raw narrative approaches
   directly. Each approach must be reduced to axes first; skipping normalization
   produces a subjective narrative comparison, not an arbitration. (Applies to
@@ -153,6 +153,6 @@ exclusively with the human gate in `sdd-harden`.
   axis where the approaches diverge most consequentially. A memo without a
   decisive dimension is not actionable.
 - **Irreversibility is the primary trigger.** When it is unclear whether to
-  invoke `sdd-arbiter`, ask: "Is the wrong choice hard to undo?" If yes,
+  invoke `goalforge-arbiter`, ask: "Is the wrong choice hard to undo?" If yes,
   arbitrate. If no, the decision can be revisited cheaply and arbitration adds
   overhead without value.

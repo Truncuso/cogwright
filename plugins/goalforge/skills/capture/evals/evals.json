@@ -1,5 +1,5 @@
 {
-  "skill_name": "sdd-capture",
+  "skill_name": "goalforge-capture",
   "evals": [
     {
       "id": 1,
@@ -7,7 +7,7 @@
       "expected_output": "Creates ~/.claude/plans/notification-service/overview.md with status: draft and todo.md from template",
       "files": [],
       "expectations": [
-        "SKILL.md declares name: sdd-capture",
+        "SKILL.md declares name: goalforge-capture",
         "SKILL.md documents output files: overview.md (status: draft) and todo.md",
         "SKILL.md references template feature-overview.md",
         "SKILL.md references template feature-todo.md",
@@ -43,11 +43,11 @@
     {
       "id": 4,
       "prompt": "Run the test suite and report which tests are failing.",
-      "expected_output": "sdd-capture should NOT trigger — this is a test-execution request, not a feature-planning request. The skill is not applicable.",
+      "expected_output": "goalforge-capture should NOT trigger — this is a test-execution request, not a feature-planning request. The skill is not applicable.",
       "files": [],
       "expectations": [
         "SKILL.md trigger phrase requires user describing a new feature, change, or work item",
-        "A test-run request is outside the trigger surface of sdd-capture"
+        "A test-run request is outside the trigger surface of goalforge-capture"
       ]
     },
     {

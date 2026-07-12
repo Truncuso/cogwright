@@ -1,15 +1,15 @@
 ---
-name: sdd-recap
-description: "Maintain a living, resumable recap.md per feature that traces the per-WP execution loop. The authoritative trace is ONE row per WP (record-wp): the task list, loop-back entries, and a per-WP status line carrying the SINGLE WP commit at WP altitude (no per-task commit column — the answer to 'trace too many commits'). append-task is optional live-progress. Regenerates the feature rollup on demand. Invoked by sdd-execute (optional live append) and sdd-verify (record-wp at WP finalization). Trigger: sdd-execute or sdd-verify delegates a record-wp, append-task, append-loopback, or rollup operation for a feature WP."
+name: goalforge-recap
+description: "Maintain a living, resumable recap.md per feature that traces the per-WP execution loop. The authoritative trace is ONE row per WP (record-wp): the task list, loop-back entries, and a per-WP status line carrying the SINGLE WP commit at WP altitude (no per-task commit column — the answer to 'trace too many commits'). append-task is optional live-progress. Regenerates the feature rollup on demand. Invoked by goalforge-execute (optional live append) and goalforge-verify (record-wp at WP finalization). Trigger: goalforge-execute or goalforge-verify delegates a record-wp, append-task, append-loopback, or rollup operation for a feature WP."
 metadata:
   version: 2.0.0
 hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh sdd-recap"
+          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-recap"
         - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh sdd-recap:stop"
+          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-recap:stop"
 ---
 
 Maintains `recap.md` — a living, idempotent execution trace for a feature's WP
@@ -26,8 +26,8 @@ Script: `${CLAUDE_SKILL_DIR}/scripts/recap.sh`
 
 ## Trigger
 
-Invoked by `sdd-execute` (after each task, after each loop-back) and
-`sdd-verify` (at WP finalization). Also callable directly for manual audits.
+Invoked by `goalforge-execute` (after each task, after each loop-back) and
+`goalforge-verify` (at WP finalization). Also callable directly for manual audits.
 
 ---
 
@@ -56,7 +56,7 @@ The file follows this exact contract (all consumers and evals depend on it):
 ```markdown
 # Recap — <feature-slug>
 
-<!-- maintained by sdd-recap (scripts/recap.sh); do not hand-edit -->
+<!-- maintained by goalforge-recap (scripts/recap.sh); do not hand-edit -->
 
 ## <wp-slug>
 
@@ -101,14 +101,14 @@ All subcommands are in `${CLAUDE_SKILL_DIR}/scripts/recap.sh`.
 | `--self-test` | _(none)_ | Full lifecycle smoke test; exits 0 on all-pass |
 
 The WP commit passed to `record-wp` is the single WP-altitude commit (the caller —
-`sdd-verify` — supplies it). `record-wp` records `-` when the commit is empty
+`goalforge-verify` — supplies it). `record-wp` records `-` when the commit is empty
 (test fixtures / no git).
 
 ---
 
-## Reuse of sdd-rollup Cadence
+## Reuse of goalforge-rollup Cadence
 
-`recap.sh` mirrors the idempotency discipline of `sdd-rollup.sh`:
+`recap.sh` mirrors the idempotency discipline of `goalforge-rollup.sh`:
 - Paths resolved via `python3 os.path.realpath` — no `cd` tricks.
 - Deterministic output: append/finalize upsert in place and `rollup`
   regenerates from the Status lines (no duplicate rows, loop-back entries, or
@@ -130,12 +130,12 @@ The WP commit passed to `record-wp` is the single WP-altitude commit (the caller
 3. **Rollup ordering**: `rollup` counts Status lines in file order (top → bottom);
    WPs added out of order will appear out of order — this is intentional (insertion
    order = execution order).
-4. **Hand-edits**: the `<!-- maintained by sdd-recap ... -->` comment is a hard
+4. **Hand-edits**: the `<!-- maintained by goalforge-recap ... -->` comment is a hard
    warning; downstream tools may overwrite the rollup section on next `rollup` call.
 5. **Empty summary on finalize**: the `<summary>` argument may not be empty —
    `recap.sh` exits non-zero if it is, to prevent Status lines like `green — `.
 6. **recap is an audit artifact, NOT the recovery/evidence mechanism.** Crash
-   recovery rides on per-task git commits + task checkpoints (sdd-execute Step 9);
+   recovery rides on per-task git commits + task checkpoints (goalforge-execute Step 9);
    the evidence invariant rides on task `checkpoint:` blocks. recap only *records*
    what happened. Losing/regenerating recap.md never affects recoverability.
 7. **One commit per WP, at WP altitude.** The commit lives on the Status line via

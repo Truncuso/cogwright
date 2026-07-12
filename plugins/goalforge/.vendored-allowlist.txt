@@ -1,0 +1,2 @@
+plugins/goalforge/skills/capture/SKILL.md
+plugins/goalforge/skills/harden/SKILL.md

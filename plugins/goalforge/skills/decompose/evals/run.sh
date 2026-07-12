@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-decompose checks
+# evals/run.sh — goalforge-decompose checks
 #
 # Check types:
 #   STATIC-CONTRACT: asserts SKILL.md declares the correct contract
@@ -45,10 +45,10 @@ file_check() {
   fi
 }
 
-echo "=== sdd-decompose: contract + fixture checks ==="
+echo "=== goalforge-decompose: contract + fixture checks ==="
 
 # STATIC-CONTRACT: identity
-check STATIC-CONTRACT "skill name declared" "name: sdd-decompose"
+check STATIC-CONTRACT "skill name declared" "name: goalforge-decompose"
 
 # STATIC-CONTRACT: inputs
 check STATIC-CONTRACT "input spec.md declared" "plans/<feature>/spec.md"
@@ -110,10 +110,10 @@ check STATIC-CONTRACT "WP sizing is by goal, not task count" "sized by its **goa
 # ── Tier-1 feature audit (adversarial, hash-gated) ──────────────────────────
 check STATIC-CONTRACT "Tier-1 feature audit step present" "Tier-1 feature audit"
 check STATIC-CONTRACT "Tier-1 dispatched at feature-audit role tier" "role \`feature-audit\`"
-check STATIC-CONTRACT "Tier-1 hash helper referenced" "sdd-feature-hash.sh"
+check STATIC-CONTRACT "Tier-1 hash helper referenced" "goalforge-feature-hash.sh"
 
 # BEHAVIORAL: the feature-hash helper is deterministic + emits a 12-char hash.
-HASH_SH="$SKILL_DIR/../sdd/scripts/sdd-feature-hash.sh"
+HASH_SH="$SKILL_DIR/../../scripts/goalforge-feature-hash.sh"
 HASH_FIXTURE="$SKILL_DIR/evals/fixtures/goal"
 file_check FIXTURE "feature-hash helper present" "$HASH_SH"
 if [ -f "$HASH_SH" ] && [ -d "$HASH_FIXTURE" ]; then
@@ -134,7 +134,7 @@ fi
 # existence; it does NOT perform the cascade MERGE. The merge itself is asserted
 # by the cascade-resolver check immediately below — the two together cover both
 # "the block is well-formed" and "the cascade semantics are right".
-VALIDATE="$SKILL_DIR/../sdd/scripts/sdd-validate.sh"
+VALIDATE="$SKILL_DIR/../../scripts/goalforge-validate.sh"
 GOAL_FIXTURE="$SKILL_DIR/evals/fixtures/goal"
 # Validator presence is a hard precondition — a moved/renamed validator must
 # FAIL the eval, never silently skip the behavioral check (fail-closed signal).
@@ -156,7 +156,7 @@ fi
 # keeping the WP's own outcome. This is the only check here that actually
 # exercises the cascade MERGE (resolve_effective_goal, the single back-compat
 # owner) — it turns red if decompose's derived cascade semantics regress.
-RESOLVER="$SKILL_DIR/../sdd/scripts/sdd-goal-eval.py"
+RESOLVER="$SKILL_DIR/../../scripts/goalforge-goal-eval.py"
 file_check FIXTURE "cascade resolver present (behavioral precondition)" "$RESOLVER"
 if [ -f "$RESOLVER" ]; then
   if python3 - "$RESOLVER" "$GOAL_FIXTURE" <<'PY'

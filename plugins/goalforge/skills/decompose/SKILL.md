@@ -1,18 +1,18 @@
 ---
-name: sdd-decompose
-description: "Decompose an approved feature spec into work packages and tasks. Reads plans/<feature>/spec.md, emits wp-NN-<slug>/ folders each containing overview.md (status: spec), todo.md, and task-NN-*.md files stamped from WP templates. Fills depends_on and parallel from the spec's WP table. Also owns the single-WP Add-WP mode (--add-wp): author ONE new WP into an existing feature — the fast-path (route: fast) WP author and the lightweight grow-on-the-go path for a mid-flight WP add, without a full re-decomposition (sdd-redecompose stays the restructure tool). Trigger: the user asks to decompose, break down, or plan the work packages for a feature that has an approved spec.md — or to add a single WP to an existing feature mid-flight."
+name: goalforge-decompose
+description: "Decompose an approved feature spec into work packages and tasks. Reads plans/<feature>/spec.md, emits wp-NN-<slug>/ folders each containing overview.md (status: spec), todo.md, and task-NN-*.md files stamped from WP templates. Fills depends_on and parallel from the spec's WP table. Also owns the single-WP Add-WP mode (--add-wp): author ONE new WP into an existing feature — the fast-path (route: fast) WP author and the lightweight grow-on-the-go path for a mid-flight WP add, without a full re-decomposition (goalforge-redecompose stays the restructure tool). Trigger: the user asks to decompose, break down, or plan the work packages for a feature that has an approved spec.md — or to add a single WP to an existing feature mid-flight."
 metadata:
   version: 1.3.0
 hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh sdd-decompose"
+          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-decompose"
         - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh sdd-decompose:stop"
+          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-decompose:stop"
 ---
 
-# sdd-decompose
+# goalforge-decompose
 
 Reads an approved feature spec and emits the WP folder tree: one `wp-NN-<slug>/`
 folder per work package, each containing `overview.md`, `todo.md`, and one or
@@ -45,7 +45,7 @@ Also generates/updates:
 | File | Change |
 |---|---|
 | `<PLANS_ROOT>/<feature>/overview.md` | Fills the Work Packages table with WP slugs, titles, and statuses |
-| `<PLANS_ROOT>/<feature>/todo.md` | Auto-generated rollup (via `sdd-rollup.sh`); derived from WP statuses and open items |
+| `<PLANS_ROOT>/<feature>/todo.md` | Auto-generated rollup (via `goalforge-rollup.sh`); derived from WP statuses and open items |
 
 No other files are created or modified.
 
@@ -98,12 +98,12 @@ rather than shipping production code is a **declared spike**: set
 `register: prototype` in its frontmatter (schema.md §WP frontmatter), give the
 goal block a `judge` or `human` strategy over the findings doc, name the
 prototype branch (logic / UI / perf) in the outcome, and stamp **exactly one
-task** ("answer the question; deliverable = the findings doc") — sdd-execute
+task** ("answer the question; deliverable = the findings doc") — goalforge-execute
 collapses the spike to that task's commit so the WP exit contract holds.
-`sdd-execute` routes such a WP to the `prototype` skill; only the findings
+`goalforge-execute` routes such a WP to the `prototype` skill; only the findings
 doc commits. A design
 question smaller than a WP does not get its own prototype WP — it surfaces as
-an open question and routes to `prototype` via `sdd-harden` Step 1.
+an open question and routes to `prototype` via `goalforge-harden` Step 1.
 
 ### Step 3 — Derive WP metadata
 
@@ -137,8 +137,8 @@ template.
 
 > **Genesis, not a transition.** This initial `status: spec` is the WP's birth
 > state, stamped from the template — decompose does **not** route it through
-> `sdd-transition.sh` (which reads an existing `from` status). Every *subsequent*
-> WP-`status:` change is written exclusively by `sdd-transition.sh` in the
+> `goalforge-transition.sh` (which reads an existing `from` status). Every *subsequent*
+> WP-`status:` change is written exclusively by `goalforge-transition.sh` in the
 > downstream chain skills — never by hand-edit or `sed`.
 
 Body sections: **Goal** (one measurable sentence), **Verification** (exact
@@ -265,7 +265,7 @@ every `todo.md` to today. Set `updated:` in the feature `overview.md` to today.
 Generate the feature-level `todo.md` rollup:
 
 ```bash
-bash ~/.claude/skills/sdd/scripts/sdd-rollup.sh <PLANS_ROOT>/<feature>
+bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
 ```
 
 It reads each WP `overview.md` status + `todo.md` open items and writes
@@ -277,7 +277,7 @@ produces byte-identical output).
 Before reporting, parse-check every file just written:
 
 ```bash
-bash ~/.claude/skills/sdd/scripts/sdd-validate.sh --feature <feature> --show <PLANS_ROOT>
+bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-validate.sh --feature <feature> --show <PLANS_ROOT>
 ```
 
 Fix any `invalid YAML frontmatter` ERROR immediately — its most common cause is a
@@ -290,12 +290,12 @@ downstream, so catch it here, not three sessions later.
 Run the **Tier-1 adversarial audit once per feature**, here at the
 decompose→harden seam — the cheapest place to catch *feature-global* defects
 before per-WP harden. Feature-global defects are audited once here; WP-local
-defects are a cheap per-WP delta in `sdd-harden` (Step 0a).
+defects are a cheap per-WP delta in `goalforge-harden` (Step 0a).
 
 1. **Compute the feature audit hash** (deterministic, gates re-runs):
 
    ```bash
-   bash ~/.claude/skills/sdd/scripts/sdd-feature-hash.sh <PLANS_ROOT>/<feature>
+   bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-feature-hash.sh <PLANS_ROOT>/<feature>
    ```
 
    The hash covers the feature's *structure + goals* (sorted WP slugs, each
@@ -305,10 +305,10 @@ defects are a cheap per-WP delta in `sdd-harden` (Step 0a).
 
 2. **If stale (or no audit exists), dispatch the feature-audit agent.** Resolve
    its dispatch from the canonical role→tier map — role `feature-audit`
-   (`sdd/scripts/sdd-pick-agent.py`, instantiated to an explicit `{model, effort}`
+   (`scripts/goalforge-pick-agent.py`, instantiated to an explicit `{model, effort}`
    via `resolve_dispatch`; state both on the brief); do not restate the tier here. Its cold,
    author-blind whole-feature brief + the `.tier1-audit.md` stamp contract:
-   `references/tier1-feature-audit.md`. `sdd-harden` reads the stamp as typed DATA.
+   `references/tier1-feature-audit.md`. `goalforge-harden` reads the stamp as typed DATA.
 
 **Advisory at decompose time** — record findings, do not block; the human harden
 gate enforces resolution.
@@ -321,9 +321,9 @@ Decomposed <feature> into N work packages:
   wp-02-<slug>  (<M> tasks)
   ...
 Updated: <PLANS_ROOT>/<feature>/overview.md  (work_packages list)
-Generated: <PLANS_ROOT>/<feature>/todo.md  (rollup via sdd-rollup.sh)
+Generated: <PLANS_ROOT>/<feature>/todo.md  (rollup via goalforge-rollup.sh)
 Tier-1 audit: <PLANS_ROOT>/<feature>/.tier1-audit.md  (<verdict>; hash <hash[:8]>)
-Next: run sdd-harden to grill each WP and resolve open questions.
+Next: run goalforge-harden to grill each WP and resolve open questions.
 ```
 
 ## Add-WP mode (`--add-wp`) — author ONE WP into an existing feature
@@ -331,15 +331,15 @@ Next: run sdd-harden to grill each WP and resolve open questions.
 The lightweight sibling of a full decomposition — an **append, not a reconcile**:
 it never touches existing WPs (no status changes, supersession, or renames). The
 moment a learning implies an existing WP is wrong (`changed`/`dropped`/`ambiguous`
-in reconcile vocabulary), stop and route through `sdd-redecompose`. Two callers:
+in reconcile vocabulary), stop and route through `goalforge-redecompose`. Two callers:
 
 - **Fast path** (`route: fast`): capture delegates here to author the single WP
-  that carries the whole goal (sdd-capture §Fast path).
+  that carries the whole goal (goalforge-capture §Fast path).
 - **Grow-on-the-go**: mid-flight a learning surfaces one new WP without
   invalidating existing WPs. (When it *changes or drops* existing WPs, that is a
-  restructure: use `sdd-redecompose`'s 5-bucket reconcile, not this mode.)
+  restructure: use `goalforge-redecompose`'s 5-bucket reconcile, not this mode.)
 
-Invocation: `sdd-decompose --add-wp <slug> --goal "<outcome>"` (optionally
+Invocation: `goalforge-decompose --add-wp <slug> --goal "<outcome>"` (optionally
 `--depends-on <wp-slug>,…`, `--severity`, `--task-type`).
 
 Procedure — the scoped subset of the full run:
@@ -357,11 +357,11 @@ Procedure — the scoped subset of the full run:
 4. **Self-check** (Step 7b) scoped to the new WP, plus: its `depends_on` targets
    exist and the dependency graph stays acyclic.
 5. **Refresh feature artifacts** (Steps 8–10): WP table row, `work_packages:`,
-   timestamps, `sdd-rollup.sh`.
-6. **Lint** (Step 10.5): `sdd-validate.sh --feature <feature>` — feature level,
+   timestamps, `goalforge-rollup.sh`.
+6. **Lint** (Step 10.5): `goalforge-validate.sh --feature <feature>` — feature level,
    never the WP subtree alone.
 7. **Tier-1 hash note — do NOT re-audit here.** Adding a WP stales the feature
-   hash (`sdd-feature-hash.sh`), so the next `sdd-harden` Step 0a.1 freshness gate
+   hash (`goalforge-feature-hash.sh`), so the next `goalforge-harden` Step 0a.1 freshness gate
    detects the drift and takes its whole-feature-review fallback. Report one line:
    `tier-1 audit stale (WP added) — next harden re-audits`.
 
@@ -369,16 +369,16 @@ Report: `Added <wp-id> (<M> tasks) to <feature>; rollup + WP table refreshed;
 tier-1 audit stale — next harden re-audits.`
 
 The new WP then enters the normal frontier: full-path features harden it
-(`sdd-harden`); a fast-path WP takes the deterministic gates in sdd-capture
+(`goalforge-harden`); a fast-path WP takes the deterministic gates in goalforge-capture
 §Fast path (validate + OQ check + complexity → record goal hash
-(`sdd-goal-hash.sh --record`) → `--mode auto`, escalating to harden on any
+(`goalforge-goal-hash.sh --record`) → `--mode auto`, escalating to harden on any
 trip). The add-wp'd fast WP is born `goal_approved_version: null`, so capture
 records the hash before the auto-advance — else wp-01's `→ready` gate refuses it.
 
 ## Constraints
 
 - **Never** modify `spec.md` — it is read-only for this skill.
-- **Never** advance `overview.md` status beyond `ready` (set by `sdd-spec`).
+- **Never** advance `overview.md` status beyond `ready` (set by `goalforge-spec`).
 - **Never** set a newly created WP status to anything but `spec`, or a task
   status to anything but `pending`.
 - Write only the contracted files listed in the Outputs table above.
@@ -404,6 +404,6 @@ the appropriate marker:
 ## Gotchas
 
 - Idempotency is folder-level: an existing `wp-01-scaffold/` is **skipped without modifying** any file — editing `spec.md` and re-running will NOT update an already-created WP. Delete the WP folder explicitly to force a re-stamp.
-- **A live or manual step inside a `strategy: deterministic` check is the single most common decompose defect** (Step 7b.1): it cannot run in the unattended `sdd-execute` eval loop. Keep the gate fixture/command-only; the pre-harden review BLOCKs on it, so catching it here saves the round-trip.
-- **A fast-path feature growing past ~3 WPs or gaining its first cross-WP contract has outgrown the fast route** — prompt the user to author `spec.md` retroactively (`sdd-spec`) so shared shapes get a single home (the Interface Contract). Judgment nudge, not a hard gate.
+- **A live or manual step inside a `strategy: deterministic` check is the single most common decompose defect** (Step 7b.1): it cannot run in the unattended `goalforge-execute` eval loop. Keep the gate fixture/command-only; the pre-harden review BLOCKs on it, so catching it here saves the round-trip.
+- **A fast-path feature growing past ~3 WPs or gaining its first cross-WP contract has outgrown the fast route** — prompt the user to author `spec.md` retroactively (`goalforge-spec`) so shared shapes get a single home (the Interface Contract). Judgment nudge, not a hard gate.
 - Edge-case gotchas (empty-`goal.outcome` late-fail, cascade-scalar silent-resolve): `references/gotchas.md`.

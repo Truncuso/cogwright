@@ -1,5 +1,5 @@
 ---
-name: sdd-spec
+name: goalforge-spec
 description: "Run a design pass on a captured feature and produce the spec document. Reads plans/<feature>/overview.md, optionally invokes personas or architect for a multi-lens review, writes plans/<feature>/spec.md from the feature-spec template, and advances the feature status draft → ready. HUMAN-GATED: must receive explicit user approval before advancing status. Trigger: the user asks to spec, design, or elaborate on a feature that already has an overview.md (status: draft)."
 metadata:
   version: 1.1.0
@@ -7,12 +7,12 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh sdd-spec"
+          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-spec"
         - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh sdd-spec:stop"
+          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-spec:stop"
 ---
 
-# sdd-spec
+# goalforge-spec
 
 Reads a captured feature overview, conducts a design pass, writes `spec.md`,
 and advances the feature status from `draft` to `ready`. The `draft → ready`
@@ -20,8 +20,8 @@ transition is **human-gated**: the skill halts and asks for explicit approval
 before changing any `status:` field.
 
 **Full route only.** A `route: fast` feature (overview frontmatter, stamped by
-`sdd-capture`) has no `spec.md` by design — its single WP carries the complete
-goal block. Invoking sdd-spec on a fast feature is the deliberate promotion
+`goalforge-capture`) has no `spec.md` by design — its single WP carries the complete
+goal block. Invoking goalforge-spec on a fast feature is the deliberate promotion
 path (the feature outgrew the fast route — e.g. 3+ WPs or a cross-WP
 contract): author the spec retroactively and flip `route: full` with a note.
 
@@ -76,7 +76,7 @@ Conduct a design pass to produce the content of `spec.md`. This involves:
    package will produce an artifact another consumes — a file (give the exact path
    convention), a JSON/record (give the field schema), an env var, a CLI flag —
    write the path *and* the schema in this section now. A contract left "TBD"
-   forces `sdd-decompose` to invent a shape or leave the consumer WP
+   forces `goalforge-decompose` to invent a shape or leave the consumer WP
    unspecifiable; pinning it here is the cheapest place to do it.
 3. **Non-Goals**: what the design explicitly excludes.
 4. **Open Questions**: unresolved questions that must be answered before
@@ -106,7 +106,7 @@ Write these into the `feature-spec.md` frontmatter (the template already carries
 the block skeleton). `goal.outcome` is authoritative — it supersedes the body
 `## Goal` prose; keep them consistent. Leave a facet only partially specified
 **only** if it is a genuine open question — record it in `## Open Questions` so
-`sdd-harden` drives it to zero (it must be complete before `hardened → ready`).
+`goalforge-harden` drives it to zero (it must be complete before `hardened → ready`).
 
 **Optional multi-lens review** (recommended for medium/high complexity features):
 
@@ -155,7 +155,7 @@ requests revisions, iterate the design pass (Step 2) and re-present. If the
 user declines, exit without writing any files or changing any status.
 
 This gate enforces the `draft → ready` human-gated transition for the feature
-(§2 Status state machine; sdd-spec advances overview.md, not spec.md).
+(§2 Status state machine; goalforge-spec advances overview.md, not spec.md).
 
 ### Step 4 — Stamp `spec.md`
 
@@ -188,7 +188,7 @@ Do not modify any other frontmatter fields.
 ```
 Updated: <PLANS_ROOT>/<feature>/overview.md  (status: draft → ready)
 Created: <PLANS_ROOT>/<feature>/spec.md      (status: spec)
-Next: run sdd-decompose to break the spec into work packages.
+Next: run goalforge-decompose to break the spec into work packages.
 ```
 
 ## Drafting discipline
@@ -201,7 +201,7 @@ change the human gate or any status transition):
    solution fits.
 2. **Hard-bets-first** — surface the hard-to-reverse decisions early and make
    them explicit in the spec; when two or more such approaches compete, that is
-   the `sdd-arbiter` trigger at harden.
+   the `goalforge-arbiter` trigger at harden.
 3. **Standalone** — the spec must read on its own: a reader with no session
    context can understand the outcome, constraints, and boundaries.
 4. **Concrete-first** — prefer concrete outcomes and measurable verification over
@@ -210,12 +210,12 @@ change the human gate or any status transition):
    is `deterministic`, the `check` must be reproducible offline (fixtures /
    commands), with no live run, network call, or manual step. A real end-to-end or
    manual check is worth stating, but as a separate "manual integration" note, not
-   inside the deterministic gate — the gate must run unattended in `sdd-execute`.
+   inside the deterministic gate — the gate must run unattended in `goalforge-execute`.
 
 ## Constraints
 
 - **Never** advance status without explicit human approval (Step 3 gate).
-- **Never** create WP folders or task files — those belong to `sdd-decompose`.
+- **Never** create WP folders or task files — those belong to `goalforge-decompose`.
 - **Never** modify `todo.md` or any WP files.
 - Write only the two contracted files above.
 - If `spec.md` already exists, ask the user whether to overwrite or merge.
@@ -245,10 +245,10 @@ Templates at `~/.claude/skills/sdd/references/templates/`. Stamped files carry:
 ## Gotchas
 
 - The human-gated transition protected here is `overview.md` advancing OUT of `draft` (to `ready`, per this skill's Step 3 gate + Outputs table) — it NEVER happens without explicit approval: not on re-run, not if `spec.md` already exists, not via any flag. (`spec.md` carries its own `status: spec`; don't conflate the two.) Bypassing the gate violates the SDD state-machine contract.
-- The goal block (`task_type`, `goal.outcome`, `goal.verification`, etc.) is authored in `spec.md` frontmatter, NOT in `overview.md` — writing goal block fields to `overview.md` is incorrect and those values will be ignored by `sdd-harden` and `sdd-execute`.
+- The goal block (`task_type`, `goal.outcome`, `goal.verification`, etc.) is authored in `spec.md` frontmatter, NOT in `overview.md` — writing goal block fields to `overview.md` is incorrect and those values will be ignored by `goalforge-harden` and `goalforge-execute`.
 - If `spec.md` already exists, the skill must ask the user whether to overwrite or merge — silently overwriting a previously approved spec discards prior design decisions; silently skipping leaves the overview in a potentially inconsistent state.
-- Goal facets left partially specified must have a corresponding entry in `## Open Questions`; an empty facet with no open question entry will not be detected here but will be surfaced (and grilled) by `sdd-harden` — this is expected behavior, but it delays the chain unnecessarily if the spec author forgot to record the question.
-- Both files (`spec.md` and the updated `overview.md`) are written only after user approval; a partial write that creates `spec.md` but does not update `overview.md` status leaves the chain in an inconsistent state that `sdd-decompose` will reject (it reads `overview.md` for the feature `status: ready` precondition).
+- Goal facets left partially specified must have a corresponding entry in `## Open Questions`; an empty facet with no open question entry will not be detected here but will be surfaced (and grilled) by `goalforge-harden` — this is expected behavior, but it delays the chain unnecessarily if the spec author forgot to record the question.
+- Both files (`spec.md` and the updated `overview.md`) are written only after user approval; a partial write that creates `spec.md` but does not update `overview.md` status leaves the chain in an inconsistent state that `goalforge-decompose` will reject (it reads `overview.md` for the feature `status: ready` precondition).
 - **Spin-off candidates during spec:** if speccing reveals an adjacent improvement worth capturing, invoke the `idea` package (mode=capture) — see `rules/common/idea-capture.md`. Don't silently absorb it into scope.
 - **An unpinned cross-WP contract is a spec defect, not a decompose one.** If WP-B will read what WP-A writes, the path + schema belong in the Interface Contract *here* — leaving it for decompose forces a guess and surfaces as a pre-harden BLOCK. The spec is the single home for shared shapes.
 - **A live/manual step inside a deterministic feature check** will propagate into the WP verification surfaces at decompose and BLOCK at pre-harden review. Keep the deterministic gate offline-reproducible; state live checks as a separate manual note.

@@ -1,5 +1,5 @@
 {
-  "skill_name": "sdd-harden",
+  "skill_name": "goalforge-harden",
   "evals": [
     {
       "id": 1,
@@ -7,7 +7,7 @@
       "expected_output": "Delegates to interview-loop; appends findings to findings.md; advances spec → hardened automatically. Then HUMAN-GATED: presents findings summary and awaits explicit approval before advancing hardened → ready.",
       "files": ["evals/fixtures/wp-overview.md"],
       "expectations": [
-        "SKILL.md declares name: sdd-harden",
+        "SKILL.md declares name: goalforge-harden",
         "SKILL.md precondition is status: spec",
         "SKILL.md delegates to interview-loop skill",
         "SKILL.md creates or updates findings.md",
@@ -31,11 +31,11 @@
     {
       "id": 3,
       "prompt": "Run the full SDD chain from scratch for my new feature.",
-      "expected_output": "sdd-harden should NOT trigger in isolation — orchestrating the full chain is the role of sdd-run, not sdd-harden. The skill is not applicable as a standalone response to this request.",
+      "expected_output": "goalforge-harden should NOT trigger in isolation — orchestrating the full chain is the role of goalforge-run, not goalforge-harden. The skill is not applicable as a standalone response to this request.",
       "files": [],
       "expectations": [
-        "SKILL.md trigger is specific: invoked via /sdd-harden <wp-path> or when sdd-run reaches the harden step",
-        "A full-chain orchestration request is outside the trigger surface of sdd-harden"
+        "SKILL.md trigger is specific: invoked via /goalforge-harden <wp-path> or when goalforge-run reaches the harden step",
+        "A full-chain orchestration request is outside the trigger surface of goalforge-harden"
       ]
     },
     {

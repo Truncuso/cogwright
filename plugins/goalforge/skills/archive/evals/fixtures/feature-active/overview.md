@@ -13,9 +13,9 @@ sources: []
 
 ## Problem
 
-Fixture: a feature still `active` (not all WPs verified). sdd-archive MUST
+Fixture: a feature still `active` (not all WPs verified). goalforge-archive MUST
 REFUSE to archive this — the fail-close case.
 
 ## Goal
 
-Exercise the sdd-archive precondition gate (status != completed → refuse).
+Exercise the goalforge-archive precondition gate (status != completed → refuse).

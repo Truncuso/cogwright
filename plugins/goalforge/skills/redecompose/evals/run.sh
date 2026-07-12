@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-redecompose static-contract + behavioral checks
+# evals/run.sh — goalforge-redecompose static-contract + behavioral checks
 #
 # Static-contract checks: grep SKILL.md for documented behaviors.
-# Behavioral checks: run the real sdd-reconcile-diff.sh against fixtures and
+# Behavioral checks: run the real goalforge-reconcile-diff.sh against fixtures and
 # assert the properties the skill's routing logic depends on.
 #
 # The `status:` key is kept un-joined from its enum value so the wp-01
@@ -13,7 +13,7 @@ set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"
-RECONCILE="$SKILL_DIR/../sdd/scripts/sdd-reconcile-diff.sh"
+RECONCILE="$SKILL_DIR/../../scripts/goalforge-reconcile-diff.sh"
 FIXTURES="$SKILL_DIR/evals/fixtures"
 
 PASS=0
@@ -48,15 +48,15 @@ file_check() {
 
 # ── Static-contract checks ────────────────────────────────────────────────────
 
-echo "=== sdd-redecompose: static-contract checks ==="
+echo "=== goalforge-redecompose: static-contract checks ==="
 
 # Identity
-check "skill name declared" "name: sdd-redecompose"
+check "skill name declared" "name: goalforge-redecompose"
 
 # Core script interface
-check "documents calling sdd-reconcile-diff.sh" "sdd-reconcile-diff.sh"
-check "documents sdd-goal-changelog.sh append"  "sdd-goal-changelog.sh"
-check "documents routing via sdd-transition.sh" "sdd-transition.sh"
+check "documents calling goalforge-reconcile-diff.sh" "goalforge-reconcile-diff.sh"
+check "documents goalforge-goal-changelog.sh append"  "goalforge-goal-changelog.sh"
+check "documents routing via goalforge-transition.sh" "goalforge-transition.sh"
 
 # Bucket routing
 check "same bucket → untouched" "same"
@@ -71,7 +71,7 @@ check "documents explicit trigger param" "--learning"
 # ── Fixture files ─────────────────────────────────────────────────────────────
 
 echo ""
-echo "=== sdd-redecompose: fixture checks ==="
+echo "=== goalforge-redecompose: fixture checks ==="
 
 file_check "identity-feature wp-01-alpha fixture" \
   "$FIXTURES/identity-feature/wp-01-alpha/overview.md"
@@ -86,13 +86,13 @@ file_check "ambiguous-feature wp-02-keep fixture" \
 file_check "ambiguous proposed JSON" \
   "$FIXTURES/ambiguous-proposed.json"
 
-# ── Behavioral checks (run real sdd-reconcile-diff.sh against fixtures) ───────
+# ── Behavioral checks (run real goalforge-reconcile-diff.sh against fixtures) ───────
 
 echo ""
-echo "=== sdd-redecompose: behavioral checks ==="
+echo "=== goalforge-redecompose: behavioral checks ==="
 
 if [ ! -f "$RECONCILE" ]; then
-  echo "  SKIP: sdd-reconcile-diff.sh not found at $RECONCILE (dependency missing)"
+  echo "  SKIP: goalforge-reconcile-diff.sh not found at $RECONCILE (dependency missing)"
 else
 
   # ── (1) Identity: proposed == existing → all same, all other buckets empty ──

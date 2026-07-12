@@ -1,13 +1,13 @@
 {
-  "skill_name": "sdd-execute",
+  "skill_name": "goalforge-execute",
   "evals": [
     {
       "id": 1,
       "prompt": "Execute wp-01-api-scaffold (status: ready) — full sub-cycle",
-      "expected_output": "Sets status: executing on entry. For each task: ensures clean tree, picks next task honoring depends_on + parallel, stubs sdd-pick-agent (WP-04), dispatches via implement, writes checkpoint, runs eval pass (verify + lint + type-check) with up to 3 retries before escalation, delegates simplification to verify-and-simplify, re-runs eval, commits atomically, sets task status: verified. Parallel tasks use EnterWorktree per task dispatched in one batched message; orchestrator merges with conflict resolution. Resume is idempotent.",
+      "expected_output": "Sets status: executing on entry. For each task: ensures clean tree, picks next task honoring depends_on + parallel, stubs goalforge-pick-agent (WP-04), dispatches via implement, writes checkpoint, runs eval pass (verify + lint + type-check) with up to 3 retries before escalation, delegates simplification to verify-and-simplify, re-runs eval, commits atomically, sets task status: verified. Parallel tasks use EnterWorktree per task dispatched in one batched message; orchestrator merges with conflict resolution. Resume is idempotent.",
       "files": ["evals/fixtures/wp-ready/overview.md"],
       "expectations": [
-        "SKILL.md declares name: sdd-execute",
+        "SKILL.md declares name: goalforge-execute",
         "SKILL.md precondition is status: ready",
         "SKILL.md entry action is status: executing",
         "SKILL.md state transition ready → executing documented",
@@ -37,7 +37,7 @@
     },
     {
       "id": 2,
-      "prompt": "Resume sdd-execute for a WP already at status: executing",
+      "prompt": "Resume goalforge-execute for a WP already at status: executing",
       "expected_output": "Reads checkpoint from each task-*.md. Tasks with status: verified are skipped (no-op). Tasks with a live worktree in checkpoint.worktree re-enter their worktree via EnterWorktree. Tasks without a checkpoint are treated as pending. Resume is idempotent.",
       "files": ["evals/fixtures/wp-ready/overview.md"],
       "expectations": [
@@ -51,7 +51,7 @@
     {
       "id": 3,
       "prompt": "Evaluation pass fails 3 times for task-02 — what happens?",
-      "expected_output": "After 3 failed retries (each re-dispatching implement with failure context), sdd-execute appends a blocker to findings.md including the task name, failure output, and retry count. It then escalates via AskUserQuestion. It does NOT silently mark the task verified.",
+      "expected_output": "After 3 failed retries (each re-dispatching implement with failure context), goalforge-execute appends a blocker to findings.md including the task name, failure output, and retry count. It then escalates via AskUserQuestion. It does NOT silently mark the task verified.",
       "files": [],
       "expectations": [
         "SKILL.md documents bounded configurable retry cap (SDD_MAX_RETRIES, default 3)",
@@ -78,40 +78,40 @@
     {
       "id": 5,
       "prompt": "WP goal uses strategy: deterministic — how does the outer loop decide completion?",
-      "expected_output": "At entry, resolve_effective_goal yields the effective goal. After the sub-cycle, the pure sdd-goal-eval runs the deterministic check; exit 0 → verdict.met=True → break and proceed to Step 10 (sdd-verify). No dispatch needed.",
+      "expected_output": "At entry, resolve_effective_goal yields the effective goal. After the sub-cycle, the pure goalforge-goal-eval runs the deterministic check; exit 0 → verdict.met=True → break and proceed to Step 10 (goalforge-verify). No dispatch needed.",
       "files": ["evals/fixtures/goal-loop/wp-met-deterministic.md"],
       "expectations": [
         "SKILL.md documents resolve_effective_goal at entry (Step 0b)",
-        "SKILL.md documents pure sdd-goal-eval invoked each outer iteration",
-        "sdd-goal-eval returns met=True in-script for a passing deterministic check (behavioral)"
+        "SKILL.md documents pure goalforge-goal-eval invoked each outer iteration",
+        "goalforge-goal-eval returns met=True in-script for a passing deterministic check (behavioral)"
       ]
     },
     {
       "id": 6,
       "prompt": "WP goal uses strategy: judge — how is completion decided without the script dispatching?",
-      "expected_output": "sdd-goal-eval returns met=null plus a {dispatch: judge, artifact, rubric, block_on} directive (the script stays pure). The agent invokes the judge skill and maps the verdict: met iff no finding at/above a block_on severity. In evals the judge dispatch is MOCKED for determinism.",
+      "expected_output": "goalforge-goal-eval returns met=null plus a {dispatch: judge, artifact, rubric, block_on} directive (the script stays pure). The agent invokes the judge skill and maps the verdict: met iff no finding at/above a block_on severity. In evals the judge dispatch is MOCKED for determinism.",
       "files": ["evals/fixtures/goal-loop/wp-judge.md"],
       "expectations": [
         "SKILL.md documents agent acting on the judge dispatch directive",
         "SKILL.md documents met-mapping via block_on severities",
-        "sdd-goal-eval returns met=null + dispatch directive; mocked block_on mapping yields met=True with no findings, met=False with a HIGH finding (behavioral)"
+        "goalforge-goal-eval returns met=null + dispatch directive; mocked block_on mapping yields met=True with no findings, met=False with a HIGH finding (behavioral)"
       ]
     },
     {
       "id": 7,
       "prompt": "A goal is never met across all outer iterations — what happens (blocked_stop)?",
-      "expected_output": "Each outer iteration sdd-goal-eval returns met=False. After outer_max_iter (or when the blocked_stop condition is hit), the agent appends a blocker to findings.md and escalates via AskUserQuestion. It never silently advances status.",
+      "expected_output": "Each outer iteration goalforge-goal-eval returns met=False. After outer_max_iter (or when the blocked_stop condition is hit), the agent appends a blocker to findings.md and escalates via AskUserQuestion. It never silently advances status.",
       "files": ["evals/fixtures/goal-loop/wp-blocked-stop.md"],
       "expectations": [
         "SKILL.md documents blocked_stop escalation path",
         "SKILL.md documents outer_max_iter bound independent of inner 3-retry",
-        "sdd-goal-eval returns met=False each iteration for the blocked-stop fixture (behavioral)"
+        "goalforge-goal-eval returns met=False each iteration for the blocked-stop fixture (behavioral)"
       ]
     },
     {
       "id": 8,
       "prompt": "A WP sets inherits_from — how is its effective goal resolved (cascade)?",
-      "expected_output": "resolve_effective_goal merges the WP goal with the inherited spec: outcome/verification are never inherited (WP's own); constraints/boundaries union-with-dedupe; scalars (iteration_policy, blocked_stop) inherited when unset on the WP. Single owner — sdd-execute does not re-derive cascade.",
+      "expected_output": "resolve_effective_goal merges the WP goal with the inherited spec: outcome/verification are never inherited (WP's own); constraints/boundaries union-with-dedupe; scalars (iteration_policy, blocked_stop) inherited when unset on the WP. Single owner — goalforge-execute does not re-derive cascade.",
       "files": ["evals/fixtures/goal-loop/wp-cascade.md", "evals/fixtures/goal-loop/feature-spec.md"],
       "expectations": [
         "SKILL.md documents per-field cascade via resolve_effective_goal (single owner)",

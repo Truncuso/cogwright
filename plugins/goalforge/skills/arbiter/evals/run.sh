@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-arbiter static-contract checks
+# evals/run.sh — goalforge-arbiter static-contract checks
 # The skill is model-driven (approach normalization + arbitration); behavioral
 # output cannot be asserted without a model call, so these are static-contract
-# checks over SKILL.md plus a wiring check against sdd-harden.
+# checks over SKILL.md plus a wiring check against goalforge-harden.
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"
-SDD_HARDEN_MD="$(cd "$SKILL_DIR/../sdd-harden" && pwd)/SKILL.md"
+SDD_HARDEN_MD="$(cd "$SKILL_DIR/../goalforge-harden" && pwd)/SKILL.md"
 PASS=0
 FAIL=0
 
@@ -25,10 +25,10 @@ check() {
   fi
 }
 
-echo "=== sdd-arbiter: static-contract checks ==="
+echo "=== goalforge-arbiter: static-contract checks ==="
 
 # Identity + version
-check "skill name declared" "name: sdd-arbiter"
+check "skill name declared" "name: goalforge-arbiter"
 check "version declared" "version: 1.1.0"
 
 # Trigger conditions
@@ -56,7 +56,7 @@ check "decision memo: verification gates" "verification gates"
 # Advisory boundary
 check "advisory / non-blocking" "advisory"
 check "does not change human-gated transition" "hardened"
-check "status authority stays with sdd-harden" "status authority"
+check "status authority stays with goalforge-harden" "status authority"
 
 # Stakes tiering (quick-compare vs full grid)
 check "stakes tiering section present" "Stakes tiering"
@@ -68,10 +68,10 @@ check "optional cheap-tier grid via arbiter-grid role" "arbiter-grid"
 # Hygiene
 check "Gotchas section present" "## Gotchas"
 
-# Wiring: sdd-harden references sdd-arbiter
-# NOTE: this check is EXPECTED TO FAIL — the orchestrator wires sdd-harden,
+# Wiring: goalforge-harden references goalforge-arbiter
+# NOTE: this check is EXPECTED TO FAIL — the orchestrator wires goalforge-harden,
 # not this skill. It will pass once WP-orchestration wires the caller.
-check "sdd-harden wires sdd-arbiter" "sdd-arbiter" "$SDD_HARDEN_MD"
+check "goalforge-harden wires goalforge-arbiter" "goalforge-arbiter" "$SDD_HARDEN_MD"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

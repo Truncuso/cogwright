@@ -1,15 +1,15 @@
 ---
-name: sdd-execute
-description: "Execute all tasks in a WP at status `ready`, running the per-task clean → deterministic-eval → commit sub-cycle (each task reaches the interim status `implemented`). The expensive semantic review + simplify are amortized to the WP boundary (sdd-verify), not run per task. TRIGGER: /sdd-execute <wp-path> or when sdd-run reaches the execute step in the chain."
+name: goalforge-execute
+description: "Execute all tasks in a WP at status `ready`, running the per-task clean → deterministic-eval → commit sub-cycle (each task reaches the interim status `implemented`). The expensive semantic review + simplify are amortized to the WP boundary (goalforge-verify), not run per task. TRIGGER: /goalforge-execute <wp-path> or when goalforge-run reaches the execute step in the chain."
 metadata:
   version: 2.0.0
 hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh sdd-execute"
+          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-execute"
         - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh sdd-execute:stop"
+          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-execute:stop"
 ---
 
 # SDD Execute
@@ -23,11 +23,11 @@ resolution (env `SDD_PLANS_DIR` → project git-root `plans/` → global
 
 ## Contract
 
-Reads a WP at `status: ready` and drives `ready → executing`; `sdd-verify` writes
+Reads a WP at `status: ready` and drives `ready → executing`; `goalforge-verify` writes
 `executing → verified` after the WP-level semantic gate. **Tasks reach the
 interim status `implemented`** here (deterministic eval passed + committed) —
 *not* `verified`. `verified` is quality-signed-off and is
-**written only at the WP gate** by `sdd-verify`, which flips each `implemented`
+**written only at the WP gate** by `goalforge-verify`, which flips each `implemented`
 task to `verified` as it finalizes. State-machine invariants (schema.md §state machine): `executing` ⇒ ≥1
 task has a `checkpoint` block; a task reaches `implemented` after its
 deterministic eval (Step 6) passes and it is committed (Step 8); `verified` ⇒ all
@@ -45,7 +45,7 @@ and stop cleanly; status is never advanced past a blocker. Detail:
 Steps 1–10 run inside an **outer goal-completion loop** that simulates native
 `/goal` (design §4). Split of labour:
 
-- **The script (`sdd-goal-eval`) is pure.** It decides `deterministic`/`numeric`
+- **The script (`goalforge-goal-eval`) is pure.** It decides `deterministic`/`numeric`
   goals itself (binary exit) and, for `judge`/`human`, **returns a directive**
   instead of acting. `resolve_effective_goal` (same module) is the single owner of
   goal cascade + legacy fallback.
@@ -62,17 +62,17 @@ Two bounded caps, **independent of** each other:
   `human` → a non-blocking gate that parks, does not iterate.
 
 **Single status-advance path:** the outer gate never writes `status: verified` —
-it only decides whether to invoke `sdd-verify` (Step 10), the sole authority for
+it only decides whether to invoke `goalforge-verify` (Step 10), the sole authority for
 `executing → verified`.
 
 ## Files read / written
 
 | File | Access |
 |------|--------|
-| `<wp>/overview.md` | read + WP `status:`/`stage_updated:` via `sdd-transition.sh`; `## Tasks` status cell written with the task's frontmatter (Step 8) |
+| `<wp>/overview.md` | read + WP `status:`/`stage_updated:` via `goalforge-transition.sh`; `## Tasks` status cell written with the task's frontmatter (Step 8) |
 | `<wp>/task-*.md` | read + write (`status:`, `checkpoint:`, `commit:`) |
-| `<wp>/findings.md` | read (must exist — created by sdd-harden); append on blocker |
-| `<feature>/todo.md` | write via `sdd-rollup.sh` (per task — Step 8.5 — and at the WP boundary — Step 10) |
+| `<wp>/findings.md` | read (must exist — created by goalforge-harden); append on blocker |
+| `<feature>/todo.md` | write via `goalforge-rollup.sh` (per task — Step 8.5 — and at the WP boundary — Step 10) |
 
 ---
 
@@ -82,15 +82,15 @@ it only decides whether to invoke `sdd-verify` (Step 10), the sole authority for
 
 0. **Prototype-register WP?** If frontmatter carries `register: prototype`
    (schema.md §WP frontmatter), the WP is a declared spike whose task loop
-   collapses to its single task (sdd-decompose stamps prototype WPs with
+   collapses to its single task (goalforge-decompose stamps prototype WPs with
    exactly one task for this reason): after the status advance below, run the
    `prototype` skill (one design question + success criteria from the goal
    block; spike code in a worktree, never committed) and commit the findings
    doc (LOGIC.md / UI.md / PERF.md content, filed per the task spec) as that
    task's commit — the task reaches `implemented` through Steps 6–8 like any
    other, so Step 10's preconditions (all tasks `implemented`, `commit:`
-   backfill) hold, and sdd-verify's cumulative-diff review covers a docs-only
-   diff. Also write the WP-level `findings.md` (sdd-verify requires it). Goal
+   backfill) hold, and goalforge-verify's cumulative-diff review covers a docs-only
+   diff. Also write the WP-level `findings.md` (goalforge-verify requires it). Goal
    verdict via the WP's declared `judge`/`human` strategy over the findings —
    never deterministic-on-spike-code.
 1. Read `<wp>/overview.md`.
@@ -99,14 +99,14 @@ it only decides whether to invoke `sdd-verify` (Step 10), the sole authority for
    rejects `executing → executing` as illegal, so this check must precede the
    advance.)
 3. Otherwise assert `status: ready` (abort if neither `ready` nor `executing`),
-   then advance `ready → executing` through `sdd-transition.sh` — the single
+   then advance `ready → executing` through `goalforge-transition.sh` — the single
    writer of WP `status:` (writes `status:` + `stage_updated:`, appends the
    provenance ledger row, refreshes status cells + feature `todo.md`). Pass
    `--from ready` as an optimistic-lock re-check; never hand-edit `status:` or a
    status cell:
    ```bash
-   bash ~/.claude/skills/sdd/scripts/sdd-transition.sh <wp> executing \
-     --from ready --reason "sdd-execute entry" --actor sdd-execute
+   bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-transition.sh <wp> executing \
+     --from ready --reason "goalforge-execute entry" --actor goalforge-execute
    ```
 
 ### Step 0b — Resolve the effective goal
@@ -135,7 +135,7 @@ Carry `effective_goal` and an empty `reason_feedback` into the outer loop.
 `## Assumptions` checks (set at harden) before building on them:
 
 ```bash
-bash ~/.claude/skills/sdd/scripts/sdd-assumption-recheck.sh <wp>/overview.md
+bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-assumption-recheck.sh <wp>/overview.md
 ```
 
 On a mismatch it writes a keyed, idempotent row to `<wp>/findings.md`
@@ -165,7 +165,7 @@ for outer_iter in 1..outer_max_iter:
     if verdict.met is True: goal_met = True; break
     reason_feedback = verdict.reason          # carry forward as next-iter guidance
     reopen_task_from_reason(verdict.reason)   # Step 9.5 — map reason→task, reset to pending (bounded),
-                                              # or PARK / sdd-redecompose if none maps
+                                              # or PARK / goalforge-redecompose if none maps
 
 if not goal_met:                              # loop exhausted without meeting the goal
     # never silent-pass: exhausting outer_max_iter IS the blocked_stop condition
@@ -210,7 +210,7 @@ not:
 
 - **Task group → one subagent** when the candidate tasks share files/module,
   every task's `complexity ≤ medium`, and none triggers a blast-radius hit
-  (`blast_radius` in `sdd-pick-agent.py`). The group's tasks go to a single
+  (`blast_radius` in `goalforge-pick-agent.py`). The group's tasks go to a single
   subagent that implements them in sequence.
 - **Whole-WP → one subagent** for a small WP (≤ 3 tasks) meeting the same
   conditions (shared cohesion, complexity ≤ medium, no blast radius).
@@ -220,7 +220,7 @@ not:
 
 A grouped dispatch still **commits per task where feasible** (the
 one-conventional-commit-per-task discipline below is unchanged) and the semantic
-review stays **amortized at the WP boundary** (`sdd-verify`) — grouping changes
+review stays **amortized at the WP boundary** (`goalforge-verify`) — grouping changes
 dispatch fan-out, not the commit or review granularity.
 
 Group-edge rules (deterministic):
@@ -262,7 +262,7 @@ EnterWorktree/ExitWorktree.
 ### Step 4 — Dispatch resolution (pick-agent)
 
 Call `pick_agent(task_frontmatter, touched_files, specialist_map, discover=…,
-ollama_health=…)` from `~/.claude/skills/sdd/scripts/sdd-pick-agent.py` →
+ollama_health=…)` from `"$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-pick-agent.py` →
 `{specialist, model, route, discovered_by}` (optionally `proposed_map_entry`).
 
 **Injected callables:** `discover` (a `general-purpose` Sonnet subagent that names
@@ -275,7 +275,7 @@ the fitting specialist + estimates complexity low|medium|high) and `ollama_healt
 evaluator *strategy* is resolved separately by the WP-02 router — `pick_agent`
 selects the *specialist*, never the strategy.
 
-**Model + effort:** from the **canonical role→tier map** (`sdd-pick-agent.py`,
+**Model + effort:** from the **canonical role→tier map** (`goalforge-pick-agent.py`,
 `resolve_role_tier`), then instantiated to an explicit `{model, effort}` via
 `tier_to_dispatch`/`resolve_dispatch` — values live in
 `references/dispatch-resolution.md` §Model tier + effort, do not restate them
@@ -305,7 +305,7 @@ Delegate code-writing to the `implement` skill. **Do NOT reimplement**
 - **`use_testing` hint (goal-predicated).** Evaluate
   `should_invoke_testing(effective_goal)` (the Step 0b effective goal) via
   `from sdd_goal_eval import should_invoke_testing` — the predicate has ONE home
-  in `sdd-goal-eval.py`, not here. It returns `True` when the WP is
+  in `goalforge-goal-eval.py`, not here. It returns `True` when the WP is
   `task_type == 'code'` **AND** `verification.strategy == 'deterministic'`; then
   pass `use_testing: true` so `implement` routes test authoring through
   `testing:write`/`update`. When `False`, pass **no** hint — the dispatch is
@@ -325,7 +325,7 @@ After `implement` returns, write the checkpoint immediately (Step 6b).
 
 Run the task's **deterministic** verification suite — the cheap
 early-error-detection + recovery tier, NOT semantic review (review/simplify/
-second-opinion are amortized to the WP boundary, Step 7 / `sdd-verify`):
+second-opinion are amortized to the WP boundary, Step 7 / `goalforge-verify`):
 
 1. Execute the task's `verify:` command exactly as written in frontmatter.
 2. Run **lint** diff-scoped to the files this task touched (`eslint <files>`,
@@ -347,15 +347,15 @@ escalate via `AskUserQuestion` — **never silent-pass** a failing eval.
 ### Step 6b — Checkpoint write
 
 **After every subagent return** (whether the eval passed or failed), write the
-`checkpoint:` block to the task's **body** as a `## Checkpoint (sdd-execute
-state)` section — NOT the frontmatter. `sdd-validate` enforces the `executing`
+`checkpoint:` block to the task's **body** as a `## Checkpoint (goalforge-execute
+state)` section — NOT the frontmatter. `goalforge-validate` enforces the `executing`
 evidence invariant by scanning for `^checkpoint:` in the body; a checkpoint placed
 inside the frontmatter is invisible to that scan and the pre-commit hook will
 BLOCK. Belt-and-suspenders: it must function even if the **WP-05** `SubagentStop`
 hook is absent.
 
 ````markdown
-## Checkpoint (sdd-execute state)
+## Checkpoint (goalforge-execute state)
 
 checkpoint:
   last_step: <step number just completed>
@@ -372,14 +372,14 @@ Set `resumable: false` only when a blocker has been escalated and human
 intervention is required before continuing. `commit_sha` is the
 **deferred-backfill carrier** (schema.md §Frontmatter `task-NN-*.md`): the commit
 hash is stashed here at commit time (Step 8) and batch-backfilled into each task's
-frontmatter `commit:` at WP finalize by `sdd-verify` — so execution does not churn
+frontmatter `commit:` at WP finalize by `goalforge-verify` — so execution does not churn
 task frontmatter with a per-task `commit:` write.
 
 ### Step 7 — Semantic review (amortized to the WP boundary; opt-in per task)
 
 **Per-task `verify-and-simplify` is removed from the default path.** The expensive
 agent fan-out (code review + simplify + second-opinion) now runs **once** in
-`sdd-verify` on the cumulative WP diff — running it per-task ×N on isolated diffs
+`goalforge-verify` on the cumulative WP diff — running it per-task ×N on isolated diffs
 and then re-doing it at the WP was pure duplication. A task that passed the
 deterministic eval (Step 6) is `implemented`, not yet quality-signed-off.
 
@@ -407,36 +407,36 @@ recorded.
    pass. **In the same edit**, update that task's row in the `overview.md`
    `## Tasks` Status cell to `implemented` — frontmatter and Tasks cell MUST
    advance together (the wp-01 drift-detector hard-fails on divergence).
-   (`verified` is written later, by `sdd-verify`, when the WP gate passes.)
+   (`verified` is written later, by `goalforge-verify`, when the WP gate passes.)
 4. After the commit succeeds, capture the hash and **stash it in the task's
    checkpoint block** (`checkpoint.commit_sha`) — do **not** write a frontmatter
    `commit:` field here:
    ```bash
    HASH=$(git rev-parse HEAD)   # write to checkpoint.commit_sha (Step 6b block)
    ```
-   `sdd-verify` batch-backfills every task's `commit:` from the stashed
+   `goalforge-verify` batch-backfills every task's `commit:` from the stashed
    `commit_sha` at WP finalize. Resume (Step 9) keys on `status:`, not `commit:`,
    so deferring the `commit:` write is safe.
 5. After the task reaches `implemented` and `commit_sha` is stashed, refresh the
    feature rollup (per-task cadence):
    ```bash
-   bash ~/.claude/skills/sdd/scripts/sdd-rollup.sh <PLANS_ROOT>/<feature>
+   bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
    ```
    Step 10 refreshes the rollup again at the WP boundary; both are intentional.
 
-### Step 8.5 — Recap (delegated to `sdd-recap`)
+### Step 8.5 — Recap (delegated to `goalforge-recap`)
 
 The **authoritative** trace record is **one row per WP** written at WP finalize by
-`sdd-verify` (`recap.sh record-wp`); the recap carries no per-task commit column.
+`goalforge-verify` (`recap.sh record-wp`); the recap carries no per-task commit column.
 Per-task `append-task` here is **optional live-progress only** (useful in a
 long-running / interactive run) — record-only, with no effect on outer-loop
 control or status-advance authority:
 
 ```bash
 RECAP=<PLANS_ROOT>/<feature>/recap.md
-bash ~/.claude/skills/sdd-recap/scripts/recap.sh init "$RECAP" <feature>
+bash "$COGWRIGHT_ROOT"/plugins/goalforge/skills/recap/scripts/recap.sh init "$RECAP" <feature>
 # OPTIONAL live progress (result = ok|… ; no commit column):
-bash ~/.claude/skills/sdd-recap/scripts/recap.sh append-task "$RECAP" <wp-slug> <task-slug> ok
+bash "$COGWRIGHT_ROOT"/plugins/goalforge/skills/recap/scripts/recap.sh append-task "$RECAP" <wp-slug> <task-slug> ok
 ```
 
 On a Step 6 loop-back (re-dispatch after a failed eval) **and** on a Step 9.5
@@ -444,12 +444,12 @@ reason→task re-open, record the loop-back before the retry (the iteration trac
 accumulated into the WP's single record at finalize):
 
 ```bash
-bash ~/.claude/skills/sdd-recap/scripts/recap.sh append-loopback "$RECAP" <wp-slug> <iter> "<reason>" <task-slug>
+bash "$COGWRIGHT_ROOT"/plugins/goalforge/skills/recap/scripts/recap.sh append-loopback "$RECAP" <wp-slug> <iter> "<reason>" <task-slug>
 ```
 
 ### Step 9 — Resume (re-entry)
 
-When `sdd-execute` is called for a WP already at `status: executing`:
+When `goalforge-execute` is called for a WP already at `status: executing`:
 
 1. Read every `task-*.md` (frontmatter for `status:`; body for the `checkpoint:`
    section).
@@ -477,7 +477,7 @@ the whole sub-cycle:
    loop-back (Step 8.5). **Bound** re-opens per task (default 2); a task past the
    bound without meeting the goal escalates — do not loop a task forever.
 2. **No task maps** (the gap is structural): **PARK** (append the reason to
-   `findings.md`, exit for human pickup) or route to `sdd-redecompose` when the
+   `findings.md`, exit for human pickup) or route to `goalforge-redecompose` when the
    reason indicates a decomposition gap (a missing/mis-scoped WP). Never silently
    re-run with no target.
 
@@ -508,7 +508,7 @@ post-condition table: `references/goal-directive.md`.
 - **`human`** (`met` is `null`, directive `{gate: <prompt>}`): a **non-blocking**
   gate. PAUSE — emit the gate prompt, write the pending gate to `findings.md`, set
   `verdict.paused = True`, and return so the outer loop **exits** (do not
-  block-wait, do not iterate). The next `sdd-execute` invocation resumes once the
+  block-wait, do not iterate). The next `goalforge-execute` invocation resumes once the
   human has answered (Step 9 idempotency).
 
 **Reason-feedback.** When the goal is not met and the loop continues, carry
@@ -519,21 +519,21 @@ guidance (mirrors native `/goal`'s per-turn reason).
 
 Reached only when **every task is `implemented` AND `verdict.met` is `True`**:
 
-- Invoke `sdd-verify` — the single WP semantic gate. It runs the one
+- Invoke `goalforge-verify` — the single WP semantic gate. It runs the one
   cumulative-diff `verify-and-simplify` pass, **promotes each `implemented` task →
   `verified`**, batch-backfills every task's `commit:` from its checkpoint
   `commit_sha`, runs `--require-commit`, and advances `executing → verified`. It
   checks: all tasks `implemented`/`verified` + `findings.md` exists, then the
   cumulative-diff semantic gate.
-- After `sdd-verify` returns, refresh the feature rollup:
+- After `goalforge-verify` returns, refresh the feature rollup:
   ```bash
-  bash ~/.claude/skills/sdd/scripts/sdd-rollup.sh <PLANS_ROOT>/<feature>
+  bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
   ```
-- The WP `recap.md` finalize + `recap.sh rollup` are delegated to `sdd-recap`
-  **inside `sdd-verify`** — record-only, no status-advance effect.
+- The WP `recap.md` finalize + `recap.sh rollup` are delegated to `goalforge-recap`
+  **inside `goalforge-verify`** — record-only, no status-advance effect.
 
 The outer goal gate does **not** write `status: verified` itself — it only gates
-whether this step runs. `sdd-verify` is the **sole authority** for the
+whether this step runs. `goalforge-verify` is the **sole authority** for the
 `executing → verified` transition (defense in depth; no dual status-advance path).
 
 ---
@@ -543,10 +543,10 @@ whether this step runs. `sdd-verify` is the **sole authority** for the
 | Skill / Superpower | Used for |
 |---|---|
 | `implement` | Code-writing subagent dispatch (Step 5) |
-| `verify-and-simplify` | **Opt-in only** for a flagged high-risk task (Step 7); the one review + simplify + second-opinion pass runs at the WP boundary in `sdd-verify` |
+| `verify-and-simplify` | **Opt-in only** for a flagged high-risk task (Step 7); the one review + simplify + second-opinion pass runs at the WP boundary in `goalforge-verify` |
 | `superpowers:dispatching-parallel-agents` | Wave batched dispatch (Step 3) |
 | `superpowers:using-git-worktrees` | Worktree create/merge per parallel task (Step 3) |
-| `sdd-goal-eval` (`skills/sdd/scripts/`) | Pure goal router + `resolve_effective_goal` (Steps 0b, 9b) |
+| `goalforge-goal-eval` (`scripts/`) | Pure goal router + `resolve_effective_goal` (Steps 0b, 9b) |
 | `judge` | Acting on a `judge` directive from the goal eval (Step 9b) |
 
 ---
@@ -554,13 +554,13 @@ whether this step runs. `sdd-verify` is the **sole authority** for the
 ## Gotchas
 
 - **Commit-hash ordering.** The hash is stashed in `checkpoint.commit_sha` at
-  Step 8, not written to frontmatter `commit:` during execution; `sdd-verify`
+  Step 8, not written to frontmatter `commit:` during execution; `goalforge-verify`
   batch-backfills `commit:` at WP finalize **before** the `--require-commit` gate
   — backfilling after would false-block. The pre-commit hook uses `--strict` only
   (never `--require-commit`), so the absent mid-execution `commit:` never blocks a
   commit.
 - **`verified` is never written here.** Writing `status: verified` from
-  sdd-execute is a contract violation — `sdd-verify` is the sole authority (it
+  goalforge-execute is a contract violation — `goalforge-verify` is the sole authority (it
   promotes `implemented → verified` at the WP gate). This holds even when
   `verdict.met` is `True`; a dual status-advance path is forbidden.
 - **Inner vs outer caps are independent** — exhausting the inner retry cap

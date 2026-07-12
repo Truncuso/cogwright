@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-recap eval harness
+# evals/run.sh — goalforge-recap eval harness
 #
 # Behavioral assertions (driven by scripts/recap.sh against a temp fixture) +
 # static-contract checks on SKILL.md.
@@ -40,17 +40,17 @@ assert() {
 }
 
 # ── Static: SKILL.md contract ────────────────────────────────────────────────
-echo "=== sdd-recap: static-contract checks ==="
+echo "=== goalforge-recap: static-contract checks ==="
 
-check "name declared as sdd-recap"       "name: sdd-recap"
+check "name declared as goalforge-recap"       "name: goalforge-recap"
 check "version declared"                 "version: 2.0.0"
 check "recap.md mentioned"               "recap.md"
 check "record-wp subcommand documented"  "record-wp"
 check "one commit per WP (no per-task commit column)" "one commit per WP"
 check "task table is 2-col (no Commit column)" "| Task | Result |"
 check "Gotchas section present"          "## Gotchas"
-check "skill-measure.sh hook present"    "skill-measure.sh sdd-recap"
-check "skill-trace.sh hook present"      "skill-trace.sh sdd-recap:stop"
+check "skill-measure.sh hook present"    "skill-measure.sh goalforge-recap"
+check "skill-trace.sh hook present"      "skill-trace.sh goalforge-recap:stop"
 check "append-task subcommand documented" "append-task"
 check "finalize subcommand documented"   "finalize"
 check "rollup subcommand documented"     "rollup"
@@ -59,7 +59,7 @@ check "maintenance comment documented"   "do not hand-edit"
 
 # ── Behavioral: lifecycle assertions via recap.sh ────────────────────────────
 echo ""
-echo "=== sdd-recap: behavioral lifecycle checks ==="
+echo "=== goalforge-recap: behavioral lifecycle checks ==="
 
 TMPDIR_FIXTURE="$(mktemp -d)"
 cleanup() { rm -rf "$TMPDIR_FIXTURE"; }

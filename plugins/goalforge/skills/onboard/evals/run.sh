@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# sdd-onboard evals/run.sh — deterministic eval harness
+# goalforge-onboard evals/run.sh — deterministic eval harness
 # Exit 0 = all pass, exit 1 = one or more failures.
 set -uo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SCRIPT="$SKILL_DIR/scripts/sdd-onboard.sh"
+SCRIPT="$SKILL_DIR/scripts/goalforge-onboard.sh"
 SKILL_MD="$SKILL_DIR/SKILL.md"
 
 PASS=0
@@ -19,7 +19,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-echo "=== sdd-onboard evals ==="
+echo "=== goalforge-onboard evals ==="
 echo ""
 
 # ── Trigger 1: SKILL.md description carries onboard trigger phrases ───────────
@@ -62,14 +62,14 @@ done
 echo ""
 
 # ── Functional 1: bootstrap a fresh temp repo ─────────────────────────────────
-echo "[functional-1] sdd-onboard.sh bootstraps a fresh temp repo"
+echo "[functional-1] goalforge-onboard.sh bootstraps a fresh temp repo"
 TMPDIR1=$(mktemp -d)
 git -C "$TMPDIR1" init -q
 
 if bash "$SCRIPT" "$TMPDIR1" >/dev/null 2>&1; then
     true
 else
-    fail "sdd-onboard.sh exited non-zero on fresh repo"
+    fail "goalforge-onboard.sh exited non-zero on fresh repo"
 fi
 
 if [[ -d "$TMPDIR1/plans" ]]; then
@@ -84,10 +84,10 @@ else
     fail ".git/hooks/pre-commit missing"
 fi
 
-if grep -qF '# >>> sdd-pre-commit >>>' "$TMPDIR1/.git/hooks/pre-commit" 2>/dev/null; then
-    pass "pre-commit contains sdd-pre-commit marker"
+if grep -qF '# >>> goalforge-pre-commit >>>' "$TMPDIR1/.git/hooks/pre-commit" 2>/dev/null; then
+    pass "pre-commit contains goalforge-pre-commit marker"
 else
-    fail "pre-commit missing sdd-pre-commit marker"
+    fail "pre-commit missing goalforge-pre-commit marker"
 fi
 
 if [[ -f "$TMPDIR1/CLAUDE.md" ]]; then

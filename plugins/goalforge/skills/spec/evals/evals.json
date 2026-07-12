@@ -1,5 +1,5 @@
 {
-  "skill_name": "sdd-spec",
+  "skill_name": "goalforge-spec",
   "evals": [
     {
       "id": 1,
@@ -7,7 +7,7 @@
       "expected_output": "Reads overview.md (status: draft), writes spec.md, advances overview.md status to ready. HUMAN-GATED: must present draft and await approval before writing files.",
       "files": ["evals/fixtures/overview.md"],
       "expectations": [
-        "SKILL.md declares name: sdd-spec",
+        "SKILL.md declares name: goalforge-spec",
         "SKILL.md input is overview.md with status: draft",
         "SKILL.md output is spec.md with its own status: spec",
         "SKILL.md output updates overview.md status to ready",
@@ -31,11 +31,11 @@
     {
       "id": 3,
       "prompt": "Commit my changes and push to main.",
-      "expected_output": "sdd-spec should NOT trigger — this is a git operation request, not a spec authoring request. The skill is not applicable.",
+      "expected_output": "goalforge-spec should NOT trigger — this is a git operation request, not a spec authoring request. The skill is not applicable.",
       "files": [],
       "expectations": [
         "SKILL.md trigger requires user asking to spec, design, or elaborate on a feature with an overview.md at status: draft",
-        "A git commit/push request is outside the trigger surface of sdd-spec"
+        "A git commit/push request is outside the trigger surface of goalforge-spec"
       ]
     },
     {

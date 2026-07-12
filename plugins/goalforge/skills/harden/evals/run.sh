@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-harden static-contract checks
+# evals/run.sh — goalforge-harden static-contract checks
 #
 # All checks are STATIC-CONTRACT — the skill delegates to interview-loop
 # (a conversational agent) so behavioral output requires a model.
@@ -41,10 +41,10 @@ file_check() {
   fi
 }
 
-echo "=== sdd-harden: static-contract checks ==="
+echo "=== goalforge-harden: static-contract checks ==="
 
 # Identity
-check "skill name declared" "name: sdd-harden"
+check "skill name declared" "name: goalforge-harden"
 
 # Precondition
 check "precondition status is spec" "$SK spec"
@@ -93,7 +93,7 @@ check "never advance ready with invalid/incomplete goal block" "caught here, at 
 # ── Adversarial-verification topology (Tier-1 once / Tier-2 delta) ───────────
 check "Step 0a is the Tier-2 WP-scoped delta" "Tier-2 WP-scoped delta"
 check "consumes Tier-1 feature audit" ".tier1-audit.md"
-check "freshness guard via feature-hash" "sdd-feature-hash.sh"
+check "freshness guard via feature-hash" "goalforge-feature-hash.sh"
 check "stale Tier-1 → whole-feature fallback" "Fall back to a whole-feature review"
 check "reviewer tier via role wp-harden-delta" "wp-harden-delta"
 check "role-exclusive dedup contract present" "Role-exclusive dedup"
@@ -102,7 +102,7 @@ check "panel scoped to this WP's design dissent" "this WP's design dissent"
 # BEHAVIORAL (via validator): a WP with an incomplete goal block (empty outcome)
 # is caught at hardening — the validator rejects it (fatal, non-zero) so
 # hardened→ready must not proceed.
-VALIDATE="$SKILL_DIR/../sdd/scripts/sdd-validate.sh"
+VALIDATE="$SKILL_DIR/../../scripts/goalforge-validate.sh"
 BAD_FIXTURE="$SKILL_DIR/evals/fixtures/incomplete-goal"
 file_check "incomplete-goal fixture tree exists" "$BAD_FIXTURE/wp-01-incomplete-goal/overview.md"
 if [ -f "$VALIDATE" ] && [ -d "$BAD_FIXTURE" ]; then

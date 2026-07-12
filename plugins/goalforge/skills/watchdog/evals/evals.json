@@ -1,13 +1,13 @@
 {
-  "skill_name": "sdd-watchdog",
+  "skill_name": "goalforge-watchdog",
   "evals": [
     {
       "id": 1,
-      "prompt": "sdd-verify just confirmed wp-03 acceptance criteria pass. Audit the WP diff against its spec.",
+      "prompt": "goalforge-verify just confirmed wp-03 acceptance criteria pass. Audit the WP diff against its spec.",
       "expected_output": "Reconstructs the WP goal block, reads changed files + neighbors, reports claimed-vs-implemented / missing tests-docs / deviations as a light summary; does not change WP status.",
       "files": [],
       "expectations": [
-        "SKILL.md declares name: sdd-watchdog",
+        "SKILL.md declares name: goalforge-watchdog",
         "SKILL.md describes reconstructing the WP goal/contract from the goal block",
         "SKILL.md describes reading changed files plus their neighbors",
         "SKILL.md reports three gap classes: claimed-vs-implemented, missing tests/docs, deviations",
@@ -28,22 +28,22 @@
     {
       "id": 3,
       "prompt": "The rollup todo.md is stale for this feature — report it.",
-      "expected_output": "sdd-watchdog should NOT report stale rollup — that is a mechanical check owned by sdd-validate, not the semantic audit. Out of scope.",
+      "expected_output": "goalforge-watchdog should NOT report stale rollup — that is a mechanical check owned by goalforge-validate, not the semantic audit. Out of scope.",
       "files": [],
       "expectations": [
         "SKILL.md restricts scope to semantic gaps, not mechanical/bookkeeping checks",
-        "SKILL.md cross-links sdd-verification-integrity-gaps as the separate mechanical-checks concern",
+        "SKILL.md cross-links goalforge-verification-integrity-gaps as the separate mechanical-checks concern",
         "SKILL.md Gotchas state that reporting a stale rollup is duplication and out of scope"
       ]
     },
     {
       "id": 4,
       "prompt": "Format my Python file with black.",
-      "expected_output": "sdd-watchdog should NOT trigger — this is a formatting request, not a WP gap audit. Not applicable.",
+      "expected_output": "goalforge-watchdog should NOT trigger — this is a formatting request, not a WP gap audit. Not applicable.",
       "files": [],
       "expectations": [
-        "SKILL.md trigger requires an SDD WP gap audit context (invoked by sdd-verify or an explicit WP-vs-spec audit request)",
-        "A code-formatting request is outside the trigger surface of sdd-watchdog"
+        "SKILL.md trigger requires an SDD WP gap audit context (invoked by goalforge-verify or an explicit WP-vs-spec audit request)",
+        "A code-formatting request is outside the trigger surface of goalforge-watchdog"
       ]
     },
     {

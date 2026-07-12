@@ -46,7 +46,7 @@ cmd_init() {
   cat > "$recap_path" <<EOF
 # Recap — ${feature_slug}
 
-<!-- maintained by sdd-recap (scripts/recap.sh); do not hand-edit -->
+<!-- maintained by goalforge-recap (scripts/recap.sh); do not hand-edit -->
 EOF
 }
 
@@ -522,13 +522,13 @@ cmd_self_test() {
     fi
   }
 
-  echo "=== sdd-recap: --self-test ==="
+  echo "=== goalforge-recap: --self-test ==="
 
   # 1. init creates file
   bash "$0" init "$recap" "my-feature"
   assert "init creates recap.md" "[[ -f '$recap' ]]"
   assert "init writes feature slug header" "grep -qF '# Recap — my-feature' '$recap'"
-  assert "init writes maintenance comment" "grep -qF 'maintained by sdd-recap' '$recap'"
+  assert "init writes maintenance comment" "grep -qF 'maintained by goalforge-recap' '$recap'"
 
   # 2. init twice = no-op (idempotency)
   local before after

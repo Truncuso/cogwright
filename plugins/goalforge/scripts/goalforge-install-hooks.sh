@@ -19,7 +19,16 @@ set -euo pipefail
 
 MARKER_OPEN="# >>> sdd-pre-commit >>>"
 MARKER_CLOSE="# <<< sdd-pre-commit <<<"
-SDD_HOOK_PATH="$HOME/.claude/skills/sdd/scripts/hooks/sdd-pre-commit.sh"
+# Resolve the pre-commit hook plugin-relative first (self-contained plugin),
+# falling back to the dotfiles source when running outside an installed plugin.
+_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+if [[ -n "${CLAUDE_PLUGIN_ROOT:-}" && -f "$CLAUDE_PLUGIN_ROOT/hooks/goalforge-pre-commit.sh" ]]; then
+    SDD_HOOK_PATH="$CLAUDE_PLUGIN_ROOT/hooks/goalforge-pre-commit.sh"
+elif [[ -f "$_SCRIPT_DIR/../hooks/goalforge-pre-commit.sh" ]]; then
+    SDD_HOOK_PATH="$(cd "$_SCRIPT_DIR/../hooks" && pwd)/goalforge-pre-commit.sh"
+else
+    SDD_HOOK_PATH="$HOME/.claude/skills/sdd/scripts/hooks/sdd-pre-commit.sh"
+fi
 
 # ── Resolve target repo ────────────────────────────────────────────────────────
 if [[ $# -gt 0 ]]; then
