@@ -1,1 +1,17 @@
-{"hooks": {}}
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-single-writer.sh\"",
+            "timeout": 5
+          }
+        ],
+        "description": "single-writer guard: only the sanctioned goalforge writer may edit status:/goal_approved_version: in plans/**; blocks hand-edits (dual-root: <git-root>/plans/** or ~/.claude/plans/**)"
+      }
+    ]
+  }
+}
