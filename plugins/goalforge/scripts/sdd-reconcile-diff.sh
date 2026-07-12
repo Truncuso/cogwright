@@ -1,1 +1,0 @@
-goalforge-reconcile-diff.sh

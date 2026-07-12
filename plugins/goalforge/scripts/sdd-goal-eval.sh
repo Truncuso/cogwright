@@ -1,1 +1,0 @@
-goalforge-goal-eval.sh

@@ -1,1 +1,0 @@
-goalforge-archive-batch.sh

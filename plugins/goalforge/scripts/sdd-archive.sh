@@ -1,1 +1,0 @@
-goalforge-archive.sh

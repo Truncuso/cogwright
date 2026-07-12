@@ -36,10 +36,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 STATE_MACHINE="$SCRIPT_DIR/../references/state-machine.md"
-STAMP="$SCRIPT_DIR/sdd-stamp-tables.sh"
-ROLLUP="$SCRIPT_DIR/sdd-rollup.sh"
-VALIDATE="$SCRIPT_DIR/sdd-validate.sh"
-ATTRIB="$SCRIPT_DIR/sdd-attribution.sh"
+STAMP="$SCRIPT_DIR/goalforge-stamp-tables.sh"
+ROLLUP="$SCRIPT_DIR/goalforge-rollup.sh"
+VALIDATE="$SCRIPT_DIR/goalforge-validate.sh"
+ATTRIB="$SCRIPT_DIR/goalforge-attribution.sh"
 
 usage() {
     sed -n '2,20p' "$SELF" | sed 's/^# \{0,1\}//'
@@ -288,7 +288,7 @@ transition() {
     # non-zero (IO/usage error on a WP that HAS a block) REFUSES — never a silent
     # skip, which would let an unapproved WP reach ready.
     if [[ "$KIND" == "wp" && "$TO" == "ready" ]]; then
-        local GOAL_HASH_SH="$SCRIPT_DIR/sdd-goal-hash.sh"
+        local GOAL_HASH_SH="$SCRIPT_DIR/goalforge-goal-hash.sh"
         local RECOMPUTED GH_RC APPROVED
         set +e; RECOMPUTED="$(bash "$GOAL_HASH_SH" "$OVERVIEW" 2>/dev/null)"; GH_RC=$?; set -e
         if [[ "$GH_RC" -eq 3 ]]; then
@@ -524,7 +524,7 @@ EOF
     _mk_goal_wp "$gfeat/wp-g-missing"  wp-g-missing  null
     _mk_goal_wp "$gfeat/wp-g-freeform" wp-g-freeform '"approved-v1"'
     # stamp ONLY wp-g-ok with its correct recomputed hash
-    bash "$SCRIPT_DIR/sdd-goal-hash.sh" --record "$gfeat/wp-g-ok" >/dev/null
+    bash "$SCRIPT_DIR/goalforge-goal-hash.sh" --record "$gfeat/wp-g-ok" >/dev/null
 
     # (g) stamped-and-matching hardened→ready SUCCEEDS
     if bash "$SELF" "$gfeat/wp-g-ok" ready --reason "approved" >/dev/null 2>&1 \
@@ -708,7 +708,7 @@ EOF
         no "(l) fast-route spec→ready --mode auto should be refused with 'ready refused' (rc=$l_rc)"
     fi
     # (m) POSITIVE — record the hash, then the SAME edge SUCCEEDS → ready (the fix)
-    bash "$SCRIPT_DIR/sdd-goal-hash.sh" --record "$gfeat/wp-g-fast" >/dev/null
+    bash "$SCRIPT_DIR/goalforge-goal-hash.sh" --record "$gfeat/wp-g-fast" >/dev/null
     if bash "$SELF" "$gfeat/wp-g-fast" ready --mode auto --reason "fast-path: route=fast" >/dev/null 2>&1 \
        && [[ "$(read_status "$gfeat/wp-g-fast/overview.md")" == "ready" ]]; then
         ok "(m) fast-route spec→ready --mode auto succeeds after --record → ready"

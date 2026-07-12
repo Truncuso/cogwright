@@ -1,0 +1,60 @@
+# specialist-map.yaml — SDD dispatch seed
+# Maps file extensions, tags, and task_type to specialist agents.
+# Resolution order (sdd-pick-agent.py): by_tag → by_task_type → by_extension →
+# discovery agent. No catch-all default: unmatched → discovery agent.
+# New entries proposed by the discovery agent land in findings.md for human review.
+
+by_extension:
+  .ts: typescript-pro
+  .tsx: typescript-pro
+  .js: typescript-pro
+  .jsx: typescript-pro
+  .py: python-pro
+  .rs: rust-engineer
+  .cpp: cpp-pro
+  .hpp: cpp-pro
+  .cc: cpp-pro
+  .h: cpp-pro
+  # .sql intentionally unmapped: SQL review is handled by the code-review
+  # `database` child (via the code-reviewer agent); no SQL *implementer*
+  # specialist exists, so unmatched .sql falls through to the discovery agent.
+
+by_tag:
+  infra: devops-engineer
+  ci: devops-engineer
+  docker: devops-engineer
+  mechanical: __ollama__      # signals route=ollama, not a specialist
+
+by_task_type:                 # non-code task_type → specialist (after by_tag,
+                              # before by_extension). Code WPs fall through to
+                              # by_extension; `code` deliberately has no entry.
+                              # Every target MUST exist in AGENTS.md.
+                              # GOTCHA: a non-code task_type here OVERRIDES
+                              # file-extension routing — a WP with
+                              # `task_type: analysis` touching a .py file
+                              # dispatches to research-analyst, NOT python-pro.
+                              # Do not set research/writing/analysis on a WP that
+                              # should be dispatched by file type.
+  research: research-analyst
+  writing: __by_writing_kind__   # writing is kind-dependent: resolve via the
+                                 # by_writing_kind sub-map below, keyed on the
+                                 # WP's `writing_kind` tag. (judge only
+                                 # *adjudicates* writing — it is not a producer.)
+  analysis: research-analyst
+  ops: devops-engineer
+
+by_writing_kind:              # second-level resolution for task_type: writing.
+                              # Keyed on the WP's `writing_kind` tag. Untagged
+                              # writing → no match → discovery/escalation (ask a
+                              # human which kind). Every target is an agents/*.md
+                              # subagent that must exist in AGENTS.md.
+  scientific: scientific-literature-researcher
+  research: research-analyst
+  docs: doc-updater
+
+review_pairs:                 # specialist -> reviewer for the eval pass.
+                              # Consolidated: the code-reviewer agent auto-detects
+                              # language and loads the matching code-review child.
+  typescript-pro: code-reviewer
+  python-pro: code-reviewer
+  rust-engineer: code-reviewer

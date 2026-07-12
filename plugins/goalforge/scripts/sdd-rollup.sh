@@ -1,1 +1,0 @@
-goalforge-rollup.sh

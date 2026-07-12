@@ -1,1 +1,0 @@
-goalforge-stamp-tables.sh

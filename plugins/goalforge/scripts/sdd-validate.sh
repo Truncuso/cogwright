@@ -1,1 +1,0 @@
-goalforge-validate.sh

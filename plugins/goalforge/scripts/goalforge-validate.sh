@@ -30,7 +30,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
-GOAL_HASH_SH="$SCRIPT_DIR/sdd-goal-hash.sh"
+GOAL_HASH_SH="$SCRIPT_DIR/goalforge-goal-hash.sh"
 
 # ── Argument parsing ────────────────────────────────────────────────────────
 

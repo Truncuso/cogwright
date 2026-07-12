@@ -1,1 +1,0 @@
-goalforge-install-hooks.sh

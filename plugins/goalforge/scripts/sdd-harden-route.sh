@@ -1,1 +1,0 @@
-goalforge-harden-route.sh

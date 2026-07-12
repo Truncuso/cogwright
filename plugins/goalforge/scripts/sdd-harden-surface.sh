@@ -1,1 +1,0 @@
-goalforge-harden-surface.sh

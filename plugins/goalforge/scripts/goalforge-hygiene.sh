@@ -13,9 +13,9 @@
 set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STAMP="$SD/sdd-stamp-tables.sh"
-ROLLUP="$SD/sdd-rollup.sh"
-VALIDATE="$SD/sdd-validate.sh"
+STAMP="$SD/goalforge-stamp-tables.sh"
+ROLLUP="$SD/goalforge-rollup.sh"
+VALIDATE="$SD/goalforge-validate.sh"
 
 SHOW=0
 APPLY=0

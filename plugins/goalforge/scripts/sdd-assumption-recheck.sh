@@ -1,1 +1,0 @@
-goalforge-assumption-recheck.sh

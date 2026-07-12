@@ -40,7 +40,7 @@ if [[ -z "$PLANS" ]]; then
     fi
 fi
 
-VALIDATOR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sdd-validate.sh"
+VALIDATOR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/goalforge-validate.sh"
 
 # Best-effort: a missing validator / plans dir degrades to empty (exit 0), never
 # crashes the caller.

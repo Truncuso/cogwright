@@ -9,7 +9,8 @@
 
 set -euo pipefail
 
-SDD_INSTALL_HOOKS="$HOME/.claude/skills/sdd/scripts/sdd-install-hooks.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SDD_INSTALL_HOOKS="$SCRIPT_DIR/../../../scripts/goalforge-install-hooks.sh"
 
 # ── Resolve target repo ────────────────────────────────────────────────────────
 if [[ $# -gt 0 ]]; then

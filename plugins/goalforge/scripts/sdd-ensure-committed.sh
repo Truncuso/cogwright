@@ -1,1 +1,0 @@
-goalforge-ensure-committed.sh

@@ -23,10 +23,10 @@
 set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DETECT="$SD/sdd-completed.sh"
-HYGIENE="$SD/sdd-hygiene.sh"
-ARCHIVE="$SD/sdd-archive.sh"
-ENSURE="$SD/sdd-ensure-committed.sh"
+DETECT="$SD/goalforge-completed.sh"
+HYGIENE="$SD/goalforge-hygiene.sh"
+ARCHIVE="$SD/goalforge-archive.sh"
+ENSURE="$SD/goalforge-ensure-committed.sh"
 
 SHOW=0
 APPLY=0

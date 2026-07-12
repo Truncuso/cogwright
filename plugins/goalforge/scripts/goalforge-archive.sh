@@ -25,7 +25,7 @@
 set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VALIDATE="$SD/sdd-validate.sh"
+VALIDATE="$SD/goalforge-validate.sh"
 
 FEATURE=""
 OLD=""

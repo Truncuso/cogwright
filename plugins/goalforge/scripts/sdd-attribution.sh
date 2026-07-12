@@ -1,1 +1,0 @@
-goalforge-attribution.sh

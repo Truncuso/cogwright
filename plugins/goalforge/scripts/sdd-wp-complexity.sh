@@ -1,1 +1,0 @@
-goalforge-wp-complexity.sh

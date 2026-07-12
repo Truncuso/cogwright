@@ -26,7 +26,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
-COMPLEXITY="$SCRIPT_DIR/sdd-wp-complexity.sh"
+COMPLEXITY="$SCRIPT_DIR/goalforge-wp-complexity.sh"
 
 usage() {
     sed -n '2,25p' "$SELF" | sed 's/^# \{0,1\}//'
