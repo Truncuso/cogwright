@@ -1,0 +1,66 @@
+{
+  "skill_name": "sdd-capture",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to build a notification service that sends emails and SMS when events occur.",
+      "expected_output": "Creates ~/.claude/plans/notification-service/overview.md with status: draft and todo.md from template",
+      "files": [],
+      "expectations": [
+        "SKILL.md declares name: sdd-capture",
+        "SKILL.md documents output files: overview.md (status: draft) and todo.md",
+        "SKILL.md references template feature-overview.md",
+        "SKILL.md references template feature-todo.md",
+        "SKILL.md describes slugification procedure",
+        "SKILL.md states idempotency: folder present + overview.md present = update in place without clobbering",
+        "SKILL.md forbids creating WP folders or spec.md",
+        "SKILL.md forbids moving or deleting existing files",
+        "SKILL.md states stage_updated is not applicable to feature overview.md (uses updated: instead)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Start a plan for 'User Auth Revamp'",
+      "expected_output": "Slugifies to user-auth-revamp; creates overview.md with status: draft",
+      "files": [],
+      "expectations": [
+        "SKILL.md example shows 'User auth Revamp' → user-auth-revamp",
+        "SKILL.md status for overview.md output is exactly 'draft'",
+        "SKILL.md template marker line is: <!-- Template: feature-overview v4 (frontmatter-first, flat layout) -->"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Create a new feature plan for a search indexing pipeline",
+      "expected_output": "Slugifies to search-indexing-pipeline; creates overview.md (status: draft) and todo.md; does not create spec.md or any WP folder",
+      "files": [],
+      "expectations": [
+        "SKILL.md triggers on user describing a new feature in natural language",
+        "SKILL.md writes exactly two files: overview.md and todo.md",
+        "SKILL.md Never creates spec.md or WP folders at capture time"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Run the test suite and report which tests are failing.",
+      "expected_output": "sdd-capture should NOT trigger — this is a test-execution request, not a feature-planning request. The skill is not applicable.",
+      "files": [],
+      "expectations": [
+        "SKILL.md trigger phrase requires user describing a new feature, change, or work item",
+        "A test-run request is outside the trigger surface of sdd-capture"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I want to add a caching layer, but I haven't decided on Redis vs Memcached yet.",
+      "expected_output": "Captures the intent with status: draft; records the Redis vs Memcached decision as an open question or scope note; does NOT block on the unresolved choice. Slugifies to something like 'caching-layer'.",
+      "files": [],
+      "expectations": [
+        "SKILL.md Scope section can be left as template placeholder if user did not specify",
+        "SKILL.md proceeds with partial information rather than blocking on unresolved design choices",
+        "SKILL.md output status is draft regardless of open questions",
+        "SKILL.md never advances status beyond draft"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1 @@
+goalforge-feature-hash.sh

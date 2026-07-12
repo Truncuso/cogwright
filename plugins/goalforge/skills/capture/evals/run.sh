@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# evals/run.sh — sdd-capture static-contract checks
+# All checks are static-contract (skill transforms markdown via model;
+# behavioral output cannot be asserted without a model call).
+set -euo pipefail
+
+SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+SKILL_MD="$SKILL_DIR/SKILL.md"
+PASS=0
+FAIL=0
+
+check() {
+  local desc="$1"
+  local pattern="$2"
+  if grep -qF "$pattern" "$SKILL_MD"; then
+    echo "  PASS: $desc"
+    PASS=$((PASS+1))
+  else
+    echo "  FAIL: $desc"
+    echo "        expected to find: $pattern"
+    FAIL=$((FAIL+1))
+  fi
+}
+
+# Ordering-aware check: assert $2 (first) appears on an earlier line than $3
+# (second) in SKILL.md — a bare substring match cannot catch a step landing in
+# the wrong order. Fails if either pattern is missing.
+check_order() {
+  local desc="$1"
+  local first="$2"
+  local second="$3"
+  local ln_first ln_second
+  ln_first=$(grep -nF "$first" "$SKILL_MD" | head -n 1 | cut -d: -f1)
+  ln_second=$(grep -nF "$second" "$SKILL_MD" | head -n 1 | cut -d: -f1)
+  if [ -n "$ln_first" ] && [ -n "$ln_second" ] && [ "$ln_first" -lt "$ln_second" ]; then
+    echo "  PASS: $desc"
+    PASS=$((PASS+1))
+  else
+    echo "  FAIL: $desc (first@${ln_first:-none} must precede second@${ln_second:-none})"
+    FAIL=$((FAIL+1))
+  fi
+}
+
+echo "=== sdd-capture: static-contract checks ==="
+
+# Identity
+check "skill name declared" "name: sdd-capture"
+
+# Output contract
+check "overview.md output declared" "plans/<feature>/overview.md"
+check "overview.md initial status is draft" "status: draft"
+check "todo.md output declared" "plans/<feature>/todo.md"
+check "feature-overview template referenced" "feature-overview.md"
+check "feature-todo template referenced" "feature-todo.md"
+
+# Template marker
+check "template marker present" "<!-- Template: feature-overview v4 (frontmatter-first, flat layout) -->"
+
+# Idempotency
+check "idempotency: folder present + overview present = update in place" "Folder present, \`overview.md\` present"
+
+# Guardrails
+check "never create WP folders guardrail" "Never"
+check "spec.md creation forbidden" "spec.md"
+check "stage_updated not applicable to feature overview" "stage_updated"
+
+# Slugification
+check "slugification example documented" "user-auth-revamp"
+
+# Route classification (Step 4c) + fast path
+check "route classifier invoked (sdd-goal-route.sh)" "sdd-goal-route.sh"
+check "route stamped as frontmatter data" "route:"
+check "borderline verdict confirms with the human" "borderline"
+check "fast-path runbook present" "Fast path"
+check "fast path delegates WP authoring to add-wp" "Add-WP mode"
+check "fast path never skips verification" "never skips verification"
+check "fast path records goal hash (reconciles wp-01 ready-gate)" "sdd-goal-hash.sh --record"
+check_order "fast path records goal hash BEFORE spec->ready --mode auto" \
+  "sdd-goal-hash.sh --record" "sdd-transition.sh <wp> ready"
+
+# Route classifier self-test (deterministic regression)
+if bash "$HOME/.claude/skills/sdd/scripts/sdd-goal-route.sh" --self-test >/dev/null 2>&1; then
+  echo "  PASS: sdd-goal-route.sh --self-test green"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL: sdd-goal-route.sh --self-test failed"
+  FAIL=$((FAIL+1))
+fi
+
+echo ""
+echo "Results: $PASS passed, $FAIL failed"
+if [ "$FAIL" -gt 0 ]; then
+  exit 1
+fi
+exit 0

@@ -1,0 +1,1 @@
+goalforge-goal-hash.sh

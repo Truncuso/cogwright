@@ -1,0 +1,64 @@
+{
+  "skill_name": "sdd-spec",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run a design pass for the notification-service feature",
+      "expected_output": "Reads overview.md (status: draft), writes spec.md, advances overview.md status to ready. HUMAN-GATED: must present draft and await approval before writing files.",
+      "files": ["evals/fixtures/overview.md"],
+      "expectations": [
+        "SKILL.md declares name: sdd-spec",
+        "SKILL.md input is overview.md with status: draft",
+        "SKILL.md output is spec.md with its own status: spec",
+        "SKILL.md output updates overview.md status to ready",
+        "SKILL.md declares draft → spec transition is human-gated",
+        "SKILL.md states skill must present draft to user before writing files",
+        "SKILL.md references feature-spec template",
+        "SKILL.md forbids creating WP folders or task files"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Write the design document and spec for the payment-gateway feature",
+      "expected_output": "Reads plans/payment-gateway/overview.md (status: draft), conducts design pass, authors goal block in spec.md frontmatter, presents draft to user for approval, then writes spec.md and updates overview.md status to ready.",
+      "files": [],
+      "expectations": [
+        "SKILL.md triggers on user asking to spec, design, or elaborate on a feature with an existing overview.md",
+        "SKILL.md authors the goal block (task_type, goal.outcome, goal.verification) in spec.md frontmatter",
+        "SKILL.md never advances status without explicit human approval"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Commit my changes and push to main.",
+      "expected_output": "sdd-spec should NOT trigger — this is a git operation request, not a spec authoring request. The skill is not applicable.",
+      "files": [],
+      "expectations": [
+        "SKILL.md trigger requires user asking to spec, design, or elaborate on a feature with an overview.md at status: draft",
+        "A git commit/push request is outside the trigger surface of sdd-spec"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Author the spec for the search-indexing-pipeline with a numeric verification strategy",
+      "expected_output": "Conducts design pass; authors goal block with task_type and goal.verification.strategy = 'numeric'; goal.verification.check includes bench/metric/op/threshold fields; presents draft for approval before writing files.",
+      "files": [],
+      "expectations": [
+        "SKILL.md goal.verification.strategy supports deterministic, numeric, judge, human",
+        "SKILL.md goal block is authored in spec.md frontmatter, not in overview.md",
+        "SKILL.md goal.verification.check is written in the strategy's correct shape"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Write a spec for a feature but its overview.md is already at status: ready (spec already approved)",
+      "expected_output": "Skill warns the user that overview.md status is not 'draft' and asks for confirmation before proceeding. Does NOT silently overwrite or skip. If spec.md already exists, asks whether to overwrite or merge.",
+      "files": [],
+      "expectations": [
+        "SKILL.md warns and asks user to confirm when input overview.md status is not draft",
+        "SKILL.md asks whether to overwrite or merge when spec.md already exists",
+        "SKILL.md never silently overwrites an existing approved spec"
+      ]
+    }
+  ]
+}

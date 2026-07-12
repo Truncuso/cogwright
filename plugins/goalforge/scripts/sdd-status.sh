@@ -1,0 +1,1 @@
+goalforge-status.sh
