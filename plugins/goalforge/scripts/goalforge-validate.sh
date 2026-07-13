@@ -1189,8 +1189,9 @@ def check_verify_string(path, fm, status):
         ea = [ea]
     expects_absent = {str(p) for p in ea}
     for tok in _verify_path_tokens(verify):
+        tok_exp = os.path.expanduser(tok)
         if tok in expects_absent:
-            target = Path(tok) if os.path.isabs(tok) else (verify_base / tok)
+            target = Path(tok_exp) if os.path.isabs(tok_exp) else (verify_base / tok)
             if target.exists():
                 err(path, f"verify-path `{tok}` is declared expects_absent but still exists (deletion did not happen / regressed)",
                     "Complete the deletion, or remove the path from expects_absent")
@@ -1198,7 +1199,7 @@ def check_verify_string(path, fm, status):
         if tok.startswith('tmp/') or '/tmp/' in tok:   # token filter never yields bare 'tmp'
             warn(path, f"verify-path `{tok}` is tmp/ evidence — uncommitted, may be absent at verify-time")
             continue
-        target = Path(tok) if os.path.isabs(tok) else (verify_base / tok)
+        target = Path(tok_exp) if os.path.isabs(tok_exp) else (verify_base / tok)
         if target.exists():
             continue
         if _verify_path_gitignored(tok):
