@@ -115,11 +115,13 @@ status: draft|ready|active|completed|archived
 # active: reserved-for-future (no skill writes it yet; sdd-lifecycle-redesign)
 created: YYYY-MM-DD
 feature: <feature>
-route: standard                   # one-go|fast|standard|wave — chain route,
+route: standard                   # fast|standard|wave — chain route,
                                   # stamped by sdd-capture (sdd-goal-route.sh
-                                  # verdict). Back-compat: fast|full still
-                                  # accepted on read; full normalizes to
-                                  # standard. Absent ⇒ standard (back-compat).
+                                  # verdict). Back-compat: legacy full|one-go
+                                  # still accepted on read; full normalizes to
+                                  # standard, one-go to fast (single-agent
+                                  # dispatch expressed via execution_plan).
+                                  # Absent ⇒ standard (back-compat).
 # confidence: clear|borderline|pinned  # classifier confidence for the route
                                   # verdict (optional; sdd-goal-route.sh output
                                   # field, not gating). pinned = human override.
@@ -148,17 +150,18 @@ in frontmatter. No folder move is ever required or meaningful.
 
 ## Route enum + execution_plan block
 
-`route:` classifies how much of the chain a feature needs. Four values:
+`route:` classifies how much of the chain a feature needs. Three values:
 
 | Route | Meaning |
 |---|---|
-| `one-go` | Smallest unit — reuses fast-path 1-WP mechanics with a single dispatch (full goal-contract + deterministic gates preserved). |
-| `fast` | capture → single WP → execute/verify, no `spec.md`. |
+| `fast` | capture → single WP → execute/verify, no `spec.md`. A "one-go" (smallest-unit, single-dispatch) feature is `route: fast` whose `execution_plan` sets `dispatch: agent` on the implement step = exactly one implement-agent — the full goal-contract + deterministic gates are preserved. |
 | `standard` | Full chain: spec → decompose → harden → execute → verify. Default. |
 | `wave` | Multi-WP with parallel fan-out (explore, parallel spec authors, cross-spec judge, hygiene). |
 
-Back-compat: `fast`/`full` are still accepted on read; `full` normalizes to
-`standard`. Absent `route:` ⇒ `standard` (legacy behavior).
+Back-compat: legacy `full`/`one-go` are still accepted on read; `full`
+normalizes to `standard`, `one-go` to `fast` (single-agent dispatch expressed
+via `execution_plan`, never a 4th enum value). Absent `route:` ⇒ `standard`
+(legacy behavior).
 
 Classifier confidence (optional `confidence:` field, output of
 `sdd-goal-route.sh`, never gating): `clear` (unambiguous signals), `borderline`
@@ -170,7 +173,7 @@ alongside `route:` — persisted DATA, inspectable and human-overridable at the
 spec gate, consumed (never re-classified) by the runner:
 
 ```yaml
-route: standard            # one-go | fast | standard | wave
+route: standard            # fast | standard | wave
 execution_plan:
   steps: [spec, decompose, harden, execute, verify]   # subset per route
   dispatch:                # inline | agent, per step
