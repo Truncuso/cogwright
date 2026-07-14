@@ -101,6 +101,7 @@ WRITING_KIND_SENTINEL = "__by_writing_kind__"  # task_type: writing → resolve 
                                                # `writing_kind` tag (kind-dependent).
 
 SPECIALIST_MAP_PATH = Path(__file__).parent.parent / "references" / "specialist-map.yaml"
+TIER_MAP_PATH = Path(__file__).parent.parent / "references" / "tier-map.md"
 
 
 # ---------------------------------------------------------------------------
@@ -270,6 +271,81 @@ def resolve_dispatch(
         role, profile, complexity=complexity, blast_radius_hit=blast_radius_hit
     )
     return tier_to_dispatch(tier)
+
+
+# ---------------------------------------------------------------------------
+# tier-map.md projection (generated view of ROLE_TIER — no runtime md parsing)
+# ---------------------------------------------------------------------------
+# tier-map.md is a GENERATED, human-readable projection of ROLE_TIER — the dict
+# stays the single authoritative source. render_tier_map() emits it; the
+# --test-tiers eval drift-checks the on-disk file against this render (the
+# generation-drift gate). Nothing in the resolution path ever PARSES the md.
+
+_TIER_MAP_HEADER = """<!-- GENERATED FILE — do not hand-edit.
+     Human-readable projection of the authoritative ROLE_TIER dict in
+     scripts/goalforge-pick-agent.py. Regenerate from the dict; the
+     `goalforge-pick-agent.py --test-tiers` eval drift-checks this projection
+     against ROLE_TIER (no runtime markdown parsing anywhere). -->
+
+# Dispatch Tier Map (role → tier × effort)
+
+Projection of `ROLE_TIER` (scripts/goalforge-pick-agent.py) — the single
+authoritative source. Tiers are bare (`haiku`/`sonnet`/`opus`/`fable`); effort is
+bare (`low`/`medium`/`high`/`xhigh`/`max`). No pinned vendor model IDs.
+
+- **tier** — the `low`/`medium`/`high` band from `ROLE_TIER[role][profile]`.
+- **model** — the concrete model class via `COMPLEXITY_MODEL`
+  (`low → sonnet`, `medium → opus`, `high → opus`).
+- **effort** — the derived dispatch effort via `tier_to_dispatch`
+  (`low → low`, `medium → low`, `high → high`).
+
+Blast radius (auth / schema / migration / exported API / 3+ files) is detected
+deterministically and forces the `high` tier (→ `opus` @ `high`) regardless of
+role or profile — a sensitive change is never silently downgraded.
+
+## Roles
+
+| role | autonomous-minimal (tier / model / effort) | semi-autonomous (tier / model / effort) |
+|------|---------------------------------------------|------------------------------------------|
+"""
+
+_TIER_MAP_FOOTER = """
+## Complexity-conditioned rows
+
+The `implement` role carries the `by_complexity` sentinel in both autonomy
+profiles: it does not fix a tier, it defers to the task's own `complexity`
+(`low`/`medium`/`high`), which then resolves to a tier × effort through the same
+`tier_to_dispatch` mapping. This preserves per-task tiering for the code-writing
+role while every other role reads its fixed band from `ROLE_TIER`.
+
+## Autonomy profiles
+
+- **autonomous-minimal** — cost-lean: the cheapest tier that still does the job,
+  escalating only on blast radius. Default for fully-autonomous runs.
+- **semi-autonomous** — a human reviews the output, so spend for quality at the
+  gates feeding that review (the WP `wp-verify` pass, the `panel`, the
+  last-WP `integration-review`).
+"""
+
+
+def _tier_cell(value: str) -> str:
+    """Render one ROLE_TIER cell as `tier / model / effort` (or the sentinel)."""
+    if value == "by_complexity":
+        return "by_complexity"
+    return f"{value} / {COMPLEXITY_MODEL[value]} / {TIER_DISPATCH[value]['effort']}"
+
+
+def render_tier_map() -> str:
+    """Render tier-map.md verbatim from ROLE_TIER — the projection generator.
+
+    Pure and offline. The single writer of tier-map.md; `--test-tiers` compares
+    the on-disk file to this output (generation-drift gate) and `--regen-tier-map`
+    writes it. No caller ever parses the markdown back."""
+    rows = [
+        f"| {role} | {_tier_cell(pr['autonomous-minimal'])} | {_tier_cell(pr['semi-autonomous'])} |"
+        for role, pr in ROLE_TIER.items()
+    ]
+    return _TIER_MAP_HEADER + "\n".join(rows) + "\n" + _TIER_MAP_FOOTER
 
 
 # ---------------------------------------------------------------------------
@@ -632,6 +708,18 @@ def _test_tiers() -> int:
     except EscalationRequired:
         pass
 
+    # Generation-drift gate: the on-disk tier-map.md must equal render_tier_map()
+    # (ROLE_TIER is authoritative; the md is a generated projection, never parsed).
+    try:
+        on_disk = TIER_MAP_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        on_disk = None
+    if on_disk != render_tier_map():
+        failures.append(
+            "tier-map.md drift: regenerate with --regen-tier-map "
+            "(ROLE_TIER changed without updating the projection)"
+        )
+
     if failures:
         for f in failures:
             print(f"  FAIL: {f}", file=sys.stderr)
@@ -646,6 +734,11 @@ def _build_cli() -> argparse.ArgumentParser:
         description="SDD pick-agent: resolve specialist/model/route for a task."
     )
     p.add_argument("--task", metavar="FILE", help="Path to task YAML/MD file")
+    p.add_argument(
+        "--regen-tier-map",
+        action="store_true",
+        help="Regenerate references/tier-map.md from ROLE_TIER and exit (no network).",
+    )
     p.add_argument(
         "--test-tiers",
         action="store_true",
@@ -674,6 +767,11 @@ def _build_cli() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns exit code."""
     args = _build_cli().parse_args(argv)
+
+    if args.regen_tier_map:
+        TIER_MAP_PATH.write_text(render_tier_map(), encoding="utf-8")
+        print(f"wrote {TIER_MAP_PATH}")
+        return 0
 
     if args.test_tiers:
         return _test_tiers()
