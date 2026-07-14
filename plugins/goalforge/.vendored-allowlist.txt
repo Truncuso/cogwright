@@ -1,2 +1,5 @@
 plugins/goalforge/skills/capture/SKILL.md
 plugins/goalforge/skills/harden/SKILL.md
+
+# Vendored external content (source · retrieved date)
+plugins/goalforge/references/discipline-core.md  # source: ~/.claude/skills/fable-mode/references/discipline-core.md · retrieved 2026-07-14
