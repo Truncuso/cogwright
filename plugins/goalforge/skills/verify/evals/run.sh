@@ -9,7 +9,10 @@ set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"
-IMPLEMENT_MD="$SKILL_DIR/../implement/SKILL.md"   # sibling skill (wp-02 boundary note)
+EXECUTE_MD="$SKILL_DIR/../execute/SKILL.md"   # sibling skill (wp-02 boundary note)
+# The plugin has NO bare `implement` skill (local-tree layout only) — execute owns
+# the per-task cycle here, and the wp-02 boundary contract lives in ITS SKILL.md:
+# tasks stop at interim `implemented`; `verified` is written only at the WP gate.
 PASS=0
 FAIL=0
 # The `status:` key, kept un-joined from its enum value so the wp-01
@@ -77,7 +80,7 @@ check STATIC-CONTRACT "last-WP cross-WP integration review" "integration review"
 
 # ── wp-02: executor-divergence naming + implement boundary (Gap 2) ──────────
 check STATIC-CONTRACT "wp-02: executor-divergence cause named in refusal" "executor-divergence"
-check STATIC-CONTRACT "wp-02: implement declares it never advances task status" "never advances task" "$IMPLEMENT_MD"
+check STATIC-CONTRACT "wp-02: execute declares verified is written only at the WP gate" "written only at the WP gate" "$EXECUTE_MD"
 
 # BEHAVIORAL-STATIC: refusal template present
 check BEHAVIORAL-STATIC "refusal template: goalforge-verify REFUSED" "goalforge-verify REFUSED"
