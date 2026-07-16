@@ -58,15 +58,19 @@ def frontmatter(path: Path) -> dict:
 
 
 def mentions(path: Path, slug: str) -> list[tuple[int, str]]:
-    """1-indexed (line, text) pairs mentioning the slug as a path or name."""
+    """1-indexed (line, text) pairs REFERENCING the feature: a `<slug>/` path
+    ref or a `[[<slug>]]` wikilink. Bare-name mentions are deliberately NOT
+    matched — for a feature named after a common phrase (agent-dispatch) they
+    are almost all prose noise (live run 2026-07-16: 208 memory 'hits')."""
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return []
-    needle = slug + "/"
+    path_needle = slug + "/"
+    link_needle = "[[" + slug + "]]"
     out = []
     for i, line in enumerate(text.split("\n"), 1):
-        if needle in line or slug in line:
+        if path_needle in line or link_needle in line:
             out.append((i, line.strip()))
     return out
 

@@ -65,6 +65,13 @@ class SweepFixture(unittest.TestCase):
         write(self.docs / "handoffs/_archived/old/2026-06-01-handoff.md",
               "---\nslug: old\nstatus: picked_up\n---\nfeat-x/ mention in archive.\n")
 
+        # Bare-name-only mention (no path ref, no wikilink) — must NOT match
+        write(self.memory / "project/prose-only.md",
+              "---\nname: prose-only\ntype: project\n---\nWe discussed feat-x in standup.\n")
+        # Wikilink-only idea — MUST match
+        write(self.plans / "ideas/wikilink-idea.md",
+              "---\nname: wikilink-idea\nstatus: captured\n---\nRelates to [[feat-x]].\n")
+
         # Memory: fact file + MEMORY.md pointer line
         write(self.memory / "project/handoff_feat-x.md",
               "---\nname: handoff_feat-x\ntype: project\n---\nfeat-x/ execution in flight.\n")
@@ -104,6 +111,7 @@ class SweepFixture(unittest.TestCase):
         self.assertIn("live-idea", names)
         self.assertIn("done-idea", names)
         self.assertNotIn("other-idea", names)
+        self.assertIn("wikilink-idea", names, "[[slug]] wikilink must count as a ref")
         self.assertFalse(names["live-idea"]["terminal"])
         self.assertEqual(names["live-idea"]["action"], "triage")
         self.assertTrue(names["done-idea"]["terminal"])
@@ -130,6 +138,12 @@ class SweepFixture(unittest.TestCase):
         self.assertIn("pointer", kinds)
         # pointer entries carry the MEMORY.md line number for a propose-only diff
         self.assertTrue(all("line" in m for m in mem if m["kind"] == "pointer"))
+
+    def test_bare_name_mention_not_matched(self):
+        rep, _ = self.report()
+        mem_paths = [m["path"] for m in rep["categories"]["memory"]]
+        self.assertFalse(any("prose-only" in p for p in mem_paths),
+                         "bare-name mention without slug/ or [[slug]] must not match")
 
     def test_findings_open_items(self):
         rep, _ = self.report()
