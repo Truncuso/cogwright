@@ -212,8 +212,11 @@ stdout; routing (tactical → `findings.md`, strategic → propose-only) and the
    feature plan artifacts:
    ```bash
    git add <PLANS_ROOT>/<feature>
-   git commit -m "docs(sdd): finalize <wp> verification"
+   git commit -m "docs(sdd): finalize <wp> verification" -- <PLANS_ROOT>/<feature>
    ```
+   The explicit `-- <pathspec>` is required: parallel sessions share `.git/index`,
+   and a bare commit would sweep another session's staged files (repos with
+   `shared_index_guard: true` block it at the harness layer).
    Use a `docs`/`chore` type; no body is needed. Commit on the **current branch**
    — in the dotfiles repo that is `master` (no feature branch, no push). Then
    confirm no uncommitted artifacts remain under the feature path:

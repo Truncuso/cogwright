@@ -333,6 +333,31 @@ transition() {
         fi
     fi
 
+    # ── →ready findings.md backstop — WP-only ────────────────────────────────
+    # goalforge-harden creates findings.md only on the interview-resolution path;
+    # a clean WP with ZERO open questions skipped it entirely, and goalforge-verify
+    # then REFUSED on the missing file (wayfind 2026-07-16: 3/3 WPs). The transition
+    # is the one choke point both ready doors (human + signal-scoped auto) pass
+    # through, so ensure the file deterministically here. CREATE (idempotent,
+    # never overwrite), don't refuse — absence is mechanically fixable and a
+    # refusal would stall unattended chains on a formality.
+    if [[ "$KIND" == "wp" && "$TO" == "ready" && ! -f "$WP_DIR/findings.md" ]]; then
+        local FTPL="$SCRIPT_DIR/../references/templates/findings.md"
+        local WPID FEAT_NAME
+        WPID="$(basename "$WP_DIR")"
+        FEAT_NAME="$(basename "$FEATURE_DIR")"
+        if [[ -f "$FTPL" ]]; then
+            sed -e "s|<wp-id>|$WPID|g" -e "s|<feature>|$FEAT_NAME|g" \
+                -e "s|<human title> — findings|$WPID — findings|" \
+                -e "s|YYYY-MM-DD|$(date +%F)|g" "$FTPL" > "$WP_DIR/findings.md"
+        else
+            printf -- '---\nname: %s-findings\nplan: %s\nwp: %s\ncreated: %s\n---\n\n## Decisions\n\n## Discoveries\n\n## Regressions\n' \
+                "$WPID" "$FEAT_NAME" "$WPID" "$(date +%F)" > "$WP_DIR/findings.md"
+        fi
+        printf '\n<!-- auto-created by goalforge-transition.sh at %s->ready: WP hardened with zero recorded resolutions -->\n' "$FROM" >> "$WP_DIR/findings.md"
+        echo "note: findings.md was missing — created from template (harden recorded no resolutions)" >&2
+    fi
+
     local LOCKFILE="$FEATURE_DIR/.sdd-transitions.lock"
     local LEDGER="$FEATURE_DIR/.sdd-transitions.jsonl"
     local TODAY TS COMMIT WP_NAME
@@ -431,6 +456,26 @@ EOF
     else
         no "(a) forward edge should succeed and write a stamped ledger row"
     fi
+
+    # (a2) wp hardened -> ready auto-creates a missing findings.md (backstop)
+    rm -f "$wp/findings.md"
+    if bash "$SELF" "$wp" ready >/dev/null 2>&1 \
+       && [[ -f "$wp/findings.md" ]] \
+       && grep -q 'auto-created by goalforge-transition.sh' "$wp/findings.md"; then
+        ok "(a2) wp->ready backstop creates missing findings.md"
+    else
+        no "(a2) wp->ready should auto-create findings.md when missing"
+    fi
+    # (a2b) idempotent: existing findings.md is never overwritten on a re-entry
+    printf 'SENTINEL-KEEP\n' >> "$wp/findings.md"
+    bash "$SELF" "$wp" hardened --reason "st-back" >/dev/null 2>&1 || true
+    bash "$SELF" "$wp" ready >/dev/null 2>&1 || true
+    if grep -q 'SENTINEL-KEEP' "$wp/findings.md" && [[ "$(read_status "$wp/overview.md")" == "ready" ]]; then
+        ok "(a2b) existing findings.md preserved across hardened->ready re-entry"
+    else
+        no "(a2b) backstop must never overwrite an existing findings.md"
+    fi
+    bash "$SELF" "$wp" hardened --reason "st-restore" >/dev/null 2>&1 || true
 
     # (b) reverse edge WITHOUT --reason is rejected (status unchanged)
     if bash "$SELF" "$wp" spec >/dev/null 2>&1; then

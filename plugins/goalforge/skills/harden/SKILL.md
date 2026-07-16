@@ -278,6 +278,15 @@ After `interview-loop` completes:
    Rationale: <why this is safe to assume>
    ```
 
+1b. **Ensure `findings.md` exists UNCONDITIONALLY** — also for a clean WP with
+   ZERO open questions and zero assumptions. Create it from
+   `references/templates/findings.md` with a one-line note ("hardened with zero
+   open questions"). A WP without `findings.md` reaches goalforge-verify's gate
+   and is REFUSED there (wayfind 2026-07-16: 3/3 WPs — the creation above only
+   fired on the interview-resolution path). `goalforge-transition.sh` carries a
+   deterministic backstop (auto-creates a stub at the `→ready` door), but the
+   backstop is a formality guard — this step is the authored record.
+
 2. **Advance** the WP `spec → hardened` **through the transition mechanism** —
    `goalforge-transition.sh` is the single writer of WP `status:` (writes `status:` +
    `stage_updated:`, appends the provenance ledger row, refreshes status cells +
