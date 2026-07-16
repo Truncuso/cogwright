@@ -79,12 +79,50 @@
       "id": 7,
       "prompt": "Archive the completed feature feature-completed and verify it moves to _archived/.",
       "expected_output": "Skill edits overview.md (status: archived), then moves <PLANS_ROOT>/feature-completed/ to <PLANS_ROOT>/_archived/feature-completed/. The original path no longer exists.",
-      "files": ["evals/fixtures/feature-completed/overview.md"],
+      "files": [
+        "evals/fixtures/feature-completed/overview.md"
+      ],
       "expectations": [
         "SKILL.md Step 2b moves the feature folder to <PLANS_ROOT>/_archived/<feature>/ after frontmatter edit",
         "SKILL.md halts if _archived/<feature>/ already exists (conflict guard)",
         "SKILL.md runs goalforge-ensure-committed.sh on the new _archived/<feature>/ path, not the original",
         "SKILL.md report shows the new path _archived/<feature>/overview.md"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Archive feat-a with --strict-refs while another feature carries a locator: pointing into feat-a/. The ref-gate refuses.",
+      "expected_output": "Script refuses with exit 6 BEFORE any frontmatter write — feat-a's overview.md stays byte-identical (status: completed intact), the folder is not moved. No --relocate recovery needed.",
+      "files": [],
+      "expectations": [
+        "SKILL.md documents the gate ordering invariant: refusing gates run before the first frontmatter write",
+        "SKILL.md: a refusal at any exit code leaves the tree byte-identical to pre-invocation state",
+        "SKILL.md: validator failure rolls the frontmatter edits back",
+        "Regression suite scripts/tests/goalforge-archive.test.sh covers the strand bug"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Archive feat-b with --strict-refs; the only inbound mentions are prose sentences discussing feat-b/ layout.",
+      "expected_output": "Ref-gate classifies the hits as PROSE, prints them as INFO, and does NOT refuse — only HARD refs (frontmatter pointer fields, markdown link targets) gate under --strict-refs.",
+      "files": [],
+      "expectations": [
+        "SKILL.md Step 4b classifies hits HARD vs PROSE",
+        "SKILL.md: HARD = frontmatter pointer fields (locator:, promoted_to:, source:, path:, Resume:) and markdown link targets",
+        "SKILL.md: PROSE mentions are informational only and never refuse"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Run the archive hygiene sweep for feat-c before archiving it.",
+      "expected_output": "goalforge-archive-sweep.py emits a typed JSON report with categories ideas / feature_refs / handoffs / memory / findings_open plus a human summary. Read-only: nothing is edited; live ideas surface for triage, terminal ideas are offered to idea-archive, cross-owned refs are listed with their owner, memory rewrites are proposed as diffs. --gate exits 2 on open findings items.",
+      "files": [],
+      "expectations": [
+        "SKILL.md Step 0 documents the hygiene sweep with the five-category checklist",
+        "SKILL.md: the sweep is read-only / propose-only and never edits cross-owned files",
+        "SKILL.md: idea moves go through idea-archive (deletion guard)",
+        "SKILL.md: --gate makes open findings items a hard stop (exit 2)",
+        "Unit suite scripts/tests/test_goalforge_archive_sweep.py covers read-only invariant, category detection, and the gate"
       ]
     }
   ]

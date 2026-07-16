@@ -18,6 +18,14 @@
 # Exit:  0 archived/relocated ok | 2 usage | 3 refused (wrong status / missing target)
 #        4 destination collision | 5 validator failed | 6 reference-gate (--strict-refs)
 #
+# Gate ordering invariant: every gate that can REFUSE (status precondition,
+# destination collision, reference-gate) runs BEFORE the first frontmatter
+# write, and the validator gate rolls the frontmatter edits back on failure —
+# a refusal at any exit code leaves the tree byte-identical to the
+# pre-invocation state. (Strand bug 2026-07-16: --strict-refs refusal after
+# the status stamp left wayfind `archived` at the active root; recovery
+# needed --relocate.)
+#
 # The sdd-archive SKILL is the human front door (refusal templates, supersede
 # explanation, reporting); it delegates these mechanical steps here so a script
 # (batch / loop) can drive them deterministically. Skill parity: schema.md.
@@ -25,7 +33,7 @@
 set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VALIDATE="$SD/goalforge-validate.sh"
+VALIDATE="${GOALFORGE_VALIDATE:-$SD/goalforge-validate.sh}"
 
 FEATURE=""
 OLD=""
@@ -95,6 +103,64 @@ if [[ -n "$OLD" ]]; then
     [[ -f "$ROOT/$OLD/overview.md" ]] || { echo "sdd-archive REFUSED — supersedes target not found: $ROOT/$OLD/overview.md" >&2; exit 3; }
 fi
 
+# ── Step 1b: destination-collision pre-check (before any write — gate ordering
+# invariant: an exit-4 halt after the status stamp would strand the feature).
+precheck_dest() {  # $1 = slug
+    if [[ -e "$ROOT/_archived/$1" ]]; then
+        echo "sdd-archive HALT — destination already exists: $ROOT/_archived/$1 (no overwrite)" >&2
+        return 4
+    fi
+}
+precheck_dest "$FEATURE" || exit 4
+if [[ -n "$OLD" ]]; then precheck_dest "$OLD" || exit 4; fi
+
+# ── Step 2: reference-gate (warn; REFUSE under --strict-refs) ─────────────────
+# Runs BEFORE any frontmatter write (gate ordering invariant above). Finds
+# references that point INTO the feature dir from OUTSIDE it — those use the
+# active `<slug>/` path and DANGLE after the move (they would need
+# `_archived/<slug>/`). Relationship wikilinks `[[<slug>]]` are graph edges
+# (the validator resolves archived targets) and are NOT flagged — only PATH
+# refs (`<slug>/`) are.
+#
+# Hits are classified HARD vs PROSE:
+#   HARD  — machine-followed locators that break: frontmatter pointer fields
+#           (locator:, promoted_to:, source:, path:, Resume:) and markdown
+#           link targets `](...<slug>/...)`. These gate under --strict-refs.
+#   PROSE — a plain textual mention of the path (discussion, changelog line,
+#           dir-name coincidence). Informational only; never refuses.
+# (Wayfind 2026-07-16: the unclassified gate flagged prose mentions and the
+# unrelated `wayfind/` ticket-subdir concept alongside the two real locators.)
+DOCS="$(dirname "$ROOT")/docs"
+ref_gate() {  # $1 = slug
+    local slug="$1" hits hard prose
+    local -a search=("$ROOT")
+    [[ -d "$DOCS" ]] && search+=("$DOCS")
+    hits=$(grep -rInF --exclude-dir=_archived --exclude-dir=.git "$slug/" "${search[@]}" 2>/dev/null \
+           | grep -vF "$ROOT/$slug/" | grep -vF "/_archived/" || true)
+    [[ -z "$hits" ]] && return 0
+    # HARD: content (after file:line:) is a frontmatter pointer field naming
+    # the slug-path, or a markdown link whose TARGET contains the slug-path.
+    hard=$(echo "$hits" | grep -E ":[0-9]+:[[:space:]]*-?[[:space:]]*(locator|promoted_to|source|path|resume|Resume):.*${slug}/|\]\([^)]*${slug}/" || true)
+    prose=$(echo "$hits" | grep -vxF "$hard" || true)
+    if [[ -n "$prose" ]]; then
+        echo "sdd-archive ref-gate INFO: prose mentions of '$slug/' (not gating):" >&2
+        echo "$prose" | sed 's/^/  /' >&2
+    fi
+    [[ -z "$hard" ]] && return 0
+    echo "sdd-archive REFERENCE-GATE: inbound HARD path refs to '$slug/' (will dangle after move to _archived/):" >&2
+    echo "$hard" | sed 's/^/  /' >&2
+    echo "  -> relocate the cross-cited artifact + repoint these refs BEFORE archiving, or re-point them" >&2
+    echo "     to _archived/$slug/. (A blind archive of a cross-cited findings.md broke ~12 links once.)" >&2
+    if [[ "$STRICT_REFS" == "1" ]]; then
+        echo "sdd-archive: --strict-refs set -> REFUSING (exit 6). Resolve the refs above, or drop --strict-refs." >&2
+        return 6
+    fi
+    echo "  (warning only; pass --strict-refs to make this a hard gate)" >&2
+    return 0
+}
+ref_gate "$FEATURE" || exit 6
+if [[ -n "$OLD" ]]; then ref_gate "$OLD" || exit 6; fi
+
 # ── Frontmatter editor (targeted, minimal-diff) ──────────────────────────────
 edit_fm() {  # $1=file  $2=edge(''|supersedes|superseded_by)  $3=edge-target
     python3 - "$1" "$2" "$3" <<'PY'
@@ -137,9 +203,21 @@ open(f, 'w', encoding='utf-8').write('\n'.join(['---'] + fm + rest))
 PY
 }
 
-# ── Step 2/3: frontmatter edits (BEFORE the move, so git sees edit+rename together)
-# Relocate mode skips this entirely — the feature is already status: archived.
+# ── Step 3: frontmatter edits, backed up for rollback (BEFORE the move, so git
+# sees edit+rename together). Relocate mode skips this entirely — the feature
+# is already status: archived.
+BAK=""
+rollback() {  # restore pre-edit frontmatter on a post-edit refusal
+    [[ -z "$BAK" ]] && return 0
+    cp -p "$BAK/feat.orig" "$FEAT_OV"
+    [[ -n "$OLD" && -f "$BAK/old.orig" ]] && cp -p "$BAK/old.orig" "$ROOT/$OLD/overview.md"
+    rm -rf "$BAK"
+    BAK=""
+}
 if [[ $RELOCATE -eq 0 ]]; then
+    BAK="$(mktemp -d)"
+    cp -p "$FEAT_OV" "$BAK/feat.orig"
+    [[ -n "$OLD" ]] && cp -p "$ROOT/$OLD/overview.md" "$BAK/old.orig"
     if [[ -n "$OLD" ]]; then
         edit_fm "$FEAT_OV" supersedes "$OLD"
         edit_fm "$ROOT/$OLD/overview.md" superseded_by "$FEATURE"
@@ -155,46 +233,19 @@ fi
 # features therefore never blocks the archive (the tree legitimately carries
 # deferred drift). Each per-feature commit is independently re-validated by the
 # pre-commit hook, which is likewise per-feature scoped.
+# A validator FAILURE rolls the frontmatter edits back (gate ordering invariant).
 validate_feature() {  # $1 = slug
     if ! "$VALIDATE" --feature "$1" --strict "$ROOT" >/dev/null 2>&1; then
         echo "sdd-archive: validator FAILED for $1 — run: goalforge-validate.sh --feature $1 --strict --show $ROOT" >&2
+        echo "sdd-archive: frontmatter edits rolled back — feature left at its pre-invocation status." >&2
         return 5
     fi
 }
-validate_feature "$FEATURE" || exit 5
-if [[ -n "$OLD" ]]; then validate_feature "$OLD" || exit 5; fi
+validate_feature "$FEATURE" || { rollback; exit 5; }
+if [[ -n "$OLD" ]]; then validate_feature "$OLD" || { rollback; exit 5; }; fi
+[[ -n "$BAK" ]] && { rm -rf "$BAK"; BAK=""; }
 
-# ── Step 4b: reference-gate (warn; REFUSE under --strict-refs) ────────────────
-# Before moving <slug>/ into _archived/, find references that point INTO the
-# feature dir from OUTSIDE it -- a cross-cited findings.md/playbook, or a
-# frontmatter `locator:`. Those use the active `<slug>/` path and DANGLE after
-# the move (they would need `_archived/<slug>/`). Relationship wikilinks
-# `[[<slug>]]` are graph edges (the validator resolves archived targets) and are
-# NOT flagged -- only PATH refs (`<slug>/`) are. Lesson: a blind archive of a
-# cross-cited wp findings.md broke ~12 links and was reverted.
-DOCS="$(dirname "$ROOT")/docs"
-ref_gate() {  # $1 = slug
-    local slug="$1" hits
-    local -a search=("$ROOT")
-    [[ -d "$DOCS" ]] && search+=("$DOCS")
-    hits=$(grep -rInF --exclude-dir=_archived --exclude-dir=.git "$slug/" "${search[@]}" 2>/dev/null \
-           | grep -vF "$ROOT/$slug/" | grep -vF "/_archived/" || true)
-    [[ -z "$hits" ]] && return 0
-    echo "sdd-archive REFERENCE-GATE: inbound path refs to '$slug/' (will dangle after move to _archived/):" >&2
-    echo "$hits" | sed 's/^/  /' >&2
-    echo "  -> relocate the cross-cited artifact + repoint these refs BEFORE archiving, or re-point them" >&2
-    echo "     to _archived/$slug/. (A blind archive of a cross-cited findings.md broke ~12 links once.)" >&2
-    if [[ "$STRICT_REFS" == "1" ]]; then
-        echo "sdd-archive: --strict-refs set -> REFUSING (exit 6). Resolve the refs above, or drop --strict-refs." >&2
-        return 6
-    fi
-    echo "  (warning only; pass --strict-refs to make this a hard gate)" >&2
-    return 0
-}
-ref_gate "$FEATURE" || exit 6
-if [[ -n "$OLD" ]]; then ref_gate "$OLD" || exit 6; fi
-
-# ── Step 2b: physical move (AFTER edit+validate, so git records edit+rename together)
+# ── Step 5: physical move (AFTER edit+validate, so git records edit+rename together)
 mkdir -p "$ROOT/_archived"
 move_one() {  # $1 = slug
     local dest="$ROOT/_archived/$1"

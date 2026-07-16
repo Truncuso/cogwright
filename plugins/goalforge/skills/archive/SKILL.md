@@ -1,8 +1,8 @@
 ---
 name: goalforge-archive
-description: "Archive a completed SDD feature to its terminal `archived` status, optionally recording that it supersedes a prior feature. Fail-closed: REFUSES unless the feature is `status: completed` (cannot archive draft/ready/active). On `--supersedes <old>` writes the `supersedes`/`superseded_by` relationship edges on both features and archives the old one too, verifying both slugs exist first. A `--relocate` mode reconciles a STRANDED archived feature — one already `status: archived` but still physically at the active plans root (status set out-of-band, never moved) — by moving it into `_archived/` (move-only, no frontmatter edit; requires status: archived). Runs the strict validator gate and an ensure-committed check. TRIGGER: 'archive feature', 'archive completed feature', 'feature B supersedes A', 'migration archive', 'relocate stranded archived feature', 'reconcile archived plan at active root'. Human-gated / on-demand — NOT part of the sdd chain."
+description: "Archive a completed SDD feature to its terminal `archived` status, optionally recording that it supersedes a prior feature. Fail-closed: REFUSES unless the feature is `status: completed` (cannot archive draft/ready/active). On `--supersedes <old>` writes the `supersedes`/`superseded_by` relationship edges on both features and archives the old one too, verifying both slugs exist first. A `--relocate` mode reconciles a STRANDED archived feature — one already `status: archived` but still physically at the active plans root (status set out-of-band, never moved) — by moving it into `_archived/` (move-only, no frontmatter edit; requires status: archived). Ships a HYGIENE SWEEP (goalforge-archive-sweep.py): a read-only pre/post-archive scan that finds live ideas, cross-feature refs, ready handoffs, stale memory pointers, and open findings items tied to the feature — propose-only, typed JSON report. Runs the strict validator gate and an ensure-committed check. TRIGGER: 'archive feature', 'archive completed feature', 'feature B supersedes A', 'migration archive', 'relocate stranded archived feature', 'reconcile archived plan at active root', 'archive hygiene sweep'. Human-gated / on-demand — NOT part of the sdd chain."
 metadata:
-  version: 1.4.0
+  version: 1.5.0
 hooks:
   Stop:
     - hooks:
@@ -40,8 +40,53 @@ global `~/.claude/plans/`.
 - `--relocate` — optional; reconcile a **stranded** archived feature (move-only).
   Mutually exclusive with `--supersedes`. See *Relocate mode* below.
 - `--strict-refs` — optional; escalate the reference-gate (Step 4b) from WARN to
-  REFUSE (exit 6) when inbound **path** references to the feature would dangle after
-  the move. Recommended for interactive archival. Composes with all modes.
+  REFUSE (exit 6) when inbound **HARD path** references to the feature would dangle
+  after the move (prose mentions never gate — see Step 4b classification).
+  Recommended for interactive archival. Composes with all modes.
+
+## Gate ordering invariant (strand-bug guard)
+
+Every gate that can REFUSE — the status precondition, the destination-collision
+pre-check, and the reference-gate — runs **BEFORE the first frontmatter write**,
+and the validator gate **rolls the frontmatter edits back** on failure. A refusal
+at ANY exit code leaves the plans tree byte-identical to the pre-invocation
+state. (Regression: 2026-07-16, a `--strict-refs` refusal after the status stamp
+left wayfind `status: archived` at the active root — stranded, recovered via
+`--relocate`. Test: `scripts/tests/goalforge-archive.test.sh` case 1.)
+
+## Step 0 — Hygiene sweep (recommended pre-archive; re-run post-archive)
+
+Before archiving, run the deterministic hygiene sweep — a **read-only,
+propose-only** scan of everything that still points at the feature:
+
+```bash
+python3 "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-archive-sweep.py <feature> \
+        --plans-root <PLANS_ROOT> [--json] [--gate]
+```
+
+Sweep checklist (one category per report key):
+
+- [ ] **ideas** — `plans/ideas/*.md` referencing the feature. Terminal ideas
+      (promoted/dropped/superseded/archived) → offer `idea-archive`; live ideas
+      → surface for triage. Idea moves go through `idea-archive` (deletion
+      guard), never direct file ops.
+- [ ] **feature_refs** — other features'/WPs' files with `<slug>/` path refs
+      (frontmatter `locator:`, `sources`, goal outcomes). Listed **with their
+      owning feature** — NEVER edit files owned by another thread; hand the
+      list to that thread.
+- [ ] **handoffs** — `docs/handoffs/` handoffs at `status: ready` referencing
+      the feature (stale-pointer candidates; archived handoffs excluded).
+- [ ] **memory** — `.memory/` fact files + `MEMORY.md` pointer lines
+      referencing the feature. Propose a RESOLVED rewrite of the fact + pointer
+      swap (as a diff for the user), never auto-edit.
+- [ ] **findings_open** — the feature's OWN `findings.md` unresolved `- [ ]`
+      items. These are blockers: resolve them or explicitly carry them before
+      archiving. `--gate` makes this a hard stop (exit 2).
+
+Output: typed JSON report on stdout (`--json`) + human summary. The sweep
+**never writes** — every finding is a proposal. Re-run after the archive to
+confirm the categories drained (feature_refs should then point at
+`_archived/<slug>/` or be gone).
 
 ## Relocate mode (stranded archived → `_archived/`)
 
@@ -110,7 +155,7 @@ from scratch.
 
 ## Steps 2–4 — Mechanical core (delegated to `goalforge-archive.sh`)
 
-The frontmatter edit, physical move, and validator gate are performed
+The gates, frontmatter edit, physical move, and validator are performed
 **deterministically by a script** — `"$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-archive.sh`
 — so the same logic is drivable unattended (the `goalforge-archive-batch.sh` loop). The
 script is the single source of truth for these mechanics; this skill is the
@@ -119,26 +164,31 @@ the Step-6 report).
 
 ```bash
 bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-archive.sh <feature> \
-     [--supersedes <old>] [--plans-root <PLANS_ROOT>]
+     [--supersedes <old>] [--strict-refs] [--plans-root <PLANS_ROOT>]
 ```
 
-What the script does (and its contract):
+What the script does, in gate-ordering-invariant order:
 
 - **Re-enforces the Step-1 gate** (refuses unless `status: completed`; under
   `--supersedes`, verifies both slugs exist). Exit **3** = refused.
-- **Edits frontmatter** (targeted, minimal-diff): `<feature>` → `status: archived`
-  + `updated: <today>`. Under `--supersedes`, also writes the inverse edges —
-  `supersedes: [[<old>]]` on `<feature>` and `superseded_by: [[<feature>]]` on
-  `<old>` (merged into any existing `relationships:` list, never clobbered) — and
-  flips `<old>` to `status: archived` too.
+- **Destination-collision pre-check** — `_archived/<slug>` must not already
+  exist, checked BEFORE any write. Exit **4** = HALT, no overwrite, no edit.
+- **Reference-gate** (Step 4b below) — runs BEFORE any frontmatter write.
+  Exit **6** under `--strict-refs` with HARD refs present; tree untouched.
+- **Edits frontmatter** (targeted, minimal-diff, backed up for rollback):
+  `<feature>` → `status: archived` + `updated: <today>`. Under `--supersedes`,
+  also writes the inverse edges — `supersedes: [[<old>]]` on `<feature>` and
+  `superseded_by: [[<feature>]]` on `<old>` (merged into any existing
+  `relationships:` list, never clobbered) — and flips `<old>` to
+  `status: archived` too.
 - **Validates** each edited feature scoped — `--feature <slug> --strict` —
   BEFORE the move. The validator still WALKS the whole tree (so cross-feature
   `supersedes`/`superseded_by`/`depends_on` edges resolve), but only the archived
   feature's own errors gate, so a tree that legitimately carries deferred drift in
-  unrelated features never blocks the archive. Exit **5** if it fails.
+  unrelated features never blocks the archive. Exit **5** if it fails — and the
+  frontmatter edits are **rolled back** (pre-invocation bytes restored).
 - **Moves** `<feature>/` (and `<old>/` under `--supersedes`) into `_archived/`
-  AFTER the edit+validate, so git records the edit + rename in one commit. Exit
-  **4** if the destination already exists (HALT, no overwrite).
+  AFTER the edit+validate, so git records the edit + rename in one commit.
 
 The script does **not** commit and does **not** run ensure-committed — Step 5
 does that after the orchestrator commits. On a non-zero exit, present the matching
@@ -146,24 +196,37 @@ refusal template and HALT.
 
 ## Step 4b — Reference-gate (warn; REFUSE under `--strict-refs`)
 
-Between the validator gate and the physical move, the script scans for **inbound
-path references** to the feature — refs that use the active `<slug>/` path (a
-cross-cited `findings.md`/playbook, a fixture, a frontmatter `locator:`) and will
-**dangle** after the folder moves to `_archived/<slug>/`. This is the gate that
-was missing when a blind archive of a cross-cited WP `findings.md` broke ~12 links
-and had to be reverted.
+Before any frontmatter write, the script scans for **inbound path references**
+to the feature — refs that use the active `<slug>/` path and will **dangle**
+after the folder moves to `_archived/<slug>/`. This is the gate that was missing
+when a blind archive of a cross-cited WP `findings.md` broke ~12 links and had
+to be reverted.
 
-- **What is flagged:** only path references (`<slug>/…`) from OUTSIDE the feature's
-  own folder and outside `_archived/`, across `<PLANS_ROOT>` and the sibling
-  `docs/`. The search is `grep -F` (literal) so a slug with regex chars is safe.
+Hits are **classified HARD vs PROSE**:
+
+- **HARD** — machine-followed locators that actually break: frontmatter pointer
+  fields (`locator:`, `promoted_to:`, `source:`, `path:`, `Resume:`) naming the
+  slug-path, and markdown link **targets** `](…<slug>/…)`. Only these gate under
+  `--strict-refs`.
+- **PROSE** — a plain textual mention of the path (discussion, changelog line, a
+  dir-name coincidence like a ticket subdir that happens to share the slug).
+  Printed as INFO, never refuses. (Wayfind 2026-07-16: the unclassified gate
+  flagged prose + the unrelated `wayfind/` ticket-subdir concept alongside the
+  two real locators.)
+
+- **What is scanned:** `<PLANS_ROOT>` and the sibling `docs/`, excluding the
+  feature's own folder and `_archived/`. The search is `grep -F` (literal) so a
+  slug with regex chars is safe.
 - **What is NOT flagged:** relationship wikilinks `[[<slug>]]` — those are graph
   edges the validator resolves even for archived targets, so archiving never breaks
   them.
-- **Behavior:** WARN by default (prints the offending refs + the relocate-then-move
-  remedy, exit 0 — non-blocking so the unattended `goalforge-archive-batch.sh` loop is
-  unchanged). Under `--strict-refs` it **REFUSES with exit 6**. The remedy in both
-  cases: relocate the cross-cited artifact to a stable home and repoint every
-  reference (or re-point them to `_archived/<slug>/`) BEFORE archiving.
+- **Behavior:** WARN by default (prints HARD refs + the relocate-then-move remedy,
+  exit 0 — non-blocking so the unattended `goalforge-archive-batch.sh` loop is
+  unchanged). Under `--strict-refs` it **REFUSES with exit 6** on HARD refs only —
+  and because the gate runs pre-write, a refusal leaves the tree untouched. The
+  remedy in both cases: relocate the cross-cited artifact to a stable home and
+  repoint every reference (or re-point them to `_archived/<slug>/`) BEFORE
+  archiving.
 
 ## Step 5 — Ensure-clean (after the orchestrator commits)
 
@@ -189,6 +252,7 @@ Archived:   <PLANS_ROOT>/_archived/<feature>/overview.md  (status: archived, mov
 [Supersedes: <old> — <old> archived + moved to _archived/<old>/]
 Validator:  PASS (goalforge-validate --strict)
 Working tree: clean under _archived/<feature>/ [and _archived/<old>/]
+Hygiene:    <sweep summary counts, or "sweep not run">
 ```
 
 ## Not in the chain
@@ -204,6 +268,7 @@ human-gated decision invoked on demand — never an automated chain step.
 | `<feature>/` (directory) | moved to `_archived/<feature>/` after frontmatter edit |
 | `<old>/overview.md` | (`--supersedes` only) read (existence) + write (`status: archived`, `updated:`, `superseded_by` edge) |
 | `<old>/` (directory) | (`--supersedes` only) moved to `_archived/<old>/` after frontmatter edit |
+| everything the sweep scans | read-only (goalforge-archive-sweep.py never writes) |
 
 ## State transition
 
@@ -243,13 +308,22 @@ Check the <old> slug spelling, or confirm the feature exists.
 
 ## Gotchas
 
-- **Reference-gate flags PATH refs, not wikilinks.** Step 4b greps for `<slug>/`
-  (literal, `grep -F`) from outside the feature + outside `_archived/`. A
-  `[[<slug>]]` relationship edge is NOT a path ref and is correctly ignored — only
-  refs that point INTO the feature's files (a cross-cited `findings.md`, a
-  frontmatter `locator:`) dangle after the move. WARN by default keeps the
-  unattended batch loop working; `--strict-refs` makes it a hard gate (exit 6).
-  Do NOT "fix" a flagged ref by deleting it — relocate the artifact and repoint.
+- **Gate ordering invariant is load-bearing.** Status gate, collision pre-check,
+  and reference-gate all run pre-write; validator failure rolls edits back. Any
+  future gate added to the script MUST either run before the first write or pair
+  with the rollback — a post-write refusal without rollback re-introduces the
+  strand bug (wayfind 2026-07-16). Regression tests:
+  `scripts/tests/goalforge-archive.test.sh`.
+- **Reference-gate flags HARD path refs, not wikilinks, not prose.** Step 4b
+  greps for `<slug>/` (literal, `grep -F`) then classifies: frontmatter pointer
+  fields + markdown link targets = HARD (gate); plain textual mentions = PROSE
+  (info only). A `[[<slug>]]` relationship edge is NOT a path ref and is ignored
+  entirely. Do NOT "fix" a flagged ref by deleting it — relocate the artifact
+  and repoint.
+- **The hygiene sweep is propose-only.** It never edits: idea moves go through
+  `idea-archive`; cross-owned feature files belong to their thread; memory
+  rewrites are presented as diffs. Auto-fixing from the sweep report is a
+  boundary violation.
 - The status gate is fail-closed on exactly `completed` — `active`, `ready`, `draft`, and an already-`archived` feature all REFUSE in the default mode. There is no "force archive"; advance the feature to `completed` via `goalforge-verify`'s last-WP rule first. The one exception is `--relocate`, whose gate is the *inverse* (`status: archived` required) and which only moves a stranded archived feature into `_archived/` — it never flips a non-archived status.
 - Feature terminal status is `archived`; WP terminal status is `verified`. Never write `status: verified` to a feature overview or `status: completed`/`archived` to a WP — the enums do not overlap at the terminal end.
 - `--supersedes` archives BOTH features: `<feature>` (the replacing one, already `completed`) AND `<old>` (the replaced one, retired regardless of its prior status). Forgetting that `<old>` also flips to `archived` leaves a half-written relationship with one live and one archived side.

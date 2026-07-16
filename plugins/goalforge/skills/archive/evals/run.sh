@@ -45,7 +45,7 @@ echo "=== goalforge-archive: contract + fixture checks ==="
 
 # STATIC-CONTRACT: identity
 check STATIC-CONTRACT "skill name declared" "name: goalforge-archive"
-check STATIC-CONTRACT "version metadata present" "version: 1.4.0"
+check STATIC-CONTRACT "version metadata present" "version: 1.5.0"
 
 # STATIC-CONTRACT: triggers (incl. negative — surface is constrained to archival)
 check STATIC-CONTRACT "trigger: archive feature" "archive feature"
@@ -86,7 +86,7 @@ check STATIC-CONTRACT "archival is explicit user action only" "explicit user act
 # STATIC-CONTRACT: reference-gate (Step 4b)
 check STATIC-CONTRACT "reference-gate step documented" "Step 4b — Reference-gate"
 check STATIC-CONTRACT "strict-refs flag documented" "strict-refs"
-check STATIC-CONTRACT "ref-gate flags path refs not wikilinks" "PATH refs, not wikilinks"
+check STATIC-CONTRACT "ref-gate flags HARD refs only" "HARD path refs, not wikilinks, not prose"
 check STATIC-CONTRACT "ref-gate refuses with exit 6 under strict" "REFUSES with exit 6"
 
 # BEHAVIORAL-STATIC: refusal template present
@@ -145,7 +145,7 @@ if [ -f "$SCRIPT" ]; then
   cp -r "$SKILL_DIR/evals/fixtures/feature-completed" "$RT/plans/feat-comp"
   sed -i 's/^name: .*/name: feat-comp/' "$RT/plans/feat-comp/overview.md"
   # an external doc with an inbound PATH ref into the feature (would dangle on move)
-  printf 'see plans/feat-comp/wp-01/findings.md for the playbook\n' > "$RT/docs/cross-cite.md"
+  printf 'see [the playbook](plans/feat-comp/wp-01/findings.md)\n' > "$RT/docs/cross-cite.md"
   # danger + --strict-refs -> REFUSE exit 6
   rc=0; bash "$SCRIPT" feat-comp --strict-refs --plans-root "$RT/plans" >/dev/null 2>&1 || rc=$?
   if [ "$rc" -eq 6 ]; then echo "  PASS [BEHAVIORAL]: ref-gate refuses inbound path ref under --strict-refs (exit 6)"; PASS=$((PASS+1))
@@ -167,6 +167,40 @@ if [ -f "$SCRIPT" ]; then
   if [ "$rc" -ne 6 ]; then echo "  PASS [BEHAVIORAL]: ref-gate passes clean feature under --strict-refs (rc=$rc != 6)"; PASS=$((PASS+1))
   else echo "  FAIL [BEHAVIORAL]: clean feature should not trip ref-gate (got 6)"; FAIL=$((FAIL+1)); fi
   rm -rf "$RT" "$RC2"
+fi
+
+
+# STATIC-CONTRACT: gate ordering invariant + hygiene sweep (v1.5.0)
+check STATIC-CONTRACT "gate ordering invariant documented" "Gate ordering invariant"
+check STATIC-CONTRACT "validator failure rolls edits back" "rolled back"
+check STATIC-CONTRACT "hygiene sweep step documented" "Hygiene sweep"
+check STATIC-CONTRACT "hygiene sweep is propose-only" "propose-only"
+file_check FIXTURE "sweep script exists" "$COGWRIGHT_ROOT/plugins/goalforge/scripts/goalforge-archive-sweep.py"
+
+# BEHAVIORAL: ref-gate PROSE mention does NOT gate under --strict-refs
+if [ -f "$SCRIPT" ]; then
+  RP="$(mktemp -d)"; mkdir -p "$RP/plans" "$RP/docs"
+  cp -r "$SKILL_DIR/evals/fixtures/feature-completed" "$RP/plans/feat-comp"
+  sed -i 's/^name: .*/name: feat-comp/' "$RP/plans/feat-comp/overview.md"
+  printf 'we discussed the feat-comp/ layout in standup\n' > "$RP/docs/notes.md"
+  rc=0; bash "$SCRIPT" feat-comp --strict-refs --plans-root "$RP/plans" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -ne 6 ]; then echo "  PASS [BEHAVIORAL]: prose-only mention does not gate under --strict-refs (rc=$rc)"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: prose-only mention must not refuse (got 6)"; FAIL=$((FAIL+1)); fi
+  rm -rf "$RP"
+fi
+
+# BEHAVIORAL: full script regression suite (strand bug, rollback, collision, supersedes, relocate)
+SUITE="$COGWRIGHT_ROOT/plugins/goalforge/scripts/tests/goalforge-archive.test.sh"
+if [ -f "$SUITE" ]; then
+  if bash "$SUITE" >/dev/null 2>&1; then echo "  PASS [BEHAVIORAL]: goalforge-archive.test.sh suite green"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: goalforge-archive.test.sh suite failed — run it directly"; FAIL=$((FAIL+1)); fi
+fi
+
+# BEHAVIORAL: hygiene sweep unit suite (read-only, categories, gate)
+SWEEP_T="$COGWRIGHT_ROOT/plugins/goalforge/scripts/tests/test_goalforge_archive_sweep.py"
+if [ -f "$SWEEP_T" ]; then
+  if python3 "$SWEEP_T" >/dev/null 2>&1; then echo "  PASS [BEHAVIORAL]: archive-sweep unit suite green"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: archive-sweep unit suite failed — run it directly"; FAIL=$((FAIL+1)); fi
 fi
 
 echo ""
