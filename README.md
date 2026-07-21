@@ -13,6 +13,41 @@ The thesis: agentic coding gets reliable when the *process* is engineered — go
 
 Each plugin is self-contained: installing one never requires another (declared relations degrade gracefully — a missing companion produces a warning, not a failure).
 
+## Installing (contributor vs consumer)
+
+`scripts/install.sh` covers both install modes:
+
+```
+scripts/install.sh --mode consumer      # prints the marketplace commands above + runs `claude plugin validate`
+scripts/install.sh --mode contributor   # dev mode: symlink your skills dir at this checkout
+scripts/install.sh --self-test          # fixture-sandbox self-test (never touches your real $HOME)
+```
+
+**Contributor (dev) mode** replaces `~/dotfiles/claude/skills/goalforge` with a
+per-machine symlink pointing at `packages/goalforge` in *this* cogwright
+checkout, so every future goalforge edit lands in the working tree and `git push`
+keeps GitHub current. The swap is a strict, verified transaction:
+
+- **Precondition — a cogwright checkout must be present.** The link target
+  (`packages/goalforge`) has to resolve to a real package with a `SKILL.md`;
+  contributor mode refuses if it does not.
+- **Refuses to clobber drift.** If the existing real dir has uncommitted
+  *tracked* changes versus the package it refuses rather than overwrite. Drift is
+  measured on tracked content only (gitignored `__pycache__` / `evals/workspace`
+  transients are ignored), never a raw `diff -r`.
+- **Idempotent.** Re-running on a correct install is a no-op (exit 0). A
+  wrong-target or dangling symlink is repaired; a dirty real dir is refused with
+  a clear message.
+- **Rollback is git.** The dotfiles dir removal is one reversible commit
+  (`git revert` restores every tracked file). No in-repo backup dir is created.
+
+**Dangling-link semantics / the symlink is never git-tracked.** dotfiles commits
+a `.gitignore` entry for `skills/goalforge` and the installer recreates the link
+per machine, so machines that clone dotfiles WITHOUT cogwright get no dangling
+link. The cost: **a dotfiles clone alone no longer carries goalforge** — run
+`scripts/install.sh --mode contributor` from a cogwright checkout (or install the
+plugin via the marketplace) before goalforge is available on a new machine.
+
 ## Catalog
 
 | System | Status | What it is |
