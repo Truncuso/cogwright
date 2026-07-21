@@ -165,7 +165,10 @@ if [ "$DOC_PIN_OK" = "pass" ]; then
   # CLAUDE.md P5 digest restates the tier values — pin them too (user decision
   # 2026-07-09). Guarded by the CANON_LINE equality above: if TIER_DISPATCH
   # changes, that check fails first and these greps must be updated with it.
-  CLAUDE_MD="$SKILL_DIR/../../CLAUDE.md"
+  # $HOME/.claude/CLAUDE.md, not $SKILL_DIR/../..: the skills dir may be a
+  # symlink into this package (wp-18 contributor mode) and a relative climb
+  # resolves physically into the cogwright repo, where no CLAUDE.md exists.
+  CLAUDE_MD="${CLAUDE_MD_OVERRIDE:-$HOME/.claude/CLAUDE.md}"
   { [ -f "$CLAUDE_MD" ] \
       && grep -qF "sonnet/low" "$CLAUDE_MD" \
       && grep -qE 'opus at low|opus@low|opus/low' "$CLAUDE_MD" \
