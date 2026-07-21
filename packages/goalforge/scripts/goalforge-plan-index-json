@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+"""goalforge-plan-index-json — deterministic plan-index.json generator.
+
+Walks a plans/ root and emits plan-index.json: features → WPs → tasks, each
+carrying status, route, depends_on, and a goal_digest, plus a top-level
+schema_version. A pure projection of plan frontmatter — read-only relative to
+the plans tree (never writes status:/goal_approved_version:, never transitions).
+It is the stable, versioned read contract goalforge-viz and the command-center
+consume instead of parsing markdown.
+
+Distinct from goalforge-plan-index.py (which emits plans/INDEX.md, a different
+artifact). This tool REUSES that script's frontmatter-parse helpers via importlib
+and does NOT clobber it.
+
+Schema (resolves wp-11 OQ1 — deliberately under-fit):
+  {
+    "schema_version": <int>,
+    "generated_from": <plans-root-path string>,
+    "features": [
+      { "name": str, "status": str, "route": str,
+        "wps": [
+          { "id": str, "status": str, "depends_on": [str,...],
+            "goal_digest": str,
+            "tasks": [ { "id": str, "status": str, "task_route": str } ] }
+        ] }
+    ]
+  }
+
+The FEATURE `route` and the TASK `task_route` are distinct keys.
+
+Usage:
+  goalforge-plan-index-json [--plans-root <root>] [-o <file>]
+     (no -o  => writes <feature>/plan-index.json for each feature under root;
+                use --single-file to write one <root>/plan-index.json instead)
+  goalforge-plan-index-json --self-test
+
+Exit: 0 ok | 2 usage/root-not-found | 3 no features found
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+SCHEMA_VERSION = 1
+SCRIPT_DIR = Path(__file__).resolve().parent
+GOAL_HASH = SCRIPT_DIR / "goalforge-goal-hash.sh"
+SIBLING = SCRIPT_DIR / "goalforge-plan-index.py"
+
+
+def _load_sibling_helpers():
+    """Import _split_frontmatter/_load_yaml from goalforge-plan-index.py by path.
+
+    Reuse (not clobber) — the sibling's module name has a hyphen and can't be a
+    normal import, so load it via importlib under a safe alias.
+    """
+    spec = importlib.util.spec_from_file_location("_goalforge_plan_index", SIBLING)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod._split_frontmatter, mod._load_yaml
+
+
+_split_frontmatter, _load_yaml = _load_sibling_helpers()
+
+
+def _frontmatter(path: Path) -> dict:
+    return _load_yaml(_split_frontmatter(path.read_text(encoding="utf-8", errors="replace")))
+
+
+def _str(v) -> str:
+    return "" if v is None else str(v).strip()
+
+
+def _dep_list(v) -> list[str]:
+    """Normalize a depends_on value to a sorted list of wp-id strings."""
+    if isinstance(v, list):
+        items = [_str(x).strip("[]") for x in v]
+    elif v:
+        items = [_str(v).strip("[]")]
+    else:
+        items = []
+    return sorted(x for x in items if x)
+
+
+def _goal_digest(wp_dir: Path) -> str:
+    """goalforge-goal-hash.sh output for a WP dir; '' when no goal: block."""
+    try:
+        r = subprocess.run(
+            ["bash", str(GOAL_HASH), str(wp_dir)],
+            capture_output=True, text=True,
+        )
+    except OSError:
+        return ""
+    return r.stdout.strip() if r.returncode == 0 else ""
+
+
+def _tasks(wp_dir: Path) -> list[dict]:
+    out: list[dict] = []
+    for tf in sorted(wp_dir.glob("task-*.md")):
+        fm = _frontmatter(tf)
+        out.append({
+            "id": _str(fm.get("name") or tf.stem),
+            "status": _str(fm.get("status")),
+            "task_route": _str(fm.get("route")),
+        })
+    return out
+
+
+def _wps(feature_dir: Path) -> list[dict]:
+    out: list[dict] = []
+    for wp_dir in sorted(feature_dir.glob("wp-*/")):
+        ov = wp_dir / "overview.md"
+        if not ov.is_file():
+            continue
+        fm = _frontmatter(ov)
+        out.append({
+            "id": _str(fm.get("name") or wp_dir.name),
+            "status": _str(fm.get("status")),
+            "depends_on": _dep_list(fm.get("depends_on")),
+            "goal_digest": _goal_digest(wp_dir),
+            "tasks": _tasks(wp_dir),
+        })
+    out.sort(key=lambda w: w["id"])
+    return out
+
+
+def build_feature(feature_dir: Path) -> dict:
+    fm = _frontmatter(feature_dir / "overview.md")
+    return {
+        "name": _str(fm.get("feature") or fm.get("name") or feature_dir.name),
+        "status": _str(fm.get("status")),
+        "route": _str(fm.get("route")),
+        "wps": _wps(feature_dir),
+    }
+
+
+def build_index(root: Path, single_feature: Path | None = None) -> dict:
+    """Assemble the index dict. If single_feature, project only that feature."""
+    if single_feature is not None:
+        feats = [build_feature(single_feature)]
+    else:
+        feats = [
+            build_feature(ov.parent)
+            for ov in sorted(root.glob("*/overview.md"))
+        ]
+    feats.sort(key=lambda f: f["name"])
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "generated_from": str(root),
+        "features": feats,
+    }
+
+
+def dumps(index: dict) -> str:
+    """Deterministic serialization: stable key order, 2-space indent, trailing NL."""
+    return json.dumps(index, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+
+
+def _resolve_root(cli_root: str) -> Path:
+    root = cli_root or os.environ.get("SDD_PLANS_DIR", "")
+    if not root:
+        gr = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True,
+        ).stdout.strip()
+        if gr and (Path(gr) / "plans").is_dir():
+            root = str(Path(gr) / "plans")
+        elif (Path.cwd() / "plans").is_dir():
+            root = str(Path.cwd() / "plans")
+        else:
+            root = str(Path.home() / ".claude" / "plans")
+    return Path(root).resolve()
+
+
+def main(argv) -> int:
+    ap = argparse.ArgumentParser(add_help=True)
+    ap.add_argument("--plans-root", default="")
+    ap.add_argument("-o", "--output", default="",
+                    help="write to this path ('-' = stdout); default per-feature")
+    ap.add_argument("--single-file", action="store_true",
+                    help="write one <root>/plan-index.json spanning all features")
+    ap.add_argument("--self-test", action="store_true")
+    args = ap.parse_args(argv)
+
+    if args.self_test:
+        return _self_test()
+
+    root = _resolve_root(args.plans_root)
+    if not root.is_dir():
+        print(f"goalforge-plan-index-json: plans root not found: {root}", file=sys.stderr)
+        return 2
+
+    feature_dirs = sorted(p.parent for p in root.glob("*/overview.md"))
+    if not feature_dirs:
+        print(f"goalforge-plan-index-json: no features under {root}", file=sys.stderr)
+        return 3
+
+    if args.output == "-":
+        sys.stdout.write(dumps(build_index(root)))
+        return 0
+
+    if args.output or args.single_file:
+        dest = Path(args.output) if args.output else (root / "plan-index.json")
+        dest.write_text(dumps(build_index(root)), encoding="utf-8")
+        print(f"goalforge-plan-index-json: wrote {dest}", file=sys.stderr)
+        return 0
+
+    # default: one plan-index.json per feature, projecting that feature only
+    for fdir in feature_dirs:
+        dest = fdir / "plan-index.json"
+        dest.write_text(dumps(build_index(root, single_feature=fdir)), encoding="utf-8")
+        print(f"goalforge-plan-index-json: wrote {dest}", file=sys.stderr)
+    return 0
+
+
+# ── Self-test ────────────────────────────────────────────────────────────────
+def _self_test() -> int:
+    import tempfile
+
+    passed = 0
+    failed = 0
+
+    def ok(name):
+        nonlocal passed
+        print(f"{name}: PASS")
+        passed += 1
+
+    def no(name, detail=""):
+        nonlocal failed
+        print(f"{name}: FAIL {detail}")
+        failed += 1
+
+    print("=== goalforge-plan-index-json --self-test ===")
+
+    def _wp_fixture(path: Path, name: str, depends_on: list[str], outcome: str):
+        deps = "".join(f"\n  - {d}" for d in depends_on) or " []"
+        path.write_text(
+            "---\n"
+            f"name: {name}\n"
+            "title: fixture wp\n"
+            "status: ready\n"
+            "severity: LOW\n"
+            "parallel: false\n"
+            f"depends_on:{deps}\n"
+            "plan: tmpfeat\n"
+            "task_type: code\n"
+            "goal:\n"
+            f'  outcome: "{outcome}"\n'
+            "  verification:\n"
+            "    strategy: deterministic\n"
+            '    check: "true"\n'
+            "  constraints: []\n"
+            "  boundaries: []\n"
+            "inherits_from: null\n"
+            "goal_approved_version: null\n"
+            "---\n\n# fixture\n",
+            encoding="utf-8",
+        )
+
+    def _task_fixture(path: Path, name: str, route: str):
+        path.write_text(
+            "---\n"
+            f"name: {name}\n"
+            "title: fixture task\n"
+            "status: pending\n"
+            f"route: {route}\n"
+            "depends_on: []\n"
+            "---\n\n# task\n",
+            encoding="utf-8",
+        )
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        feat = root / "tmpfeat"
+        wp_a = feat / "wp-01-alpha"
+        wp_b = feat / "wp-02-beta"
+        wp_a.mkdir(parents=True)
+        wp_b.mkdir(parents=True)
+        (feat / "overview.md").write_text(
+            "---\nname: tmpfeat\nfeature: tmpfeat\nstatus: ready\nroute: standard\n---\n\n# feat\n",
+            encoding="utf-8",
+        )
+        _wp_fixture(wp_a / "overview.md", "wp-01-alpha", [], "alpha is done")
+        _wp_fixture(wp_b / "overview.md", "wp-02-beta", ["wp-01-alpha"], "beta is done")
+        _task_fixture(wp_b / "task-01-first.md", "task-01-first", "api")
+        _task_fixture(wp_b / "task-02-second.md", "task-02-second", "code")
+
+        # (a) idempotency — two runs byte-identical
+        s1 = dumps(build_index(root))
+        s2 = dumps(build_index(root))
+        if s1 == s2:
+            ok("idempotency-byte-identical")
+        else:
+            no("idempotency-byte-identical")
+
+        idx = json.loads(s1)
+
+        # (b) schema — required fields present and correctly typed
+        try:
+            assert isinstance(idx["schema_version"], int)
+            assert isinstance(idx["generated_from"], str)
+            assert isinstance(idx["features"], list) and idx["features"]
+            f = idx["features"][0]
+            assert isinstance(f["name"], str)
+            assert isinstance(f["status"], str)
+            assert isinstance(f["route"], str) and f["route"] == "standard"
+            assert isinstance(f["wps"], list) and len(f["wps"]) == 2
+            for w in f["wps"]:
+                assert isinstance(w["id"], str)
+                assert isinstance(w["status"], str)
+                assert isinstance(w["depends_on"], list)
+                assert isinstance(w["goal_digest"], str)
+                assert isinstance(w["tasks"], list)
+                for t in w["tasks"]:
+                    assert isinstance(t["id"], str)
+                    assert isinstance(t["status"], str)
+                    assert isinstance(t["task_route"], str)
+                    assert "route" not in t  # task uses task_route, never route
+            ok("schema-fields-present-and-typed")
+        except (AssertionError, KeyError, TypeError) as e:
+            no("schema-fields-present-and-typed", repr(e))
+
+        # (c) cross-WP depends_on round-trips
+        try:
+            wps = {w["id"]: w for w in idx["features"][0]["wps"]}
+            assert wps["wp-02-beta"]["depends_on"] == ["wp-01-alpha"]
+            assert wps["wp-01-alpha"]["depends_on"] == []
+            ok("cross-wp-depends_on-roundtrip")
+        except (AssertionError, KeyError) as e:
+            no("cross-wp-depends_on-roundtrip", repr(e))
+
+        # (d) goal_digest is a non-empty 12-hex hash for a WP with a goal block
+        try:
+            gd = wps["wp-01-alpha"]["goal_digest"]
+            assert len(gd) == 12 and all(c in "0123456789abcdef" for c in gd)
+            ok("goal_digest-populated")
+        except (AssertionError, KeyError) as e:
+            no("goal_digest-populated", repr(e))
+
+    print(f"\nResults: {passed} passed, {failed} failed")
+    return 0 if failed == 0 else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

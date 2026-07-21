@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""goalforge-trace-read — shared reader over a feature's trace-events.jsonl.
+
+The single read-side entry point for the wp-14 trace substrate. Both wp-12's
+step-graph distiller and wp-15's retrospective distiller consume THIS module —
+there is no second parser (B-12-SEAM).
+
+Read contract (wp-14, references/trace-events.md §Monotonic-seq rules):
+
+  * Torn-tail skip — the emitter issues exactly one atomic append per row, so at
+    most the LAST line of the log can be torn (a partial write). A consumer skips
+    an unparseable *trailing* line. An unparseable INTERIOR line is a real
+    corruption and is a hard error, never silently dropped.
+
+  * schema_version branch select — each row carries a row-level `schema_version`;
+    the reader keys parsing off it via a per-version parser registry. An unknown
+    version is rejected (the branch does not exist yet), never guessed. A COMPLETE
+    JSON row that the branch rejects is a contract violation regardless of its
+    line position — it is never mistaken for a torn tail.
+
+Programmatic API:
+    read_events(path) -> list[dict]      # parsed rows, torn tail skipped
+    read_events(path, strict=False)      # interior/unknown-version rows skipped too
+
+CLI:
+    goalforge-trace-read --self-test     # exit 0 iff the read contract holds
+    goalforge-trace-read <path>          # print one parsed row per line (JSON)
+
+Exit codes:
+    0  success (or --self-test passed)
+    2  usage / read error / self-test failure
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+LOG_NAME = "trace-events.jsonl"
+
+# schema_version → parse branch. A new schema version registers a new branch;
+# it never rewrites an emitted row (append-only substrate).
+KNOWN_SCHEMA_VERSIONS = (1,)
+
+
+class TraceReadError(Exception):
+    """A hard read-contract violation (interior torn line, unknown version)."""
+
+
+def _parse_v1(row: dict) -> dict:
+    """schema_version == 1 parse branch: envelope-validate, return as-is."""
+    for field in ("seq", "type", "schema_version"):
+        if field not in row:
+            raise TraceReadError(f"v1 row missing envelope field '{field}'")
+    return row
+
+
+_PARSERS = {1: _parse_v1}
+
+
+def _branch(row: dict) -> dict:
+    """Select the parse branch off the row's schema_version."""
+    ver = row.get("schema_version")
+    parser = _PARSERS.get(ver)
+    if parser is None:
+        raise TraceReadError(f"unknown schema_version {ver!r} (no parse branch)")
+    return parser(row)
+
+
+def read_events(path, strict: bool = True) -> list[dict]:
+    """Read + parse trace-events.jsonl honouring the wp-14 read contract.
+
+    Torn trailing line is always skipped. In strict mode (default) an interior
+    unparseable line or an unknown schema_version is a hard error; in
+    best-effort mode (strict=False) such rows are skipped.
+    """
+    p = Path(path)
+    text = p.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    # Drop a single trailing empty line (the LF terminator of the last row).
+    if lines and lines[-1] == "":
+        lines.pop()
+    if not lines:
+        return []
+    last_i = len(lines) - 1
+
+    events: list[dict] = []
+    for i, line in enumerate(lines):
+        if line.strip() == "":
+            continue
+        # Torn-tail is a JSON-level partial write: a bare json.loads failure on
+        # the LAST line is the torn trailing row and is skipped. A COMPLETE JSON
+        # row that the schema_version branch rejects is never "torn" — it is a
+        # real contract violation regardless of line position.
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as e:
+            if i == last_i:
+                continue  # torn trailing line — skip per the read contract
+            if strict:
+                raise TraceReadError(f"interior unparseable line {i}: {e}") from e
+            continue
+        try:
+            parsed = _branch(row)
+        except TraceReadError:
+            if strict:
+                raise
+            continue
+        events.append(parsed)
+    return events
+
+
+def _self_test() -> int:
+    failures: list[str] = []
+
+    def check(cond: bool, label: str) -> None:
+        if not cond:
+            failures.append(label)
+
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+
+        # 1) torn trailing line is skipped; valid rows returned.
+        good = (
+            '{"seq":0,"ts":"2026-07-19T09:00:00Z","type":"gate.result","schema_version":1,"wp":"w","gate":"verify","result":"pass"}\n'
+            '{"seq":1,"ts":"2026-07-19T09:01:00Z","type":"gate.result","schema_version":1,"wp":"w","gate":"review","result":"pass"}\n'
+            '{"seq":2,"ts":"2026-07-19T09:02:0'  # torn (partial) trailing line, no LF
+        )
+        f1 = base / LOG_NAME
+        f1.write_text(good, encoding="utf-8")
+        ev = read_events(f1)
+        check(len(ev) == 2, "torn-tail: expected 2 parsed rows")
+        check([e["seq"] for e in ev] == [0, 1], "torn-tail: seq order preserved")
+
+        # 2) a clean log (LF-terminated) parses every row.
+        clean = (
+            '{"seq":0,"ts":"t","type":"wp.status_changed","schema_version":1,"wp":"w","from":"a","to":"b"}\n'
+        )
+        f2 = base / "clean.jsonl"
+        f2.write_text(clean, encoding="utf-8")
+        check(len(read_events(f2)) == 1, "clean-log: expected 1 row")
+
+        # 3) schema_version branch select — unknown version rejected (strict),
+        #    even as the trailing row (a complete JSON row is not torn).
+        unk = (
+            '{"seq":0,"ts":"t","type":"gate.result","schema_version":1,"wp":"w","gate":"g","result":"pass"}\n'
+            '{"seq":1,"ts":"t","type":"gate.result","schema_version":999,"wp":"w","gate":"g","result":"pass"}\n'
+        )
+        f3 = base / "unk.jsonl"
+        f3.write_text(unk, encoding="utf-8")
+        raised = False
+        try:
+            read_events(f3)
+        except TraceReadError:
+            raised = True
+        check(raised, "schema-branch: unknown version must raise in strict mode")
+        check(len(read_events(f3, strict=False)) == 1,
+              "schema-branch: strict=False skips only the unknown-version row")
+
+        # 4) interior torn line is a hard error (strict), skipped (best-effort).
+        interior = (
+            '{"seq":0,"ts":"t","type":"gate.result","schema_version":1,"wp":"w","gate":"g","result":"pass"}\n'
+            'NOT-JSON-INTERIOR\n'
+            '{"seq":1,"ts":"t","type":"gate.result","schema_version":1,"wp":"w","gate":"g","result":"pass"}\n'
+        )
+        f4 = base / "interior.jsonl"
+        f4.write_text(interior, encoding="utf-8")
+        raised = False
+        try:
+            read_events(f4)
+        except TraceReadError:
+            raised = True
+        check(raised, "interior: unparseable interior line must raise in strict mode")
+        check(len(read_events(f4, strict=False)) == 2, "interior: strict=False skips it")
+
+        # 5) empty log yields no events.
+        f5 = base / "empty.jsonl"
+        f5.write_text("", encoding="utf-8")
+        check(read_events(f5) == [], "empty-log: expected no rows")
+
+    if failures:
+        for f in failures:
+            sys.stderr.write(f"goalforge-trace-read self-test FAIL: {f}\n")
+        return 2
+    print("goalforge-trace-read: self-test OK")
+    return 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="goalforge-trace-read", add_help=True)
+    ap.add_argument("path", nargs="?", help="path to trace-events.jsonl")
+    ap.add_argument("--self-test", action="store_true", help="run the read-contract self-test")
+    ap.add_argument("--best-effort", action="store_true",
+                    help="skip interior/unknown-version rows instead of erroring")
+    args = ap.parse_args(argv)
+
+    if args.self_test:
+        return _self_test()
+    if not args.path:
+        ap.error("a path is required unless --self-test is given")
+    try:
+        events = read_events(args.path, strict=not args.best_effort)
+    except (OSError, TraceReadError) as e:
+        sys.stderr.write(f"goalforge-trace-read: {e}\n")
+        return 2
+    for ev in events:
+        print(json.dumps(ev, separators=(",", ":"), sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

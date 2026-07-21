@@ -1,0 +1,68 @@
+{
+  "skill_name": "sdd-run",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "--dry-run: resolve all chain steps and verify each skill exists",
+      "expected_output": "chain.yaml parses successfully; exactly 6 steps in order (sdd-capture, sdd-spec, sdd-decompose, sdd-harden, sdd-execute, sdd-verify); each step's skill resolves to an existing SKILL.md; precondition status values are valid schema stages; no side effects.",
+      "files": [],
+      "expectations": [
+        "chain.yaml has name: sdd-run",
+        "chain.yaml lists exactly 6 steps",
+        "step 1 skill is sdd-capture",
+        "step 2 skill is sdd-spec",
+        "step 3 skill is sdd-decompose",
+        "step 4 skill is sdd-harden",
+        "step 5 skill is sdd-execute",
+        "step 6 skill is sdd-verify",
+        "each skill resolves to ~/.claude/skills/<name>/SKILL.md",
+        "precondition statuses are valid schema values: null, draft, spec, hardened, ready, executing",
+        "sdd-harden step is marked human_gated: true",
+        "SKILL.md documents --dry-run semantics"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run the full SDD chain for my notification-service feature",
+      "expected_output": "sdd-run orchestrates the chain: reads current feature status, enters at the correct step, delegates to the appropriate child skill (sdd-capture → sdd-spec → sdd-decompose → sdd-harden → sdd-execute → sdd-verify), and pauses at human-gated transitions.",
+      "files": [],
+      "expectations": [
+        "SKILL.md triggers when a user runs any of the four entry commands or when the chain must resume",
+        "SKILL.md routes based on the current WP status frontmatter field",
+        "SKILL.md delegates to child skills rather than reimplementing their logic"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Continue where we left off on the payment-gateway feature",
+      "expected_output": "sdd-run reads the current WP status: field, identifies the next actionable step in the chain, and resumes at that step by invoking the appropriate child skill.",
+      "files": [],
+      "expectations": [
+        "SKILL.md resume mid-chain: reads current WP status and resumes at the next actionable step",
+        "SKILL.md status hardened causes sdd-run to present the human gate before advancing",
+        "SKILL.md status archived is terminal — sdd-run halts with a clear message"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Fix the bug in the authentication middleware.",
+      "expected_output": "sdd-run should NOT trigger — this is a direct bug-fix request, not a request to run the SDD chain. The skill is not applicable.",
+      "files": [],
+      "expectations": [
+        "SKILL.md trigger is specific: invoked when a user runs /spec /plan /implement /verify or when the chain must resume from a known WP stage",
+        "A direct bug-fix request is outside the trigger surface of sdd-run"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Resume the SDD chain for wp-03-notifications which is at status: archived",
+      "expected_output": "sdd-run HALTS with a clear message: archived is a terminal status. No child skill is dispatched, no status fields are mutated.",
+      "files": [],
+      "expectations": [
+        "SKILL.md status archived is terminal — chain complete; never auto-resumed",
+        "SKILL.md never attempts to resume from an archived WP",
+        "SKILL.md --dry-run has no side effects and would also report archived as terminal"
+      ]
+    }
+  ]
+}

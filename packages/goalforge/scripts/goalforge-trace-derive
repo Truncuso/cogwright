@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""goalforge-trace-derive — read-only projection of the legacy transition ledger.
+
+Projects an existing `<feature-dir>/.sdd-transitions.jsonl` into
+schema-conformant trace events:
+
+  - each ledger row → `wp.status_changed` (WP-level) or `feature.status_changed`
+    (feature-level), classified by whether the row's `wp` value equals the
+    feature dir basename (a feature transition targets its own dir);
+  - each ledger row carrying a non-empty `commit` → an additional
+    `commit.linked` edge.
+
+The ledger has NO task-level rows, so `task.status_changed` is never derived
+(D-OQ1). The legacy ledger is NEVER modified — derivation is a read-only
+projection.
+
+Two modes:
+
+  stdout (default)  A deterministic, byte-idempotent PROVISIONAL projection:
+                    every row carries `derived: true` and a provisional
+                    ledger-order `seq` ordinal and the ledger `ts` verbatim.
+                    This form is for inspection/diffing — it is intentionally
+                    NOT the append form (it carries the provisional `derived`
+                    marker, which the append schema does not admit).
+
+  --write           Feeds the derived events THROUGH the validating emitter
+                    (`goalforge-trace-emit`) in ledger order, so the emitter
+                    stays the SOLE final-`seq` authority — derivation never
+                    self-assigns the final seq. Bounded by a recorded flag-day
+                    boundary (D-OQ3 dual-emit contract): derivation covers ONLY
+                    pre-emitter rows. Idempotent — a `.trace-derived` sentinel
+                    records the boundary; a second `--write` is a no-op, so the
+                    log is left byte-identical.
+
+Cutover contract (D-OQ3, dual-emit ON): the flag-day boundary is the earliest
+`ts` already present in `trace-events.jsonl` (live emission has begun) — only
+ledger rows strictly older than it are derived, so a live-emitted row and its
+derived counterpart cannot duplicate. With no live rows yet, the whole ledger is
+pre-emitter and the boundary is the derivation run time.
+
+Envelope-authority note: the emitter is the sole authority for `seq` and
+`schema_version`; `ts` is carried verbatim from the source ledger row through
+BOTH `--write` and stdout, so the appended read-contract log preserves the
+historical timestamps (not the derivation run time).
+
+Exit codes:
+  0  projected (stdout) / appended or already-derived (--write) / nothing to do
+  2  usage error (missing/again-invalid feature dir)
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+
+LEDGER_NAME = ".sdd-transitions.jsonl"
+LOG_NAME = "trace-events.jsonl"
+SENTINEL_NAME = ".trace-derived"
+SCHEMA_VERSION = 1
+
+# Attribution fields carried verbatim from the ledger row onto status/commit
+# events (no parallel naming — reused from the attribution stamp).
+_ATTRIB = ("actor", "mode", "override", "session", "model", "provider", "agent",
+           "decision_ref")
+# Emitted-row key order (readability only; JSON key order is not semantic).
+_ORDER = ("seq", "ts", "type", "schema_version", "derived", "wp", "task",
+          "from", "to", "reason", "commit", "gate", "result", *_ATTRIB)
+
+
+def _emitter_path() -> Path:
+    return Path(__file__).resolve().parent / "goalforge-trace-emit"
+
+
+def _load_emitter():
+    """Import the extensionless emitter module (SourceFileLoader — a null loader
+    is returned for a suffix-less file via spec_from_file_location)."""
+    return SourceFileLoader("goalforge_trace_emit", str(_emitter_path())).load_module()
+
+
+# ---------------------------------------------------------------------------
+# Ledger read + classification
+# ---------------------------------------------------------------------------
+
+def _read_ledger(ledger_path: Path) -> list[dict]:
+    """Parse the legacy ledger in file (== chronological) order. Skips blank and
+    unparseable lines (best-effort read; never mutates the ledger)."""
+    if not ledger_path.exists():
+        return []
+    rows: list[dict] = []
+    for line in ledger_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            rows.append(obj)
+    return rows
+
+
+def _classify_type(row: dict, feature_name: str) -> str:
+    """A row is feature-level iff its `wp` value is the feature dir basename."""
+    return ("feature.status_changed" if row.get("wp") == feature_name
+            else "wp.status_changed")
+
+
+def _status_event(row: dict, feature_name: str) -> dict:
+    """Build the status_changed event carrying the verbatim ledger `ts`
+    (seq/schema_version stay emitter-stamped)."""
+    ev: dict = {"type": _classify_type(row, feature_name)}
+    ledger_ts = row.get("ts")
+    if isinstance(ledger_ts, str) and ledger_ts:
+        ev["ts"] = ledger_ts
+    for f in ("wp", "from", "to"):
+        ev[f] = row.get(f, "")
+    for f in ("reason", "commit"):
+        if row.get(f):
+            ev[f] = row[f]
+    for f in _ATTRIB:
+        if f in row:
+            ev[f] = row[f]
+    return ev
+
+
+def _commit_event(row: dict) -> dict | None:
+    """Build a commit.linked edge for a row carrying a non-empty commit."""
+    commit = row.get("commit")
+    if not commit:
+        return None
+    ev: dict = {"type": "commit.linked", "wp": row.get("wp", ""), "commit": commit}
+    ledger_ts = row.get("ts")
+    if isinstance(ledger_ts, str) and ledger_ts:
+        ev["ts"] = ledger_ts   # inherit parent row ts verbatim
+    for f in _ATTRIB:
+        if f in row:
+            ev[f] = row[f]
+    return ev
+
+
+def derive_events(rows: list[dict], feature_name: str) -> list[dict]:
+    """Ledger rows → ordered list of clean derived events (status, then its
+    commit.linked edge where present). Each carries the verbatim ledger `ts`;
+    seq/schema_version stay emitter-stamped."""
+    events: list[dict] = []
+    for row in rows:
+        events.append(_status_event(row, feature_name))
+        ce = _commit_event(row)
+        if ce is not None:
+            events.append(ce)
+    return events
+
+
+# ---------------------------------------------------------------------------
+# stdout (provisional) projection — deterministic, byte-idempotent
+# ---------------------------------------------------------------------------
+
+def _ordered(obj: dict) -> dict:
+    out: dict = {}
+    for k in _ORDER:
+        if k in obj:
+            out[k] = obj[k]
+    for k, v in obj.items():
+        if k not in out:
+            out[k] = v
+    return out
+
+
+def _provisional_rows(rows: list[dict], feature_name: str) -> list[str]:
+    """Provisional projection lines: verbatim ledger `ts`, provisional
+    ledger-order `seq` ordinal, `derived: true`. Deterministic → byte-idempotent.
+
+    The provisional `ts` is taken verbatim from the source ledger row when the
+    event is a status_changed; a commit.linked edge inherits its parent row `ts`.
+    """
+    lines: list[str] = []
+    ordinal = 0
+    for row in rows:
+        src_ts = row.get("ts", "")
+        for ev in derive_events([row], feature_name):
+            provisional = dict(ev)
+            provisional["seq"] = ordinal
+            provisional["ts"] = src_ts
+            provisional["schema_version"] = SCHEMA_VERSION
+            provisional["derived"] = True
+            lines.append(json.dumps(_ordered(provisional),
+                                    separators=(",", ":"), ensure_ascii=False))
+            ordinal += 1
+    return lines
+
+
+# ---------------------------------------------------------------------------
+# --write (through the emitter, bounded by the flag-day boundary)
+# ---------------------------------------------------------------------------
+
+def _flag_day(log_path: Path, explicit: str | None) -> str | None:
+    """The cutover boundary: only ledger rows with `ts` strictly before it are
+    derived. Explicit `--flag-day` wins; else the earliest `ts` already in the
+    live log (live emission has begun); else None (whole ledger is pre-emitter)."""
+    if explicit:
+        return explicit
+    if not log_path.exists():
+        return None
+    earliest: str | None = None
+    for line in log_path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            ts = json.loads(line).get("ts")
+        except json.JSONDecodeError:
+            continue
+        if isinstance(ts, str) and (earliest is None or ts < earliest):
+            earliest = ts
+    return earliest
+
+
+def _write(feature_dir: Path, rows: list[dict], feature_name: str,
+           flag_day_explicit: str | None) -> int:
+    log_path = feature_dir / LOG_NAME
+    sentinel = feature_dir / SENTINEL_NAME
+
+    if sentinel.exists():
+        print(f"goalforge-trace-derive: already derived (sentinel "
+              f"{sentinel.name}); no-op", file=sys.stderr)
+        return 0
+
+    boundary = _flag_day(log_path, flag_day_explicit)
+    covered = [r for r in rows
+               if boundary is None or str(r.get("ts", "")) < boundary]
+
+    emitter = _load_emitter()
+    schema = emitter.load_schema()
+
+    written = 0
+    for ev in derive_events(covered, feature_name):
+        try:
+            emitter.emit(feature_dir, ev, schema=schema)  # sole seq authority; verbatim ledger ts preserved
+            written += 1
+        except emitter.EmitReject as exc:  # a derived event must be schema-clean
+            print(f"goalforge-trace-derive: rejected derived event: {exc}",
+                  file=sys.stderr)
+            return 2
+
+    sentinel.write_text(json.dumps({
+        "derived": True,
+        "flag_day": boundary,
+        "ledger_rows": len(rows),
+        "covered_rows": len(covered),
+        "events_written": written,
+    }, indent=2) + "\n", encoding="utf-8")
+    print(f"goalforge-trace-derive: wrote {written} derived events "
+          f"(boundary={boundary})", file=sys.stderr)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Read-only derivation of .sdd-transitions.jsonl into trace events.")
+    ap.add_argument("feature_dir", nargs="?", help="feature dir holding the ledger")
+    ap.add_argument("--write", action="store_true",
+                    help="feed derived events through the emitter (bounded by the "
+                         "flag-day boundary; idempotent)")
+    ap.add_argument("--flag-day", help="explicit cutover ts (derive rows strictly "
+                                       "older than this)")
+    ap.add_argument("--self-test", action="store_true", help="run hermetic self-test")
+    args = ap.parse_args(argv)
+
+    if args.self_test:
+        return _self_test()
+
+    if not args.feature_dir:
+        print("goalforge-trace-derive: feature-dir is required", file=sys.stderr)
+        return 2
+    feature_dir = Path(args.feature_dir).resolve()
+    if not feature_dir.is_dir():
+        print(f"goalforge-trace-derive: not a directory: {feature_dir}",
+              file=sys.stderr)
+        return 2
+
+    feature_name = feature_dir.name
+    rows = _read_ledger(feature_dir / LEDGER_NAME)
+
+    if args.write:
+        return _write(feature_dir, rows, feature_name, args.flag_day)
+
+    for line in _provisional_rows(rows, feature_name):
+        print(line)
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Self-test (hermetic temp fixture)
+# ---------------------------------------------------------------------------
+
+def _self_test() -> int:
+    import tempfile
+
+    failures: list[str] = []
+
+    def check(cond: bool, label: str) -> None:
+        if not cond:
+            failures.append(label)
+            print(f"  FAIL {label}", file=sys.stderr)
+        else:
+            print(f"  ok   {label}", file=sys.stderr)
+
+    ledger_lines = [
+        {"ts": "2026-07-01T00:00:00Z", "wp": "wp-01-a", "from": "spec",
+         "to": "hardened", "reason": "r1", "actor": "goalforge-harden",
+         "override": False, "commit": "abc1234", "mode": "auto",
+         "session": "s1", "model": "opus", "provider": "anthropic",
+         "agent": "", "decision_ref": "findings.md"},
+        {"ts": "2026-07-02T00:00:00Z", "wp": "myfeat", "from": "ready",
+         "to": "executing", "reason": "exec", "actor": "goalforge-execute",
+         "override": False, "commit": "", "mode": "auto", "session": "s1",
+         "model": "opus", "provider": "anthropic", "agent": "",
+         "decision_ref": ""},
+        {"ts": "2026-07-03T00:00:00Z", "wp": "wp-02-b", "from": "ready",
+         "to": "executing", "reason": "", "actor": "goalforge-execute",
+         "override": False, "commit": "def5678", "mode": "auto",
+         "session": "s1", "model": "opus", "provider": "anthropic",
+         "agent": "", "decision_ref": ""},
+    ]
+
+    with tempfile.TemporaryDirectory() as td:
+        feat = Path(td) / "myfeat"
+        feat.mkdir()
+        (feat / LEDGER_NAME).write_text(
+            "\n".join(json.dumps(r) for r in ledger_lines) + "\n", encoding="utf-8")
+
+        rows = _read_ledger(feat / LEDGER_NAME)
+        p1 = _provisional_rows(rows, "myfeat")
+        p2 = _provisional_rows(rows, "myfeat")
+        check(p1 == p2, "stdout projection byte-identical across runs")
+
+        types = [json.loads(x)["type"] for x in p1]
+        check("wp.status_changed" in types, "wp.status_changed derived")
+        check("feature.status_changed" in types, "feature.status_changed derived")
+        check("commit.linked" in types, "commit.linked derived for commit rows")
+        check(types.count("commit.linked") == 2, "one commit.linked per commit row")
+        check(all(json.loads(x)["derived"] is True for x in p1),
+              "every provisional row marked derived")
+        # feature classification: the 'myfeat' row is feature-level
+        feat_rows = [json.loads(x) for x in p1
+                     if json.loads(x)["type"] == "feature.status_changed"]
+        check(len(feat_rows) == 1 and feat_rows[0]["wp"] == "myfeat",
+              "feature row classified by basename match")
+
+        rc = _write(feat, rows, "myfeat", None)
+        check(rc == 0, "--write exits 0")
+        log = feat / LOG_NAME
+        written = [json.loads(x) for x in log.read_text().splitlines()]
+        emitter = _load_emitter()
+        schema = emitter.load_schema()
+        check(all(not emitter._validate(r, schema) for r in written),
+              "every written row validates against the schema")
+        ledger_ts = {r["ts"] for r in ledger_lines}
+        check(all(r.get("ts") in ledger_ts for r in written),
+              "written rows carry verbatim ledger ts (not derivation-time)")
+        seqs = [r["seq"] for r in written]
+        check(seqs == list(range(len(written))), "written seq contiguous 0..n-1")
+
+        before = log.read_bytes()
+        rc2 = _write(feat, rows, "myfeat", None)
+        check(rc2 == 0 and log.read_bytes() == before,
+              "--write idempotent (sentinel → byte-identical log)")
+
+    if failures:
+        print(f"goalforge-trace-derive --self-test: FAIL ({len(failures)})",
+              file=sys.stderr)
+        return 1
+    print("goalforge-trace-derive --self-test: PASS", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

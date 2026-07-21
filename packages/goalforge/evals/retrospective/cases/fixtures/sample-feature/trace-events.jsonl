@@ -1,0 +1,5 @@
+{"seq":0,"ts":"t","type":"issue.recorded","schema_version":1,"kind":"retry-wall","wp":"wp-14","summary":"loop not converging","decision_ref":"findings.md"}
+{"seq":1,"ts":"t","type":"issue.recorded","schema_version":1,"kind":"retry-wall","wp":"wp-14","summary":"still stuck","decision_ref":"findings.md"}
+{"seq":2,"ts":"t","type":"issue.recorded","schema_version":1,"kind":"spec-gap","wp":"wp-13","summary":"ambiguous WP"}
+{"seq":3,"ts":"t","type":"issue.recorded","schema_version":1,"kind":"skill-defect","wp":"wp-14","summary":"mis-triggered","decision_ref":"plans/x/wp-14/task-01.md"}
+{"seq":4,"ts":"t","type":"gate.result","schema_version":1,"wp":"wp-14","gate":"verify","result":"pass"}
