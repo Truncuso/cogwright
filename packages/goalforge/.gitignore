@@ -1,0 +1,9 @@
+# Eval runtime scratch — must never dirty the checkout (breaks the installer's
+# clean pre-check / idempotency). Kept out of the tracked package.
+evals/workspace/
+evals-workspace/
+**/__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.tmp
