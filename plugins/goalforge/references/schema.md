@@ -109,21 +109,20 @@ under the signal-scoped rule** (complexity verdict `simple`, severity ≤ MEDIUM
 ---
 name: <feature>                   # kebab, matches folder name
 title: <human title>
-status: draft|ready|active|completed|archived
-# draft→ready→active→completed→archived
+status: draft|spec|ready|active|executing|completed|archived
+# draft→spec→ready→active→executing→completed  (state-machine.md §Feature policy
+# is the machine-parsed source of truth — goalforge-transition.sh reads it directly)
 # completed: written by sdd-verify (last-WP rule); archived: written by sdd-archive
 # active: reserved-for-future (no skill writes it yet; sdd-lifecycle-redesign)
 created: YYYY-MM-DD
 feature: <feature>
-route: standard                   # fast|standard|wave — chain route,
-                                  # stamped by sdd-capture (sdd-goal-route.sh
-                                  # verdict). Back-compat: legacy full|one-go
-                                  # still accepted on read; full normalizes to
-                                  # standard, one-go to fast (single-agent
-                                  # dispatch expressed via execution_plan).
-                                  # Absent ⇒ standard (back-compat).
+route: standard                   # one-go|fast|standard|wave — chain route,
+                                  # stamped by sdd-capture (goalforge-route.sh
+                                  # verdict). Back-compat: fast|full still
+                                  # accepted on read; full normalizes to
+                                  # standard. Absent ⇒ standard (back-compat).
 # confidence: clear|borderline|pinned  # classifier confidence for the route
-                                  # verdict (optional; sdd-goal-route.sh output
+                                  # verdict (optional; goalforge-route.sh output
                                   # field, not gating). pinned = human override.
 # execution_plan:                 # optional; stamped by sdd-capture alongside
                                   # route. Shape (see spec.md Interface Contract
@@ -150,21 +149,20 @@ in frontmatter. No folder move is ever required or meaningful.
 
 ## Route enum + execution_plan block
 
-`route:` classifies how much of the chain a feature needs. Three values:
+`route:` classifies how much of the chain a feature needs. Four values:
 
 | Route | Meaning |
 |---|---|
-| `fast` | capture → single WP → execute/verify, no `spec.md`. A "one-go" (smallest-unit, single-dispatch) feature is `route: fast` whose `execution_plan` sets `dispatch: agent` on the implement step = exactly one implement-agent — the full goal-contract + deterministic gates are preserved. |
+| `one-go` | Smallest unit — reuses fast-path 1-WP mechanics with a single dispatch (full goal-contract + deterministic gates preserved). |
+| `fast` | capture → single WP → execute/verify, no `spec.md`. |
 | `standard` | Full chain: spec → decompose → harden → execute → verify. Default. |
 | `wave` | Multi-WP with parallel fan-out (explore, parallel spec authors, cross-spec judge, hygiene). |
 
-Back-compat: legacy `full`/`one-go` are still accepted on read; `full`
-normalizes to `standard`, `one-go` to `fast` (single-agent dispatch expressed
-via `execution_plan`, never a 4th enum value). Absent `route:` ⇒ `standard`
-(legacy behavior).
+Back-compat: `fast`/`full` are still accepted on read; `full` normalizes to
+`standard`. Absent `route:` ⇒ `standard` (legacy behavior).
 
 Classifier confidence (optional `confidence:` field, output of
-`sdd-goal-route.sh`, never gating): `clear` (unambiguous signals), `borderline`
+`goalforge-route.sh`, never gating): `clear` (unambiguous signals), `borderline`
 (mixed signals, verdict is a best guess), `pinned` (human override — the
 verdict was set explicitly, not classified).
 
@@ -173,7 +171,7 @@ alongside `route:` — persisted DATA, inspectable and human-overridable at the
 spec gate, consumed (never re-classified) by the runner:
 
 ```yaml
-route: standard            # fast | standard | wave
+route: standard            # one-go | fast | standard | wave
 execution_plan:
   steps: [spec, decompose, harden, execute, verify]   # subset per route
   dispatch:                # inline | agent, per step
@@ -280,7 +278,10 @@ for assumed answers. Do not use `[risk-accepted]` without the id payload.
 ---
 name: task-01-<slug>
 title: <one-line goal>
-status: pending|in-progress|implemented|verified
+status: pending|briefed|in-progress|implemented|verified
+# briefed     = a complexity-gated (medium/high) task has had its brief-task-NN.md
+#               authored (interim, between pending and in-progress); low-complexity
+#               tasks skip briefing and never enter briefed.
 # implemented = deterministic eval passed + committed (interim, by sdd-execute);
 #               NOT quality-signed-off. verified is written only at the WP gate by
 #               sdd-verify (it promotes implemented → verified).

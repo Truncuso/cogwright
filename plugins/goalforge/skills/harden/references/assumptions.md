@@ -1,12 +1,12 @@
 # Machine-checkable Assumptions block (harden → execute recheck)
 
-Full protocol for the `## Assumptions` block goalforge-harden writes into a WP's
+Full protocol for the `## Assumptions` block sdd-harden writes into a WP's
 `overview.md`. Inline summary lives in `SKILL.md` § Assumptions; this file is the
 format + trust-boundary + recheck-row detail, consulted only when authoring an
 assumption block or debugging a recheck.
 
 Harden records the WP's working assumptions as a **machine-checkable**
-`## Assumptions` block so `goalforge-execute` can re-verify them at preflight before
+`## Assumptions` block so `sdd-execute` can re-verify them at preflight before
 building on a stale premise. This is distinct from the dated
 `## [DATE] Assumption: …` rationale entries appended to `findings.md` in Step 1
 (those are the human-readable audit trail; this block is the **recheck input**).
@@ -35,8 +35,8 @@ the verb-lint only inspects (`command -v` on its first token) and **never runs**
 Keep the two separate: assumption `check`s are executed; `verify:` strings are
 linted.
 
-**Execute Step 0b re-runs them.** At the goal-resolution preflight `goalforge-execute`
-calls `"$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-assumption-recheck.sh <wp>/overview.md`,
+**Execute Step 0b re-runs them.** At the goal-resolution preflight `sdd-execute`
+calls `~/.claude/skills/sdd/scripts/sdd-assumption-recheck.sh <wp>/overview.md`,
 which runs each `check` and, on a mismatch, writes a keyed, idempotent row to the
 WP's `findings.md`:
 
@@ -52,6 +52,6 @@ Re-running updates the keyed row in place — it never appends a duplicate.
 
 **Script detects; human decides (the split).** The recheck script
 *deterministically* detects and *logs* a stale assumption; it does **not** gate. A
-logged mismatch is **not** an auto-abort — `goalforge-execute` records it and leaves the
+logged mismatch is **not** an auto-abort — `sdd-execute` records it and leaves the
 proceed-or-stop call to operator judgment (assumption-recheck is judgment, not a
 deterministic gate, per the WP goal constraint).

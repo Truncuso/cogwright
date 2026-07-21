@@ -1,6 +1,6 @@
 ---
 name: <feature>
-title: <human title>
+title: "<human title>"
 status: draft
 schema_version: 5          # opt-in marker (schema.md "Version lineage"): makes
                             # a WP's goal: mandatory at ready/executing/verified

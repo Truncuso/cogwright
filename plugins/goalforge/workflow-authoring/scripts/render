@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""render — render a task-01 step-graph into a NAMED declarative execution_plan
+route file (steps + dispatch + parallel groups + opaque tiers + provenance) plus
+a Mermaid step-graph, stored under skills/goalforge/run/workflows/<name>.md.
+
+Input: the task-01 step-graph JSON (from `distill`), either read from a file /
+stdin (`--graph`) or produced inline by distilling a trace (`--trace`). The
+step-graph shape is:
+
+    {
+      "steps":     [<chain.yaml step basenames, canonical order>],
+      "dispatch":  {step: "inline"|"agent"},
+      "parallel":  [[step], ...],
+      "provenance": "<feature>/trace-events.jsonl"
+    }
+
+Output: a markdown route file whose YAML frontmatter carries an `execution_plan:`
+block (steps[], dispatch{}, parallel[], tiers{}) that the EXISTING
+run/scripts/goalforge-plan-consumer.sh loads UNMODIFIED (B-12 case c), plus a
+Mermaid step-graph fence derived from the same step-graph and a `provenance:`
+pointer to the source trace. Stored at
+skills/goalforge/run/workflows/<name>.md.
+
+Determinism (B-12 case d): the renderer only ever sees the step-graph, which
+already has ALL non-deterministic trace fields (seq, ts, session, model,
+provider, agent) stripped upstream. Frontmatter is emitted with sorted keys and
+the Mermaid is derived deterministically from steps/parallel, so two runs over
+the same step-graph produce byte-identical output.
+
+CLI:
+    render --trace <path> --name <name> [--out-dir <dir>]   # distil + render + write
+    render --graph <path|-> --name <name> [--out-dir <dir>] # render a step-graph + write
+    render --graph <path|-> --name <name> --stdout          # print, do not write
+    render --self-test                                       # exit 0 iff invariants hold
+
+Exit codes:
+    0  success (or --self-test passed)
+    2  usage / read error / self-test failure
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import yaml
+
+_THIS = Path(__file__).resolve()
+# .../goalforge/workflow-authoring/scripts/render → goalforge/
+_GOALFORGE = _THIS.parents[2]
+_DISTILL = _THIS.parent / "distill"
+_WORKFLOWS_DIR = _GOALFORGE / "run" / "workflows"
+
+STEP_GRAPH_KEYS = {"steps", "dispatch", "parallel", "provenance"}
+
+
+def _load_distill():
+    """Import the sibling `distill` module (extensionless script)."""
+    loader = importlib.machinery.SourceFileLoader("distill", str(_DISTILL))
+    spec = importlib.util.spec_from_loader("distill", loader)
+    if spec is None:
+        raise RuntimeError(f"cannot load distill at {_DISTILL}")
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def _validate_graph(graph: dict) -> None:
+    if not isinstance(graph, dict):
+        raise ValueError("step-graph must be a JSON object")
+    missing = STEP_GRAPH_KEYS - set(graph)
+    if missing:
+        raise ValueError(f"step-graph missing key(s): {sorted(missing)}")
+    if not isinstance(graph["steps"], list) or not all(isinstance(s, str) for s in graph["steps"]):
+        raise ValueError("step-graph.steps must be a list of strings")
+    if not isinstance(graph["dispatch"], dict):
+        raise ValueError("step-graph.dispatch must be an object")
+    if not isinstance(graph["parallel"], list):
+        raise ValueError("step-graph.parallel must be a list of groups")
+    if not isinstance(graph["provenance"], str):
+        raise ValueError("step-graph.provenance must be a string")
+
+
+def render_mermaid(steps: list[str], dispatch: dict, parallel: list) -> str:
+    """A deterministic Mermaid step-graph derived solely from the step-graph.
+
+    Nodes = steps (labeled with their dispatch mode); edges connect each parallel
+    batch to the next (every member of batch i → every member of batch i+1), so
+    concurrently-runnable steps share a rank. Empty step-graph → a bare graph.
+    """
+    lines = ["flowchart TD"]
+    for s in steps:
+        mode = dispatch.get(s, "inline")
+        lines.append(f'  {s}["{s} ({mode})"]')
+    # Edges follow the parallel batches in declared order.
+    for a, b in zip(parallel, parallel[1:]):
+        for src in a:
+            for dst in b:
+                lines.append(f"  {src} --> {dst}")
+    return "\n".join(lines)
+
+
+def render_route(graph: dict, name: str) -> str:
+    """Render a step-graph into the full route-file text (frontmatter + Mermaid)."""
+    _validate_graph(graph)
+    steps = graph["steps"]
+    dispatch = graph["dispatch"]
+    parallel = graph["parallel"]
+    provenance = graph["provenance"]
+
+    frontmatter = {
+        "name": name,
+        "execution_plan": {
+            "steps": list(steps),
+            "dispatch": dict(dispatch),
+            "parallel": [list(g) for g in parallel],
+            "tiers": {},          # opaque hints — none captured (never resolved here)
+        },
+        "provenance": provenance,
+    }
+    fm_yaml = yaml.safe_dump(
+        frontmatter, sort_keys=True, default_flow_style=False, allow_unicode=True
+    )
+    mermaid = render_mermaid(steps, dispatch, parallel)
+    return (
+        "---\n"
+        f"{fm_yaml}"
+        "---\n"
+        "\n"
+        f"# Captured execution_plan route: {name}\n"
+        "\n"
+        "Captured from a completed goalforge-chain run; loads UNMODIFIED through\n"
+        "`run/scripts/goalforge-plan-consumer.sh`.\n"
+        "\n"
+        "```mermaid\n"
+        f"{mermaid}\n"
+        "```\n"
+        "\n"
+        f"Provenance: `{provenance}`\n"
+    )
+
+
+def write_route(graph: dict, name: str, out_dir: Path | None = None) -> Path:
+    out_dir = out_dir or _WORKFLOWS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    dest = out_dir / f"{name}.md"
+    dest.write_text(render_route(graph, name), encoding="utf-8")
+    return dest
+
+
+def _read_graph(spec: str) -> dict:
+    if spec == "-":
+        return json.loads(sys.stdin.read())
+    return json.loads(Path(spec).read_text(encoding="utf-8"))
+
+
+def _self_test() -> int:
+    failures: list[str] = []
+
+    def check(cond: bool, label: str) -> None:
+        if not cond:
+            failures.append(label)
+
+    graph = {
+        "steps": ["harden", "execute", "verify"],
+        "dispatch": {"harden": "inline", "execute": "agent", "verify": "inline"},
+        "parallel": [["harden"], ["execute"], ["verify"]],
+        "provenance": "demo-feature/trace-events.jsonl",
+    }
+
+    text = render_route(graph, "demo-route")
+
+    # Frontmatter parses and round-trips the step-graph faithfully.
+    m = text.split("---\n", 2)
+    check(text.startswith("---\n") and len(m) >= 3, "frontmatter: delimited block present")
+    fm = yaml.safe_load(m[1]) or {}
+    ep = fm.get("execution_plan") or {}
+    check(fm.get("name") == "demo-route", f"name preserved (got {fm.get('name')})")
+    check(ep.get("steps") == graph["steps"], f"steps preserved (got {ep.get('steps')})")
+    check(ep.get("dispatch") == graph["dispatch"], f"dispatch preserved (got {ep.get('dispatch')})")
+    check(ep.get("parallel") == graph["parallel"], f"parallel preserved (got {ep.get('parallel')})")
+    check(ep.get("tiers") == {}, f"tiers emitted as empty opaque map (got {ep.get('tiers')})")
+    check(fm.get("provenance") == graph["provenance"], f"provenance preserved (got {fm.get('provenance')})")
+
+    # Mermaid derived from the same step-graph, sequential batch edges.
+    check("```mermaid" in text and "flowchart TD" in text, "mermaid: fence + header present")
+    check('harden["harden (inline)"]' in text and 'execute["execute (agent)"]' in text,
+          "mermaid: labeled step nodes present")
+    check("harden --> execute" in text and "execute --> verify" in text,
+          "mermaid: batch-to-batch edges present")
+
+    # No non-deterministic field leaks into the rendered route.
+    for bad in ("seq", "ts:", "session", "model", "provider", "agent:", "anthropic", "opus", "implementer"):
+        check(bad not in text, f"determinism: stripped token '{bad}' absent from route text")
+
+    # Byte-determinism: two renders of the same graph are byte-identical.
+    check(render_route(graph, "demo-route") == text, "determinism: two renders byte-identical")
+
+    # Empty step-graph → a valid, bare route (no edges, empty plan lists).
+    empty = {"steps": [], "dispatch": {}, "parallel": [], "provenance": "e/trace-events.jsonl"}
+    etext = render_route(empty, "empty-route")
+    efm = yaml.safe_load(etext.split("---\n", 2)[1]) or {}
+    check(efm.get("execution_plan", {}).get("steps") == [], "empty: empty steps list")
+    check("flowchart TD" in etext and "-->" not in etext, "empty: mermaid header, no edges")
+
+    # Consumer round-trip smoke: the emitted execution_plan block, embedded into a
+    # feature overview.md frontmatter, loads through goalforge-plan-consumer.sh and
+    # selects the captured steps/parallel batches UNMODIFIED (B-12 case c). Skipped
+    # (not failed) if the consumer/chain.yaml is unavailable in this environment.
+    consumer = _GOALFORGE / "run" / "scripts" / "goalforge-plan-consumer.sh"
+    chain_yaml = _GOALFORGE / "run" / "chain.yaml"
+    if consumer.exists() and chain_yaml.exists():
+        import subprocess
+        import tempfile
+        ep_yaml = yaml.safe_dump(
+            {"route": "standard", "execution_plan": ep}, sort_keys=True, default_flow_style=False
+        )
+        overview = "---\n" + ep_yaml + "---\n\n## Goal\n"
+        with tempfile.TemporaryDirectory() as td:
+            ov = Path(td) / "overview.md"
+            ov.write_text(overview, encoding="utf-8")
+            proc = subprocess.run(
+                ["bash", str(consumer), "--emit-batches", str(ov)],
+                capture_output=True, text=True,
+            )
+            check(proc.returncode == 0,
+                  f"consumer round-trip: exit 0 (got {proc.returncode}: {proc.stderr.strip()})")
+            out = proc.stdout.strip().splitlines()
+            check(out == ["batch 1: harden", "batch 2: execute", "batch 3: verify"],
+                  f"consumer round-trip: captured batches selected (got {out})")
+
+    if failures:
+        for f in failures:
+            sys.stderr.write(f"render self-test FAIL: {f}\n")
+        return 2
+    print("render: self-test OK")
+    return 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="render", add_help=True)
+    ap.add_argument("--trace", help="path to a feature's trace-events.jsonl (distil then render)")
+    ap.add_argument("--graph", help="path to a step-graph JSON file, or '-' for stdin")
+    ap.add_argument("--name", help="route name (file stored as <name>.md)")
+    ap.add_argument("--out-dir", help="output directory (default: skills/goalforge/run/workflows/)")
+    ap.add_argument("--stdout", action="store_true", help="print the route to stdout; do not write a file")
+    ap.add_argument("--self-test", action="store_true", help="run the renderer self-test")
+    args = ap.parse_args(argv)
+
+    if args.self_test:
+        return _self_test()
+
+    if not args.name:
+        ap.error("--name is required unless --self-test is given")
+    if bool(args.trace) == bool(args.graph):
+        ap.error("exactly one of --trace / --graph is required")
+
+    try:
+        if args.trace:
+            graph = _load_distill().distill(args.trace)
+        else:
+            graph = _read_graph(args.graph)
+        if args.stdout:
+            sys.stdout.write(render_route(graph, args.name))
+            return 0
+        out_dir = Path(args.out_dir) if args.out_dir else None
+        dest = write_route(graph, args.name, out_dir)
+    except Exception as e:  # read / IO / validation failure
+        sys.stderr.write(f"render: {e}\n")
+        return 2
+    print(str(dest))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

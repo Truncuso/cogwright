@@ -580,7 +580,7 @@ def drift_err(filepath, msg, suggest=""):
 # ── Schema constants ────────────────────────────────────────────────────────
 
 # feature overview.md
-FEATURE_STATUS_ENUM = {'draft','ready','active','completed','archived'}
+FEATURE_STATUS_ENUM = {'draft','spec','ready','active','executing','completed','archived'}
 FEATURE_REQUIRED    = {'name','title','status','created'}
 
 # WP overview.md
@@ -590,7 +590,7 @@ WP_REQUIRED      = {'name','title','status','stage_updated'}
 # task-NN-*.md
 # `implemented` = deterministic eval passed + committed (interim, set by sdd-execute);
 # sdd-verify promotes implemented → verified at the WP gate.
-TASK_STATUS_ENUM = {'pending','in-progress','implemented','verified'}
+TASK_STATUS_ENUM = {'pending','briefed','in-progress','implemented','verified'}
 TASK_REQUIRED    = {'name','title','status'}
 
 READY_PLUS = {'ready','executing','verified','completed','active'}  # "ready+" — dep satisfied
@@ -1460,6 +1460,25 @@ for path, kind, fm, has_ckpt in all_files:
         check_enum(path, fm, 'status', TASK_STATUS_ENUM)
         status = fm.get('status', '')
         check_staleness(path, fm, status)
+
+        # ── STATIC brief-skip invariant (wp-06) ──────────────────────────
+        # A complexity-gated (medium/high) task that reached implemented/
+        # verified WITHOUT a sibling brief-task-NN.md skipped the brief stage.
+        # Static current-file-state check: complexity is read DIRECTLY from
+        # this task's frontmatter (NOT goalforge-wp-complexity.sh), and no
+        # transition/state-machine is observed. WARN (exit 0) — the brief
+        # stage is new; this surfaces the skip without blocking --strict.
+        task_complexity = str(fm.get('complexity', '') or '').strip().lower()
+        if task_complexity in ('medium', 'high') and status in ('implemented', 'verified'):
+            m = re.match(r'(task-\d+)', os.path.basename(str(path)))
+            if m:
+                brief_sibling = os.path.join(os.path.dirname(str(path)),
+                                             'brief-%s.md' % m.group(1))
+                if not os.path.exists(brief_sibling):
+                    warn(path,
+                         'gated task (complexity=%s) at status `%s` has no '
+                         'sibling brief-%s.md — brief stage was skipped'
+                         % (task_complexity, status, m.group(1)))
 
         # Task-level depends_on within same WP
         raw_deps = fm.get('depends_on', []) or []

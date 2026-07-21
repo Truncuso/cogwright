@@ -1,5 +1,5 @@
 {
   "name": "goalforge",
-  "version": "0.1.0",
-  "description": "Spec-driven development chain — goal-object work packages, harden/execute/verify lifecycle for Claude Code."
+  "version": "33b31eab96c9",
+  "description": "Goal-and-verification-driven development chain for Claude Code — goal-object work packages with a harden/execute/verify lifecycle."
 }

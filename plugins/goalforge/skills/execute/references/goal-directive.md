@@ -1,4 +1,4 @@
-# goalforge-execute — Goal-eval directive contract (Step 9b)
+# sdd-execute — Goal-eval directive contract (Step 9b)
 
 Mechanical post-condition contract behind Step 9b's `act_on_directive`.
 Consulted when reasoning about the exact `paused`/`met` shape the outer loop

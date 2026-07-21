@@ -3,13 +3,6 @@ name: goalforge-spec
 description: "Run a design pass on a captured feature and produce the spec document. Reads plans/<feature>/overview.md, optionally invokes personas or architect for a multi-lens review, writes plans/<feature>/spec.md from the feature-spec template, and advances the feature status draft → ready. HUMAN-GATED: must receive explicit user approval before advancing status. Trigger: the user asks to spec, design, or elaborate on a feature that already has an overview.md (status: draft)."
 metadata:
   version: 1.1.0
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-spec"
-        - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-spec:stop"
 ---
 
 # goalforge-spec
@@ -25,8 +18,8 @@ goal block. Invoking goalforge-spec on a fast feature is the deliberate promotio
 path (the feature outgrew the fast route — e.g. 3+ WPs or a cross-WP
 contract): author the spec retroactively and flip `route: full` with a note.
 
-Schema reference: `references/schema.md`.
-Templates: `references/templates/`.
+Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
+Templates: `~/.claude/skills/goalforge/references/templates/`.
 
 ## Unattended mode (`SDD_AUTONOMY=unattended`)
 
@@ -86,7 +79,7 @@ Conduct a design pass to produce the content of `spec.md`. This involves:
 
 Author the **feature-level goal block** in the `spec.md` frontmatter. This is
 the parent goal each WP may inherit unset fields from (via `inherits_from`).
-Schema: `references/schema.md` §Goal object. Set:
+Schema: `~/.claude/skills/goalforge/references/schema.md` §Goal object. Set:
 
 - **`task_type`** — `code | research | ops | writing | optimization | analysis`.
   The dominant nature of the work; defaults to `code`. Picked here so dispatch
@@ -231,12 +224,12 @@ before approving.
 ## Plans root
 
 Resolve `<PLANS_ROOT>` at runtime per the priority rules in
-`references/schema.md` §PLANS_ROOT resolution:
+`~/.claude/skills/goalforge/references/schema.md` §PLANS_ROOT resolution:
 env `SDD_PLANS_DIR` → project git-root `plans/` → global `~/.claude/plans/`.
 
 ## Template reference
 
-Templates at `references/templates/`. Stamped files carry:
+Templates at `~/.claude/skills/goalforge/references/templates/`. Stamped files carry:
 
 ```
 <!-- Template: feature-spec v4 (frontmatter-first, flat layout) -->

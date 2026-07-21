@@ -12,7 +12,7 @@ ctx:
 
 # Chain route — read from the feature overview.md frontmatter `route:` field,
 # stamped by goalforge-capture (goalforge-route.sh; capture is the routing home).
-# Absent => full (back-compat). Steps carry `when_route:`; a step without it
+# Absent => standard (back-compat). Steps carry `when_route:`; a step without it
 # runs on every route.
 #   full: goalforge-capture → goalforge-spec → goalforge-decompose → goalforge-harden → goalforge-execute → goalforge-verify
 #   fast: goalforge-capture → goalforge-decompose (add-wp, single WP, no spec.md)
@@ -24,19 +24,19 @@ ctx:
 #   safety net. goalforge-verify runs on EVERY route (never skipped).
 
 steps:
-  - skill: goalforge-capture
+  - skill: goalforge/capture
     purpose: "Elicit raw input; write feature overview.md (status: draft); classify + stamp route: via goalforge-route.sh (borderline verdict => confirm with human; unattended => full)"
     precondition: null   # chain entry; no prior status required
 
-  - skill: goalforge-spec
-    when_route: full     # fast path has no spec.md by design
+  - skill: goalforge/spec
+    when_route: standard     # fast path has no spec.md by design
     purpose: "Write spec.md; author the feature goal object (outcome + verification + constraints/boundaries); advance feature status: draft → ready"
     precondition:
       target: feature
       status: draft
     human_gated: true
 
-  - skill: goalforge-decompose
+  - skill: goalforge/decompose
     purpose: "Break spec into WP overview.md files; derive each WP goal block (inherits_from the feature goal object) with task stubs. route: fast => Add-WP mode instead: author the ONE WP (self-contained goal block) against the draft feature — no spec.md required"
     precondition:
       target: feature
@@ -47,27 +47,27 @@ steps:
         target: feature
         status: draft
 
-  - skill: goalforge-harden
-    when_route: full     # fast path replaces harden with the deterministic gates above, then records the goal hash (goalforge-goal-hash.sh --record) before spec->ready --mode auto, exactly as harden's auto door does; a tripped fast WP re-enters HERE
+  - skill: goalforge/harden
+    when_route: standard     # fast path replaces harden with the deterministic gates above, then records the goal hash (goalforge-goal-hash.sh --record) before spec->ready --mode auto, exactly as harden's auto door does; a tripped fast WP re-enters HERE
     purpose: "Grill each WP goal block facets via interview-loop; resolve open questions (status: spec → hardened → ready); delegate to goalforge-arbiter when ≥2 architectural approaches involve a hard-to-reverse bet (advisory)"
     precondition:
       target: wp
       status: spec
     human_gated: true    # hardened → ready: human by default; signal-scoped auto-advance per goalforge-harden Step 2.3 / state-machine.md §Policy
 
-  - skill: goalforge-execute
+  - skill: goalforge/execute
     purpose: "Run the goal object completion loop per WP: resolve effective goal → execute sub-cycle (pick-agent → dispatch → checkpoint) → evaluate goal verdict; delegate per-task + loop-back records to goalforge-recap"
     precondition:
       target: wp
       status: ready
 
-  - skill: goalforge-verify
+  - skill: goalforge/verify
     purpose: "Run superpowers:verification-before-completion; mark WP verified; delegate semantic spec-vs-diff gap audit to goalforge-watchdog (advisory) and finalize the WP trace via goalforge-recap"
     precondition:
       target: wp
       status: executing
 
-  - skill: goalforge-redecompose
+  - skill: goalforge/redecompose
     purpose: "Loop-back (re-entrant): on a learning that invalidates existing WPs, reconcile proposed re-decomposition against verified WPs — diff produces 5 buckets (same/changed/dropped/new/ambiguous); route changed+new to harden, supersede dropped-verified in place, surface ambiguous to judgment/human; idempotent re-entry"
     precondition: null   # loop-back: triggered by a learning, not the linear status flow
 

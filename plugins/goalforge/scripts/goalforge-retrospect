@@ -1,0 +1,354 @@
+#!/usr/bin/env python3
+"""goalforge-retrospect — deterministic retrospective distiller (wp-15 task-02).
+
+Projects a feature's trace window into `improvement-report.md` with three
+contracted sections — Bottlenecks, Issues Chased, Routed Proposals — as a pure,
+byte-idempotent, PROPOSE-ONLY projection of `issue.recorded` trace events. It
+writes ONLY `improvement-report.md`; it never edits skills, rules, workflows, or
+memory (application of any proposal routes through /skill-improve, idea-capture,
+or memory-write — human-gated + eval-gated per the Auto-Research/Auto-Improve
+Contract).
+
+  goalforge-retrospect <feature-dir> [--since <seq>]
+
+Behaviour (per the wp-15 goal + B-15-RANKING / B-12-SEAM decisions):
+
+  * CONSUMES the shared `scripts/goalforge-trace-read` helper (torn-tail skip +
+    schema_version branch select) — never a second parser.
+  * Ranking v1 = deterministic GROUP + COUNT per (kind, wp) with recency (last
+    seq). NO threshold heuristics, NO auto-detection, NO per-kind branch
+    (dispatch-mismatch is counted by the uniform group like any other kind, but
+    gets no special ranking branch).
+  * Issues Chased carries resolution status REPORT-side (the event has no
+    resolution field — B-15-SCHEMA): the row shows the repo-relative
+    `decision_ref` pointer, or `unresolved` when none was captured.
+  * Routed Proposals cite `rules/common/learning-routing.md` VERBATIM as the
+    routing authority — never a divergent baked copy.
+  * Deterministic render: no LLM call, no wall-clock, repo-relative paths only →
+    two runs over the same window are byte-identical.
+  * `--since <seq>` windows a lap (events with `seq >= since`); default = whole
+    log. An ABSENT or EMPTY trace log yields an explicit empty report, exit 0
+    (zero-breakage).
+
+Exit codes:
+  0  report written (including the explicit empty report)
+  2  usage error / interior log corruption (a hard read-contract violation)
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.machinery
+import importlib.util
+import sys
+from pathlib import Path
+
+LOG_NAME = "trace-events.jsonl"
+REPORT_NAME = "improvement-report.md"
+ISSUE_TYPE = "issue.recorded"
+ROUTING_AUTHORITY = "rules/common/learning-routing.md"
+
+# Routing target per issue kind. This is the INDICATIVE projection of
+# `rules/common/learning-routing.md` (mirrored in references/retrospective.md);
+# the rule remains the cited authority — the report never claims to supersede it.
+ROUTING = {
+    "retry-wall": "workflow/tooling idea → `plans/ideas/` (tooling tag)",
+    "context-bloat": "workflow/tooling idea → `plans/ideas/` (tooling tag)",
+    "dispatch-mismatch": "workflow/tooling idea → `plans/ideas/` (tooling tag)",
+    "missing-skill": "idea → `plans/ideas/`; if repeated, skill authoring",
+    "skill-defect": "`/skill-improve` once it recurs ≥2× (per the rule)",
+    "spec-gap": "durable fact → `.memory/` or a rule",
+    "tool-failure": "tooling idea → `plans/ideas/` (tooling tag)",
+    "env-friction": "tooling idea → `plans/ideas/` (tooling tag)",
+}
+
+
+def _load_trace_read():
+    """Import the shared goalforge-trace-read helper (B-12-SEAM) as a module.
+
+    The helper has no `.py` suffix and a hyphenated name, so it is loaded by
+    path — but it is the SAME single read-side parser, never re-implemented.
+    """
+    helper = Path(__file__).resolve().parent / "goalforge-trace-read"
+    if not helper.exists():
+        raise FileNotFoundError(f"shared read helper not found: {helper}")
+    loader = importlib.machinery.SourceFileLoader("goalforge_trace_read", str(helper))
+    spec = importlib.util.spec_from_loader("goalforge_trace_read", loader)
+    if spec is None or spec.loader is None:
+        raise FileNotFoundError(f"shared read helper not loadable: {helper}")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _cell(value: str) -> str:
+    """Sanitise a value for a one-line markdown table cell."""
+    return value.replace("|", "\\|").replace("\n", " ").strip()
+
+
+def read_issue_events(feature_dir: Path, since: int | None):
+    """Read issue.recorded events in the window through the shared helper.
+
+    Absent or empty log → []. Returns events sorted by seq (chronological).
+    """
+    log = feature_dir / LOG_NAME
+    if not log.exists():
+        return []
+    mod = _load_trace_read()
+    events = mod.read_events(log)  # strict: interior corruption raises
+    issues = [
+        e for e in events
+        if e.get("type") == ISSUE_TYPE
+        and (since is None or int(e.get("seq", 0)) >= since)
+    ]
+    issues.sort(key=lambda e: int(e.get("seq", 0)))
+    return issues
+
+
+def _bottlenecks(issues) -> list[str]:
+    groups: dict[tuple[str, str], dict] = {}
+    for e in issues:
+        key = (e.get("kind", "?"), e.get("wp", "—") or "—")
+        g = groups.setdefault(key, {"count": 0, "last_seq": -1})
+        g["count"] += 1
+        g["last_seq"] = max(g["last_seq"], int(e.get("seq", 0)))
+    # Deterministic rank: count desc, recency desc, then kind/wp for tie-break.
+    ordered = sorted(
+        groups.items(),
+        key=lambda kv: (-kv[1]["count"], -kv[1]["last_seq"], kv[0][0], kv[0][1]),
+    )
+    lines = [
+        "## Bottlenecks",
+        "",
+        "Ranking v1 (B-15-RANKING): GROUP + COUNT per (kind, wp) with recency —"
+        " no thresholds, no auto-detection.",
+        "",
+    ]
+    if not ordered:
+        lines.append("No issues recorded in the trace window.")
+        return lines
+    lines += ["| Rank | Kind | WP | Count | Last seq |", "|---|---|---|---|---|"]
+    for rank, ((kind, wp), g) in enumerate(ordered, start=1):
+        lines.append(f"| {rank} | {_cell(kind)} | {_cell(wp)} | {g['count']} | {g['last_seq']} |")
+    return lines
+
+
+def _issues_chased(issues) -> list[str]:
+    lines = [
+        "## Issues Chased",
+        "",
+        "Resolution status is REPORT-side (B-15-SCHEMA — the event carries no"
+        " resolution field): the pointer is a repo-relative `decision_ref`, or"
+        " `unresolved` when none was captured.",
+        "",
+    ]
+    if not issues:
+        lines.append("No issues recorded in the trace window.")
+        return lines
+    lines += ["| Seq | Kind | WP | Summary | Resolution pointer |",
+              "|---|---|---|---|---|"]
+    for e in issues:
+        seq = int(e.get("seq", 0))
+        kind = _cell(e.get("kind", "?"))
+        wp = _cell(e.get("wp", "—") or "—")
+        summary = _cell(e.get("summary", "—") or "—")
+        ref = e.get("decision_ref") or ""
+        pointer = f"`{_cell(ref)}`" if ref else "unresolved"
+        lines.append(f"| {seq} | {kind} | {wp} | {summary} | {pointer} |")
+    return lines
+
+
+def _routed_proposals(issues) -> list[str]:
+    kinds = sorted({e.get("kind", "?") for e in issues})
+    lines = [
+        "## Routed Proposals",
+        "",
+        f"Routing authority: `{ROUTING_AUTHORITY}` — cited verbatim, never a"
+        " divergent baked copy (including the ≥2× skill-defect threshold). All"
+        " proposals are propose-only and human-gated + eval-gated per the"
+        " Auto-Research/Auto-Improve Contract.",
+        "",
+    ]
+    if not kinds:
+        lines.append("No issues recorded in the trace window.")
+        return lines
+    lines += [f"| Kind | Routing target (per `{ROUTING_AUTHORITY}`) |",
+              "|---|---|"]
+    for kind in kinds:
+        target = ROUTING.get(kind, f"see `{ROUTING_AUTHORITY}`")
+        lines.append(f"| {_cell(kind)} | {target} |")
+    return lines
+
+
+def render(feature_dir: Path, issues) -> str:
+    lines = [
+        f"# Improvement Report — {feature_dir.name}",
+        "",
+        "<!-- Generated by goalforge-retrospect: a deterministic, propose-only"
+        " projection of trace-events.jsonl. Do not hand-edit; re-run the"
+        " distiller. -->",
+        "",
+    ]
+    lines += _bottlenecks(issues) + ["", ""]
+    lines += _issues_chased(issues) + ["", ""]
+    lines += _routed_proposals(issues) + [""]
+    return "\n".join(lines) + "\n"
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        prog="goalforge-retrospect",
+        description="Deterministic retrospective distiller (propose-only).")
+    ap.add_argument("feature_dir", nargs="?", help="feature dir holding trace-events.jsonl")
+    ap.add_argument("--since", type=int, default=None,
+                    help="window to events with seq >= SINCE (default: whole log)")
+    ap.add_argument("--self-test", action="store_true", help="run the hermetic self-test")
+    args = ap.parse_args(argv)
+
+    if args.self_test:
+        return _self_test()
+    if not args.feature_dir:
+        ap.error("a feature-dir is required unless --self-test is given")
+
+    feature_dir = Path(args.feature_dir)
+    if not feature_dir.is_dir():
+        sys.stderr.write(f"goalforge-retrospect: not a directory: {feature_dir}\n")
+        return 2
+    try:
+        issues = read_issue_events(feature_dir, args.since)
+    except Exception as exc:  # interior corruption / unknown version = hard error
+        sys.stderr.write(f"goalforge-retrospect: {exc}\n")
+        return 2
+
+    report = render(feature_dir, issues)
+    (feature_dir / REPORT_NAME).write_text(report, encoding="utf-8")
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# Hermetic self-test
+# ---------------------------------------------------------------------------
+
+def _self_test() -> int:
+    import tempfile
+
+    failures: list[str] = []
+
+    def check(cond: bool, label: str) -> None:
+        if not cond:
+            failures.append(label)
+            print(f"  FAIL {label}", file=sys.stderr)
+        else:
+            print(f"  ok   {label}", file=sys.stderr)
+
+    def row(seq, kind, wp=None, summary=None, ref=None):
+        import json
+        e = {"seq": seq, "ts": "t", "type": ISSUE_TYPE, "schema_version": 1, "kind": kind}
+        if wp:
+            e["wp"] = wp
+        if summary:
+            e["summary"] = summary
+        if ref:
+            e["decision_ref"] = ref
+        return json.dumps(e, separators=(",", ":"))
+
+    with tempfile.TemporaryDirectory() as td:
+        base = Path(td)
+
+        # (1) populated feature — sections present, GROUP+COUNT correct
+        fd = base / "feat"
+        fd.mkdir()
+        log = fd / LOG_NAME
+        rows = [
+            row(0, "retry-wall", "wp-14", "loop not converging", "findings.md"),
+            row(1, "retry-wall", "wp-14", "still stuck", "findings.md"),
+            row(2, "spec-gap", "wp-13", "ambiguous WP"),
+            row(3, "skill-defect", "wp-14", "skill mis-triggered", "plans/x/wp-14/task-01.md"),
+            row(4, "skill-defect", "wp-14", "again"),
+            row(5, "tool-failure", None, "mcp hung"),
+            # a non-issue event must be filtered out
+            '{"seq":6,"ts":"t","type":"gate.result","schema_version":1,"wp":"wp-14","gate":"verify","result":"pass"}',
+        ]
+        log.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+        rc = main([str(fd)])
+        check(rc == 0, "populated run exits 0")
+        rep = (fd / REPORT_NAME).read_text()
+        check("## Bottlenecks" in rep, "Bottlenecks section present")
+        check("## Issues Chased" in rep, "Issues Chased section present")
+        check("## Routed Proposals" in rep, "Routed Proposals section present")
+        check("| 1 | retry-wall | wp-14 | 2 | 1 |" in rep
+              or "| 1 | skill-defect | wp-14 | 2 | 4 |" in rep,
+              "top bottleneck is a count-2 group")
+        # both count-2 groups present with correct counts
+        check("| retry-wall | wp-14 | 2 |" in rep.replace(" 1 | retry-wall", "retry-wall")
+              or "retry-wall | wp-14 | 2 |" in rep, "retry-wall count 2 rendered")
+        check("skill-defect | wp-14 | 2 |" in rep, "skill-defect count 2 rendered")
+        check(ROUTING_AUTHORITY in rep, "routing authority cited")
+        check("`/skill-improve`" in rep, "skill-defect routes to /skill-improve")
+        check("`.memory/`" in rep, "spec-gap routes to memory/rule")
+        check("gate.result" not in rep, "non-issue events filtered out")
+        check("unresolved" in rep, "issue without decision_ref shows unresolved")
+        check("`findings.md`" in rep, "decision_ref pointer rendered")
+        check("/home/" not in rep, "no absolute home paths in report")
+
+        # (2) byte-idempotent — run twice identical
+        first = (fd / REPORT_NAME).read_text()
+        main([str(fd)])
+        second = (fd / REPORT_NAME).read_text()
+        check(first == second, "byte-idempotent across two runs")
+
+        # (3) propose-only — only improvement-report.md added to the feature dir
+        names = sorted(p.name for p in fd.iterdir())
+        check(names == sorted([LOG_NAME, REPORT_NAME]),
+              f"propose-only: feature dir holds only log + report (got {names})")
+
+        # (4) torn-tail — a torn trailing line distills identically
+        fd2 = base / "feat-torn"
+        fd2.mkdir()
+        torn = "\n".join(rows) + "\n" + '{"seq":7,"ts":"t","type":"issue.rec'  # torn, no LF
+        (fd2 / LOG_NAME).write_text(torn, encoding="utf-8")
+        main([str(fd2)])
+        torn_rep = (fd2 / REPORT_NAME).read_text()
+        # same body modulo the header feature-name line
+        check(torn_rep.split("\n", 1)[1] == first.split("\n", 1)[1],
+              "torn-tail distills identically to the untorn log")
+
+        # (5) absent log → explicit empty report, exit 0
+        fd3 = base / "feat-empty"
+        fd3.mkdir()
+        rc3 = main([str(fd3)])
+        check(rc3 == 0, "absent-log run exits 0")
+        emp = (fd3 / REPORT_NAME).read_text()
+        check("No issues recorded in the trace window." in emp,
+              "absent log yields explicit empty report")
+        check("## Bottlenecks" in emp and "## Routed Proposals" in emp,
+              "empty report still carries the contracted sections")
+
+        # (6) empty (zero-byte) log → empty report, exit 0
+        fd4 = base / "feat-zero"
+        fd4.mkdir()
+        (fd4 / LOG_NAME).write_text("", encoding="utf-8")
+        rc4 = main([str(fd4)])
+        check(rc4 == 0, "zero-byte-log run exits 0")
+        check("No issues recorded" in (fd4 / REPORT_NAME).read_text(),
+              "zero-byte log yields empty report")
+
+        # (7) --since windows the lap
+        main([str(fd), "--since", "4"])
+        windowed = (fd / REPORT_NAME).read_text()
+        check("| 4 | skill-defect" in windowed, "since=4 keeps seq 4")
+        check("| 0 | retry-wall" not in windowed, "since=4 drops seq 0")
+        check("`retry-wall`" not in windowed and "retry-wall |" not in windowed,
+              "since=4 drops retry-wall entirely")
+        # restore full report so the dir is left in a clean state
+        main([str(fd)])
+
+    if failures:
+        print(f"goalforge-retrospect --self-test: FAIL ({len(failures)})", file=sys.stderr)
+        return 2
+    print("goalforge-retrospect --self-test: PASS", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

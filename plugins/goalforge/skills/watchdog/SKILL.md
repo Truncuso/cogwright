@@ -3,13 +3,6 @@ name: goalforge-watchdog
 description: "Semantic spec-vs-diff gap audit for an SDD work package. Invoked by goalforge-verify AFTER acceptance criteria pass: reconstructs the WP goal/contract, reads the changed files plus their neighbors, and reports gaps — claimed-vs-implemented mismatches, missing tests/docs at changed seams, and deviations from the spec constraints/boundaries. Light summary by default (into findings.md; material gaps recorded as recap.md loop-backs via goalforge-recap); deep verify-gap.md report on opt-in. Advisory only — never blocks or rewrites goalforge-verify's status-advance authority. Trigger: goalforge-verify delegates a gap audit for a WP, or a user asks to audit a WP diff against its spec."
 metadata:
   version: 1.1.0
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-watchdog"
-        - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-watchdog:stop"
 ---
 
 # goalforge-watchdog
@@ -23,20 +16,20 @@ It is **advisory**. It reads, reconstructs, and reports — it never changes a
 status, never blocks the `executing → verified` transition, and never rewrites
 any plan file's authority fields. `goalforge-verify` remains the sole status authority.
 
-Schema reference: `references/schema.md`.
+Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
 
 ## Scope — semantic only (boundary)
 
 `goalforge-watchdog` audits **meaning**, not bookkeeping. The mechanical/structural
 checks — stale rollup, missing `commit:` hashes, status drift, table-cell
-mismatch — are already enforced by `goalforge-validate --strict --require-commit`
+mismatch — are already enforced by `sdd-validate --strict --require-commit`
 (run inside `goalforge-verify`). A broader mechanical integrity sweep is tracked as
-the **separate** `goalforge-verification-integrity-gaps` idea. This skill does **not**
+the **separate** `sdd-verification-integrity-gaps` idea. This skill does **not**
 duplicate those mechanical checks. Clean split:
 
 | Concern | Owner |
 |---|---|
-| Stale rollup / drift / missing hash / table-cell mismatch (mechanical) | `goalforge-validate` (+ future `goalforge-verification-integrity-gaps`) |
+| Stale rollup / drift / missing hash / table-cell mismatch (mechanical) | `sdd-validate` (+ future `sdd-verification-integrity-gaps`) |
 | Claimed-vs-implemented / missing tests-docs / spec deviation (semantic) | `goalforge-watchdog` (this skill) |
 
 ## Inputs
@@ -113,7 +106,7 @@ surfaces for human follow-up (the WP is still verified; the gap is a note).
   verified`. If you find yourself withholding verification on a watchdog finding,
   that is a bug — record the gap and let `goalforge-verify` proceed. Hard blocking is
   the job of the acceptance gate, not the semantic audit.
-- **Semantic only.** Do not re-implement `goalforge-validate`'s mechanical checks
+- **Semantic only.** Do not re-implement `sdd-validate`'s mechanical checks
   (rollup freshness, commit hashes, drift). A finding that "the rollup is stale"
   belongs to the mechanical layer, not here — reporting it is duplication.
 - **A recorded deviation is not a gap.** Before flagging a deviation, check

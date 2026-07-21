@@ -1,6 +1,6 @@
 ---
 name: task-01-<slug>
-title: <one-line goal>
+title: "<one-line goal>"
 status: pending
 complexity: medium
 route: api

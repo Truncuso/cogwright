@@ -84,3 +84,43 @@ complexity task carries **no** discipline block (gate: stamp iff
 
 The stamp is by-reference to one file so the five-gate discipline has a single
 owner; its Gate-5 escalation return maps to `EscalationRequired` as above.
+
+## Wave-route brief instance — concurrent spec-author fan-out
+
+The wave route (run/SKILL.md) fans out one **spec-author brief per feature**,
+run concurrently. Each is an ordinary brief on the fields above — no new
+vocabulary. The only wave-specific rule is that the concurrent set's `owned`
+sets are **pairwise-disjoint**, pinned per feature dir (planning-fan-out is a
+feature-level primitive; safety = pairwise-disjoint owned-sets + per-feature-dir
+isolation, declaration-time only, [risk-accepted]).
+
+Per author, pin `owned` to that feature's tree and name every sibling feature
+dir in `off-limits`:
+
+```
+role:        spec-author
+model:       opus
+effort:      medium
+autonomy:    semi-autonomous
+owned:
+  - plans/feature-a/**                 # this author's feature dir ONLY
+off-limits:
+  - plans/**                           # never a status: line (default fence)
+  - plans/feature-b/**                 # sibling author's owned set
+task_spec:   <feature-a spec goal object>
+context:     <feature-a overview + references — pointers, not copies>
+```
+
+The sibling author's brief mirrors this with `owned: [plans/feature-b/**]` and
+`off-limits: [plans/feature-a/**]`. The two `owned` sets share no path, so the
+concurrent writes are naturally disjoint. The cross-spec judge that runs over
+the finished set is **cold** (fresh subagent, no shared conversation state) per
+the dispatch trust boundary.
+
+**Pairwise-disjointness check (net-new, checkable — not prose-only).** Before
+the fan-out dispatches, run the concurrent briefs through
+`evals/wave-route/owned-set-disjoint.py BRIEF ...`. It parses each brief's
+top-level `owned:` block and flags any pair with a non-empty intersection —
+`OVERLAP <a> <b>: <shared paths>` (exit 1) — or prints `DISJOINT` (exit 0). An
+overlapping owned-set is thus detectable mechanically at authoring time, not
+merely discouraged in guidance.

@@ -11,7 +11,7 @@ same defect is never paid for twice:
   ownership, WP ordering, and claims-vs-source **at feature scope**.
 - **Tier-2 delta** (this step) owns **WP-local** defects + consuming Tier-1.
 - **interview-loop** (Step 1) is the **sole resolver** of open questions.
-- **goalforge-arbiter** (Step 1) owns **architectural-approach bets only**.
+- **sdd-arbiter** (Step 1) owns **architectural-approach bets only**.
 - **panel** (complex path) owns **this WP's design dissent only**.
 
 A finding **RESOLVED upstream is consumed** (cited in `findings.md`, not

@@ -1,4 +1,4 @@
-# goalforge-execute — Dispatch resolution detail (Step 4)
+# sdd-execute — Dispatch resolution detail (Step 4)
 
 Full detail behind Step 4's `pick_agent` call. Consulted when a dispatch does
 not resolve cleanly or a non-code / writing WP needs its specialist route.
@@ -32,14 +32,14 @@ not resolve cleanly or a non-code / writing WP needs its specialist route.
    **No silent hard default.**
 
 The evaluator **strategy** is resolved separately by the WP-02 router
-(`default_strategy_for(task_type)` in `goalforge-goal-eval.py`) — `pick_agent` selects
+(`default_strategy_for(task_type)` in `sdd-goal-eval.py`) — `pick_agent` selects
 the *specialist*, never the strategy. There is one task_type→strategy map and it
 lives in the router.
 
 ## Model tier + effort
 
 Resolved from the **canonical role→tier map** (single source of truth —
-`scripts/goalforge-pick-agent.py`, `resolve_role_tier`). The `implement` role is
+`sdd/scripts/sdd-pick-agent.py`, `resolve_role_tier`). The `implement` role is
 **complexity-driven**, so the discovery callable supplies the `complexity`
 estimate when frontmatter omits it; **blast radius**
 (auth/schema/migration/exported-API/3+ files) deterministically forces the high

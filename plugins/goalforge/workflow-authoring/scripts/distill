@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+"""distill — distil a completed goalforge-chain run into a step-graph.
+
+Input: a feature's `plans/<feature>/trace-events.jsonl` (the wp-14 trace
+substrate). Reading goes through the SHARED `goalforge-trace-read` helper — this
+distiller never re-parses the log itself (B-12-SEAM; wp-15's retrospective
+distiller consumes the same helper).
+
+Output (stdout): a deterministic step-graph intermediate structure consumed by
+task-02's execution_plan route renderer:
+
+    {
+      "steps":     [<chain.yaml step basenames, canonical order>],
+      "dispatch":  {step: "inline"|"agent"},
+      "parallel":  [[step], ...],          # one group per step (chain steps are
+                                           # sequential in a single run)
+      "provenance": "<feature>/trace-events.jsonl"
+    }
+
+Determinism (B-12 case d): ALL non-deterministic trace fields (seq, ts, session,
+model, provider, agent) are dropped — they never enter the step-graph. Two runs
+over the same trace produce byte-identical JSON (sorted keys, compact
+separators, no trailing newline variance).
+
+Derivation:
+  * A step is a chain.yaml basename recovered from a chain event. Two recognizers
+    are unioned so the distiller works on BOTH the production emitter's output and
+    the hand-authored substrate fixtures:
+      - status recognizer (authoritative for real runs): the production emitter
+        (goalforge-attribution.sh) stamps `actor` as `auto`/`human:<name>`, NEVER
+        `goalforge-<step>`, so the step is derived from the state-machine schema —
+        `type` + the transition target (`to`) / gate. A WP `→ hardened|ready` is
+        `harden`; `→ executing` and any `task.status_changed` are `execute`;
+        `→ verified` (or a `verified`/`verify` gate) is `verify`; a WP authored at
+        `→ spec` is `decompose`; a feature `→ ready` is `spec`.
+      - actor recognizer (substrate fixtures): an `actor` of `goalforge-<step>`
+        (e.g. `goalforge-harden` → `harden`). Used by the wp-14 trace substrate's
+        hand-authored fixtures; harmless on real data (never present there).
+    Events whose recognizer yields no chain step (code-reviewer findings, retro
+    issues, …) are ignored.
+  * Consecutive repeats / no-op re-emissions of the same step collapse to one.
+  * Steps are emitted in canonical chain order (the plan-consumer requires a
+    contiguous canonical path).
+  * Per-step dispatch = "agent" when an agent was dispatched during that step,
+    else "inline". Two signals feed it (the AGENT VALUE is always stripped — only
+    inline-vs-agent survives, a deterministic mode, not the non-deterministic id):
+      - a `dispatch.launched` event (the real dispatch record) carrying a
+        non-empty `agent`, correlated to a step by its `task` (task dispatch ⇒
+        the `execute` step) or, absent a task, the step active at LAUNCH time.
+        Only the `launched` event is used for mode detection — `dispatch.completed`
+        is its closing bracket and carries no independent step correlation (by
+        the time it fires the active step may have moved on). On real status rows
+        the `agent` field holds the acting SESSION-agent id (not a dispatch), so
+        it is deliberately NOT read as a dispatch signal.
+      - a `goalforge-<step>`-actor row carrying a non-empty `agent` (substrate
+        fixtures only — guarded to actor-prefixed rows so a real session-agent id
+        never counts as a dispatch).
+  * Parallel groups: chain steps run sequentially within one completed run, so
+    each selected step is its own singleton group (a faithful, deterministic
+    partition that covers every step exactly once).
+
+CLI:
+    distill --trace <path>   # print the step-graph JSON
+    distill --self-test      # exit 0 iff the distiller invariants hold
+
+Exit codes:
+    0  success (or --self-test passed)
+    2  usage / read error / self-test failure
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.machinery
+import importlib.util
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+_THIS = Path(__file__).resolve()
+# .../goalforge/workflow-authoring/scripts/distill → goalforge/
+_GOALFORGE = _THIS.parents[2]
+_HELPER = _GOALFORGE / "scripts" / "goalforge-trace-read"
+_CHAIN_YAML = _GOALFORGE / "run" / "chain.yaml"
+
+LOG_NAME = "trace-events.jsonl"
+ACTOR_PREFIX = "goalforge-"
+DISPATCH_TYPES = ("dispatch.launched", "dispatch.completed")
+
+
+def _load_helper():
+    """Import the shared goalforge-trace-read module (extensionless script)."""
+    loader = importlib.machinery.SourceFileLoader("goalforge_trace_read", str(_HELPER))
+    spec = importlib.util.spec_from_loader("goalforge_trace_read", loader)
+    if spec is None:
+        raise RuntimeError(f"cannot load trace-read helper at {_HELPER}")
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def _chain_steps(chain_path: Path = _CHAIN_YAML) -> list[str]:
+    """Canonical chain.yaml step basenames, in declared order.
+
+    Parsed without a yaml dependency: each step is a `- skill: <pkg>/<basename>`
+    line under the top-level `steps:` block.
+    """
+    steps: list[str] = []
+    in_steps = False
+    for raw in chain_path.read_text(encoding="utf-8").split("\n"):
+        stripped = raw.strip()
+        if not raw.startswith(" ") and stripped.endswith(":"):
+            in_steps = stripped == "steps:"
+            continue
+        if in_steps and stripped.startswith("- skill:"):
+            val = stripped.split(":", 1)[1].strip()
+            steps.append(val.split("/")[-1])
+    return steps
+
+
+def _actor_to_step(actor, chain_index: dict) -> str | None:
+    """Recover the chain step basename from a `goalforge-<step>` actor, or None.
+
+    Substrate-fixture recognizer: the production emitter never stamps this shape.
+    """
+    if not isinstance(actor, str) or not actor.startswith(ACTOR_PREFIX):
+        return None
+    base = actor[len(ACTOR_PREFIX):]
+    return base if base in chain_index else None
+
+
+def _status_to_step(ev: dict) -> str | None:
+    """Recover the chain step from the state-machine schema (real-run recognizer).
+
+    Keys off `type` + the transition target / gate — the fields the production
+    emitter actually writes (its `actor` is `auto`/`human:<name>`, never a step).
+    """
+    typ = ev.get("type")
+    if typ == "wp.status_changed":
+        return {
+            "spec": "decompose",     # a WP authored into existence
+            "hardened": "harden",
+            "ready": "harden",       # a WP's hardened → ready is harden's advance
+            "executing": "execute",
+            "verified": "verify",
+        }.get(ev.get("to"))
+    if typ == "feature.status_changed":
+        # A feature's draft → ready is the spec step; → executing is execute.
+        return {"ready": "spec", "executing": "execute"}.get(ev.get("to"))
+    if typ == "task.status_changed":
+        return "execute"             # tasks are an execute-phase concern
+    if typ == "gate.result":
+        return {
+            "verify": "verify",
+            "verified": "verify",
+            "review": "verify",
+            "ready": "harden",       # a WP's ready gate
+        }.get(ev.get("gate"))
+    return None
+
+
+def _event_step(ev: dict, chain_index: dict) -> str | None:
+    """Chain step for an event, unioning the status + actor recognizers."""
+    step = _actor_to_step(ev.get("actor"), chain_index)
+    if step is None:
+        step = _status_to_step(ev)
+    return step if step in chain_index else None
+
+
+def build_step_graph(events: list[dict], feature: str,
+                     chain_steps: list[str] | None = None) -> dict:
+    """Distil parsed trace events into the deterministic step-graph structure."""
+    chain_steps = chain_steps if chain_steps is not None else _chain_steps()
+    chain_index = {name: i for i, name in enumerate(chain_steps)}
+
+    seen: dict[str, bool] = {}       # step -> saw an agent dispatch for it
+    current: str | None = None       # step active at this point (dispatch corr.)
+    for ev in events:
+        if ev.get("type") in DISPATCH_TYPES:
+            # Real dispatch record. Only the LAUNCH event carries a reliable step
+            # correlation (its `task`, else the step active at launch); the
+            # COMPLETED event is the closing bracket — attributing it to the
+            # then-current step would misfire once the run has advanced.
+            if ev.get("type") == "dispatch.launched":
+                agent = ev.get("agent")
+                if isinstance(agent, str) and agent:
+                    target = "execute" if ev.get("task") else current
+                    if target in chain_index:
+                        seen[target] = True
+            continue
+
+        step = _event_step(ev, chain_index)
+        if step is None:
+            continue
+
+        # Substrate-fixture dispatch signal: a goalforge-<step> actor row whose
+        # `agent` is non-empty. Guarded to actor-prefixed rows so a real
+        # session-agent id (present on every production status row) never counts.
+        actor = ev.get("actor")
+        had_agent = False
+        if isinstance(actor, str) and actor.startswith(ACTOR_PREFIX):
+            agent = ev.get("agent")
+            had_agent = isinstance(agent, str) and bool(agent)
+
+        seen[step] = seen.get(step, False) or had_agent
+        current = step
+
+    steps = sorted(seen, key=lambda s: chain_index[s])
+    dispatch = {s: ("agent" if seen[s] else "inline") for s in steps}
+    parallel = [[s] for s in steps]
+    return {
+        "steps": steps,
+        "dispatch": dispatch,
+        "parallel": parallel,
+        "provenance": f"{feature}/{LOG_NAME}",
+    }
+
+
+def _feature_of(trace_path: Path) -> str:
+    """Deterministic feature id = the trace file's parent directory name."""
+    return trace_path.resolve().parent.name
+
+
+def distill(trace_path, helper=None) -> dict:
+    helper = helper or _load_helper()
+    p = Path(trace_path)
+    events = helper.read_events(p)
+    return build_step_graph(events, _feature_of(p))
+
+
+def _dumps(graph: dict) -> str:
+    return json.dumps(graph, sort_keys=True, separators=(",", ":"))
+
+
+def _self_test() -> int:
+    failures: list[str] = []
+
+    def check(cond: bool, label: str) -> None:
+        if not cond:
+            failures.append(label)
+
+    helper = _load_helper()
+    chain_steps = _chain_steps()
+    check("harden" in chain_steps and "execute" in chain_steps and "verify" in chain_steps,
+          "chain-steps: harden/execute/verify present")
+
+    with tempfile.TemporaryDirectory() as td:
+        feat_dir = Path(td) / "demo-feature"
+        feat_dir.mkdir()
+
+        # ── (1) Substrate-fixture shape: actor = goalforge-<step> ─────────────
+        # A completed chain run: harden (inline), execute (agent-dispatched,
+        # repeated + task-scoped rows), verify (inline). Plus a non-chain-step
+        # actor (code-reviewer) that must be ignored, and a torn trailing line.
+        trace = feat_dir / LOG_NAME
+        rows = (
+            '{"seq":0,"ts":"2026-07-19T09:00:00Z","type":"wp.status_changed","schema_version":1,"wp":"w","from":"spec","to":"hardened","actor":"goalforge-harden","agent":"","session":"S","model":"opus","provider":"anthropic"}\n'
+            '{"seq":1,"ts":"2026-07-19T09:05:00Z","type":"feature.status_changed","schema_version":1,"wp":"f","from":"ready","to":"executing","actor":"goalforge-execute","agent":"","session":"S","model":"opus","provider":"anthropic"}\n'
+            '{"seq":2,"ts":"2026-07-19T09:08:00Z","type":"task.status_changed","schema_version":1,"wp":"w","task":"task-01","from":"pending","to":"implemented","actor":"goalforge-execute","agent":"implementer","session":"S","model":"opus","provider":"anthropic"}\n'
+            '{"seq":3,"ts":"2026-07-19T09:14:00Z","type":"finding.recorded","schema_version":1,"wp":"w","severity":"HIGH","actor":"code-reviewer","session":"S"}\n'
+            '{"seq":4,"ts":"2026-07-19T09:16:00Z","type":"gate.result","schema_version":1,"wp":"w","gate":"verify","result":"pass","actor":"goalforge-verify","agent":"","session":"S","model":"opus","provider":"anthropic"}\n'
+            '{"seq":5,"ts":"2026-07-19T09:18:00'  # torn trailing line
+        )
+        trace.write_text(rows, encoding="utf-8")
+
+        g = distill(trace, helper=helper)
+        check(g["steps"] == ["harden", "execute", "verify"],
+              f"actor-shape steps: canonical-ordered, deduped (got {g['steps']})")
+        check(g["dispatch"] == {"harden": "inline", "execute": "agent", "verify": "inline"},
+              f"actor-shape dispatch: agent iff a dispatch seen (got {g['dispatch']})")
+        check(g["parallel"] == [["harden"], ["execute"], ["verify"]],
+              f"parallel: one singleton group per step (got {g['parallel']})")
+        check(g["provenance"] == "demo-feature/trace-events.jsonl",
+              f"provenance: <feature>/trace-events.jsonl (got {g['provenance']})")
+
+        # No non-deterministic field leaks into the serialized graph.
+        blob = _dumps(g)
+        for bad in ("seq", "\"ts\"", "session", "\"model\"", "provider",
+                    "implementer", "anthropic", "opus"):
+            check(bad not in blob, f"determinism: stripped field '{bad}' absent from output")
+
+        # Byte-determinism: two runs over the same trace are byte-identical.
+        check(_dumps(distill(trace, helper=helper)) == blob,
+              "determinism: two runs byte-identical")
+
+        # ── (2) Production-emitter shape: actor = auto / human:<name> ─────────
+        # The real emitter (goalforge-attribution.sh) never stamps a
+        # goalforge-<step> actor, carries the acting SESSION agent id on every
+        # status row, and records dispatch via dispatch.launched/completed. The
+        # step must still resolve from the state-machine schema and dispatch from
+        # the dispatch event — NOT from the session-agent id.
+        real = feat_dir / "real.jsonl"
+        real_rows = (
+            '{"seq":0,"ts":"2026-07-19T09:00:00Z","type":"wp.status_changed","schema_version":1,"wp":"w","from":"spec","to":"hardened","reason":"OQs zero","commit":"aaa1111","actor":"auto","mode":"auto","override":false,"session":"80ec009c","model":"claude-fable-5[1m]","provider":"anthropic","agent":"80ec009c-fable","decision_ref":"w/findings.md"}\n'
+            '{"seq":1,"ts":"2026-07-19T09:01:00Z","type":"wp.status_changed","schema_version":1,"wp":"w","from":"hardened","to":"ready","reason":"human approval","commit":"aaa1111","actor":"human:t","mode":"human","override":false,"session":"80ec009c","model":"claude-fable-5[1m]","provider":"anthropic"}\n'
+            '{"seq":2,"ts":"2026-07-19T09:02:00Z","type":"wp.status_changed","schema_version":1,"wp":"w","from":"ready","to":"executing","reason":"execute lap","commit":"aaa1111","actor":"auto","mode":"auto","override":false,"session":"80ec009c","model":"claude-fable-5[1m]","provider":"anthropic","agent":"80ec009c-fable"}\n'
+            '{"seq":3,"ts":"2026-07-19T09:03:00Z","type":"task.status_changed","schema_version":1,"wp":"w","task":"task-01","from":"pending","to":"implemented","actor":"auto","mode":"auto","override":false,"session":"80ec009c","model":"claude-fable-5[1m]","provider":"anthropic","agent":"80ec009c-fable"}\n'
+            '{"seq":4,"ts":"2026-07-19T09:04:00Z","type":"dispatch.launched","schema_version":1,"wp":"w","model":"opus","provider":"anthropic","agent":"implementer","effort":"low","task":"task-01","session":"80ec009c"}\n'
+            '{"seq":5,"ts":"2026-07-19T09:05:00Z","type":"dispatch.completed","schema_version":1,"wp":"w","agent":"implementer","outcome":"success","exit_code":0,"session":"80ec009c"}\n'
+            '{"seq":6,"ts":"2026-07-19T09:06:00Z","type":"wp.status_changed","schema_version":1,"wp":"w","from":"executing","to":"verified","reason":"all green","commit":"bbb2222","actor":"auto","mode":"auto","override":false,"session":"80ec009c","model":"claude-fable-5[1m]","provider":"anthropic","agent":"80ec009c-fable"}\n'
+            '{"seq":7,"ts":"2026-07-19T09:07:00Z","type":"gate.result","schema_version":1,"wp":"w","gate":"verified","result":"pass","actor":"auto","mode":"auto","override":false,"session":"80ec009c","model":"claude-fable-5[1m]","provider":"anthropic","agent":"80ec009c-fable"}\n'
+        )
+        real.write_text(real_rows, encoding="utf-8")
+        gr = distill(real, helper=helper)
+        check(gr["steps"] == ["harden", "execute", "verify"],
+              f"real-shape steps: derived from status transitions (got {gr['steps']})")
+        check(gr["dispatch"] == {"harden": "inline", "execute": "agent", "verify": "inline"},
+              f"real-shape dispatch: agent from dispatch.launched, NOT session-agent id (got {gr['dispatch']})")
+        check("80ec009c" not in _dumps(gr) and "implementer" not in _dumps(gr),
+              "real-shape: session-agent id / dispatched-agent value stripped from output")
+
+        # ── (3) Empty / no-chain-actor trace → empty step-graph. ─────────────
+        empty = feat_dir / "empty.jsonl"
+        empty.write_text(
+            '{"seq":0,"ts":"t","type":"finding.recorded","schema_version":1,"wp":"w","actor":"code-reviewer"}\n',
+            encoding="utf-8")
+        ge = distill(empty, helper=helper)
+        check(ge["steps"] == [] and ge["parallel"] == [] and ge["dispatch"] == {},
+              "empty: no chain-step events → empty step-graph")
+
+    if failures:
+        for f in failures:
+            sys.stderr.write(f"distill self-test FAIL: {f}\n")
+        return 2
+    print("distill: self-test OK")
+    return 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(prog="distill", add_help=True)
+    ap.add_argument("--trace", help="path to a feature's trace-events.jsonl")
+    ap.add_argument("--self-test", action="store_true", help="run the distiller self-test")
+    args = ap.parse_args(argv)
+
+    if args.self_test:
+        return _self_test()
+    if not args.trace:
+        ap.error("--trace is required unless --self-test is given")
+    try:
+        graph = distill(args.trace)
+    except Exception as e:  # read/IO/contract failure
+        sys.stderr.write(f"distill: {e}\n")
+        return 2
+    print(_dumps(graph))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -40,9 +40,39 @@ STAMP="$SCRIPT_DIR/goalforge-stamp-tables.sh"
 ROLLUP="$SCRIPT_DIR/goalforge-rollup.sh"
 VALIDATE="$SCRIPT_DIR/goalforge-validate.sh"
 ATTRIB="$SCRIPT_DIR/goalforge-attribution.sh"
+# The validating trace emitter (wp-14). Overridable so the zero-breakage eval
+# can point at an absent path and prove an emit failure never blocks a transition.
+EMIT="${GOALFORGE_TRACE_EMIT:-$SCRIPT_DIR/goalforge-trace-emit}"
 
 usage() {
     sed -n '2,20p' "$SELF" | sed 's/^# \{0,1\}//'
+}
+
+# ── Trace-event emission (wp-14) ────────────────────────────────────
+# Build one event's JSON from `key=value` pairs (empty-valued keys dropped;
+# `override` coerced to a boolean) and append it through the validating emitter.
+# Called ONLY after goalforge-transition.sh's flock-9 critical section releases —
+# the emitter takes its OWN flock on trace-events.lock, so the two locks never
+# nest (per the hardened concurrency contract). Zero-breakage: an emitter failure
+# warns to stderr and never changes the transition's exit code.
+_trace_event_json() {
+    python3 - "$@" <<'PY'
+import sys, json
+argv = sys.argv[1:]
+obj = {"type": argv[0]}
+for kv in argv[1:]:
+    k, _, v = kv.partition("=")
+    if v == "":
+        continue
+    obj[k] = (v == "true") if k == "override" else v
+print(json.dumps(obj))
+PY
+}
+
+emit_trace() {
+    # $1=feature_dir  $2=event_json
+    printf '%s' "$2" | python3 "$EMIT" --feature-dir "$1" 2>/dev/null \
+        || echo "WARN: trace emission failed" >&2
 }
 
 # ── Read the on-disk `status:` from a WP overview.md frontmatter ─────────────
@@ -389,6 +419,30 @@ transition() {
     bash "$ROLLUP" "$FEATURE_DIR" >/dev/null
     flock -u 9
     exec 9>&-
+
+    # ── Trace-event emission — OUTSIDE the flock-9 critical section (wp-14). The
+    #    emitter takes its OWN lock on trace-events.lock; the two locks never nest.
+    #    Reuses the attribution vars computed above; every emit passes the resolved
+    #    $FEATURE_DIR (never a PLANS_ROOT guess). task.status_changed is NOT emitted
+    #    here (schema-only this lap, D-OQ1). Guarded: emission never blocks. ──
+    local ETYPE="wp.status_changed"
+    [[ "$KIND" == "feature" ]] && ETYPE="feature.status_changed"
+    emit_trace "$FEATURE_DIR" "$(_trace_event_json "$ETYPE" \
+        "wp=$WP_NAME" "from=$FROM" "to=$TO" "reason=$REASON" "commit=$COMMIT" \
+        "actor=$ACTOR" "mode=$MODE" "override=$OVERRIDE" "session=$SESSION" \
+        "model=$MODEL" "provider=$PROVIDER" "agent=$AGENT" "decision_ref=$DECISION_REF")"
+    if [[ -n "$COMMIT" ]]; then
+        emit_trace "$FEATURE_DIR" "$(_trace_event_json commit.linked \
+            "wp=$WP_NAME" "commit=$COMMIT" \
+            "actor=$ACTOR" "mode=$MODE" "override=$OVERRIDE" "session=$SESSION" \
+            "model=$MODEL" "provider=$PROVIDER" "agent=$AGENT" "decision_ref=$DECISION_REF")"
+    fi
+    if [[ "$TO" == "ready" || "$TO" == "verified" ]]; then
+        emit_trace "$FEATURE_DIR" "$(_trace_event_json gate.result \
+            "wp=$WP_NAME" "gate=$TO" "result=pass" "reason=$REASON" \
+            "actor=$ACTOR" "mode=$MODE" "override=$OVERRIDE" "session=$SESSION" \
+            "model=$MODEL" "provider=$PROVIDER" "agent=$AGENT" "decision_ref=$DECISION_REF")"
+    fi
 
     echo "transition: $WP_NAME $FROM -> $TO${HG:+ (human_gated=$HG)}"
 }

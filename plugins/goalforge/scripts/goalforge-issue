@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""goalforge-issue — fire-and-forget issue/bottleneck capture helper (wp-15).
+
+Records ONE schema-legal `issue.recorded` trace event via the wp-14 emitter
+(`goalforge-trace-emit`). Capture is JUDGMENT-INVOKED: a session calls this when
+its own judgment flags friction. It is fire-and-forget — it NEVER blocks the
+run: WARN + exit 0 both when the emitter is ABSENT and when the emitter REJECTS
+(exit 2).
+
+Schema boundary (B-15-SCHEMA): the frozen wp-14 `issue.recorded` schema is NOT
+extended. This helper emits schema-legal fields ONLY — type/kind/summary/wp plus
+attribution (actor/session/decision_ref). There are deliberately no
+`--evidence` / `--resolution` flags; evidence, resolution, and chase status are
+REPORT-side (improvement-report.md), carried as repo-relative decision_ref
+pointers. See references/retrospective.md.
+
+Interface:
+  goalforge-issue --feature-dir <dir> --kind <k> [--wp <wp>] [--summary <s>]
+                  [--decision-ref <ptr>]
+
+`--feature-dir` is MANDATORY (OQ3 — no PLANS_ROOT guessing). `--kind` is
+mandatory and must be in the vocabulary.
+
+Exit codes:
+  0  event captured, OR degraded (emitter absent / emitter reject / bad usage in
+     the fire-and-forget path) — capture never blocks the run.
+  2  reserved for --self-test failure only.
+
+The emitter command is `goalforge-trace-emit` in this script's own directory,
+overridable via env `GOALFORGE_TRACE_EMIT` (used by the self-test).
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+# Issue kind vocabulary — authoritative copy lives in references/retrospective.md;
+# kept here as the input-validation gate. dispatch-mismatch is vocabulary-only
+# until a dispatch.* producer lands (wp-14 OQ1).
+KINDS = (
+    "retry-wall",
+    "tool-failure",
+    "missing-skill",
+    "skill-defect",
+    "dispatch-mismatch",
+    "context-bloat",
+    "spec-gap",
+    "env-friction",
+)
+
+
+def _emitter_cmd() -> str:
+    override = os.environ.get("GOALFORGE_TRACE_EMIT")
+    if override:
+        return override
+    return str(Path(__file__).resolve().parent / "goalforge-trace-emit")
+
+
+def _warn(msg: str) -> None:
+    print(f"goalforge-issue: WARN {msg}", file=sys.stderr)
+
+
+def capture(feature_dir: str, kind: str, *, summary: str | None = None,
+            wp: str | None = None, decision_ref: str | None = None,
+            actor: str = "goalforge-issue",
+            session: str | None = None) -> int:
+    """Build a schema-legal issue.recorded event and hand it to the emitter.
+
+    Returns a process exit code that is ALWAYS 0 in the fire-and-forget path:
+    emitter-absent and emitter-reject both degrade to WARN + 0.
+    """
+    event: dict = {"type": "issue.recorded", "kind": kind}
+    if summary:
+        event["summary"] = summary
+    if wp:
+        event["wp"] = wp
+    if actor:
+        event["actor"] = actor
+    sess = session if session is not None else os.environ.get("GOALFORGE_SESSION")
+    if sess:
+        event["session"] = sess
+    if decision_ref:
+        event["decision_ref"] = decision_ref
+
+    cmd = [_emitter_cmd(), "--feature-dir", feature_dir, "--event",
+           json.dumps(event, separators=(",", ":"), ensure_ascii=False)]
+    try:
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+    except (FileNotFoundError, OSError) as exc:
+        _warn(f"emitter absent, issue not recorded ({kind}): {exc}")
+        return 0
+
+    if proc.returncode == 2:
+        _warn(f"emitter rejected the event, issue not recorded ({kind}): "
+              f"{proc.stderr.strip()}")
+        return 0
+    if proc.returncode != 0:
+        _warn(f"emitter exited {proc.returncode}, issue not recorded ({kind}): "
+              f"{proc.stderr.strip()}")
+        return 0
+    return 0
+
+
+def _run(args) -> int:
+    if not args.feature_dir:
+        _warn("--feature-dir is required; issue not recorded")
+        return 0
+    if not args.kind:
+        _warn("--kind is required; issue not recorded")
+        return 0
+    if args.kind not in KINDS:
+        _warn(f"unknown kind '{args.kind}' (expected one of: {', '.join(KINDS)}); "
+              "issue not recorded")
+        return 0
+    return capture(args.feature_dir, args.kind, summary=args.summary,
+                   wp=args.wp, decision_ref=args.decision_ref)
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Fire-and-forget issue/bottleneck capture (wp-15).")
+    ap.add_argument("--feature-dir", help="feature dir holding trace-events.jsonl (mandatory)")
+    ap.add_argument("--kind", help=f"issue kind (one of: {', '.join(KINDS)})")
+    ap.add_argument("--wp", help="WP the issue attaches to, if any")
+    ap.add_argument("--summary", help="one-line description (no logs/excerpts)")
+    ap.add_argument("--decision-ref", help="repo-relative evidence pointer")
+    ap.add_argument("--self-test", action="store_true", help="run hermetic self-test")
+    args = ap.parse_args(argv)
+
+    if args.self_test:
+        return _self_test()
+    return _run(args)
+
+
+# ---------------------------------------------------------------------------
+# Self-test (hermetic temp fixture)
+# ---------------------------------------------------------------------------
+
+def _self_test() -> int:
+    import tempfile
+
+    self = str(Path(__file__).resolve())
+    real_emit = str(Path(__file__).resolve().parent / "goalforge-trace-emit")
+    failures: list[str] = []
+
+    def check(cond: bool, label: str) -> None:
+        if not cond:
+            failures.append(label)
+            print(f"  FAIL {label}", file=sys.stderr)
+        else:
+            print(f"  ok   {label}", file=sys.stderr)
+
+    with tempfile.TemporaryDirectory() as td:
+        tdp = Path(td)
+
+        # (a) valid capture lands exactly one schema-legal row via the REAL emitter
+        fd = tdp / "feat-valid"
+        fd.mkdir()
+        env = dict(os.environ)
+        env.pop("GOALFORGE_TRACE_EMIT", None)
+        rc = subprocess.run(
+            [self, "--feature-dir", str(fd), "--kind", "retry-wall",
+             "--wp", "wp-14", "--summary", "loop not converging",
+             "--decision-ref", "findings.md"],
+            capture_output=True, text=True, env=env).returncode
+        check(rc == 0, "valid capture exits 0")
+        log = fd / "trace-events.jsonl"
+        check(log.exists(), "valid capture wrote the log")
+        lines = [ln for ln in log.read_text().splitlines() if ln.strip()] if log.exists() else []
+        check(len(lines) == 1, "valid capture appended exactly one row")
+        if lines:
+            row = json.loads(lines[0])
+            check(row.get("type") == "issue.recorded", "row type is issue.recorded")
+            check(row.get("kind") == "retry-wall", "row kind preserved")
+            check(row.get("summary") == "loop not converging", "row summary preserved")
+            check(row.get("wp") == "wp-14", "row wp preserved")
+            check(row.get("decision_ref") == "findings.md", "row decision_ref preserved")
+            check("seq" in row and "ts" in row and "schema_version" in row,
+                  "emitter stamped envelope (seq/ts/schema_version)")
+            # schema-legal: only allowed keys present
+            allowed = {"type", "kind", "summary", "wp", "actor", "session",
+                       "decision_ref", "seq", "ts", "schema_version"}
+            check(set(row).issubset(allowed), "row carries schema-legal fields only")
+            # verify the emitter itself accepted it (no --evidence/--resolution leak)
+            check("evidence" not in row and "resolution" not in row,
+                  "no evidence/resolution fields on the event")
+
+        # (b) emitter-ABSENT path: exit 0, WARN, run unblocked (no log)
+        fd2 = tdp / "feat-absent"
+        fd2.mkdir()
+        env_absent = dict(os.environ)
+        env_absent["GOALFORGE_TRACE_EMIT"] = str(tdp / "does-not-exist-emitter")
+        proc = subprocess.run(
+            [self, "--feature-dir", str(fd2), "--kind", "tool-failure"],
+            capture_output=True, text=True, env=env_absent)
+        check(proc.returncode == 0, "emitter-absent exits 0 (never blocks)")
+        check("WARN" in proc.stderr, "emitter-absent warns to stderr")
+        check(not (fd2 / "trace-events.jsonl").exists(),
+              "emitter-absent leaves run unblocked (no log)")
+
+        # (c) emitter-REJECT path (exit 2): exit 0, WARN, run unblocked
+        stub = tdp / "reject-emitter"
+        stub.write_text(
+            "#!/usr/bin/env python3\n"
+            "import sys\n"
+            "print('stub: rejected', file=sys.stderr)\n"
+            "sys.exit(2)\n")
+        stub.chmod(0o755)
+        fd3 = tdp / "feat-reject"
+        fd3.mkdir()
+        env_reject = dict(os.environ)
+        env_reject["GOALFORGE_TRACE_EMIT"] = str(stub)
+        proc = subprocess.run(
+            [self, "--feature-dir", str(fd3), "--kind", "spec-gap"],
+            capture_output=True, text=True, env=env_reject)
+        check(proc.returncode == 0, "emitter-reject exits 0 (never blocks)")
+        check("WARN" in proc.stderr, "emitter-reject warns to stderr")
+
+        # (d) unknown kind degrades (exit 0, WARN) — never blocks
+        proc = subprocess.run(
+            [self, "--feature-dir", str(fd), "--kind", "not-a-kind"],
+            capture_output=True, text=True, env=env)
+        check(proc.returncode == 0, "unknown kind exits 0")
+        check("WARN" in proc.stderr, "unknown kind warns to stderr")
+
+        # (e) missing --feature-dir degrades (exit 0, WARN)
+        proc = subprocess.run(
+            [self, "--kind", "env-friction"],
+            capture_output=True, text=True, env=env)
+        check(proc.returncode == 0, "missing --feature-dir exits 0")
+        check("WARN" in proc.stderr, "missing --feature-dir warns to stderr")
+
+        # sanity: the real emitter path resolves (guards a rename)
+        check(Path(real_emit).exists(), "sibling goalforge-trace-emit present")
+
+    if failures:
+        print(f"goalforge-issue --self-test: FAIL ({len(failures)})", file=sys.stderr)
+        return 2
+    print("goalforge-issue --self-test: PASS", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

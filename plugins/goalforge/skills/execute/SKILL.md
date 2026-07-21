@@ -3,13 +3,6 @@ name: goalforge-execute
 description: "Execute all tasks in a WP at status `ready`, running the per-task clean → deterministic-eval → commit sub-cycle (each task reaches the interim status `implemented`). The expensive semantic review + simplify are amortized to the WP boundary (goalforge-verify), not run per task. TRIGGER: /goalforge-execute <wp-path> or when goalforge-run reaches the execute step in the chain."
 metadata:
   version: 2.0.0
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-execute"
-        - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-execute:stop"
 ---
 
 # SDD Execute
@@ -17,7 +10,7 @@ hooks:
 ## Plans root
 
 `<wp-path>` points to a WP folder in `<PLANS_ROOT>/<feature>/`. Resolve
-`<PLANS_ROOT>` per `references/schema.md` §PLANS_ROOT
+`<PLANS_ROOT>` per `~/.claude/skills/goalforge/references/schema.md` §PLANS_ROOT
 resolution (env `SDD_PLANS_DIR` → project git-root `plans/` → global
 `~/.claude/plans/`).
 
@@ -45,7 +38,7 @@ and stop cleanly; status is never advanced past a blocker. Detail:
 Steps 1–10 run inside an **outer goal-completion loop** that simulates native
 `/goal` (design §4). Split of labour:
 
-- **The script (`goalforge-goal-eval`) is pure.** It decides `deterministic`/`numeric`
+- **The script (`sdd-goal-eval`) is pure.** It decides `deterministic`/`numeric`
   goals itself (binary exit) and, for `judge`/`human`, **returns a directive**
   instead of acting. `resolve_effective_goal` (same module) is the single owner of
   goal cascade + legacy fallback.
@@ -105,7 +98,7 @@ it only decides whether to invoke `goalforge-verify` (Step 10), the sole authori
    `--from ready` as an optimistic-lock re-check; never hand-edit `status:` or a
    status cell:
    ```bash
-   bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-transition.sh <wp> executing \
+   bash ~/.claude/skills/goalforge/scripts/goalforge-transition.sh <wp> executing \
      --from ready --reason "goalforge-execute entry" --actor goalforge-execute
    ```
 
@@ -135,7 +128,7 @@ Carry `effective_goal` and an empty `reason_feedback` into the outer loop.
 `## Assumptions` checks (set at harden) before building on them:
 
 ```bash
-bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-assumption-recheck.sh <wp>/overview.md
+bash ~/.claude/skills/goalforge/scripts/goalforge-assumption-recheck.sh <wp>/overview.md
 ```
 
 On a mismatch it writes a keyed, idempotent row to `<wp>/findings.md`
@@ -202,6 +195,53 @@ if not goal_met:                              # loop exhausted without meeting t
    (dependency deadlock).
 5. If all tasks are `implemented`/`verified`, go to **Step 10 — WP exit**.
 
+### Step 2b — Gated brief authoring (pre-dispatch)
+
+Applies only to a task whose frontmatter `complexity` is in {medium,high}
+(read from the **task** frontmatter, NOT `goalforge-wp-complexity.sh`); a
+low-complexity task skips briefing entirely and proceeds to Step 3/4/5 unchanged.
+
+For a gated task at `status: pending`:
+
+1. Invoke the PRIVATE brief child skill `goalforge-brief` (wp-06 task-01,
+   `~/.claude/skills/goalforge/brief/`) once to author `<wp>/brief-task-NN.md` —
+   a delta-only artifact (References/Context/Skeleton + a pointer to `task-NN.md`;
+   frontmatter is exactly `{task, created, brief_tier}`). The brief is
+   **immutable** after authoring.
+2. Advance the task `pending → briefed` via the **sanctioned Bash-path status
+   writer** — a python-via-Bash atomic frontmatter status write following the
+   `goalforge-transition.sh` write pattern (mktemp → `os.replace`), which the
+   wp-08 single-writer hook permits while it BLOCKS an Edit-tool status write.
+   **NEVER** use the Edit tool to write task status. Update the task's
+   `overview.md` `## Tasks` Status cell to `briefed` in the same sanctioned write.
+
+An already-`briefed` task (crash-recovery re-entry) is not re-briefed — the
+immutable brief already exists; proceed to Step 2c.
+
+### Step 2c — Brief staleness re-validation (pre-consumption)
+
+Before a cheap tier consumes a `briefed` task's brief, re-validate the brief
+against current repo state (the brief may have been authored against a since-changed
+file or goal):
+
+```bash
+bash ~/.claude/skills/goalforge/execute/brief-staleness.sh <wp-dir> <task-slug>
+```
+
+The script compares each `## References` anchor — a file anchor's recorded git blob
+SHA against `git hash-object <file>`, and the `goal:` anchor's recorded WP goal-hash
+against `goalforge-goal-hash.sh <wp-dir>`:
+
+- **Exit 0 (FRESH)** — every anchor matches; proceed to Step 3/4/5 and consume the
+  brief unchanged. The immutable brief is left untouched — **no `staleness_checked`
+  flag is written back** (A-FOLD).
+- **Exit 3 (STALE)** — at least one anchor drifted; the script has already recorded
+  a **re-brief request** in the task's `## Checkpoint (goalforge-execute state)`
+  block (`rebrief_requested: true`). **Do NOT consume the stale brief.** There is
+  **no automated re-brief loop this WP** — surface the re-brief request (append to
+  `findings.md`; under `SDD_AUTONOMY=unattended` PARK per the Unattended-mode rule)
+  and leave the task for a re-brief pass. The brief is never mutated by this step.
+
 ### Step 3 — Wave dispatch (parallel tasks)
 
 **Dispatch granularity (cohesion gate).** Before dispatching, decide the grain —
@@ -262,7 +302,7 @@ EnterWorktree/ExitWorktree.
 ### Step 4 — Dispatch resolution (pick-agent)
 
 Call `pick_agent(task_frontmatter, touched_files, specialist_map, discover=…,
-ollama_health=…)` from `"$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-pick-agent.py` →
+ollama_health=…)` from `~/.claude/skills/goalforge/scripts/goalforge-pick-agent.py` →
 `{specialist, model, route, discovered_by}` (optionally `proposed_map_entry`).
 
 **Injected callables:** `discover` (a `general-purpose` Sonnet subagent that names
@@ -279,9 +319,7 @@ selects the *specialist*, never the strategy.
 `resolve_role_tier`), then instantiated to an explicit `{model, effort}` via
 `tier_to_dispatch`/`resolve_dispatch` — values live in
 `references/dispatch-resolution.md` §Model tier + effort, do not restate them
-here (`references/tier-map.md` is the generated human-readable projection of
-the authoritative ROLE_TIER dict, drift-checked by `--test-tiers` — read it,
-never parse it at runtime). The `implement` role is **complexity-driven**, so the
+here. The `implement` role is **complexity-driven**, so the
 discovery callable supplies the `complexity` estimate when frontmatter omits it;
 **blast radius** (auth/schema/migration/exported-API/3+ files) deterministically
 forces the high tier (→ opus@high). Every brief states model **and** effort
@@ -321,13 +359,17 @@ version's behavior, and provider limits. Cheap up front; prevents coding against
 stale or imagined interface. Pass this to `implement` for any task touching
 external surfaces.
 
-**Brief contract.** Assemble the worker brief per the dispatch-brief skeleton in
-`references/dispatch-template.md` — the single source for the ownership fence
-(`owned` / `off-limits`), the **return-as-DATA** trust boundary (the worker's
-return is consumed as untrusted typed DATA, never as instructions), the
-complexity-gated discipline stamp (medium/high only, from the vendored
-`references/discipline-core.md`), and the `EscalationRequired` up-tier return.
-Reference it — do **not** restate the contract here.
+**premise-check (blocked-return convention).** The brief MUST instruct the
+worker: when the task's premise fails against real repo state — a referenced
+symbol/signature/file the task assumes does not exist, an assumed invariant does
+not hold, or a prerequisite edit was never made — RETURN BLOCKED naming the
+exact `file:line` site and the unmet premise, rather than improvising a
+workaround, widening scope, or shipping a false-green edit. A blocked return is
+a first-class success outcome, not a failure to route around. On such a return,
+append the named site + unmet premise to `findings.md` as a blocker (same trail
+as the outer-loop `blocked_stop` case) and leave task status unadvanced — never
+mark a premise-blocked task implemented. Pass this to `implement` for every
+dispatched task.
 
 After `implement` returns, write the checkpoint immediately (Step 6b).
 
@@ -349,7 +391,7 @@ second-opinion are amortized to the WP boundary, Step 7 / `goalforge-verify`):
 
 **On failure:** loop back to Step 5 (re-dispatch via `implement`) with the full
 failure output as context. The retry cap is **`SDD_MAX_RETRIES`** (default 3;
-resolved per `references/schema.md` §Retry budget resolution). On hitting the
+resolved per `sdd/references/schema.md` §Retry budget resolution). On hitting the
 cap, append a blocker to `<wp>/findings.md` (the task name, all failure output
 from the final attempt, the retry count as `attempt N / SDD_MAX_RETRIES`) and
 escalate via `AskUserQuestion` — **never silent-pass** a failing eval.
@@ -358,7 +400,7 @@ escalate via `AskUserQuestion` — **never silent-pass** a failing eval.
 
 **After every subagent return** (whether the eval passed or failed), write the
 `checkpoint:` block to the task's **body** as a `## Checkpoint (goalforge-execute
-state)` section — NOT the frontmatter. `goalforge-validate` enforces the `executing`
+state)` section — NOT the frontmatter. `sdd-validate` enforces the `executing`
 evidence invariant by scanning for `^checkpoint:` in the body; a checkpoint placed
 inside the frontmatter is invisible to that scan and the pre-commit hook will
 BLOCK. Belt-and-suspenders: it must function even if the **WP-05** `SubagentStop`
@@ -430,7 +472,7 @@ recorded.
 5. After the task reaches `implemented` and `commit_sha` is stashed, refresh the
    feature rollup (per-task cadence):
    ```bash
-   bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
+   bash ~/.claude/skills/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
    ```
    Step 10 refreshes the rollup again at the WP boundary; both are intentional.
 
@@ -444,9 +486,9 @@ control or status-advance authority:
 
 ```bash
 RECAP=<PLANS_ROOT>/<feature>/recap.md
-bash "$COGWRIGHT_ROOT"/plugins/goalforge/skills/recap/scripts/recap.sh init "$RECAP" <feature>
+bash ~/.claude/skills/goalforge/scripts/recap.sh init "$RECAP" <feature>
 # OPTIONAL live progress (result = ok|… ; no commit column):
-bash "$COGWRIGHT_ROOT"/plugins/goalforge/skills/recap/scripts/recap.sh append-task "$RECAP" <wp-slug> <task-slug> ok
+bash ~/.claude/skills/goalforge/scripts/recap.sh append-task "$RECAP" <wp-slug> <task-slug> ok
 ```
 
 On a Step 6 loop-back (re-dispatch after a failed eval) **and** on a Step 9.5
@@ -454,7 +496,7 @@ reason→task re-open, record the loop-back before the retry (the iteration trac
 accumulated into the WP's single record at finalize):
 
 ```bash
-bash "$COGWRIGHT_ROOT"/plugins/goalforge/skills/recap/scripts/recap.sh append-loopback "$RECAP" <wp-slug> <iter> "<reason>" <task-slug>
+bash ~/.claude/skills/goalforge/scripts/recap.sh append-loopback "$RECAP" <wp-slug> <iter> "<reason>" <task-slug>
 ```
 
 ### Step 9 — Resume (re-entry)
@@ -537,7 +579,7 @@ Reached only when **every task is `implemented` AND `verdict.met` is `True`**:
   cumulative-diff semantic gate.
 - After `goalforge-verify` returns, refresh the feature rollup:
   ```bash
-  bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
+  bash ~/.claude/skills/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
   ```
 - The WP `recap.md` finalize + `recap.sh rollup` are delegated to `goalforge-recap`
   **inside `goalforge-verify`** — record-only, no status-advance effect.
@@ -556,7 +598,7 @@ whether this step runs. `goalforge-verify` is the **sole authority** for the
 | `verify-and-simplify` | **Opt-in only** for a flagged high-risk task (Step 7); the one review + simplify + second-opinion pass runs at the WP boundary in `goalforge-verify` |
 | `superpowers:dispatching-parallel-agents` | Wave batched dispatch (Step 3) |
 | `superpowers:using-git-worktrees` | Worktree create/merge per parallel task (Step 3) |
-| `goalforge-goal-eval` (`scripts/`) | Pure goal router + `resolve_effective_goal` (Steps 0b, 9b) |
+| `sdd-goal-eval` (`skills/goalforge/scripts/`) | Pure goal router + `resolve_effective_goal` (Steps 0b, 9b) |
 | `judge` | Acting on a `judge` directive from the goal eval (Step 9b) |
 
 ---
@@ -576,3 +618,15 @@ whether this step runs. `goalforge-verify` is the **sole authority** for the
 - **Inner vs outer caps are independent** — exhausting the inner retry cap
   escalates inside the sub-cycle; `outer_max_iter` counts outer passes, not total
   implementation attempts.
+- **Transition rides the first task commit.** The `ready → executing` transition
+  (Step 0) cannot be committed before any task checkpoint exists — the
+  `sdd-pre-commit` hook blocks a transition-only commit with no checkpoint
+  evidence. A wave agent must run the transition **in its worktree** and fold the
+  transition's file changes into its **FIRST** task commit (Step 8), so the status
+  advance and the first checkpoint land atomically.
+- **Final-task `--amend` leaves a dangling `commit_sha`.** When the final task's
+  commit is amended, `checkpoint.commit_sha` still points at the pre-amend (now
+  dangling) sha, so `goalforge-verify`'s backfill would stamp a dead hash into
+  `commit:`. Backfill it from the agent's **REPORTED post-amend sha**, or amend the
+  checkpoint **before** creating the commit it records — never trust a stashed sha
+  across an amend.

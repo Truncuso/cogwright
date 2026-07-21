@@ -3,13 +3,6 @@ name: goalforge-decompose
 description: "Decompose an approved feature spec into work packages and tasks. Reads plans/<feature>/spec.md, emits wp-NN-<slug>/ folders each containing overview.md (status: spec), todo.md, and task-NN-*.md files stamped from WP templates. Fills depends_on and parallel from the spec's WP table. Also owns the single-WP Add-WP mode (--add-wp): author ONE new WP into an existing feature — the fast-path (route: fast) WP author and the lightweight grow-on-the-go path for a mid-flight WP add, without a full re-decomposition (goalforge-redecompose stays the restructure tool). Trigger: the user asks to decompose, break down, or plan the work packages for a feature that has an approved spec.md — or to add a single WP to an existing feature mid-flight."
 metadata:
   version: 1.3.0
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-decompose"
-        - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-decompose:stop"
 ---
 
 # goalforge-decompose
@@ -19,8 +12,19 @@ folder per work package, each containing `overview.md`, `todo.md`, and one or
 more `task-NN-*.md` files. Fills `depends_on` and `parallel` from the spec's WP
 table.
 
-Schema reference: `references/schema.md`.
-Templates: `references/templates/`.
+Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
+Templates: `~/.claude/skills/goalforge/references/templates/`.
+
+## When NOT to decompose — JIT rule (soft, forward-only; 2026-07-16)
+
+Do not decompose a feature until it is **next-to-execute** (spec approved AND at
+the execution frontier). Decompose-ahead builds a speculative WP buffer whose
+todo.md rollups, `depends_on` edges, and mirrored sequence entries drift before
+the work ever runs — measured 2026-07-16: 106 WPs at `spec` against 3 executing,
+and 57% of a month's commits spent on coordination surfaces. When asked to
+decompose a feature that is not next-to-execute, say so and confirm before
+proceeding. Forward-only: existing decomposed WPs stay (their depends_on edges
+are load-bearing); this rule governs NEW decompositions.
 
 ## Inputs
 
@@ -145,6 +149,15 @@ Body sections: **Goal** (one measurable sentence), **Verification** (exact
 command/check proving the WP done), **Tasks table** (from Step 6), **Open
 Questions** (placeholder).
 
+**Quote colon-bearing free-text frontmatter.** Any free-text frontmatter string
+that may contain a colon — `title:`, and any authored `goal.outcome` — MUST be
+double-quoted (the templates default to the quoted form; keep it). An unquoted
+colon-space re-parses the line as a nested map and the whole frontmatter block
+breaks, so `status`/`title` read empty downstream.
+INCORRECT: `title: research: capture idea` → parses as a nested map, frontmatter
+breaks, status reads empty.
+CORRECT: `title: "research: capture idea"`.
+
 ### Step 5b — Derive the WP goal block + set `inherits_from`
 
 For each WP, derive its **goal block** in `overview.md` frontmatter from the
@@ -265,7 +278,7 @@ every `todo.md` to today. Set `updated:` in the feature `overview.md` to today.
 Generate the feature-level `todo.md` rollup:
 
 ```bash
-bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
+bash ~/.claude/skills/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
 ```
 
 It reads each WP `overview.md` status + `todo.md` open items and writes
@@ -277,13 +290,15 @@ produces byte-identical output).
 Before reporting, parse-check every file just written:
 
 ```bash
-bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-validate.sh --feature <feature> --show <PLANS_ROOT>
+bash ~/.claude/skills/goalforge/scripts/goalforge-validate.sh --feature <feature> --show <PLANS_ROOT>
 ```
 
-Fix any `invalid YAML frontmatter` ERROR immediately — its most common cause is a
-double-quoted `verify:` scalar containing `\|` / `\.` (see Step 7: always use a
-block scalar). A malformed `verify:` silently makes a task's `status` unreadable
-downstream, so catch it here, not three sessions later.
+Fix any `invalid YAML frontmatter` ERROR immediately — its most common causes are
+a double-quoted `verify:` scalar containing `\|` / `\.` (Step 7: always use a
+block scalar) OR an unquoted colon-bearing `title:` / `goal.outcome` (Step 5:
+always double-quote free-text that may contain a colon) — fix by using the block
+scalar or double-quoting the value. Malformed frontmatter silently makes a
+`status`/`title` unreadable downstream, so catch it here, not three sessions later.
 
 ### Step 10.7 — Tier-1 feature audit (adversarial, hash-gated)
 
@@ -295,7 +310,7 @@ defects are a cheap per-WP delta in `goalforge-harden` (Step 0a).
 1. **Compute the feature audit hash** (deterministic, gates re-runs):
 
    ```bash
-   bash "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-feature-hash.sh <PLANS_ROOT>/<feature>
+   bash ~/.claude/skills/goalforge/scripts/goalforge-feature-hash.sh <PLANS_ROOT>/<feature>
    ```
 
    The hash covers the feature's *structure + goals* (sorted WP slugs, each
@@ -387,12 +402,12 @@ records the hash before the auto-advance — else wp-01's `→ready` gate refuse
 ## Plans root
 
 Resolve `<PLANS_ROOT>` at runtime per the priority rules in
-`references/schema.md` §PLANS_ROOT resolution:
+`~/.claude/skills/goalforge/references/schema.md` §PLANS_ROOT resolution:
 env `SDD_PLANS_DIR` → project git-root `plans/` → global `~/.claude/plans/`.
 
 ## Template reference
 
-Templates at `references/templates/`. Stamped files carry
+Templates at `~/.claude/skills/goalforge/references/templates/`. Stamped files carry
 the appropriate marker:
 
 ```

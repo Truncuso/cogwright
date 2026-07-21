@@ -3,13 +3,6 @@ name: goalforge-redecompose
 description: "Reconcile a proposed re-decomposition against a partially-executed feature's verified WPs. Calls goalforge-reconcile-diff.sh to produce a 5-bucket diff, then routes: same → untouched (no-op), changed+new → status: spec and onto the harden frontier via goalforge-transition.sh, dropped-verified → supersede in place (ledger row, never delete), ambiguous (slug changed, goal matches a verified WP) → judgment/human — never auto-rename or auto-supersede. Logs goal mutations via goalforge-goal-changelog.sh. Idempotent: re-run on unchanged decomposition is a byte-identical no-op. TRIGGER: /goalforge-redecompose <feature-dir> --learning '<text>' or when goalforge-run loops back on a learning event."
 metadata:
   version: 1.0.0
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-redecompose"
-        - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-redecompose:stop"
 ---
 
 # SDD Redecompose
@@ -43,7 +36,7 @@ preserves everything that is already verified.
 Run the deterministic reconcile-diff and capture its output as typed data:
 
 ```bash
-bash "$CLAUDE_SKILL_DIR/../../scripts/goalforge-reconcile-diff.sh" "<feature-dir>" "<proposed-json>"
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-reconcile-diff.sh" "<feature-dir>" "<proposed-json>"
 ```
 
 This emits one JSON object:
@@ -76,7 +69,7 @@ Both end at `status: spec` on the harden frontier, but they get there differentl
   status writer (its on-disk status is the `from`):
 
   ```bash
-  bash "$CLAUDE_SKILL_DIR/../../scripts/goalforge-transition.sh" "<wp-path>" spec \
+  bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh" "<wp-path>" spec \
     --reason "redecompose: <learning summary>"
   ```
 
@@ -86,7 +79,7 @@ Both end at `status: spec` on the harden frontier, but they get there differentl
   from, so the call would fail.
 
 `goalforge-transition.sh` is the **single status writer** for an existing WP — it updates
-`status:` in overview.md, appends a JSON row to `.goalforge-transitions.jsonl`, and rolls up
+`status:` in overview.md, appends a JSON row to `.sdd-transitions.jsonl`, and rolls up
 the feature todo. Do not write `status:` directly into an existing WP; the only direct
 `status: spec` write is the initial authoring of a brand-new WP (what decomposition does).
 
@@ -125,7 +118,7 @@ For any WP whose goal facets changed (outcome, verification, constraints, bounda
 a changelog row:
 
 ```bash
-bash "$CLAUDE_SKILL_DIR/../../scripts/goalforge-goal-changelog.sh" append \
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-goal-changelog.sh" append \
   "<wp-path>" <facet> "<old>" "<new>" --reason "<learning summary>"
 ```
 
@@ -154,7 +147,7 @@ skills use. Use `$CLAUDE_SKILL_DIR` for script paths; never hardcode absolute pa
 | File | Operation |
 |------|-----------|
 | `<feature-dir>/wp-*/overview.md` | Read by reconcile-diff; written for supersession or transition |
-| `<feature-dir>/.goalforge-transitions.jsonl` | Appended by `goalforge-transition.sh` (git-tracked) |
+| `<feature-dir>/.sdd-transitions.jsonl` | Appended by `goalforge-transition.sh` (git-tracked) |
 | `<proposed-json>` | Read only |
 
 ## Delegated scripts

@@ -1,0 +1,447 @@
+#!/usr/bin/env python3
+"""goalforge-trace-emit — validating single-writer emitter for the trace log.
+
+Appends exactly one schema-valid event row to a feature's
+`trace-events.jsonl`. It is the SOLE `seq` authority: any caller-supplied `seq`
+is ignored and the authoritative value is read from the log's LAST parseable
+line (not a full scan). `schema_version` is stamped here; `ts` is stamped here
+UNLESS the caller supplies one (then preserved verbatim — e.g. the historical
+ledger timestamps replayed by goalforge-trace-derive --write), keeping the
+emitter the sole `seq` authority without also owning `ts`. The row is validated
+against the JSON Schema embedded (first ```json
+block) in `references/trace-events.md` — the single schema home; an unknown
+type or a missing required field is rejected with exit 2 and the log left
+byte-unchanged.
+
+Concurrency: read-max-seq + append is one RMW under this emitter's OWN
+`flock` on `plans/<feature>/trace-events.lock` (held across both the max-seq
+read and the append); one `write()` per row. This lock is independent of
+`goalforge-transition.sh`'s flock-9 on `.sdd-transitions.lock`.
+
+Interface: takes an EXPLICIT `--feature-dir` (never guesses PLANS_ROOT). Event
+JSON comes from `--event <json>` or stdin.
+
+Exit codes:
+  0  row appended (or a degrade-not-block I/O failure warned to stderr)
+  2  validation / bad-JSON / usage error — zero log bytes written
+
+Zero-breakage: a runtime I/O or lock failure warns to stderr and exits 0 so it
+never blocks the underlying chain operation; only a caller contract violation
+(bad JSON, schema-invalid event) is a hard exit 2.
+"""
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+SCHEMA_VERSION = 1
+LOG_NAME = "trace-events.jsonl"
+LOCK_NAME = "trace-events.lock"
+# Envelope order for emitted rows (readability; JSON key order is not semantic).
+_ENVELOPE_FIRST = ("seq", "ts", "type", "schema_version")
+
+
+# ---------------------------------------------------------------------------
+# Embedded-schema loading (references/trace-events.md, first ```json block)
+# ---------------------------------------------------------------------------
+
+def _schema_doc_path() -> Path:
+    return Path(__file__).resolve().parent.parent / "references" / "trace-events.md"
+
+
+def load_schema(doc_path: Path | None = None) -> dict:
+    """Extract and parse the FIRST ```json fenced block from the schema doc."""
+    path = doc_path or _schema_doc_path()
+    text = path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip() == "```json":
+            start = i + 1
+            break
+    if start is None:
+        raise ValueError(f"no ```json block in {path}")
+    end = next((j for j in range(start, len(lines)) if lines[j].strip() == "```"), None)
+    if end is None:
+        raise ValueError(f"unterminated ```json block in {path}")
+    return json.loads("\n".join(lines[start:end]))
+
+
+# ---------------------------------------------------------------------------
+# Minimal draft-07 validator (self-contained; subset used by the schema)
+# ---------------------------------------------------------------------------
+
+_JSON_TYPES = {
+    "object": dict,
+    "string": str,
+    "boolean": bool,
+    # `integer`/`number` handled explicitly (bool is not a number here).
+}
+
+
+def _type_ok(value, typ: str) -> bool:
+    if typ == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if typ == "number":
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    py = _JSON_TYPES.get(typ)
+    return isinstance(value, py) if py is not None else True
+
+
+def _validate(instance, schema, path: str = "") -> list[str]:
+    """Return a list of validation error strings ([] == valid).
+
+    Supports the keyword subset the trace schema uses: type, enum, const,
+    minimum, required, properties, additionalProperties(false), oneOf. Sibling
+    keywords are conjunctive (implicit allOf), matching draft-07.
+    """
+    errors: list[str] = []
+
+    if "type" in schema and not _type_ok(instance, schema["type"]):
+        errors.append(f"{path or '<root>'}: expected type {schema['type']}")
+        return errors  # further keyword checks assume the base type
+
+    if "const" in schema and instance != schema["const"]:
+        errors.append(f"{path}: expected const {schema['const']!r}")
+    if "enum" in schema and instance not in schema["enum"]:
+        errors.append(f"{path}: {instance!r} not in enum")
+    if "minimum" in schema and isinstance(instance, (int, float)) \
+            and instance < schema["minimum"]:
+        errors.append(f"{path}: {instance} < minimum {schema['minimum']}")
+
+    if isinstance(instance, dict):
+        props = schema.get("properties", {})
+        for req in schema.get("required", []):
+            if req not in instance:
+                errors.append(f"{path}: missing required '{req}'")
+        if schema.get("additionalProperties") is False:
+            for key in instance:
+                if key not in props:
+                    errors.append(f"{path}: additional property '{key}' not allowed")
+        for key, sub in props.items():
+            if key in instance:
+                errors.extend(_validate(instance[key], sub,
+                                        f"{path}.{key}" if path else key))
+
+    if "oneOf" in schema:
+        matches = sum(1 for branch in schema["oneOf"]
+                      if not _validate(instance, branch, path))
+        if matches != 1:
+            errors.append(f"{path or '<root>'}: matched {matches} oneOf branches "
+                          f"(exactly 1 required)")
+
+    return errors
+
+
+# ---------------------------------------------------------------------------
+# seq computation (last parseable line; torn-tail tolerant)
+# ---------------------------------------------------------------------------
+
+def _iter_tail_lines(fh, chunk: int = 65536):
+    """Yield complete lines from the end of a file object, newest first."""
+    fh.seek(0, os.SEEK_END)
+    size = fh.tell()
+    buf = b""
+    pos = size
+    while pos > 0:
+        step = min(chunk, pos)
+        pos -= step
+        fh.seek(pos)
+        buf = fh.read(step) + buf
+        parts = buf.split(b"\n")
+        buf = parts[0]
+        for part in reversed(parts[1:]):
+            if part:
+                yield part
+    if buf:
+        yield buf
+
+
+def next_seq(log_path: Path) -> int:
+    """Next monotonic seq from the log's LAST parseable line (torn-tail safe).
+
+    Reads from the end; skips an unparseable trailing line (torn-tail contract).
+    Returns 0 for a missing/empty log.
+    """
+    try:
+        with open(log_path, "rb") as fh:
+            for raw in _iter_tail_lines(fh):
+                try:
+                    obj = json.loads(raw.decode("utf-8"))
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue  # torn / corrupt line — skip, keep walking back
+                seq = obj.get("seq")
+                if isinstance(seq, int) and not isinstance(seq, bool):
+                    return seq + 1
+        return 0
+    except FileNotFoundError:
+        return 0
+
+
+# ---------------------------------------------------------------------------
+# Emit (validated, locked, single-append)
+# ---------------------------------------------------------------------------
+
+def _ordered_row(obj: dict) -> dict:
+    row: dict = {}
+    for k in _ENVELOPE_FIRST:
+        if k in obj:
+            row[k] = obj[k]
+    for k, v in obj.items():
+        if k not in row:
+            row[k] = v
+    return row
+
+
+class EmitReject(Exception):
+    """Hard caller-contract violation → exit 2, log byte-unchanged."""
+
+
+def emit(feature_dir: Path, event: dict, *, schema: dict) -> dict:
+    """Validate + append one row. Returns the written row. Raises EmitReject
+    (exit 2) on schema/JSON violation; I/O failures degrade-not-block (exit 0
+    is applied by the caller)."""
+    if not isinstance(event, dict):
+        raise EmitReject("event is not a JSON object")
+
+    log_path = feature_dir / LOG_NAME
+    lock_path = feature_dir / LOCK_NAME
+    feature_dir.mkdir(parents=True, exist_ok=True)
+
+    # Lock spans BOTH the max-seq read and the append (one RMW).
+    with open(lock_path, "w") as lock_fh:
+        fcntl.flock(lock_fh, fcntl.LOCK_EX)
+        try:
+            row = dict(event)
+            row["seq"] = next_seq(log_path)              # sole seq authority
+            # Sole `seq` authority only (harden decision): a caller-supplied
+            # `ts` is preserved verbatim (historical ledger replay); otherwise
+            # stamped with the current UTC time.
+            row["ts"] = event.get("ts") or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            row["schema_version"] = SCHEMA_VERSION
+            row = _ordered_row(row)
+
+            errs = _validate(row, schema)
+            if errs:
+                raise EmitReject("; ".join(errs))
+
+            line = json.dumps(row, separators=(",", ":"), ensure_ascii=False) + "\n"
+            # Isolate a torn (newline-less) trailing fragment from a prior
+            # crash-mid-write: if the log does not already end in "\n", prepend
+            # one so this append lands on its OWN parseable line instead of
+            # gluing onto — and silently destroying — the corrupt fragment.
+            prefix = b""
+            if log_path.exists():
+                with open(log_path, "rb") as tail_fh:
+                    tail_fh.seek(0, os.SEEK_END)
+                    if tail_fh.tell() > 0:
+                        tail_fh.seek(-1, os.SEEK_END)
+                        if tail_fh.read(1) != b"\n":
+                            prefix = b"\n"
+            fd = os.open(log_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+            try:
+                os.write(fd, prefix + line.encode("utf-8"))  # one write() per row
+            finally:
+                os.close(fd)
+            return row
+        finally:
+            fcntl.flock(lock_fh, fcntl.LOCK_UN)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def _run_emit(args) -> int:
+    if not args.feature_dir:
+        print("goalforge-trace-emit: --feature-dir is required", file=sys.stderr)
+        return 2
+    feature_dir = Path(args.feature_dir).resolve()
+
+    raw = args.event if args.event is not None else sys.stdin.read()
+    try:
+        event = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        print(f"goalforge-trace-emit: invalid event JSON: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        schema = load_schema()
+    except (OSError, ValueError) as exc:
+        # Cannot load the contract → degrade-not-block (never wedge the chain).
+        print(f"goalforge-trace-emit: WARN schema unavailable: {exc}", file=sys.stderr)
+        return 0
+
+    try:
+        row = emit(feature_dir, event, schema=schema)
+    except EmitReject as exc:
+        print(f"goalforge-trace-emit: rejected: {exc}", file=sys.stderr)
+        return 2
+    except OSError as exc:
+        # Runtime I/O/lock failure → degrade-not-block.
+        print(f"goalforge-trace-emit: WARN emit failed: {exc}", file=sys.stderr)
+        return 0
+
+    if args.print_row:
+        print(json.dumps(row, separators=(",", ":"), ensure_ascii=False))
+    return 0
+
+
+def main(argv=None) -> int:
+    ap = argparse.ArgumentParser(description="Validating single-writer trace emitter.")
+    ap.add_argument("--feature-dir", help="feature dir holding trace-events.jsonl")
+    ap.add_argument("--event", help="event JSON (else read from stdin)")
+    ap.add_argument("--print-row", action="store_true",
+                    help="print the written row (with assigned seq) to stdout")
+    ap.add_argument("--self-test", action="store_true", help="run hermetic self-test")
+    args = ap.parse_args(argv)
+
+    if args.self_test:
+        return _self_test()
+    return _run_emit(args)
+
+
+# ---------------------------------------------------------------------------
+# Self-test (hermetic temp fixture)
+# ---------------------------------------------------------------------------
+
+def _self_test() -> int:  # noqa: C901 — flat test sequence is clearest here
+    import subprocess
+    import tempfile
+
+    self = str(Path(__file__).resolve())
+    schema = load_schema()
+    failures: list[str] = []
+
+    def check(cond: bool, label: str) -> None:
+        if not cond:
+            failures.append(label)
+            print(f"  FAIL {label}", file=sys.stderr)
+        else:
+            print(f"  ok   {label}", file=sys.stderr)
+
+    with tempfile.TemporaryDirectory() as td:
+        fd = Path(td)
+        log = fd / LOG_NAME
+
+        # (a) valid append
+        row0 = emit(fd, {"type": "wp.status_changed", "wp": "wp-1",
+                         "from": "spec", "to": "hardened"}, schema=schema)
+        check(row0["seq"] == 0, "valid append assigns seq 0")
+        check(log.exists() and log.read_text().count("\n") == 1, "one row written")
+        check(not _validate(row0, schema), "written row validates")
+
+        # (a) invalid reject — unknown type — exit 2, zero new bytes
+        before = log.read_bytes()
+        raised = False
+        try:
+            emit(fd, {"type": "no.such.type", "wp": "wp-1"}, schema=schema)
+        except EmitReject:
+            raised = True
+        check(raised, "unknown type rejected")
+        check(log.read_bytes() == before, "log byte-unchanged after reject")
+
+        # (a) invalid reject — missing required field
+        raised = False
+        try:
+            emit(fd, {"type": "wp.status_changed", "wp": "wp-1"}, schema=schema)
+        except EmitReject:
+            raised = True
+        check(raised, "missing required field rejected")
+        check(log.read_bytes() == before, "log byte-unchanged after 2nd reject")
+
+        # (b) seq monotonic across appends
+        row1 = emit(fd, {"type": "commit.linked", "wp": "wp-1",
+                         "commit": "deadbee"}, schema=schema)
+        row2 = emit(fd, {"type": "gate.result", "wp": "wp-1", "gate": "verify",
+                         "result": "pass"}, schema=schema)
+        check(row1["seq"] == 1 and row2["seq"] == 2, "seq strictly monotonic")
+
+        # torn-tail: append a garbage trailing line, emitter still computes next seq
+        with open(log, "a", encoding="utf-8") as fh:
+            fh.write("{this is not json\n")
+        row3 = emit(fd, {"type": "issue.recorded", "kind": "bottleneck"},
+                    schema=schema)
+        check(row3["seq"] == 3, "torn-tail skipped; next seq computed (3)")
+
+        # consumers skip the torn line: every non-torn line parses & validates
+        good, torn = 0, 0
+        for ln in log.read_text().splitlines():
+            try:
+                obj = json.loads(ln)
+            except json.JSONDecodeError:
+                torn += 1
+                continue
+            good += 1
+            check(not _validate(obj, schema), f"line seq={obj.get('seq')} validates")
+        check(torn == 1, "exactly one torn line present")
+
+        # torn-tail WITHOUT trailing newline (a TRUE crash-mid-write): the next
+        # append must NOT glue onto the fragment — it must prepend a newline so
+        # the fragment stays isolated, remain seq-correct, and the appended row
+        # must independently re-parse as its OWN JSON line.
+        tf = Path(td) / "tornnl"
+        tf.mkdir()
+        tlog = tf / LOG_NAME
+        emit(tf, {"type": "wp.status_changed", "wp": "wp-1",
+                  "from": "spec", "to": "hardened"}, schema=schema)
+        with open(tlog, "a", encoding="utf-8") as fh:
+            fh.write('{"seq":1,"ts":"2026')          # NO trailing newline
+        rowt = emit(tf, {"type": "issue.recorded", "kind": "bottleneck"},
+                    schema=schema)
+        check(rowt["seq"] == 1, "newline-less torn tail skipped; next seq (1)")
+        parsed, appended_ok = 0, False
+        for ln in tlog.read_text().splitlines():
+            try:
+                obj = json.loads(ln)
+            except json.JSONDecodeError:
+                continue
+            parsed += 1
+            if obj.get("type") == "issue.recorded":
+                appended_ok = (obj["seq"] == 1)
+        check(parsed >= 2, "newline-less append isolated (>=2 parseable lines)")
+        check(appended_ok, "appended event re-parses seq-correct on its own line")
+
+        # exit-2 via CLI on bad JSON (zero bytes)
+        cf = Path(td) / "cli"
+        cf.mkdir()
+        rc = subprocess.run([self, "--feature-dir", str(cf), "--event", "{bad"],
+                            capture_output=True, text=True).returncode
+        check(rc == 2, "CLI bad JSON exits 2")
+        check(not (cf / LOG_NAME).exists(), "no log created on CLI reject")
+
+        # (concurrency) parallel writers → no duplicate seq
+        cd = Path(td) / "concurrent"
+        cd.mkdir()
+        n = 24
+        procs = []
+        for i in range(n):
+            ev = json.dumps({"type": "wp.status_changed", "wp": f"wp-{i}",
+                             "from": "a", "to": "b"})
+            procs.append(subprocess.Popen(
+                [self, "--feature-dir", str(cd), "--event", ev],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        for p in procs:
+            p.wait()
+        seqs = []
+        for ln in (cd / LOG_NAME).read_text().splitlines():
+            seqs.append(json.loads(ln)["seq"])
+        check(len(seqs) == n, f"all {n} concurrent rows written")
+        check(len(set(seqs)) == n, "no duplicate seq under concurrency")
+        check(sorted(seqs) == list(range(n)), "concurrent seqs contiguous 0..n-1")
+
+    if failures:
+        print(f"goalforge-trace-emit --self-test: FAIL ({len(failures)})",
+              file=sys.stderr)
+        return 1
+    print("goalforge-trace-emit --self-test: PASS", file=sys.stderr)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

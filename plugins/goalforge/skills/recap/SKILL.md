@@ -3,13 +3,6 @@ name: goalforge-recap
 description: "Maintain a living, resumable recap.md per feature that traces the per-WP execution loop. The authoritative trace is ONE row per WP (record-wp): the task list, loop-back entries, and a per-WP status line carrying the SINGLE WP commit at WP altitude (no per-task commit column — the answer to 'trace too many commits'). append-task is optional live-progress. Regenerates the feature rollup on demand. Invoked by goalforge-execute (optional live append) and goalforge-verify (record-wp at WP finalization). Trigger: goalforge-execute or goalforge-verify delegates a record-wp, append-task, append-loopback, or rollup operation for a feature WP."
 metadata:
   version: 2.0.0
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-recap"
-        - type: command
-          command: "$HOME/.claude/hooks/skill-trace.sh goalforge-recap:stop"
 ---
 
 Maintains `recap.md` — a living, idempotent execution trace for a feature's WP
@@ -20,7 +13,7 @@ the bottom tallies the per-color WP counts. The commit moved from per-task rows 
 the per-WP Status line — the recap shows **one commit per WP**, the direct answer
 to "trace too many commits" (it holds even when git history stays per-task).
 
-Script: `${CLAUDE_SKILL_DIR}/scripts/recap.sh`
+Script: `${CLAUDE_PLUGIN_ROOT}/skills/recap/scripts/recap.sh`
 
 ---
 
@@ -88,7 +81,7 @@ Rules:
 
 ## Script Interface
 
-All subcommands are in `${CLAUDE_SKILL_DIR}/scripts/recap.sh`.
+All subcommands are in `${CLAUDE_PLUGIN_ROOT}/skills/recap/scripts/recap.sh`.
 
 | Subcommand | Arguments | Effect |
 |-----------|-----------|--------|
@@ -106,7 +99,7 @@ The WP commit passed to `record-wp` is the single WP-altitude commit (the caller
 
 ---
 
-## Reuse of goalforge-rollup Cadence
+## Reuse of sdd-rollup Cadence
 
 `recap.sh` mirrors the idempotency discipline of `goalforge-rollup.sh`:
 - Paths resolved via `python3 os.path.realpath` — no `cd` tricks.

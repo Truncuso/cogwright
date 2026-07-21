@@ -83,6 +83,7 @@ STATUS_COLOR = {
     'verified':   '\033[92m',   # bright green
     'archived':   '\033[90m',   # dark grey
     'pending':    '\033[90m',   # dark grey
+    'briefed':    '\033[36m',   # cyan
     'in-progress':'\033[33m',   # yellow
     'active':     '\033[33m',   # yellow
     'completed':  '\033[92m',   # bright green
@@ -97,6 +98,7 @@ STATUS_SYMBOL = {
     'verified':    '✓',
     'archived':    '⌀',
     'pending':     '○',
+    'briefed':     '◐',
     'in-progress': '▶',
     'active':      '▶',
     'completed':   '✓',

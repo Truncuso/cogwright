@@ -3,11 +3,6 @@ name: goalforge-plan-index
 description: "Generate plans/INDEX.md -- a DERIVED feature register + cross-feature dependency DAG + topological build-order tiers + cycle/orphan detection -- by harvesting each feature overview's `relationships:` frontmatter. The frontmatter is the single source of truth; the index is regenerated, never hand-synced. Use to (re)build or refresh a plans portfolio index after adding/changing features, to see the build order, or to find dependency cycles and orphaned features. TRIGGER: 'generate the plan index', 'rebuild plans/INDEX.md', 'show the feature dependency graph', 'what is the build order', 'find plan cycles/orphans'. Pairs with goalforge-archive's reference-gate (idea: goalforge-plan-index-and-portfolio-housekeeping)."
 metadata:
   version: 1.0.0
-hooks:
-  Stop:
-    - hooks:
-        - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-plan-index"
 ---
 
 # goalforge-plan-index
@@ -24,7 +19,7 @@ cross-feature dependencies", orthogonal to a WP's goal/verify/commit cycle.
 ## Mechanical core
 
 ```bash
-python3 "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-plan-index.py \
+python3 ~/.claude/skills/goalforge/scripts/goalforge-plan-index.py \
     [--plans-root <root>] [--include-archived] [-o <file|->]
 ```
 
@@ -56,7 +51,7 @@ python3 "$COGWRIGHT_ROOT"/plugins/goalforge/scripts/goalforge-plan-index.py \
 
 ## Source of truth
 
-The `relationships:` frontmatter (schema: `references/schema.md`)
+The `relationships:` frontmatter (schema: `~/.claude/skills/goalforge/references/schema.md`)
 is canonical. If the generated index is wrong, fix the **frontmatter**, then
 regenerate -- never patch INDEX.md by hand. An unexpected orphan means a feature's
 edges are missing from its overview.
