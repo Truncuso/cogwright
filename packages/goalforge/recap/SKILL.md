@@ -20,7 +20,7 @@ the bottom tallies the per-color WP counts. The commit moved from per-task rows 
 the per-WP Status line — the recap shows **one commit per WP**, the direct answer
 to "trace too many commits" (it holds even when git history stays per-task).
 
-Script: `${CLAUDE_SKILL_DIR}/scripts/recap.sh`
+Script: `${CLAUDE_SKILL_DIR}/../scripts/recap.sh`
 
 ---
 
@@ -88,7 +88,7 @@ Rules:
 
 ## Script Interface
 
-All subcommands are in `${CLAUDE_SKILL_DIR}/scripts/recap.sh`.
+All subcommands are in `${CLAUDE_SKILL_DIR}/../scripts/recap.sh`.
 
 | Subcommand | Arguments | Effect |
 |-----------|-----------|--------|

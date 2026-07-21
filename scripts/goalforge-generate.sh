@@ -42,6 +42,18 @@ DST="$ROOT/plugins/goalforge"
 
 MODE="${1:-generate}"
 
+# --check is side-effect-free: it generates into a throwaway staging dir and
+# diffs that against the real plugins/goalforge, so it NEVER writes into the
+# artifact and NEVER consults git (staged legitimate changes must not false-block).
+REAL_DST="$DST"
+CHECK=0
+if [ "$MODE" = "--check" ]; then
+    CHECK=1
+    STAGING="$(mktemp -d)"
+    trap 'rm -rf "$STAGING"' EXIT
+    DST="$STAGING/goalforge"
+fi
+
 PLUGIN_DESC="Goal-and-verification-driven development chain for Claude Code — goal-object work packages with a harden/execute/verify lifecycle."
 # GF_PLUGIN_VERSION: stamp this "version" field into plugin.json.
 # Version experiment (wp-17 task-02, 2026-07-21): a version-LESS manifest passes
@@ -184,11 +196,19 @@ else
         '}' > "$DST/.claude-plugin/plugin.json"
 fi
 
-# ── 5. --check: drift gate ──
-if [ "$MODE" = "--check" ]; then
-    if [ -n "$(git -C "$ROOT" status --porcelain plugins/goalforge)" ]; then
+# ── 5. --check: drift gate (side-effect-free, git-independent) ──
+# Compare the freshly-generated staging tree against the committed-or-not real
+# artifact, excluding the hand-authored PRESERVE entries (absent from staging).
+# Exit 2 on any divergence; 0 when byte-identical. No writes into plugins/,
+# no git status/HEAD consulted, staging cleaned up by the EXIT trap.
+if [ "$CHECK" = 1 ]; then
+    _excl=()
+    for k in "${PRESERVE[@]}"; do _excl+=( --exclude="$k" ); done
+    if diff_out="$(diff -rq "${_excl[@]}" "$REAL_DST" "$DST" 2>&1)"; then
+        exit 0
+    else
         echo "DRIFT: plugins/goalforge/ differs from a fresh generation" >&2
-        git -C "$ROOT" status --porcelain plugins/goalforge >&2
+        printf '%s\n' "$diff_out" >&2
         exit 2
     fi
 fi
