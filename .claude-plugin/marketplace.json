@@ -7,7 +7,7 @@
     {
       "name": "goalforge",
       "source": "./plugins/goalforge",
-      "description": "Spec-driven development chain for Claude Code."
+      "description": "Goal-and-verification-driven development chain for Claude Code — goal-object work packages with a harden/execute/verify lifecycle."
     }
   ]
 }
