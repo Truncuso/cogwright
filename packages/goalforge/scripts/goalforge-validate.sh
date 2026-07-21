@@ -325,7 +325,7 @@ name: task-01-vmiss
 title: missing-path task
 status: verified
 commit: abc1234
-verify: "test -f skills/sdd/scripts/__sdd_missing_fixture__.sh"
+verify: "test -f skills/__goalforge_missing_fixture__/x.sh"
 ---
 
 # missing path
@@ -363,7 +363,7 @@ name: task-04-vneg
 title: negated-existence task
 status: verified
 commit: abc1234
-verify: "! test -f skills/sdd/scripts/__sdd_missing_fixture__.sh"
+verify: "! test -f skills/__goalforge_missing_fixture__/x.sh"
 ---
 
 # negated existence (legitimate "artifact removed" assertion)

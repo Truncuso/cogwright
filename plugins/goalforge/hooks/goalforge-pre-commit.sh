@@ -1,44 +1,29 @@
 #!/usr/bin/env bash
-# sdd-pre-commit.sh — git pre-commit hook.
+# goalforge-pre-commit.sh — git pre-commit hook.
 #
 # Blocks a commit that leaves a touched SDD feature with a
-# sdd-validate --strict ERROR.  Zero-breakage on every other path:
+# goalforge-validate --strict ERROR.  Zero-breakage on every other path:
 #   - no staged paths under plans/<feature>/ → exit 0 (silent)
-#   - sdd-validate.sh not found / not executable → exit 0 + stderr notice
+#   - goalforge-validate.sh not found / not executable → exit 0 + stderr notice
 #   - any internal error in this hook → exit 0 (never break commit flow)
 #
 # The hook uses --strict ONLY (never --require-commit); commit-hash
 # recording is enforced at sdd-verify time, not here.
 #
-# Env override (tests): SDD_VALIDATE_SCRIPT — path to sdd-validate.sh.
+# Env override (tests): GOALFORGE_VALIDATE_SCRIPT — path to goalforge-validate.sh.
 
-_sdd_pre_commit_main() {
+_goalforge_pre_commit_main() {
     set -uo pipefail
 
-    # ── Resolve validator via ladder ──────────────────────────────────────
-    #   1. SDD_VALIDATE_SCRIPT env override (tests)
-    #   2. $CLAUDE_PLUGIN_ROOT/scripts/goalforge-validate.sh (plugin runtime)
-    #   3. script-relative ../scripts/goalforge-validate.sh (BASH_SOURCE dir)
-    #   4. legacy dotfiles $HOME/.claude/skills/sdd/scripts/sdd-validate.sh
-    local _hook_dir VALIDATE_SCRIPT
-    _hook_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-    if [[ -n "${SDD_VALIDATE_SCRIPT:-}" ]]; then
-        VALIDATE_SCRIPT="$SDD_VALIDATE_SCRIPT"
-    elif [[ -n "${CLAUDE_PLUGIN_ROOT:-}" && -f "$CLAUDE_PLUGIN_ROOT/scripts/goalforge-validate.sh" ]]; then
-        VALIDATE_SCRIPT="$CLAUDE_PLUGIN_ROOT/scripts/goalforge-validate.sh"
-    elif [[ -f "$_hook_dir/../scripts/goalforge-validate.sh" ]]; then
-        VALIDATE_SCRIPT="$(cd "$_hook_dir/../scripts" && pwd)/goalforge-validate.sh"
-    else
-        VALIDATE_SCRIPT="$HOME/.claude/skills/sdd/scripts/sdd-validate.sh"
-    fi
+    local VALIDATE_SCRIPT="${GOALFORGE_VALIDATE_SCRIPT:-$HOME/.claude/skills/goalforge/scripts/goalforge-validate.sh}"
 
     # ── Zero-breakage: validator absent or not executable ──────────────────
     if [[ ! -e "$VALIDATE_SCRIPT" ]]; then
-        echo "sdd-pre-commit: sdd-validate.sh not found at $VALIDATE_SCRIPT — SDD checks skipped" >&2
+        echo "goalforge-pre-commit: goalforge-validate.sh not found at $VALIDATE_SCRIPT — SDD checks skipped" >&2
         exit 0
     fi
     if [[ ! -x "$VALIDATE_SCRIPT" ]]; then
-        echo "sdd-pre-commit: sdd-validate.sh not executable at $VALIDATE_SCRIPT — SDD checks skipped" >&2
+        echo "goalforge-pre-commit: goalforge-validate.sh not executable at $VALIDATE_SCRIPT — SDD checks skipped" >&2
         exit 0
     fi
 
@@ -107,7 +92,7 @@ _sdd_pre_commit_main() {
 
     # ── Block the commit ───────────────────────────────────────────────────
     {
-        echo "sdd-pre-commit: BLOCKED — SDD integrity error(s) in staged feature(s):"
+        echo "goalforge-pre-commit: BLOCKED — SDD integrity error(s) in staged feature(s):"
         local i name first_err
         for i in "${!FAILED_DIRS[@]}"; do
             name=$(basename "${FAILED_DIRS[$i]}")
@@ -118,7 +103,7 @@ _sdd_pre_commit_main() {
         done
         echo ""
         echo "  Fix: sdd-rollup.sh <feature-dir>          — regenerate status tables"
-        echo "       sdd-validate.sh --strict <feature-dir>  — show all errors"
+        echo "       goalforge-validate.sh --strict <feature-dir>  — show all errors"
     } >&2
     exit 1
 }
@@ -127,7 +112,7 @@ _sdd_pre_commit_main() {
 # Run main logic in a subshell; only propagate exit 1 (intentional block).
 # Any unexpected internal error (unbound variable, subprocess crash, etc.)
 # becomes exit 0 — never break the user's commit flow over a hook bug.
-( _sdd_pre_commit_main "$@" )
+( _goalforge_pre_commit_main "$@" )
 _sdd_ec=$?
 if [[ $_sdd_ec -eq 1 ]]; then
     exit 1
