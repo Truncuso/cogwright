@@ -32,7 +32,7 @@
 #
 # Usage:
 #   goalforge-generate.sh            regenerate the artifact in place
-#   goalforge-generate.sh --check    regenerate, then fail (exit 1) if the tree drifted
+#   goalforge-generate.sh --check    regenerate, then fail (exit 2) if the tree drifted
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -189,6 +189,6 @@ if [ "$MODE" = "--check" ]; then
     if [ -n "$(git -C "$ROOT" status --porcelain plugins/goalforge)" ]; then
         echo "DRIFT: plugins/goalforge/ differs from a fresh generation" >&2
         git -C "$ROOT" status --porcelain plugins/goalforge >&2
-        exit 1
+        exit 2
     fi
 fi

@@ -53,3 +53,6 @@ jobs:
 
           print("All plugin manifests valid.")
           EOF
+
+      - name: goalforge artifact drift gate
+        run: bash scripts/goalforge-generate.sh --check
