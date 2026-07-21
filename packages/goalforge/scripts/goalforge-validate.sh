@@ -412,7 +412,7 @@ EOF
 
     # (a) high-confidence missing path on a verified task ⇒ ERROR message AND, under
     #     --strict, a non-zero exit.
-    if echo "$vout" | grep -i 'verify-path' | grep -q '__sdd_missing_fixture__.sh' \
+    if echo "$vout" | grep -i 'verify-path' | grep -q '__goalforge_missing_fixture__' \
         && [[ "$vrc" -ne 0 ]]; then
         ok "verify-path-missing-error"
     else
