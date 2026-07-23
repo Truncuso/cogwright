@@ -115,12 +115,12 @@ self_test() {
     echo "=== goalforge-harden-surface.sh --self-test ==="
 
     # ── skill gap → skill-improve, propose-only, tree unchanged ───────────────
-    run_in_repo '{"severity":"MEDIUM","summary":"sdd-harden panel lacks a debate-mode default","skill":"sdd-harden"}'
+    run_in_repo '{"severity":"MEDIUM","summary":"goalforge-harden panel lacks a debate-mode default","skill":"goalforge-harden"}'
     local tgt po skl
     tgt="$(echo "$REC" | command jq -r '.target')"
     po="$(echo "$REC"  | command jq -r '.propose_only')"
     skl="$(echo "$REC" | command jq -r '.skill')"
-    if [[ "$tgt" == "skill-improve" && "$po" == "true" && "$skl" == "sdd-harden" && "$TREE_UNCHANGED" == "1" ]]; then
+    if [[ "$tgt" == "skill-improve" && "$po" == "true" && "$skl" == "goalforge-harden" && "$TREE_UNCHANGED" == "1" ]]; then
         ok "skill-gap-to-skill-improve-propose-only"
     else
         no "skill-gap-to-skill-improve-propose-only" "target=$tgt propose_only=$po skill=$skl tree_unchanged=$TREE_UNCHANGED"

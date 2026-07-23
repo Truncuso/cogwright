@@ -1,9 +1,9 @@
-"""sdd-goal-eval — pure goal-completion router + effective-goal resolver (schema v4).
+"""goalforge-goal-eval — pure goal-completion router + effective-goal resolver (schema v4).
 
 The PURE half of the simulated `/goal` loop (design §4). It decides
 deterministic/numeric goals in-script (binary signal) and, for judge/human,
 RETURNS a directive — it never dispatches a skill or runs AskUserQuestion.
-The `sdd-execute` agent (WP-03) acts on the directive.
+The `goalforge-execute` agent (WP-03) acts on the directive.
 
 Public API:
     resolve_effective_goal(wp_fm, *, spec_fm=None, legacy=None) -> dict
@@ -171,7 +171,7 @@ def should_invoke_testing(effective_goal: dict) -> bool:
     over-fire on non-code WPs. A `research+deterministic` goal returns False here.
 
     Purity mirrors `evaluate`/`default_strategy_for` — script-decides,
-    agent-dispatches. This NEVER invokes `testing`; the caller (`sdd-execute`
+    agent-dispatches. This NEVER invokes `testing`; the caller (`goalforge-execute`
     Step 5) acts on the returned bool, passing a `use_testing` hint when True.
     """
     if effective_goal.get("task_type") != "code":

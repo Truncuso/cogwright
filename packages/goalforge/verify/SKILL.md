@@ -37,7 +37,7 @@ Before any verification work begins, this skill performs a hard gate check.
 2. **`findings.md` exists** — the WP folder must contain a `findings.md` file.
 
 This is the structural precondition; the final invariant from
-`sdd/references/schema.md` — `verified` ⇒ all child tasks `verified` +
+`goalforge/references/schema.md` — `verified` ⇒ all child tasks `verified` +
 `findings.md` exists — is satisfied by the promotion step in Completion below.
 
 If either condition is not met, the skill MUST:
@@ -53,7 +53,7 @@ This is the **one** place the expensive semantic review runs — once, on the
 **cumulative WP diff** (every task's commits since the WP began), not per task.
 goalforge-execute deliberately does NOT run review/simplify/second-opinion per task.
 Resolve the dispatch for this pass from the canonical role→tier map — role
-**`wp-verify`** (`sdd/scripts/goalforge-pick-agent.py`: high under `semi-autonomous`,
+**`wp-verify`** (`goalforge/scripts/goalforge-pick-agent.py`: high under `semi-autonomous`,
 medium under `autonomous-minimal`), instantiated to an explicit `{model, effort}`
 via `resolve_dispatch` — the brief states both, never the agent `.md` defaults.
 
@@ -212,7 +212,7 @@ stdout; routing (tactical → `findings.md`, strategic → propose-only) and the
    feature plan artifacts:
    ```bash
    git add <PLANS_ROOT>/<feature>
-   git commit -m "docs(sdd): finalize <wp> verification" -- <PLANS_ROOT>/<feature>
+   git commit -m "docs(goalforge): finalize <wp> verification" -- <PLANS_ROOT>/<feature>
    ```
    The explicit `-- <pathspec>` is required: parallel sessions share `.git/index`,
    and a bare commit would sweep another session's staged files (repos with
@@ -316,6 +316,6 @@ not a mystery.
 - The AI Slop Anti-Patterns check is delegated to `superpowers:verification-before-completion` — if that superpower is unavailable or misconfigured, the check may not run (or may error, depending on the session); a missed delegation can yield a false-positive "clean" verdict. Confirm the superpower loaded before trusting a pass.
 - Feature terminal status is `completed`, not `verified`. WP enums terminate at `verified`; feature enums terminate at `completed` (draft→ready→active→completed→archived). Writing `status: verified` to a feature `overview.md` is always a bug — the feature has no `verified` state.
 - Last-WP rule: after advancing a WP to `verified`, always scan sibling `wp-*/overview.md` statuses before exiting. Skipping the scan leaves the feature stuck at `active` even when all work is done.
-- goalforge-verify is fail-closed on `sdd-validate --strict --require-commit` — a verified task missing its `commit:` hash, or a stale rollup, BLOCKS finalization. **Order matters:** the commit hashes are backfilled from each task's `checkpoint.commit_sha` and the tasks promoted `implemented → verified` in Completion Step A, which MUST run BEFORE the `--require-commit` gate (Step B) — otherwise the gate false-blocks on the not-yet-written `commit:` fields. The `--require-commit` flag is exclusive to verify-time; the pre-commit hook uses `--strict` alone so it never false-blocks. A task with no `checkpoint.commit_sha` is a real error (it was never committed) — halt, do not fabricate a hash.
+- goalforge-verify is fail-closed on `goalforge-validate --strict --require-commit` — a verified task missing its `commit:` hash, or a stale rollup, BLOCKS finalization. **Order matters:** the commit hashes are backfilled from each task's `checkpoint.commit_sha` and the tasks promoted `implemented → verified` in Completion Step A, which MUST run BEFORE the `--require-commit` gate (Step B) — otherwise the gate false-blocks on the not-yet-written `commit:` fields. The `--require-commit` flag is exclusive to verify-time; the pre-commit hook uses `--strict` alone so it never false-blocks. A task with no `checkpoint.commit_sha` is a real error (it was never committed) — halt, do not fabricate a hash.
 - The semantic review runs **once here on the cumulative WP diff**, not per task — goalforge-execute deliberately skips per-task `verify-and-simplify`. After `verify-and-simplify`, goalforge-verify **re-runs the deterministic eval suite** (relocated Step 7.3) so a simplification that breaks green is caught at the boundary, not shipped. If you find yourself wanting per-task review, that is the opt-in high-risk exception in goalforge-execute, not the default.
 - The completion commit gate (step 5) is **path-scoped and branch-agnostic**: it commits only `<PLANS_ROOT>/<feature>` and runs `goalforge-ensure-committed.sh` against that same path, so unrelated dirt elsewhere never false-blocks, and it passes on `master` under the dotfiles exception (commit directly — no branch, no push). The archive prompt (step 6) is OFFERED, never performed: goalforge-verify never writes a feature to `status: archived` — that is `goalforge-archive`'s explicit, human-gated job.

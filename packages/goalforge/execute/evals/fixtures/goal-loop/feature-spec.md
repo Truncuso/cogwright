@@ -20,4 +20,4 @@ goal:
 
 ## Design
 
-Fixture spec — the cascade source for `wp-cascade` in the sdd-execute goal-loop evals.
+Fixture spec — the cascade source for `wp-cascade` in the goalforge-execute goal-loop evals.

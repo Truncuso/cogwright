@@ -1,4 +1,4 @@
-# sdd-decompose — edge-case gotchas (load-on-demand)
+# goalforge-decompose — edge-case gotchas (load-on-demand)
 
 Consulted when debugging a decompose/harden interaction — not every run. The
 frequently-hit gotchas stay inline in `SKILL.md`; these are the rarer edge cases.
@@ -11,7 +11,7 @@ frequently-hit gotchas stay inline in `SKILL.md`; these are the rarer edge cases
   `blocked_stop` inherit from the feature spec only when the WP leaves them unset
   AND the spec has them set. If the spec also omits them, the resolved WP goal has
   no value for these fields — this does NOT error at decompose time, but
-  `sdd-harden` will grill them as incomplete facets. Set them at the spec level to
+  `goalforge-harden` will grill them as incomplete facets. Set them at the spec level to
   avoid the later round-trip.
 - **`task_type: refactor` is INVALID — use `code`.** The enum is `code |
   research | ops | writing | optimization | analysis | migration` (no

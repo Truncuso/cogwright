@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-execute static-contract checks
+# evals/run.sh — goalforge-execute static-contract checks
 #
 # All checks are STATIC-CONTRACT (no model calls, no network).
 # We assert the documented guarantees of the full sub-cycle procedure.
@@ -42,7 +42,7 @@ file_check() {
   fi
 }
 
-echo "=== sdd-execute: static-contract checks (WP-03) ==="
+echo "=== goalforge-execute: static-contract checks (WP-03) ==="
 
 # --- Identity ---
 check "skill name declared" "name: goalforge-execute"
@@ -139,7 +139,7 @@ fi
 # --- Goal layer: static-contract (WP-03 outer loop) ---
 check "outer goal-completion loop documented" "Outer goal-completion loop"
 check "resolve_effective_goal called at entry (single owner)" "resolve_effective_goal"
-check "pure sdd-goal-eval invoked each iteration" "sdd-goal-eval"
+check "pure goalforge-goal-eval invoked each iteration" "goalforge-goal-eval"
 check "outer_max_iter cap (default 3)" "outer_max_iter"
 check "outer cap independent of inner 3-retry" "independent of"
 check "agent acts on judge directive" "dispatch: judge"
@@ -147,13 +147,13 @@ check "judge met-mapping via block_on severities" "block_on"
 check "human strategy is non-blocking (pause/exit)" "non-blocking"
 check "reason-feedback carried into next iteration" "Reason-feedback"
 check "blocked_stop escalation path" "blocked_stop"
-check "single status-advance: sdd-verify sole authority" "sole authority"
+check "single status-advance: goalforge-verify sole authority" "sole authority"
 check "outer gate does not write $SK verified itself" "does **not** write"
 check "outer re-entry respects resume idempotency" "RESPECTS resume idempotency"
 
 # --- Goal layer: REAL behavioral (drives WP-02 goalforge-goal-eval.py) ---
 # Deterministic signal: the spine's decision logic is exercised, not just prose.
-echo "=== sdd-execute: goal-loop behavioral checks (real goalforge-goal-eval.py) ==="
+echo "=== goalforge-execute: goal-loop behavioral checks (real goalforge-goal-eval.py) ==="
 GOAL_EVAL="$SKILL_DIR/../scripts/goalforge-goal-eval.py"
 GL="$SKILL_DIR/evals/fixtures/goal-loop"
 if [ ! -f "$GOAL_EVAL" ]; then
@@ -165,7 +165,7 @@ import importlib.util, sys, json
 from pathlib import Path
 
 mod_path, gl = sys.argv[1], Path(sys.argv[2])
-spec = importlib.util.spec_from_file_location("sdd_goal_eval", mod_path)
+spec = importlib.util.spec_from_file_location("goalforge_goal_eval", mod_path)
 m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
 
 def load_fm(p):

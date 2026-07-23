@@ -18,7 +18,7 @@
 #   --strict           Exit non-zero if any ERROR (not just WARN) is found.
 #                      Enforces stale-rollup as ERROR; does NOT enforce missing commit.
 #   --require-commit   Also exit non-zero when any verified task is missing its
-#                      `commit:` hash. Use only at verify-time (sdd-verify gate),
+#                      `commit:` hash. Use only at verify-time (goalforge-verify gate),
 #                      NOT in the pre-commit hook (which would false-block the very
 #                      commit that records the hash).
 #   --quiet            Print one-line summary only; always exits 0.
@@ -65,7 +65,7 @@ done
 # single authority (goalforge-goal-hash.sh), then asserts: (a) a matching goal block
 # validates clean; (b) a goal block mutated after approval is flagged
 # `evolved-goal` (ERROR under --strict). Exit 0 iff both expectations hold.
-sdd_self_test() {
+goalforge_self_test() {
     local t_pass=0 t_fail=0 pr feat wp out rc
     local tmp; tmp="$(mktemp -d)"
     trap '[[ -n "${tmp:-}" ]] && rm -rf "$tmp"' EXIT
@@ -337,7 +337,7 @@ name: task-02-vtmp
 title: tmp-evidence task
 status: verified
 commit: abc1234
-verify: "test -f tmp/__sdd_fixture__/evidence.txt"
+verify: "test -f tmp/__goalforge_fixture__/evidence.txt"
 ---
 
 # tmp evidence
@@ -349,7 +349,7 @@ name: task-03-vverb
 title: bogus-verb task
 status: verified
 commit: abc1234
-verify: "__sdd_bogus_verb__ --self-test"
+verify: "__goalforge_bogus_verb__ --self-test"
 ---
 
 # bogus verb
@@ -427,7 +427,7 @@ EOF
     fi
 
     # (c) first verb token not on PATH ⇒ verb-lint WARN (string is NEVER executed)
-    if echo "$vout" | grep -i 'verify-verb' | grep -q '__sdd_bogus_verb__'; then
+    if echo "$vout" | grep -i 'verify-verb' | grep -q '__goalforge_bogus_verb__'; then
         ok "verb-lint-not-on-path"
     else
         echo "$vout" >&2; no "verb-lint-not-on-path"
@@ -461,7 +461,7 @@ EOF
 }
 
 if [[ "$SELFTEST" -eq 1 ]]; then
-    sdd_self_test
+    goalforge_self_test
     exit $?
 fi
 
@@ -588,8 +588,8 @@ WP_STATUS_ENUM   = {'draft','spec','hardened','ready','executing','verified','ar
 WP_REQUIRED      = {'name','title','status','stage_updated'}
 
 # task-NN-*.md
-# `implemented` = deterministic eval passed + committed (interim, set by sdd-execute);
-# sdd-verify promotes implemented → verified at the WP gate.
+# `implemented` = deterministic eval passed + committed (interim, set by goalforge-execute);
+# goalforge-verify promotes implemented → verified at the WP gate.
 TASK_STATUS_ENUM = {'pending','briefed','in-progress','implemented','verified'}
 TASK_REQUIRED    = {'name','title','status'}
 
@@ -759,7 +759,7 @@ for md_path in sorted(plans_dir.rglob('*.md')):
 
 # ── Archived-slug resolution index ──────────────────────────────────────────
 # Edge targets (supersedes / superseded_by / depends_on) may point at a plan that
-# sdd-archive moved into _archived/. The main walk skips _archived/ (SKIP_DIRS) to
+# goalforge-archive moved into _archived/. The main walk skips _archived/ (SKIP_DIRS) to
 # avoid schema-validation noise — which also dropped archived slugs from
 # name_index, causing false "target not found" ERRORs on every reference. Re-add
 # archived plans to name_index by FEATURE SLUG only (never to all_files, so they
@@ -832,11 +832,11 @@ def resolve_dep_slug(raw):
     return re.sub(r'^\[\[|\]\]$', '', str(raw)).strip().strip("'\"")
 
 # supersedes/superseded_by are typically CROSS-FEATURE edges (the canonical case
-# sdd-archive writes: a new feature supersedes an old one). When the walked tree
+# goalforge-archive writes: a new feature supersedes an old one). When the walked tree
 # holds only one feature overview, a cross-feature target is legitimately out of
 # scope — skip the existence check so single-feature validation never
 # false-errors. When >=2 feature overviews are walked (e.g. the whole plans root,
-# as sdd-archive validates), a missing target is a real dangling-wikilink ERROR.
+# as goalforge-archive validates), a missing target is a real dangling-wikilink ERROR.
 feature_count = sum(1 for _p, _k, _f, _h in all_files if _k == 'feature')
 
 def check_supersede_edges(path, fm):
@@ -1018,7 +1018,7 @@ def check_goal_mandatory(path, fm, kind, status):
 
 def check_register(path, fm, status, n_task_files):
     """`register:` integrity gate (adversarial-review M3). The field is
-    execution-load-bearing — sdd-execute Step 0 collapses a prototype WP to its
+    execution-load-bearing — goalforge-execute Step 0 collapses a prototype WP to its
     single task's findings-doc commit — but sits OUTSIDE the goal hash (schema
     NB) and outside WP_REQUIRED (required-subset check passes unknown fields
     silently). This explicit check is the only mechanical gate on it.
@@ -1059,7 +1059,7 @@ def check_register(path, fm, status, n_task_files):
     if status in ('ready', 'executing', 'verified') and n_task_files != 1:
         err(path,
             f"register-prototype: {n_task_files} task file(s) — a prototype WP "
-            f"carries exactly ONE task (sdd-execute Step 0 collapses the spike "
+            f"carries exactly ONE task (goalforge-execute Step 0 collapses the spike "
             f"to that task's findings-doc commit)",
             "Merge the spike into a single task-01-*.md, or split the extra "
             "work into a separate production WP")
@@ -1073,7 +1073,7 @@ def check_status_monotonicity(path, status, child_task_statuses):
     re-opened the evidence. Flag it (plain ERROR — gates under --strict; NOT fatal).
     Skipped when: zero tasks (a taskless WP is never a zombie — vacuous-true guard);
     status is `executing` (all-verified-at-executing is the legitimate pre-verify
-    state sdd-execute resolves by running sdd-verify); status is `verified`; or any
+    state goalforge-execute resolves by running goalforge-verify); status is `verified`; or any
     child task is non-`verified`."""
     if status not in ('draft', 'spec', 'hardened', 'ready'):
         return
@@ -1402,7 +1402,7 @@ for path, kind, fm, has_ckpt in all_files:
             if task_files and not has_any_ckpt:
                 err(path,
                     f"WP is `executing` but no task file contains a `checkpoint:` block",
-                    f"Either set status back to `ready`, or run sdd-execute to begin execution")
+                    f"Either set status back to `ready`, or run goalforge-execute to begin execution")
 
         # ── Invariant 3: depends_on resolution ──────────────────────────────
         raw_deps = fm.get('depends_on', []) or []
@@ -1426,7 +1426,7 @@ for path, kind, fm, has_ckpt in all_files:
                 # Dependency READINESS is an execution-time precondition: only an
                 # ERROR when this WP is itself claiming to be runnable (ready/
                 # executing). A spec/draft WP whose dep is not yet ready is normal
-                # pre-execution state — sdd-execute orders the work at run time.
+                # pre-execution state — goalforge-execute orders the work at run time.
                 # Existence of the target (checked above) is always enforced.
                 if dep_status not in READY_PLUS and status in ('ready', 'executing'):
                     err(path,
@@ -1495,7 +1495,7 @@ for path, kind, fm, has_ckpt in all_files:
                 dep_status = dep_fm.get('status', '')
                 # Only an ERROR when this task is actually being worked
                 # (in-progress) — a pending task with a pending dep is normal
-                # pre-execution state (sdd-execute resolves ordering at run time).
+                # pre-execution state (goalforge-execute resolves ordering at run time).
                 # Tasks use {pending, in-progress, implemented, verified}; a dep at
                 # `implemented` is satisfied (its code is committed + deterministically
                 # passing — it need not wait for the WP-gate promotion to verified).
@@ -1511,15 +1511,15 @@ for path, kind, fm, has_ckpt in all_files:
         # ERROR (non-zero exit) only under --require-commit.
         # Rationale: commit: is recorded AFTER the task commit, so the pre-commit
         # hook (which runs --strict) must NOT gate on it — that would false-block
-        # the very commit that writes the hash.  sdd-verify uses --strict
+        # the very commit that writes the hash.  goalforge-verify uses --strict
         # --require-commit to enforce the hash at verify-time only.
         if status == 'verified':
             commit_val = fm.get('commit', None)
             if not commit_val or not str(commit_val).strip():
                 commit_err(path,
                     "verified task missing `commit:` (the completing commit hash) — "
-                    "sdd-execute records it after the task commit",
-                    "Add commit: <sha> or re-run sdd-execute")
+                    "goalforge-execute records it after the task commit",
+                    "Add commit: <sha> or re-run goalforge-execute")
 
 # ── Output ──────────────────────────────────────────────────────────────────
 

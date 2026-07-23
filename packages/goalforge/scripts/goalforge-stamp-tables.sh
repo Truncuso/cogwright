@@ -17,7 +17,7 @@
 # contain `|`), prose preambles before the table, UNKNOWN extra columns (e.g. a
 # `Tasks` count), backtick formatting, column count, and all non-table content.
 # It never creates a table section and never adds rows (stamp-on-create lives in
-# sdd-decompose).
+# goalforge-decompose).
 #
 # Locates the table the same way goalforge-validate.sh's parse_status_table does — the
 # first table under the header with a `Status` column and a wp/task id column —
@@ -256,5 +256,5 @@ if mode == 'check':
 
 for p in changed:
     print(f"stamped {p}")
-print(f"sdd-stamp-tables: {len(changed)} table(s) regenerated.")
+print(f"goalforge-stamp-tables: {len(changed)} table(s) regenerated.")
 PY

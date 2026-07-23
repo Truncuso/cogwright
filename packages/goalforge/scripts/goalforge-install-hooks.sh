@@ -33,7 +33,7 @@ if [[ $# -gt 0 ]]; then
     REPO_DIR="$1"
 else
     REPO_DIR=$(git rev-parse --show-toplevel 2>/dev/null) || {
-        echo "sdd-install-hooks: ERROR — not in a git repo and no <repo-dir> provided." >&2
+        echo "goalforge-install-hooks: ERROR — not in a git repo and no <repo-dir> provided." >&2
         exit 1
     }
 fi
@@ -43,7 +43,7 @@ REPO_DIR=$(cd "$REPO_DIR" && pwd)
 
 # ── Resolve hooks dir (respects custom hooksPath / worktrees) ─────────────────
 HOOKS_DIR=$(git -C "$REPO_DIR" rev-parse --git-path hooks 2>/dev/null) || {
-    echo "sdd-install-hooks: ERROR — cannot resolve hooks dir for $REPO_DIR" >&2
+    echo "goalforge-install-hooks: ERROR — cannot resolve hooks dir for $REPO_DIR" >&2
     exit 1
 }
 
@@ -64,13 +64,13 @@ bash "$SDD_HOOK_PATH" || exit \$?
 $MARKER_CLOSE
 EOF
     chmod +x "$TARGET"
-    echo "sdd-install-hooks: installed pre-commit hook at $TARGET"
+    echo "goalforge-install-hooks: installed pre-commit hook at $TARGET"
     exit 0
 fi
 
 # ── Case 2: hook exists with marker → no-op (idempotent) ─────────────────────
 if grep -qF "$MARKER_OPEN" "$TARGET" 2>/dev/null; then
-    echo "sdd-install-hooks: already installed (marker found) — no-op"
+    echo "goalforge-install-hooks: already installed (marker found) — no-op"
     exit 0
 fi
 
@@ -81,7 +81,7 @@ fi
 cat >> "$TARGET" <<EOF
 
 $MARKER_OPEN
-# sdd integrity check — blocks on sdd-validate --strict ERROR in touched features
+# goalforge integrity check — blocks on goalforge-validate --strict ERROR in touched features
 # Use 'cmd || exit \$?' (NOT '[[…]] && exit') so a passing check does not leave the
 # hook's final command exit-code falsy, which would block every commit.
 bash "$SDD_HOOK_PATH" || exit \$?

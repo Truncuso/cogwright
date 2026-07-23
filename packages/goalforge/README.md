@@ -7,19 +7,19 @@ description: "Router and index for the SDD (Spec-Driven Development) planning sk
 
 **Chain:** `capture → spec → decompose → harden → execute → verify`
 
-Orchestrated by `sdd-run` (sibling `chain.yaml`). Flat on-disk layout:
+Orchestrated by `goalforge-run` (sibling `chain.yaml`). Flat on-disk layout:
 `plans/<feature>/<wp-id>/files`. Status lives in frontmatter — no lifecycle folders.
 
 ## Child Skills
 
 | Skill | Contract |
 |---|---|
-| `sdd-capture` | Elicit raw input; write the feature `overview.md` (status: draft) |
-| `sdd-spec` | Write `spec.md`; define measurable goal + verification criteria (status: draft → spec) |
-| `sdd-decompose` | Break the spec into WP `overview.md` files with task stubs |
-| `sdd-harden` | Grill each WP via `interview-loop`; resolve open questions; advance to `ready` |
-| `sdd-execute` | Run the execute sub-cycle per task (pick-agent → dispatch → checkpoint → verify) |
-| `sdd-verify` | Run `superpowers:verification-before-completion`; mark WP `verified` |
+| `goalforge-capture` | Elicit raw input; write the feature `overview.md` (status: draft) |
+| `goalforge-spec` | Write `spec.md`; define measurable goal + verification criteria (status: draft → spec) |
+| `goalforge-decompose` | Break the spec into WP `overview.md` files with task stubs |
+| `goalforge-harden` | Grill each WP via `interview-loop`; resolve open questions; advance to `ready` |
+| `goalforge-execute` | Run the execute sub-cycle per task (pick-agent → dispatch → checkpoint → verify) |
+| `goalforge-verify` | Run `superpowers:verification-before-completion`; mark WP `verified` |
 
 ## Shared References
 
@@ -40,8 +40,8 @@ terminal, reached only via explicit user action. Details: `references/schema.md`
 
 | Skill | Relationship |
 |---|---|
-| `interview-loop` | Delegated to by `sdd-harden` |
-| `implement` | Reused inside `sdd-execute` sub-cycle |
-| `verify-and-simplify` | Reused inside `sdd-execute` sub-cycle |
-| `sdd-run` | Orchestrator; wires the chain via `chain.yaml` |
+| `interview-loop` | Delegated to by `goalforge-harden` |
+| `implement` | Reused inside `goalforge-execute` sub-cycle |
+| `verify-and-simplify` | Reused inside `goalforge-execute` sub-cycle |
+| `goalforge-run` | Orchestrator; wires the chain via `chain.yaml` |
 | `goalforge-validate.sh` | Schema + status-vs-evidence + link + staleness checks |

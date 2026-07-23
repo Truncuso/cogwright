@@ -1,4 +1,4 @@
-# sdd-execute — Dispatch resolution detail (Step 4)
+# goalforge-execute — Dispatch resolution detail (Step 4)
 
 Full detail behind Step 4's `pick_agent` call. Consulted when a dispatch does
 not resolve cleanly or a non-code / writing WP needs its specialist route.
@@ -39,7 +39,7 @@ lives in the router.
 ## Model tier + effort
 
 Resolved from the **canonical role→tier map** (single source of truth —
-`sdd/scripts/goalforge-pick-agent.py`, `resolve_role_tier`). The `implement` role is
+`goalforge/scripts/goalforge-pick-agent.py`, `resolve_role_tier`). The `implement` role is
 **complexity-driven**, so the discovery callable supplies the `complexity`
 estimate when frontmatter omits it; **blast radius**
 (auth/schema/migration/exported-API/3+ files) deterministically forces the high

@@ -47,7 +47,7 @@ path = sys.argv[1]
 try:
     text = open(path, encoding="utf-8").read()
 except OSError as e:
-    print(f"sdd-goal-route: cannot read {path}: {e}", file=sys.stderr)
+    print(f"goalforge-goal-route: cannot read {path}: {e}", file=sys.stderr)
     sys.exit(1)
 
 NS = int(os.environ.get("SDD_ROUTE_NS", 4))

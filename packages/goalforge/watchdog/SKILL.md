@@ -29,14 +29,14 @@ Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
 
 `goalforge-watchdog` audits **meaning**, not bookkeeping. The mechanical/structural
 checks — stale rollup, missing `commit:` hashes, status drift, table-cell
-mismatch — are already enforced by `sdd-validate --strict --require-commit`
+mismatch — are already enforced by `goalforge-validate --strict --require-commit`
 (run inside `goalforge-verify`). A broader mechanical integrity sweep is tracked as
 the **separate** `sdd-verification-integrity-gaps` idea. This skill does **not**
 duplicate those mechanical checks. Clean split:
 
 | Concern | Owner |
 |---|---|
-| Stale rollup / drift / missing hash / table-cell mismatch (mechanical) | `sdd-validate` (+ future `sdd-verification-integrity-gaps`) |
+| Stale rollup / drift / missing hash / table-cell mismatch (mechanical) | `goalforge-validate` (+ future `sdd-verification-integrity-gaps`) |
 | Claimed-vs-implemented / missing tests-docs / spec deviation (semantic) | `goalforge-watchdog` (this skill) |
 
 ## Inputs
@@ -113,7 +113,7 @@ surfaces for human follow-up (the WP is still verified; the gap is a note).
   verified`. If you find yourself withholding verification on a watchdog finding,
   that is a bug — record the gap and let `goalforge-verify` proceed. Hard blocking is
   the job of the acceptance gate, not the semantic audit.
-- **Semantic only.** Do not re-implement `sdd-validate`'s mechanical checks
+- **Semantic only.** Do not re-implement `goalforge-validate`'s mechanical checks
   (rollup freshness, commit hashes, drift). A finding that "the rollup is stale"
   belongs to the mechanical layer, not here — reporting it is duplication.
 - **A recorded deviation is not a gap.** Before flagging a deviation, check

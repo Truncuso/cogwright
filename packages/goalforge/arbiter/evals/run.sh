@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-arbiter static-contract checks
+# evals/run.sh — goalforge-arbiter static-contract checks
 # The skill is model-driven (approach normalization + arbitration); behavioral
 # output cannot be asserted without a model call, so these are static-contract
-# checks over SKILL.md plus a wiring check against sdd-harden.
+# checks over SKILL.md plus a wiring check against goalforge-harden.
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,7 +25,7 @@ check() {
   fi
 }
 
-echo "=== sdd-arbiter: static-contract checks ==="
+echo "=== goalforge-arbiter: static-contract checks ==="
 
 # Identity + version
 check "skill name declared" "name: goalforge-arbiter"
@@ -56,7 +56,7 @@ check "decision memo: verification gates" "verification gates"
 # Advisory boundary
 check "advisory / non-blocking" "advisory"
 check "does not change human-gated transition" "hardened"
-check "status authority stays with sdd-harden" "status authority"
+check "status authority stays with goalforge-harden" "status authority"
 
 # Stakes tiering (quick-compare vs full grid)
 check "stakes tiering section present" "Stakes tiering"

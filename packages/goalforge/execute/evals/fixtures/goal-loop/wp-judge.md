@@ -18,6 +18,6 @@ goal:
 
 ## Goal
 
-Judge strategy: `sdd-goal-eval` returns met=null + a `{dispatch: judge, ...}` directive.
+Judge strategy: `goalforge-goal-eval` returns met=null + a `{dispatch: judge, ...}` directive.
 The eval MOCKS the judge dispatch (no live model) and asserts the agent maps a
 no-blocking-findings verdict → met=True (design §8.3).

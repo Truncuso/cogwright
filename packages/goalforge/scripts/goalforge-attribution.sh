@@ -2,7 +2,7 @@
 # goalforge-attribution.sh — emit the decision / answered-question attribution stamp.
 #
 # Single source of the stamp format, shared by the ledger writer
-# (goalforge-transition.sh) and the findings.md authors (sdd-harden). Reuses
+# (goalforge-transition.sh) and the findings.md authors (goalforge-harden). Reuses
 # ~/.claude/scripts/handoff-env.sh for {session,model,provider}; never reinvents
 # the extraction.
 #

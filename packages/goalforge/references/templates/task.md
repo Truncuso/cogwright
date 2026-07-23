@@ -11,7 +11,7 @@ depends_on: []
 # YAML escapes and break frontmatter parsing (status then reads as empty).
 verify: |
   <exact cmd or check that proves the task done>
-# commit: <sha>  # set by sdd-execute after the task's commit (required for verified under --strict)
+# commit: <sha>  # set by goalforge-execute after the task's commit (required for verified under --strict)
 # checkpoint:
 #   last_step: 0
 #   specialist: ""

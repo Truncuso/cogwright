@@ -142,9 +142,9 @@ for tf in task_files:
 s4 = task_score >= nt
 
 # S5: cross-WP contract — AUTHOR-DECLARED flag, set at harden when a WP shares an
-# owned file/section contract with another WP (e.g. wp-05 & wp-06 co-edit sdd-harden
+# owned file/section contract with another WP (e.g. wp-05 & wp-06 co-edit goalforge-harden
 # Step 0). Deterministic and intentional — boundary-glob overlap is too noisy to
-# infer it (a common workspace like sdd/scripts/** is shared by nearly every WP).
+# infer it (a common workspace like goalforge/scripts/** is shared by nearly every WP).
 # Read top-level first (sibling to severity, no goal-hash churn), then goal: fallback.
 def truthy(v):
     return str(v).strip().lower() in ("true", "yes", "1") if v is not None else False

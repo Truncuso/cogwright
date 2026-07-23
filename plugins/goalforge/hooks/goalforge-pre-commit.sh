@@ -8,7 +8,7 @@
 #   - any internal error in this hook → exit 0 (never break commit flow)
 #
 # The hook uses --strict ONLY (never --require-commit); commit-hash
-# recording is enforced at sdd-verify time, not here.
+# recording is enforced at goalforge-verify time, not here.
 #
 # Env override (tests): GOALFORGE_VALIDATE_SCRIPT — path to goalforge-validate.sh.
 
@@ -113,8 +113,8 @@ _goalforge_pre_commit_main() {
 # Any unexpected internal error (unbound variable, subprocess crash, etc.)
 # becomes exit 0 — never break the user's commit flow over a hook bug.
 ( _goalforge_pre_commit_main "$@" )
-_sdd_ec=$?
-if [[ $_sdd_ec -eq 1 ]]; then
+_goalforge_ec=$?
+if [[ $_goalforge_ec -eq 1 ]]; then
     exit 1
 fi
 exit 0

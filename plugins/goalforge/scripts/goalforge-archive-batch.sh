@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
         --show)        SHOW=1; shift ;;
         --apply)       APPLY=1; shift ;;
         --plans-root)  ROOT="$2"; shift 2 ;;
-        -*)            echo "sdd-archive-batch: unknown flag: $1" >&2; exit 2 ;;
+        -*)            echo "goalforge-archive-batch: unknown flag: $1" >&2; exit 2 ;;
         *)             ROOT="$1"; shift ;;
     esac
 done
@@ -54,7 +54,7 @@ ROOT="$(cd "$ROOT" && pwd)"
 REPO="$(git -C "$ROOT" rev-parse --show-toplevel 2>/dev/null || true)"
 
 if [[ "$APPLY" -eq 1 && -z "$REPO" ]]; then
-    echo "sdd-archive-batch: --apply needs a git repo (commits per feature); $ROOT is not in one." >&2
+    echo "goalforge-archive-batch: --apply needs a git repo (commits per feature); $ROOT is not in one." >&2
     exit 2
 fi
 

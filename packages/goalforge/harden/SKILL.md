@@ -146,7 +146,7 @@ adaptive-chain-routing.)*
 
 Dispatch ONE read-only review sub-agent (`subagent_type: general-purpose`), tier
 resolved from the canonical role→tier map — role **`wp-harden-delta`**
-(tier-resolved via `sdd/scripts/goalforge-pick-agent.py`, do not restate). Brief it with
+(tier-resolved via `goalforge/scripts/goalforge-pick-agent.py`, do not restate). Brief it with
 `${CLAUDE_SKILL_DIR}/references/pre-harden-review.md`, the WP path, and the Tier-1
 findings tagged to this WP.
 

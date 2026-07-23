@@ -313,7 +313,7 @@ transition() {
     # A WP WITH a goal: block may reach `ready` only when goal_approved_version is
     # present AND equal to the recomputed goal-block hash. Covers BOTH ready doors
     # (human approval + signal-scoped --mode auto) since both go through here.
-    # Fail-CLOSED: sdd-goal-hash exit 3 = no goal block ⇒ nothing to hash, a
+    # Fail-CLOSED: goalforge-goal-hash exit 3 = no goal block ⇒ nothing to hash, a
     # stamp-less WP is outside Gap 1's scope (bounded exemption; skip). Any OTHER
     # non-zero (IO/usage error on a WP that HAS a block) REFUSES — never a silent
     # skip, which would let an unapproved WP reach ready.
@@ -328,7 +328,7 @@ transition() {
             #
             # schema_version>=5 goal-mandatory rule (mirrors goalforge-validate.sh's
             # check_goal_mandatory): under that marker a goal-less WP is not
-            # exempt — sdd-validate would fatally reject it at ready/executing/
+            # exempt — goalforge-validate would fatally reject it at ready/executing/
             # verified anyway, so refuse the transition here instead of letting
             # it land and immediately fail validation. Absent marker (schema_version
             # <5 or no marker) leaves the bounded exemption byte-identical.
@@ -562,16 +562,16 @@ EOF
         ok "(e) --from optimistic-lock mismatch rejected"
     fi
 
-    # (f) sdd-validate --strict green after forward→reverse→forward round-trip
+    # (f) goalforge-validate --strict green after forward→reverse→forward round-trip
     bash "$SELF" "$wp" hardened --reason "rt-fwd1" >/dev/null 2>&1 || true
     bash "$SELF" "$wp" spec --reason "rt-rev" >/dev/null 2>&1 || true
     bash "$SELF" "$wp" hardened --reason "rt-fwd2" >/dev/null 2>&1 || true
     if bash "$VALIDATE" --strict "$pr" >/dev/null 2>&1; then
-        ok "(f) sdd-validate --strict green after round-trip"
+        ok "(f) goalforge-validate --strict green after round-trip"
     else
         echo "    --- validate --show ---" >&2
         bash "$VALIDATE" --strict --show "$pr" >&2 || true
-        no "(f) sdd-validate --strict should be green after round-trip"
+        no "(f) goalforge-validate --strict should be green after round-trip"
     fi
 
     # ── (g)(h)(i) →ready hash gate — fixtures carry a POPULATED goal: block
@@ -819,7 +819,7 @@ EOF
     #   A feature overview (work_packages:/feature:, NO plan:) is its own feature
     #   dir: ledger/stamp/rollup land there. Validated against `## Feature edges`.
     #   (q) legal forward edge (no --reason) + feature-dir ledger row;
-    #   (r) illegal feature edge (archived is sdd-archive-only, not an edge target);
+    #   (r) illegal feature edge (archived is goalforge-archive-only, not an edge target);
     #   (s) reverse feature edge requires --reason.
     local featfx="$_ST_TMP/plans/featfx"
     mkdir -p "$featfx"
@@ -848,7 +848,7 @@ EOF
 
     # (r) illegal feature edge: completed→archived rejected (archived not a target)
     if bash "$SELF" "$featfx" archived --reason "x" >/dev/null 2>&1; then
-        no "(r) feature edge →archived should be rejected (sdd-archive-only)"
+        no "(r) feature edge →archived should be rejected (goalforge-archive-only)"
     elif [[ "$(read_status "$featfx/overview.md")" == "completed" ]]; then
         ok "(r) illegal feature edge →archived rejected (status unchanged)"
     else

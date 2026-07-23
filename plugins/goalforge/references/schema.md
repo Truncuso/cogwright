@@ -63,7 +63,7 @@ agentic-OS planning continues to work unchanged.
 
 ## Retry budget resolution (`SDD_MAX_RETRIES`)
 
-The per-task evaluation retry cap (inner cap; see `sdd-execute` Step 6 and
+The per-task evaluation retry cap (inner cap; see `goalforge-execute` Step 6 and
 `## Retry cap`) is resolved at runtime from the **`SDD_MAX_RETRIES`** env var:
 
 1. **`SDD_MAX_RETRIES` env var** — if set to a positive integer, use it verbatim.
@@ -89,13 +89,13 @@ Every work package moves through six stages, stored as `status:` in frontmatter:
 | `spec` | Goal + verification defined | Measurable goal written; verification rows drafted |
 | `hardened` | Grilled, open questions resolved | `interview-loop` run; zero `open` items in OPEN_QUESTIONS |
 | `ready` | Approved for exec | Human approval recorded; `depends_on` WPs are `ready`+ |
-| `executing` | `sdd-execute` running | ≥1 task has a `checkpoint` block |
-| `verified` | Passed verification | `sdd-verify` PASS with evidence; review + simplify clean |
+| `executing` | `goalforge-execute` running | ≥1 task has a `checkpoint` block |
+| `verified` | Passed verification | `goalforge-verify` PASS with evidence; review + simplify clean |
 | `archived` | Terminal — historical record | Explicit user action only; never automatic |
 
 Transitions are forward by default. A regression (e.g. `hardened → spec`) is
 allowed and must be logged in `findings.md`. `draft → ready` (feature gate, in
-`sdd-spec`) and `hardened → ready` (WP gate, in `sdd-harden`) are the two
+`goalforge-spec`) and `hardened → ready` (WP gate, in `goalforge-harden`) are the two
 human-gated transitions — except that `hardened → ready` may **auto-advance
 under the signal-scoped rule** (complexity verdict `simple`, severity ≤ MEDIUM,
 `task_type ≠ migration`; ledger row records `mode: auto` + the signal evidence
@@ -112,19 +112,19 @@ title: <human title>
 status: draft|spec|ready|active|executing|completed|archived
 # draft→spec→ready→active→executing→completed  (state-machine.md §Feature policy
 # is the machine-parsed source of truth — goalforge-transition.sh reads it directly)
-# completed: written by sdd-verify (last-WP rule); archived: written by sdd-archive
+# completed: written by goalforge-verify (last-WP rule); archived: written by goalforge-archive
 # active: reserved-for-future (no skill writes it yet; sdd-lifecycle-redesign)
 created: YYYY-MM-DD
 feature: <feature>
 route: standard                   # one-go|fast|standard|wave — chain route,
-                                  # stamped by sdd-capture (goalforge-route.sh
+                                  # stamped by goalforge-capture (goalforge-route.sh
                                   # verdict). Back-compat: fast|full still
                                   # accepted on read; full normalizes to
                                   # standard. Absent ⇒ standard (back-compat).
 # confidence: clear|borderline|pinned  # classifier confidence for the route
                                   # verdict (optional; goalforge-route.sh output
                                   # field, not gating). pinned = human override.
-# execution_plan:                 # optional; stamped by sdd-capture alongside
+# execution_plan:                 # optional; stamped by goalforge-capture alongside
                                   # route. Shape (see spec.md Interface Contract
                                   # §2):
 #   steps: [spec, decompose, harden, execute, verify]  # subset per route
@@ -166,7 +166,7 @@ Classifier confidence (optional `confidence:` field, output of
 (mixed signals, verdict is a best guess), `pinned` (human override — the
 verdict was set explicitly, not classified).
 
-`execution_plan:` is an optional frontmatter block stamped by `sdd-capture`
+`execution_plan:` is an optional frontmatter block stamped by `goalforge-capture`
 alongside `route:` — persisted DATA, inspectable and human-overridable at the
 spec gate, consumed (never re-classified) by the runner:
 
@@ -219,7 +219,7 @@ register: production|prototype    # optional; default production. prototype ⇒
                                   # NB: register is NOT covered by the goal hash —
                                   # flipping it after goal_approved_version is set
                                   # changes execution semantics silently; treat a
-                                  # register change as a goal change: re-run sdd-harden.
+                                  # register change as a goal change: re-run goalforge-harden.
                                   # Mechanically gated by goalforge-validate.sh check_register
                                   # (ERROR under --strict): enum ∈ {production,prototype};
                                   # prototype ⇒ strategy judge|human (any status) and
@@ -258,7 +258,7 @@ recorded risk. Two coupled pieces, both in the WP `overview.md` body:
      impact: <HIGH|MEDIUM|LOW>
      likelihood: <HIGH|MEDIUM|LOW>
      owner: <who revisits — human:<name> | session | feature-owner>
-     revisit: <trigger — a date, an event, or "at sdd-verify">
+     revisit: <trigger — a date, an event, or "at goalforge-verify">
    ```
 
 2. The open-question bullet marked `[risk-accepted: <id>]`, where `<id>`
@@ -282,9 +282,9 @@ status: pending|briefed|in-progress|implemented|verified
 # briefed     = a complexity-gated (medium/high) task has had its brief-task-NN.md
 #               authored (interim, between pending and in-progress); low-complexity
 #               tasks skip briefing and never enter briefed.
-# implemented = deterministic eval passed + committed (interim, by sdd-execute);
+# implemented = deterministic eval passed + committed (interim, by goalforge-execute);
 #               NOT quality-signed-off. verified is written only at the WP gate by
-#               sdd-verify (it promotes implemented → verified).
+#               goalforge-verify (it promotes implemented → verified).
 complexity: low|medium|high       # drives model tier; discovery agent estimates if absent
 route: api|ollama                 # default: api
 parallel: false                   # safe to run concurrently with sibling tasks?
@@ -296,20 +296,20 @@ verify: "<exact cmd or check that proves the task done>"
 #   regressed), it is MISSING → pass. Tokens not listed keep the default check.
 #   Applies to the NON-negated verify form (e.g. `test -f <p>`); a negated form
 #   (`! test -f <p>`) is already skipped by verify-lint, so expects_absent is moot there.
-# commit: <sha>                   # optional; BACKFILLED by sdd-verify at WP finalize
+# commit: <sha>                   # optional; BACKFILLED by goalforge-verify at WP finalize
 #                                 # from checkpoint.commit_sha (not written per-task
 #                                 # during execution). required for status: verified
 #                                 # under --require-commit validation.
 ---
 ```
 
-The `checkpoint:` block is written by `sdd-execute` into the task **body** (not
-the frontmatter) as a `## Checkpoint (sdd-execute state)` section. The validator
+The `checkpoint:` block is written by `goalforge-execute` into the task **body** (not
+the frontmatter) as a `## Checkpoint (goalforge-execute state)` section. The validator
 enforces the `executing` evidence invariant by scanning for `^checkpoint:` in the
 body, so a checkpoint placed inside the frontmatter is invisible to it. Shape:
 
 ```markdown
-## Checkpoint (sdd-execute state)
+## Checkpoint (goalforge-execute state)
 
 checkpoint:
   last_step: 0
@@ -319,13 +319,13 @@ checkpoint:
   worktree: ""
   discovered_by: ""             # manual|map|discovery-agent
   commit_sha: ""                # full sha of this task's commit; stashed at Step 8,
-                                # batch-backfilled into frontmatter commit: by sdd-verify
+                                # batch-backfilled into frontmatter commit: by goalforge-verify
   resumable: true
 ```
 
 `complexity` drives the model tier; the tier is instantiated to an explicit
 `{model, effort}` by `TIER_DISPATCH`/`tier_to_dispatch` in
-`sdd/scripts/goalforge-pick-agent.py` — do not restate the values here (they drift).
+`goalforge/scripts/goalforge-pick-agent.py` — do not restate the values here (they drift).
 `discovered_by` records how the specialist was resolved (see §5 of spec.md for
 the dispatch algorithm).
 
@@ -371,18 +371,18 @@ they are enforced at different lifecycle points:
 
 | Check | Plain run | Under `--strict` | Under `--require-commit` | Who uses it |
 |---|---|---|---|---|
-| **Missing commit hash** | WARN (exit 0) | WARN (exit 0) | **ERROR (exit 1)** | `sdd-verify` gate — `--strict --require-commit` |
+| **Missing commit hash** | WARN (exit 0) | WARN (exit 0) | **ERROR (exit 1)** | `goalforge-verify` gate — `--strict --require-commit` |
 | **Stale feature rollup** | WARN (exit 0) | **ERROR (exit 1)** | WARN (exit 0) | pre-commit hook — `--strict` only |
 
 Rationale for the split: `commit:` is recorded **after** the task commit, so
 the pre-commit hook (`--strict`) must never gate on it — that would false-block
 the very commit writing the hash. Commit-hash provenance is enforced at
-verify-time only, via `--require-commit`. `sdd-verify` uses both flags
+verify-time only, via `--require-commit`. `goalforge-verify` uses both flags
 (`--strict --require-commit`) to enforce all advisory checks at once.
 
 | Check | Condition | Fix |
 |---|---|---|
-| **Missing commit hash** | A `task-*.md` with `status: verified` has no `commit:` field (or it is empty) | Add `commit: <sha>` — recorded by `sdd-execute` after the task's commit |
+| **Missing commit hash** | A `task-*.md` with `status: verified` has no `commit:` field (or it is empty) | Add `commit: <sha>` — recorded by `goalforge-execute` after the task's commit |
 | **Stale feature rollup** | `<feature>/todo.md` has `generated: true` and a Status Rollup cell that contradicts the current WP `status:` | Run `goalforge-rollup.sh <feature>` to regenerate |
 
 ---
@@ -549,7 +549,7 @@ plan that does not carry `schema_version:`.
 `goal_approved_version` is the **sha256 hash (first 12 hex chars)** of the raw
 `goal:` block text — the lines from `goal:` up to the next top-level frontmatter
 key, with per-line trailing whitespace stripped and line endings normalized to LF.
-It is **null/absent** until the first harden gate; set by `sdd-harden` at the
+It is **null/absent** until the first harden gate; set by `goalforge-harden` at the
 `hardened → ready` approval.
 
 ### Goal Changelog (evolved-goal audit trail)
@@ -575,13 +575,13 @@ comparison** (recomputed hash ≠ `goal_approved_version`), not a date compariso
 
 The adversarial-verification principle is applied in **two tiers**, scaled to the
 defect's altitude (not the WP count): **Tier-1** audits *feature-global* defects
-**once per feature**; **Tier-2** (`sdd-harden` Step 0a) is a cheap *WP-scoped
+**once per feature**; **Tier-2** (`goalforge-harden` Step 0a) is a cheap *WP-scoped
 delta* that consumes Tier-1 findings as typed DATA. This concentrates the
 expensive cross-cutting review up front (cheap to fix at the spec/structure
 level) and keeps per-WP harden from re-litigating it.
 
 **Artifact:** `<PLANS_ROOT>/<feature>/.tier1-audit.md` — git-tracked, one per
-feature. Written by `sdd-decompose` (Step 10.7) and refreshed by `sdd-harden`
+feature. Written by `goalforge-decompose` (Step 10.7) and refreshed by `goalforge-harden`
 only when stale. Shape:
 
 ```yaml
@@ -609,12 +609,12 @@ verdict: pass | findings
    `goal_approved_version`: trailing-whitespace-stripped, LF-normalized),
 4. the spec's `## Interface Contract` section text (cross-WP contracts).
 
-Computed by `sdd/scripts/goalforge-feature-hash.sh <feature-dir>` (single source of the
+Computed by `goalforge/scripts/goalforge-feature-hash.sh <feature-dir>` (single source of the
 hash; never hand-computed — LLMs cannot hash reliably). **Freshness gate:** an
 audit is fresh iff `.tier1-audit.md`'s `audit_hash` equals the recomputed hash;
 a stale or absent audit triggers a re-run (a `feature-audit`-role dispatch).
 
-**Tier-2 freshness fallback.** `sdd-harden` consumes Tier-1 as DATA for the WP it
+**Tier-2 freshness fallback.** `goalforge-harden` consumes Tier-1 as DATA for the WP it
 is hardening. If a *sibling* WP changed since the Tier-1 snapshot (hash mismatch),
 the cross-WP findings may be stale → `sdd-harden` falls back to a whole-feature
 review rather than trusting a stale delta.

@@ -13,9 +13,9 @@ sources: []
 
 ## Problem
 
-Fixture: a feature whose WPs are all verified, so sdd-verify advanced it to
+Fixture: a feature whose WPs are all verified, so goalforge-verify advanced it to
 `completed`. Eligible for archival.
 
 ## Goal
 
-Exercise the sdd-archive happy path (status gate passes).
+Exercise the goalforge-archive happy path (status gate passes).

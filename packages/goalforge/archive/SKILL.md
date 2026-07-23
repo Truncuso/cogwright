@@ -1,6 +1,6 @@
 ---
 name: goalforge-archive
-description: "Archive a completed SDD feature to its terminal `archived` status, optionally recording that it supersedes a prior feature. Fail-closed: REFUSES unless the feature is `status: completed` (cannot archive draft/ready/active). On `--supersedes <old>` writes the `supersedes`/`superseded_by` relationship edges on both features and archives the old one too, verifying both slugs exist first. A `--relocate` mode reconciles a STRANDED archived feature — one already `status: archived` but still physically at the active plans root (status set out-of-band, never moved) — by moving it into `_archived/` (move-only, no frontmatter edit; requires status: archived). Runs the strict validator gate and an ensure-committed check. TRIGGER: 'archive feature', 'archive completed feature', 'feature B supersedes A', 'migration archive', 'relocate stranded archived feature', 'reconcile archived plan at active root'. Human-gated / on-demand — NOT part of the sdd chain."
+description: "Archive a completed goalforge feature to its terminal `archived` status, optionally recording that it supersedes a prior feature. Fail-closed: REFUSES unless the feature is `status: completed` (cannot archive draft/ready/active). On `--supersedes <old>` writes the `supersedes`/`superseded_by` relationship edges on both features and archives the old one too, verifying both slugs exist first. A `--relocate` mode reconciles a STRANDED archived feature — one already `status: archived` but still physically at the active plans root (status set out-of-band, never moved) — by moving it into `_archived/` (move-only, no frontmatter edit; requires status: archived). Runs the strict validator gate and an ensure-committed check. TRIGGER: 'archive feature', 'archive completed feature', 'feature B supersedes A', 'migration archive', 'relocate stranded archived feature', 'reconcile archived plan at active root'. Human-gated / on-demand — NOT part of the sdd chain."
 metadata:
   version: 1.4.0
 hooks:
@@ -187,7 +187,7 @@ apply.
 ```
 Archived:   <PLANS_ROOT>/_archived/<feature>/overview.md  (status: archived, moved from <feature>/)
 [Supersedes: <old> — <old> archived + moved to _archived/<old>/]
-Validator:  PASS (sdd-validate --strict)
+Validator:  PASS (goalforge-validate --strict)
 Working tree: clean under _archived/<feature>/ [and _archived/<old>/]
 ```
 

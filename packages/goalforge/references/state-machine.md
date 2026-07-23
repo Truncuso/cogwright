@@ -2,7 +2,7 @@
 
 Single source of truth for which WP `status:` transitions are legal, which
 require a `--reason`, and which are human-gated. Consumed by
-`skills/sdd/scripts/goalforge-transition.sh` (the write mechanism) and
+`skills/goalforge/scripts/goalforge-transition.sh` (the write mechanism) and
 `hooks/goalforge-transition-guard.sh` (the advisory guard). Machine-parseable: the
 `## Edges` table uses `|` as the stable delimiter; a row exists **iff** the edge
 is legal.
@@ -41,7 +41,7 @@ WP states are linearly ordered:
   guardrail change — ADR: adaptive-chain-routing.)*
 
 `archived` is a terminal state reached only by explicit user action via
-`sdd-archive` — it is intentionally **not** an edge target here, so the
+`goalforge-archive` — it is intentionally **not** an edge target here, so the
 transition mechanism never moves a WP to/from `archived`.
 
 ## Edges
@@ -81,7 +81,7 @@ transition mechanism never moves a WP to/from `archived`.
 
 ## Reverse-edge note
 
-A reverse (regression) edge is a legitimate operation — e.g. `sdd-verify`
+A reverse (regression) edge is a legitimate operation — e.g. `goalforge-verify`
 sending a WP back to `executing`, or a harden re-open `ready→spec`. It is logged
 (ledger row with the `--reason`) and never deletes prior evidence: tasks keep
 their `verified` status and `commit:` as superseded evidence; the ledger reverse
@@ -117,7 +117,7 @@ Feature states are linearly ordered:
   only records it.
 - **`completed`** is reached from `executing` or `active` (and, forward-skipping,
   from any earlier state). `archived` is a terminal state reached ONLY via
-  `sdd-archive` — it is intentionally **not** an edge target here, so the
+  `goalforge-archive` — it is intentionally **not** an edge target here, so the
   transition mechanism never moves a feature to/from `archived`.
 
 ## Feature edges
@@ -160,4 +160,4 @@ Feature states are linearly ordered:
 A reverse feature edge (e.g. re-opening a `completed` feature back to `executing`
 for a follow-up WP) is legitimate: logged as a ledger row with its `--reason`,
 never deleting prior WP evidence. `archived` remains out of scope — use
-`sdd-archive` for the terminal move.
+`goalforge-archive` for the terminal move.

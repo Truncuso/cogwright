@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Eval harness for the sdd overview skill.
+# Eval harness for the goalforge overview skill.
 # Checks skill structure and content correctness without invoking a model.
 # Exit 0 = all pass. Exit non-zero = failures found.
 
@@ -22,7 +22,7 @@ check() {
   fi
 }
 
-echo "=== sdd SKILL.md eval harness ==="
+echo "=== goalforge SKILL.md eval harness ==="
 echo ""
 
 # ── Trigger tests ────────────────────────────────────────────────────────────

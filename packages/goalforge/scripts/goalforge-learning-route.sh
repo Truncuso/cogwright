@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # goalforge-learning-route.sh — capture-learning Phase-1 leg for the SDD verify boundary.
 #
-# At the WP `executing → verified` boundary, sdd-verify shells out here with the
+# At the WP `executing → verified` boundary, goalforge-verify shells out here with the
 # verified fix's root-cause/contrast (+ an optional strategic candidate). This
 # script does the DETERMINISTIC plumbing only: it emits a tactical detection
 # record and flags whether a strategic candidate is present. The SEMANTIC
-# L1/L2/L3 classification is capture-learning's job (invoked via sdd-verify
+# L1/L2/L3 classification is capture-learning's job (invoked via goalforge-verify
 # prose, NOT here).
 #
 # Usage:
@@ -34,7 +34,7 @@
 #   With no fix at the boundary (nothing to detect) it is a clean no-op, exit 0.
 #
 # Dual-capture (two INDEPENDENT legs — neither ever gates the other): the tactical fix is
-#   appended to <wp>/findings.md (the local provenance sink, the same file sdd-harden/execute
+#   appended to <wp>/findings.md (the local provenance sink, the same file goalforge-harden/execute
 #   append to — NOT a commit) whenever a fix is present; a strategic insight is routed
 #   PROPOSE-ONLY (stdout) to the resolved --dest, never mutating a destination file and never
 #   running git. Classification (which dest) is capture-learning's job, reused — this script
@@ -105,7 +105,7 @@ EOF
 # carry newlines or markdown metacharacters; they are FLATTENED to single lines so they
 # can never inject a `## ` header or a `---` frontmatter rule and corrupt the file. The
 # entry is keyed on a hash of the fix and UPSERTED — a re-run updates in place, never
-# duplicate-appends. Absent findings.md → propose-only (do NOT create; sdd-harden owns
+# duplicate-appends. Absent findings.md → propose-only (do NOT create; goalforge-harden owns
 # creation). Any write failure degrades to a note — never fails the verify.
 route_tactical() {
     local wp="$1" fix="$2" cause="$3" contrast="$4"

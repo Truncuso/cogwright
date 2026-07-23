@@ -38,7 +38,7 @@ and stop cleanly; status is never advanced past a blocker. Detail:
 Steps 1–10 run inside an **outer goal-completion loop** that simulates native
 `/goal` (design §4). Split of labour:
 
-- **The script (`sdd-goal-eval`) is pure.** It decides `deterministic`/`numeric`
+- **The script (`goalforge-goal-eval`) is pure.** It decides `deterministic`/`numeric`
   goals itself (binary exit) and, for `judge`/`human`, **returns a directive**
   instead of acting. `resolve_effective_goal` (same module) is the single owner of
   goal cascade + legacy fallback.
@@ -110,7 +110,7 @@ owner of cascade + legacy fallback, so do NOT re-derive them here:
 
 ```python
 # resolve_effective_goal is the sole back-compat owner (WP-02).
-from sdd_goal_eval import resolve_effective_goal   # loaded via importlib
+from goalforge_goal_eval import resolve_effective_goal   # loaded via importlib
 effective_goal = resolve_effective_goal(wp_fm, spec_fm=<inherited spec or None>)
 # → {outcome, verification:{strategy,check}, constraints, boundaries,
 #    iteration_policy, blocked_stop, task_type}
@@ -344,7 +344,7 @@ Delegate code-writing to the `implement` skill. **Do NOT reimplement**
 - Resolved specialist hint + model + effort from Step 4.
 - **`use_testing` hint (goal-predicated).** Evaluate
   `should_invoke_testing(effective_goal)` (the Step 0b effective goal) via
-  `from sdd_goal_eval import should_invoke_testing` — the predicate has ONE home
+  `from goalforge_goal_eval import should_invoke_testing` — the predicate has ONE home
   in `goalforge-goal-eval.py`, not here. It returns `True` when the WP is
   `task_type == 'code'` **AND** `verification.strategy == 'deterministic'`; then
   pass `use_testing: true` so `implement` routes test authoring through
@@ -391,7 +391,7 @@ second-opinion are amortized to the WP boundary, Step 7 / `goalforge-verify`):
 
 **On failure:** loop back to Step 5 (re-dispatch via `implement`) with the full
 failure output as context. The retry cap is **`SDD_MAX_RETRIES`** (default 3;
-resolved per `sdd/references/schema.md` §Retry budget resolution). On hitting the
+resolved per `goalforge/references/schema.md` §Retry budget resolution). On hitting the
 cap, append a blocker to `<wp>/findings.md` (the task name, all failure output
 from the final attempt, the retry count as `attempt N / SDD_MAX_RETRIES`) and
 escalate via `AskUserQuestion` — **never silent-pass** a failing eval.
@@ -400,7 +400,7 @@ escalate via `AskUserQuestion` — **never silent-pass** a failing eval.
 
 **After every subagent return** (whether the eval passed or failed), write the
 `checkpoint:` block to the task's **body** as a `## Checkpoint (goalforge-execute
-state)` section — NOT the frontmatter. `sdd-validate` enforces the `executing`
+state)` section — NOT the frontmatter. `goalforge-validate` enforces the `executing`
 evidence invariant by scanning for `^checkpoint:` in the body; a checkpoint placed
 inside the frontmatter is invisible to that scan and the pre-commit hook will
 BLOCK. Belt-and-suspenders: it must function even if the **WP-05** `SubagentStop`
@@ -598,7 +598,7 @@ whether this step runs. `goalforge-verify` is the **sole authority** for the
 | `verify-and-simplify` | **Opt-in only** for a flagged high-risk task (Step 7); the one review + simplify + second-opinion pass runs at the WP boundary in `goalforge-verify` |
 | `superpowers:dispatching-parallel-agents` | Wave batched dispatch (Step 3) |
 | `superpowers:using-git-worktrees` | Worktree create/merge per parallel task (Step 3) |
-| `sdd-goal-eval` (`skills/goalforge/scripts/`) | Pure goal router + `resolve_effective_goal` (Steps 0b, 9b) |
+| `goalforge-goal-eval` (`skills/goalforge/scripts/`) | Pure goal router + `resolve_effective_goal` (Steps 0b, 9b) |
 | `judge` | Acting on a `judge` directive from the goal eval (Step 9b) |
 
 ---

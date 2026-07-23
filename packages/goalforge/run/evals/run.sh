@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-run dry-run structural checks
+# evals/run.sh — goalforge-run dry-run structural checks
 #
 # Check types:
 #   YAML-STRUCTURE:  parses chain.yaml and asserts step order and skill presence
@@ -70,7 +70,7 @@ for skill in $REQUIRED_SKILLS; do
   check_yaml "chain references skill: goalforge/$skill" "skill: goalforge/$skill"
 done
 
-# chain.yaml: step count — 6 linear + 1 loop-back (sdd-redecompose)
+# chain.yaml: step count — 6 linear + 1 loop-back (goalforge-redecompose)
 STEP_COUNT=$(grep -c "^\s*- skill:" "$CHAIN_YAML" || true)
 if [ "$STEP_COUNT" -eq 7 ]; then
   echo "  PASS [YAML-STRUCTURE]: chain has exactly 7 steps (found $STEP_COUNT)"

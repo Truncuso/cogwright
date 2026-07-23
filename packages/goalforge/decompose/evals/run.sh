@@ -45,7 +45,7 @@ file_check() {
   fi
 }
 
-echo "=== sdd-decompose: contract + fixture checks ==="
+echo "=== goalforge-decompose: contract + fixture checks ==="
 
 # STATIC-CONTRACT: identity
 check STATIC-CONTRACT "skill name declared" "name: goalforge-decompose"
@@ -162,7 +162,7 @@ if [ -f "$RESOLVER" ]; then
   if python3 - "$RESOLVER" "$GOAL_FIXTURE" <<'PY'
 import sys, importlib.util, pathlib, yaml
 resolver_path, fixture_dir = sys.argv[1], pathlib.Path(sys.argv[2])
-spec = importlib.util.spec_from_file_location("sdd_goal_eval", resolver_path)
+spec = importlib.util.spec_from_file_location("goalforge_goal_eval", resolver_path)
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
 def fm(p): return yaml.safe_load(pathlib.Path(p).read_text().split('---', 2)[1])
 wp   = fm(fixture_dir / "wp-01-cascading-goal" / "overview.md")

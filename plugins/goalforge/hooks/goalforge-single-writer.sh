@@ -6,7 +6,7 @@
 # DISCRIMINATOR (why this hook only ever sees Edit/Write/MultiEdit): a
 # PreToolUse payload carries only the tool call (tool_name + tool_input) — it
 # has NO caller attribution, no skill/script name, no call stack. The
-# sanctioned writers (sdd-transition.sh, sdd-goal-hash.sh) mutate files via
+# sanctioned writers (goalforge-transition.sh, goalforge-goal-hash.sh) mutate files via
 # `Bash` (sed -i / python / direct file write inside a shell command), never
 # via the Edit/Write/MultiEdit tool surface — so they never trip this
 # matcher's tool_name filter. That is an exemption BY CONSTRUCTION, not a
@@ -15,7 +15,7 @@
 # is the tool surface itself. Do not attempt to special-case a "trusted
 # caller" here — the payload does not carry that information.
 #
-# DIVISION OF LABOR: hooks/sdd-transition-guard.sh is a separate, NOT-wired
+# DIVISION OF LABOR: hooks/goalforge-transition-guard.sh (dotfiles) is a separate, NOT-wired
 # ADVISORY guard over edge *legality* (is old-status -> new-status a valid SDD
 # transition). THIS hook owns hard field-mutation protection — it does not
 # care whether the transition is legal, only whether the write is coming
@@ -23,7 +23,7 @@
 #
 # SCOPE: <git-root>/plans/** or ~/.claude/plans/** (dual-root — do not
 # hardcode $HOME/.claude/plans as the only root; that was the precedent bug
-# in sdd-frontmatter-touch.sh), basename overview.md, spec.md, or task-*.md.
+# in goalforge-frontmatter-touch.sh), basename overview.md, spec.md, or task-*.md.
 #
 # SCAFFOLDING EXEMPTION (uniform across Write/Edit/MultiEdit): if the target
 # file does NOT exist on disk at check time, ALLOW regardless of tool or

@@ -6,7 +6,7 @@ schema_version: 5          # opt-in marker (schema.md "Version lineage"): makes
                             # a WP's goal: mandatory at ready/executing/verified
 created: YYYY-MM-DD
 feature: <feature>
-# route: standard                 # one-go|fast|standard|wave — stamped by sdd-capture
+# route: standard                 # one-go|fast|standard|wave — stamped by goalforge-capture
 # confidence: clear                # clear|borderline|pinned — classifier confidence
 # execution_plan:                  # optional; absent = standard route, all-inline
 #   steps: [spec, decompose, harden, execute, verify]
