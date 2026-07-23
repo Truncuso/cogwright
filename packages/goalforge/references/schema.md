@@ -383,7 +383,7 @@ verify-time only, via `--require-commit`. `sdd-verify` uses both flags
 | Check | Condition | Fix |
 |---|---|---|
 | **Missing commit hash** | A `task-*.md` with `status: verified` has no `commit:` field (or it is empty) | Add `commit: <sha>` — recorded by `sdd-execute` after the task's commit |
-| **Stale feature rollup** | `<feature>/todo.md` has `generated: true` and a Status Rollup cell that contradicts the current WP `status:` | Run `sdd-rollup.sh <feature>` to regenerate |
+| **Stale feature rollup** | `<feature>/todo.md` has `generated: true` and a Status Rollup cell that contradicts the current WP `status:` | Run `goalforge-rollup.sh <feature>` to regenerate |
 
 ---
 

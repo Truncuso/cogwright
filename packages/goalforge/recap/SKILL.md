@@ -106,7 +106,7 @@ The WP commit passed to `record-wp` is the single WP-altitude commit (the caller
 
 ---
 
-## Reuse of sdd-rollup Cadence
+## Reuse of goalforge-rollup Cadence
 
 `recap.sh` mirrors the idempotency discipline of `goalforge-rollup.sh`:
 - Paths resolved via `python3 os.path.realpath` — no `cd` tricks.

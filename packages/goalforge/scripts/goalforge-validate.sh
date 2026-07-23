@@ -1276,7 +1276,7 @@ for path, kind, fm, has_ckpt in all_files:
                                 err(_ftodo,
                                     f"feature rollup todo.md Status Rollup cell '{_cell}' "
                                     f"for {_wp_id} != WP status '{_ws}' — stale; "
-                                    f"regenerate with: sdd-rollup.sh {feature_dir}")
+                                    f"regenerate with: goalforge-rollup.sh {feature_dir}")
 
     elif kind == 'spec':
         # Feature-altitude goal block (schema v4). Integrity-checked when present;
