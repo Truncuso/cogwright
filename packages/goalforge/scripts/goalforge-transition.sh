@@ -25,7 +25,7 @@
 #      stamp {mode,actor,session,model,provider,agent,decision_ref} sourced from
 #      sdd-attribution.sh (degrade-not-block: any failure → "unknown"),
 #   3. invokes sdd-stamp-tables.sh (WP/Tasks STATUS cells — the P5 autostamp)
-#      and sdd-rollup.sh (feature todo.md).
+#      and goalforge-rollup.sh (feature todo.md).
 # It NEVER writes table cells directly — that is sdd-stamp-tables.sh's job.
 #
 # `--from` is an optimistic-lock assertion: when given it must equal the on-disk

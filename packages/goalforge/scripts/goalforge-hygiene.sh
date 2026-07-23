@@ -7,7 +7,7 @@
 # Usage:  sdd-hygiene.sh <feature-dir> [--show] [--apply]
 #   default : DRY-RUN. One-line drift verdict (fixable drift = tables + rollup).
 #             --show adds the validator health + commit-hash advisory.
-#   --apply : run sdd-stamp-tables.sh + sdd-rollup.sh to fix drift (idempotent).
+#   --apply : run goalforge-stamp-tables.sh + goalforge-rollup.sh to fix drift (idempotent).
 #   exit    : 0 normally; non-zero only on a hard error (feature dir missing).
 
 set -uo pipefail
@@ -49,19 +49,19 @@ fi
 # ── Dry-run drift detection ──────────────────────────────────────────────────
 drift_items=()
 
-# 1. Status tables stale?  (sdd-stamp-tables.sh --check exits 1 when stale)
+# 1. Status tables stale?  (goalforge-stamp-tables.sh --check exits 1 when stale)
 if ! bash "$STAMP" --check "$FEATURE" >/dev/null 2>&1; then
     drift_items+=("tables")
 fi
 
 # 2. Rollup stale?  Regenerate into a throwaway copy and diff — never mutates the
-#    real tree during a dry-run. sdd-rollup embeds the absolute feature path in a
+#    real tree during a dry-run. goalforge-rollup embeds the absolute feature path in a
 #    `Regenerate:` comment, which differs between the temp copy and the real dir;
 #    normalize that volatile line so only real content drift counts.
 tmpd="$(mktemp -d)"
 cp -r "$FEATURE" "$tmpd/f" 2>/dev/null || true
 bash "$ROLLUP" "$tmpd/f" >/dev/null 2>&1 || true
-_norm() { sed -E 's#(Regenerate: sdd-rollup\.sh ).*#\1<PATH>#'; }
+_norm() { sed -E 's#(Regenerate: (sdd|goalforge)-rollup\.sh ).*#\1<PATH>#'; }
 if [[ -f "$tmpd/f/todo.md" ]]; then
     if [[ ! -f "$FEATURE/todo.md" ]] \
        || ! diff <(_norm < "$tmpd/f/todo.md") <(_norm < "$FEATURE/todo.md") >/dev/null 2>&1; then
