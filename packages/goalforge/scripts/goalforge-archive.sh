@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# goalforge-archive.sh — deterministic core of the sdd-archive skill. Archives ONE
+# goalforge-archive.sh — deterministic core of the goalforge-archive skill. Archives ONE
 # completed feature to its terminal `archived` status and moves it to
 # _archived/. Fail-closed: refuses unless status: completed. Does NOT commit and
 # does NOT run ensure-committed — the CALLER commits, then verifies cleanliness
@@ -26,7 +26,7 @@
 # the status stamp left wayfind `archived` at the active root; recovery
 # needed --relocate.)
 #
-# The sdd-archive SKILL is the human front door (refusal templates, supersede
+# The goalforge-archive SKILL is the human front door (refusal templates, supersede
 # explanation, reporting); it delegates these mechanical steps here so a script
 # (batch / loop) can drive them deterministically. Skill parity: schema.md.
 
@@ -46,11 +46,11 @@ while [[ $# -gt 0 ]]; do
         --relocate)    RELOCATE=1; shift ;;
         --strict-refs) STRICT_REFS=1; shift ;;
         --plans-root)  ROOT="$2"; shift 2 ;;
-        -*)            echo "sdd-archive: unknown flag: $1" >&2; exit 2 ;;
+        -*)            echo "goalforge-archive: unknown flag: $1" >&2; exit 2 ;;
         *)             FEATURE="$1"; shift ;;
     esac
 done
-[[ -z "$FEATURE" ]] && { echo "sdd-archive: usage: goalforge-archive.sh <feature> [--supersedes <old>] [--plans-root <root>]" >&2; exit 2; }
+[[ -z "$FEATURE" ]] && { echo "goalforge-archive: usage: goalforge-archive.sh <feature> [--supersedes <old>] [--plans-root <root>]" >&2; exit 2; }
 
 # Resolve plans root: --plans-root → SDD_PLANS_DIR → git-root/plans → CWD/plans → ~/.claude/plans
 if [[ -z "$ROOT" ]]; then
@@ -81,33 +81,33 @@ PY
 }
 
 # ── Step 1: fail-closed precondition (mode-dependent) ────────────────────────
-[[ -f "$FEAT_OV" ]] || { echo "sdd-archive REFUSED — feature not found: $FEAT_OV" >&2; exit 3; }
+[[ -f "$FEAT_OV" ]] || { echo "goalforge-archive REFUSED — feature not found: $FEAT_OV" >&2; exit 3; }
 ST="$(read_status "$FEAT_OV")"
 if [[ $RELOCATE -eq 1 ]]; then
     # Relocate mode: gate is the inverse — the feature must ALREADY be archived
     # (stranded at the active root). --supersedes is meaningless here.
-    [[ -n "$OLD" ]] && { echo "sdd-archive: --supersedes is not valid with --relocate" >&2; exit 2; }
+    [[ -n "$OLD" ]] && { echo "goalforge-archive: --supersedes is not valid with --relocate" >&2; exit 2; }
     if [[ "$ST" != "archived" ]]; then
-        { echo "sdd-archive --relocate REFUSED — not a stranded archived feature:"
+        { echo "goalforge-archive --relocate REFUSED — not a stranded archived feature:"
           echo "  Feature: $FEATURE"
-          echo "  status: ${ST:-<none>}   (required: archived — use plain sdd-archive for a completed feature)"; } >&2
+          echo "  status: ${ST:-<none>}   (required: archived — use plain goalforge-archive for a completed feature)"; } >&2
         exit 3
     fi
 elif [[ "$ST" != "completed" ]]; then
-    { echo "sdd-archive REFUSED — precondition not satisfied:"
+    { echo "goalforge-archive REFUSED — precondition not satisfied:"
       echo "  Feature: $FEATURE"
       echo "  status: ${ST:-<none>}   (required: completed)"; } >&2
     exit 3
 fi
 if [[ -n "$OLD" ]]; then
-    [[ -f "$ROOT/$OLD/overview.md" ]] || { echo "sdd-archive REFUSED — supersedes target not found: $ROOT/$OLD/overview.md" >&2; exit 3; }
+    [[ -f "$ROOT/$OLD/overview.md" ]] || { echo "goalforge-archive REFUSED — supersedes target not found: $ROOT/$OLD/overview.md" >&2; exit 3; }
 fi
 
 # ── Step 1b: destination-collision pre-check (before any write — gate ordering
 # invariant: an exit-4 halt after the status stamp would strand the feature).
 precheck_dest() {  # $1 = slug
     if [[ -e "$ROOT/_archived/$1" ]]; then
-        echo "sdd-archive HALT — destination already exists: $ROOT/_archived/$1 (no overwrite)" >&2
+        echo "goalforge-archive HALT — destination already exists: $ROOT/_archived/$1 (no overwrite)" >&2
         return 4
     fi
 }
@@ -143,16 +143,16 @@ ref_gate() {  # $1 = slug
     hard=$(echo "$hits" | grep -E ":[0-9]+:[[:space:]]*-?[[:space:]]*(locator|promoted_to|source|path|resume|Resume):.*${slug}/|\]\([^)]*${slug}/" || true)
     prose=$(echo "$hits" | grep -vxF "$hard" || true)
     if [[ -n "$prose" ]]; then
-        echo "sdd-archive ref-gate INFO: prose mentions of '$slug/' (not gating):" >&2
+        echo "goalforge-archive ref-gate INFO: prose mentions of '$slug/' (not gating):" >&2
         echo "$prose" | sed 's/^/  /' >&2
     fi
     [[ -z "$hard" ]] && return 0
-    echo "sdd-archive REFERENCE-GATE: inbound HARD path refs to '$slug/' (will dangle after move to _archived/):" >&2
+    echo "goalforge-archive REFERENCE-GATE: inbound HARD path refs to '$slug/' (will dangle after move to _archived/):" >&2
     echo "$hard" | sed 's/^/  /' >&2
     echo "  -> relocate the cross-cited artifact + repoint these refs BEFORE archiving, or re-point them" >&2
     echo "     to _archived/$slug/. (A blind archive of a cross-cited findings.md broke ~12 links once.)" >&2
     if [[ "$STRICT_REFS" == "1" ]]; then
-        echo "sdd-archive: --strict-refs set -> REFUSING (exit 6). Resolve the refs above, or drop --strict-refs." >&2
+        echo "goalforge-archive: --strict-refs set -> REFUSING (exit 6). Resolve the refs above, or drop --strict-refs." >&2
         return 6
     fi
     echo "  (warning only; pass --strict-refs to make this a hard gate)" >&2
@@ -236,8 +236,8 @@ fi
 # A validator FAILURE rolls the frontmatter edits back (gate ordering invariant).
 validate_feature() {  # $1 = slug
     if ! "$VALIDATE" --feature "$1" --strict "$ROOT" >/dev/null 2>&1; then
-        echo "sdd-archive: validator FAILED for $1 — run: goalforge-validate.sh --feature $1 --strict --show $ROOT" >&2
-        echo "sdd-archive: frontmatter edits rolled back — feature left at its pre-invocation status." >&2
+        echo "goalforge-archive: validator FAILED for $1 — run: goalforge-validate.sh --feature $1 --strict --show $ROOT" >&2
+        echo "goalforge-archive: frontmatter edits rolled back — feature left at its pre-invocation status." >&2
         return 5
     fi
 }
@@ -250,7 +250,7 @@ mkdir -p "$ROOT/_archived"
 move_one() {  # $1 = slug
     local dest="$ROOT/_archived/$1"
     if [[ -e "$dest" ]]; then
-        echo "sdd-archive HALT — destination already exists: $dest (no overwrite)" >&2
+        echo "goalforge-archive HALT — destination already exists: $dest (no overwrite)" >&2
         return 4
     fi
     mv "$ROOT/$1" "$dest"
@@ -259,8 +259,8 @@ move_one "$FEATURE" || exit 4
 if [[ -n "$OLD" ]]; then move_one "$OLD" || exit 4; fi
 
 if [[ $RELOCATE -eq 1 ]]; then
-    echo "sdd-archive: relocated stranded archived $FEATURE -> _archived/$FEATURE"
+    echo "goalforge-archive: relocated stranded archived $FEATURE -> _archived/$FEATURE"
 else
-    echo "sdd-archive: archived $FEATURE -> _archived/$FEATURE${OLD:+ (supersedes $OLD, also archived)}"
+    echo "goalforge-archive: archived $FEATURE -> _archived/$FEATURE${OLD:+ (supersedes $OLD, also archived)}"
 fi
 exit 0

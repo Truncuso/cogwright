@@ -2,7 +2,7 @@
 # goalforge-hygiene.sh — unified per-feature reconcile. Makes ONE feature internally
 # consistent: stamp status tables + regenerate the todo rollup. Reports drift
 # terse by default; --apply fixes it. It STOPS before archive — never moves a
-# feature, never calls sdd-archive. Composes only the existing sdd scripts.
+# feature, never calls goalforge-archive. Composes only the existing goalforge scripts.
 #
 # Usage:  goalforge-hygiene.sh <feature-dir> [--show] [--apply]
 #   default : DRY-RUN. One-line drift verdict (fixable drift = tables + rollup).
@@ -24,13 +24,13 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --show)  SHOW=1; shift ;;
         --apply) APPLY=1; shift ;;
-        -*)      echo "sdd-hygiene: unknown flag: $1" >&2; exit 2 ;;
+        -*)      echo "goalforge-hygiene: unknown flag: $1" >&2; exit 2 ;;
         *)       FEATURE="$1"; shift ;;
     esac
 done
 
 if [[ -z "$FEATURE" || ! -d "$FEATURE" ]]; then
-    echo "sdd-hygiene: feature dir not found: ${FEATURE:-<none>}" >&2
+    echo "goalforge-hygiene: feature dir not found: ${FEATURE:-<none>}" >&2
     exit 2
 fi
 
@@ -42,7 +42,7 @@ root="$(dirname "$FEATURE")"
 if [[ "$APPLY" -eq 1 ]]; then
     bash "$STAMP" "$FEATURE" >/dev/null 2>&1 || true
     bash "$ROLLUP" "$FEATURE" >/dev/null 2>&1 || true
-    echo "sdd-hygiene $slug: reconciled (tables + rollup stamped)"
+    echo "goalforge-hygiene $slug: reconciled (tables + rollup stamped)"
     exit 0
 fi
 
@@ -72,10 +72,10 @@ rm -rf "$tmpd"
 
 n=${#drift_items[@]}
 if [[ "$n" -eq 0 ]]; then
-    echo "sdd-hygiene $slug: clean"
+    echo "goalforge-hygiene $slug: clean"
 else
     joined="$(printf '%s, ' "${drift_items[@]}")"; joined="${joined%, }"
-    echo "sdd-hygiene $slug: $n drift ($joined) — run --apply to fix${SHOW:+}"
+    echo "goalforge-hygiene $slug: $n drift ($joined) — run --apply to fix${SHOW:+}"
     [[ "$SHOW" -eq 0 ]] && echo "  (run --show for detail)"
 fi
 

@@ -2,7 +2,7 @@
 name: goalforge-onboard
 description: >
   Bootstraps the Spec-Driven Development chain in a repository: creates the
-  plans/ root, installs the sdd-validate pre-commit hook (via
+  plans/ root, installs the goalforge-validate pre-commit hook (via
   goalforge-install-hooks.sh), and stamps a minimal ## SDD pointer into the repo
   CLAUDE.md. Use when setting up SDD in a new or existing repo, when the user
   says "onboard this repo to SDD", "set up the SDD chain here", "install the SDD git hook",
@@ -52,7 +52,7 @@ $HOME/.claude/skills/goalforge/scripts/goalforge-install-hooks.sh <repo-dir>
   `pending→in-progress→implemented→verified` (`implemented` is the interim
   post-eval+commit state; `verified` is written only at the WP gate by
   `goalforge-verify`). It does NOT reference the legacy GSD 10-state lifecycle. Keep the
-  stamped block in lockstep with `sdd/references/schema.md` — it is the canonical
+  stamped block in lockstep with `goalforge/references/schema.md` — it is the canonical
   vocabulary onboarded repos inherit.
 - **Not a GitHub-issues setup.** This skill does not create GitHub issues,
   triage labels, milestones, or projects. That was the removed

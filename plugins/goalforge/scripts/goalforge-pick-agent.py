@@ -1,4 +1,4 @@
-"""sdd-pick-agent — specialist / model / route resolver for SDD execute.
+"""goalforge-pick-agent — specialist / model / route resolver for goalforge execute.
 
 Resolution order (spec §5):
   1. by_tag  match on task tags
@@ -107,7 +107,7 @@ TIER_MAP_PATH = Path(__file__).parent.parent / "references" / "tier-map.md"
 # ---------------------------------------------------------------------------
 # Canonical role → model-tier map (single source of truth)
 # ---------------------------------------------------------------------------
-# Every SDD dispatcher (sdd-execute, sdd-verify, sdd-harden, sdd-arbiter)
+# Every goalforge dispatcher (goalforge-execute, goalforge-verify, goalforge-harden, goalforge-arbiter)
 # resolves the model tier for a dispatched ROLE here — none of them restates the
 # table. A "tier" is one of low|medium|high and maps to a concrete model via
 # COMPLEXITY_MODEL (api) / OLLAMA_MODELS (ollama).
@@ -676,7 +676,7 @@ def _test_tiers() -> int:
         resolve_dispatch("implement", "autonomous-minimal", complexity="low", blast_radius_hit=True),
         {"model": "opus", "effort": "high"},
     )
-    # Pins the doc-level claim in sdd-harden/references/pre-harden-review.md.
+    # Pins the doc-level claim in goalforge-harden/references/pre-harden-review.md.
     expect(
         "resolve_dispatch/wp-harden-delta/semi",
         resolve_dispatch("wp-harden-delta", "semi-autonomous"),

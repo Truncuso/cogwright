@@ -1,15 +1,15 @@
 {
-  "skill_name": "sdd-archive",
+  "skill_name": "goalforge-archive",
   "evals": [
     {
       "id": 1,
       "prompt": "Archive the completed feature feature-completed.",
-      "expected_output": "Reads overview.md, confirms status: completed (gate passes), sets status: archived + updated:, runs sdd-validate --strict over the plans root, then sdd-ensure-committed after the orchestrator commits.",
+      "expected_output": "Reads overview.md, confirms status: completed (gate passes), sets status: archived + updated:, runs goalforge-validate --strict over the plans root, then goalforge-ensure-committed after the orchestrator commits.",
       "files": [
         "evals/fixtures/feature-completed/overview.md"
       ],
       "expectations": [
-        "SKILL.md declares name: sdd-archive",
+        "SKILL.md declares name: goalforge-archive",
         "SKILL.md precondition: proceeds only when status: completed",
         "SKILL.md plain archive sets status: archived and updated:",
         "SKILL.md runs goalforge-validate.sh --strict over PLANS_ROOT as a fail-closed gate",
@@ -33,7 +33,7 @@
     {
       "id": 3,
       "prompt": "Run a migration archive for this feature now that the new one shipped.",
-      "expected_output": "sdd-archive triggers — 'migration archive' is a stated trigger phrase. It archives the completed feature and (if a replacement is named) records supersession.",
+      "expected_output": "goalforge-archive triggers — 'migration archive' is a stated trigger phrase. It archives the completed feature and (if a replacement is named) records supersession.",
       "files": [],
       "expectations": [
         "SKILL.md description lists trigger phrases including 'archive feature' and 'migration archive'",
@@ -43,7 +43,7 @@
     {
       "id": 4,
       "prompt": "Check my implementation for code quality issues.",
-      "expected_output": "sdd-archive should NOT trigger — a generic code-quality check is not a feature-archival request. The trigger surface requires archiving a completed feature; a code-reviewer agent is appropriate instead.",
+      "expected_output": "goalforge-archive should NOT trigger — a generic code-quality check is not a feature-archival request. The trigger surface requires archiving a completed feature; a code-reviewer agent is appropriate instead.",
       "files": [],
       "expectations": [
         "SKILL.md trigger surface is constrained to archiving a completed feature (not generic code requests)",

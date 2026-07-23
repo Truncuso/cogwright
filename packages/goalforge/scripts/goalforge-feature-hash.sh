@@ -16,7 +16,7 @@ set -euo pipefail
 
 FEATURE_DIR="${1:-}"
 if [ -z "$FEATURE_DIR" ] || [ ! -d "$FEATURE_DIR" ]; then
-  echo "sdd-feature-hash: feature dir not found: ${FEATURE_DIR:-<missing>}" >&2
+  echo "goalforge-feature-hash: feature dir not found: ${FEATURE_DIR:-<missing>}" >&2
   exit 2
 fi
 

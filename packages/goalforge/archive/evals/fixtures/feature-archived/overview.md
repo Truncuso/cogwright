@@ -19,4 +19,4 @@ it (not `completed`); `--relocate` is the handler that moves it into `_archived/
 
 ## Goal
 
-Exercise the sdd-archive `--relocate` gate (requires `status: archived`).
+Exercise the goalforge-archive `--relocate` gate (requires `status: archived`).

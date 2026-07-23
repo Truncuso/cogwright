@@ -10,7 +10,7 @@
 #
 # Behavior:
 #   Delegates classification to goalforge-wp-complexity.sh <wp-path> and maps its verdict
-#   to the pre-harden review route (sdd-harden/SKILL.md Step 0a):
+#   to the pre-harden review route (goalforge-harden/SKILL.md Step 0a):
 #     complex -> "panel"        convene skills/adjudication/panel + dissent ledger
 #     simple  -> "single-pass"  the standing single read-only review sub-agent
 #

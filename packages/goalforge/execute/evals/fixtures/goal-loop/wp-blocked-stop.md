@@ -16,6 +16,6 @@ goal:
 
 ## Goal
 
-blocked_stop path: `sdd-goal-eval` returns met=False every outer iteration; after
+blocked_stop path: `goalforge-goal-eval` returns met=False every outer iteration; after
 `outer_max_iter` the agent appends a blocker to findings.md and escalates via
 AskUserQuestion (never silent-pass).

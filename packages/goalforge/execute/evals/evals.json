@@ -78,34 +78,34 @@
     {
       "id": 5,
       "prompt": "WP goal uses strategy: deterministic — how does the outer loop decide completion?",
-      "expected_output": "At entry, resolve_effective_goal yields the effective goal. After the sub-cycle, the pure sdd-goal-eval runs the deterministic check; exit 0 → verdict.met=True → break and proceed to Step 10 (goalforge-verify). No dispatch needed.",
+      "expected_output": "At entry, resolve_effective_goal yields the effective goal. After the sub-cycle, the pure goalforge-goal-eval runs the deterministic check; exit 0 → verdict.met=True → break and proceed to Step 10 (goalforge-verify). No dispatch needed.",
       "files": ["evals/fixtures/goal-loop/wp-met-deterministic.md"],
       "expectations": [
         "SKILL.md documents resolve_effective_goal at entry (Step 0b)",
-        "SKILL.md documents pure sdd-goal-eval invoked each outer iteration",
-        "sdd-goal-eval returns met=True in-script for a passing deterministic check (behavioral)"
+        "SKILL.md documents pure goalforge-goal-eval invoked each outer iteration",
+        "goalforge-goal-eval returns met=True in-script for a passing deterministic check (behavioral)"
       ]
     },
     {
       "id": 6,
       "prompt": "WP goal uses strategy: judge — how is completion decided without the script dispatching?",
-      "expected_output": "sdd-goal-eval returns met=null plus a {dispatch: judge, artifact, rubric, block_on} directive (the script stays pure). The agent invokes the judge skill and maps the verdict: met iff no finding at/above a block_on severity. In evals the judge dispatch is MOCKED for determinism.",
+      "expected_output": "goalforge-goal-eval returns met=null plus a {dispatch: judge, artifact, rubric, block_on} directive (the script stays pure). The agent invokes the judge skill and maps the verdict: met iff no finding at/above a block_on severity. In evals the judge dispatch is MOCKED for determinism.",
       "files": ["evals/fixtures/goal-loop/wp-judge.md"],
       "expectations": [
         "SKILL.md documents agent acting on the judge dispatch directive",
         "SKILL.md documents met-mapping via block_on severities",
-        "sdd-goal-eval returns met=null + dispatch directive; mocked block_on mapping yields met=True with no findings, met=False with a HIGH finding (behavioral)"
+        "goalforge-goal-eval returns met=null + dispatch directive; mocked block_on mapping yields met=True with no findings, met=False with a HIGH finding (behavioral)"
       ]
     },
     {
       "id": 7,
       "prompt": "A goal is never met across all outer iterations — what happens (blocked_stop)?",
-      "expected_output": "Each outer iteration sdd-goal-eval returns met=False. After outer_max_iter (or when the blocked_stop condition is hit), the agent appends a blocker to findings.md and escalates via AskUserQuestion. It never silently advances status.",
+      "expected_output": "Each outer iteration goalforge-goal-eval returns met=False. After outer_max_iter (or when the blocked_stop condition is hit), the agent appends a blocker to findings.md and escalates via AskUserQuestion. It never silently advances status.",
       "files": ["evals/fixtures/goal-loop/wp-blocked-stop.md"],
       "expectations": [
         "SKILL.md documents blocked_stop escalation path",
         "SKILL.md documents outer_max_iter bound independent of inner 3-retry",
-        "sdd-goal-eval returns met=False each iteration for the blocked-stop fixture (behavioral)"
+        "goalforge-goal-eval returns met=False each iteration for the blocked-stop fixture (behavioral)"
       ]
     },
     {

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# evals/run.sh — sdd-archive checks
+# evals/run.sh — goalforge-archive checks
 #
 # Check types:
 #   STATIC-CONTRACT:   asserts SKILL.md declares the correct contract
@@ -40,7 +40,7 @@ file_check() {
   fi
 }
 
-echo "=== sdd-archive: contract + fixture checks ==="
+echo "=== goalforge-archive: contract + fixture checks ==="
 
 # STATIC-CONTRACT: identity
 check STATIC-CONTRACT "skill name declared" "name: goalforge-archive"

@@ -10,7 +10,7 @@
 #   2  → undecided here   (judge/human — a directive was returned for the agent)
 #
 # The script is PURE: it never dispatches a skill and never prompts. The
-# sdd-execute agent acts on judge/human directives (design §4).
+# goalforge-execute agent acts on judge/human directives (design §4).
 
 set -uo pipefail
 

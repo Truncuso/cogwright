@@ -1,4 +1,4 @@
-# sdd-execute — Unattended autonomy (`SDD_AUTONOMY=unattended`)
+# goalforge-execute — Unattended autonomy (`SDD_AUTONOMY=unattended`)
 
 Consulted only when running under the `autopilot` driver. Interactive
 (`SDD_AUTONOMY` unset) behaviour is unchanged.

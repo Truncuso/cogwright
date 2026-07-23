@@ -226,12 +226,12 @@ def main(argv) -> int:
             root = str(Path.home() / ".claude" / "plans")
     root = Path(root).resolve()
     if not root.is_dir():
-        print(f"sdd-plan-index: plans root not found: {root}", file=sys.stderr)
+        print(f"goalforge-plan-index: plans root not found: {root}", file=sys.stderr)
         return 2
 
     feats, edges = collect(root, args.include_archived)
     if not feats:
-        print(f"sdd-plan-index: no features under {root}", file=sys.stderr)
+        print(f"goalforge-plan-index: no features under {root}", file=sys.stderr)
         return 3
     tier_list, cycle = tiers(feats, edges)
     out = render(root, feats, edges, tier_list, cycle)
@@ -241,7 +241,7 @@ def main(argv) -> int:
         sys.stdout.write(out)
     else:
         Path(dest).write_text(out, encoding="utf-8")
-        print(f"sdd-plan-index: wrote {dest} ({len(feats)} features, {len(edges)} edges)",
+        print(f"goalforge-plan-index: wrote {dest} ({len(feats)} features, {len(edges)} edges)",
               file=sys.stderr)
     return 4 if cycle else 0
 

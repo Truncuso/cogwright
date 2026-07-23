@@ -15,4 +15,4 @@ goal:
 
 ## Goal
 
-Deterministic strategy: `sdd-goal-eval` decides met=True in-script (exit 0).
+Deterministic strategy: `goalforge-goal-eval` decides met=True in-script (exit 0).

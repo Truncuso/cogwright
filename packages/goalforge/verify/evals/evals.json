@@ -69,7 +69,7 @@
     {
       "id": 6,
       "prompt": "After verifying the last WP and advancing the feature to completed, finalize and confirm a clean tree.",
-      "expected_output": "Completion step 5 stages+commits only the feature plan artifacts (docs(sdd): finalize <wp> verification) on the current branch, then runs goalforge-ensure-committed.sh on the feature path; on non-zero it reports dirty paths and HALTS instead of declaring done.",
+      "expected_output": "Completion step 5 stages+commits only the feature plan artifacts (docs(goalforge): finalize <wp> verification) on the current branch, then runs goalforge-ensure-committed.sh on the feature path; on non-zero it reports dirty paths and HALTS instead of declaring done.",
       "files": [],
       "expectations": [
         "SKILL.md completion step 5 commits only the feature plan artifacts (git add <PLANS_ROOT>/<feature>)",

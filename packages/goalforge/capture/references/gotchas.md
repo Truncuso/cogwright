@@ -1,4 +1,4 @@
-# sdd-capture — edge-case gotchas (load-on-demand)
+# goalforge-capture — edge-case gotchas (load-on-demand)
 
 Consulted when debugging a capture footgun — not every run. The frequently-hit
 gotchas stay inline in `SKILL.md`; these are the rarer footguns/recovery cases.
@@ -11,4 +11,4 @@ gotchas stay inline in `SKILL.md`; these are the rarer footguns/recovery cases.
   skipped step.** Creating `spec.md`, `todo.md`, or any `wp-*` folder here is a
   sign the wrong entry point was used: **abort and direct the caller to the
   correct chain entry point** (the fast path's WP is authored by
-  `sdd-decompose --add-wp`, not by capture).
+  `goalforge-decompose --add-wp`, not by capture).

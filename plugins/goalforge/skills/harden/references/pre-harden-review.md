@@ -1,4 +1,4 @@
-<!-- sdd-harden reference: pre-harden review gate. Loaded by sdd-harden Step 0. -->
+<!-- goalforge-harden reference: pre-harden review gate. Loaded by goalforge-harden Step 0. -->
 
 # Pre-Harden Review Gate
 

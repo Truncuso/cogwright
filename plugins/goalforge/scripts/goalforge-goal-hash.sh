@@ -12,8 +12,8 @@
 # stripped, line endings normalized to `\n`; leading indentation is significant
 # and preserved.
 #
-# This is the ONE place the goal-block hash is defined. sdd-harden (--record) and
-# sdd-validate (recompute-and-compare) BOTH shell out to it — the hash is NEVER
+# This is the ONE place the goal-block hash is defined. goalforge-harden (--record) and
+# goalforge-validate (recompute-and-compare) BOTH shell out to it — the hash is NEVER
 # reimplemented elsewhere, so the record and recompute paths can never diverge.
 #
 # Exit: 0 success. 3 when <wp-path> has no goal: block (prints nothing to stdout).

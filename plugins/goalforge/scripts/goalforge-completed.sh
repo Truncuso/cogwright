@@ -18,7 +18,7 @@ PLANS=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --show) SHOW=1; shift ;;
-        -*)     echo "sdd-completed: unknown flag: $1" >&2; exit 0 ;;
+        -*)     echo "goalforge-completed: unknown flag: $1" >&2; exit 0 ;;
         *)      PLANS="$1"; shift ;;
     esac
 done
@@ -57,9 +57,9 @@ else
 fi
 
 if [[ "$SHOW" == "1" && "$n" -gt 0 ]]; then
-    { echo "sdd-completed: $n archivable"; printf '  %s\n' $slugs; } >&2
+    { echo "goalforge-completed: $n archivable"; printf '  %s\n' $slugs; } >&2
 else
-    echo "sdd-completed: $n archivable (run --show to list)" >&2
+    echo "goalforge-completed: $n archivable (run --show to list)" >&2
 fi
 
 exit 0
