@@ -13,7 +13,7 @@ updated: YYYY-MM-DD
 
 <!-- Record decisions made during execution with rationale.
      Alternatives = a POINTER (ADR-NNNN | spec OQ#n | none), never a copied list.
-     Resolved-by  = the attribution stamp from sdd-attribution.sh
+     Resolved-by  = the attribution stamp from goalforge-attribution.sh
                     (auto · <provider>/<model> · session:<id8>  |  human · <name> · session:<id8>). -->
 
 | Date | Decision | Rationale | Alternatives | Resolved-by |

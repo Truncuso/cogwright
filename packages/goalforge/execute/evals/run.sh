@@ -151,9 +151,9 @@ check "single status-advance: sdd-verify sole authority" "sole authority"
 check "outer gate does not write $SK verified itself" "does **not** write"
 check "outer re-entry respects resume idempotency" "RESPECTS resume idempotency"
 
-# --- Goal layer: REAL behavioral (drives WP-02 sdd-goal-eval.py) ---
+# --- Goal layer: REAL behavioral (drives WP-02 goalforge-goal-eval.py) ---
 # Deterministic signal: the spine's decision logic is exercised, not just prose.
-echo "=== sdd-execute: goal-loop behavioral checks (real sdd-goal-eval.py) ==="
+echo "=== sdd-execute: goal-loop behavioral checks (real goalforge-goal-eval.py) ==="
 GOAL_EVAL="$SKILL_DIR/../scripts/goalforge-goal-eval.py"
 GL="$SKILL_DIR/evals/fixtures/goal-loop"
 if [ ! -f "$GOAL_EVAL" ]; then

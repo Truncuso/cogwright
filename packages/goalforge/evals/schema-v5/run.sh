@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Eval harness for schema v5 (route enum, execution_plan, optional_depends_on,
 # goal-mandatory marker). Offline, deterministic, no network/model calls.
-# Drives each fixture in fixtures/ through sdd-validate.sh and asserts the
+# Drives each fixture in fixtures/ through goalforge-validate.sh and asserts the
 # expected exit code AND (for the WARN-sensitive cases) WARN presence/absence
 # in --show output. Exit 0 only if every case + both self-tests pass.
 #
@@ -15,7 +15,7 @@
 #       present-target optional_depends_on emits no WARN (positive direction)
 #   (f) templates/wp-overview.md + templates/feature-overview.md carry
 #       schema_version: 5
-#   (g) sdd-goal-hash.sh --self-test and sdd-validate.sh --self-test both exit 0
+#   (g) goalforge-goal-hash.sh --self-test and goalforge-validate.sh --self-test both exit 0
 
 set -uo pipefail
 
@@ -99,11 +99,11 @@ fi
 # ── (g) both scripts' --self-test exit 0 ────────────────────────────────────
 bash "$GOAL_HASH_SH" --self-test >/dev/null 2>&1
 rc_hash_selftest=$?
-check "(g) sdd-goal-hash.sh --self-test exits 0" "$([ "$rc_hash_selftest" -eq 0 ] && echo pass || echo fail)"
+check "(g) goalforge-goal-hash.sh --self-test exits 0" "$([ "$rc_hash_selftest" -eq 0 ] && echo pass || echo fail)"
 
 bash "$VALIDATE_SH" --self-test >/dev/null 2>&1
 rc_validate_selftest=$?
-check "(g) sdd-validate.sh --self-test exits 0" "$([ "$rc_validate_selftest" -eq 0 ] && echo pass || echo fail)"
+check "(g) goalforge-validate.sh --self-test exits 0" "$([ "$rc_validate_selftest" -eq 0 ] && echo pass || echo fail)"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

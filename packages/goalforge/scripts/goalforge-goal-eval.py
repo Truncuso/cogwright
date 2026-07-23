@@ -20,7 +20,7 @@ Public API:
         deterministic/numeric → met decided here; judge/human → directive only.
 
 CLI:
-    python3 sdd-goal-eval.py --wp <overview.md> [--spec <spec.md>]
+    python3 goalforge-goal-eval.py --wp <overview.md> [--spec <spec.md>]
       → prints the verdict JSON; exit 0 iff met (for deterministic/numeric).
       For judge/human the directive is emitted and exit is 2 (not-decided-here).
 """

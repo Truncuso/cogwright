@@ -2,8 +2,8 @@
 
 Single source of truth for which WP `status:` transitions are legal, which
 require a `--reason`, and which are human-gated. Consumed by
-`skills/sdd/scripts/sdd-transition.sh` (the write mechanism) and
-`hooks/sdd-transition-guard.sh` (the advisory guard). Machine-parseable: the
+`skills/sdd/scripts/goalforge-transition.sh` (the write mechanism) and
+`hooks/goalforge-transition-guard.sh` (the advisory guard). Machine-parseable: the
 `## Edges` table uses `|` as the stable delimiter; a row exists **iff** the edge
 is legal.
 
@@ -23,7 +23,7 @@ WP states are linearly ordered:
 - **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no`.
 - **Reverse** edge (`order(to) < order(from)`, e.g. `verified→spec`,
   `verified→draft`, `ready→spec`): legal, `reason_required: yes`. Every
-  later→earlier edge is sanctioned — the `sdd-validate.sh` integrity invariants
+  later→earlier edge is sanctioned — the `goalforge-validate.sh` integrity invariants
   and the WP/task monotonicity check are the guardrails, not a hand-curated
   reverse subset.
 - **Human-gated**: `draft→ready` (feature gate) and `hardened→ready` (WP gate)
@@ -33,7 +33,7 @@ WP states are linearly ordered:
 - **Signal-scoped auto-advance exception (`hardened→ready` only).** The calling
   skill may advance `hardened→ready` WITHOUT human approval **iff** all three
   hold: complexity verdict `simple` (zero S1–S5 tripped, per
-  `sdd-wp-complexity.sh`), `severity ≤ MEDIUM`, and `task_type ≠ migration`.
+  `goalforge-wp-complexity.sh`), `severity ≤ MEDIUM`, and `task_type ≠ migration`.
   The transition MUST be written with `--mode auto` and a `--reason` naming the
   rule + signal evidence — the ledger row is the audit record. Any tripped
   signal, HIGH/CRITICAL severity, or migration WP keeps the human gate. The
@@ -91,7 +91,7 @@ row is the supersession record.
 
 Everything below governs FEATURE-level `status:` (a `plans/<feature>/overview.md`
 whose frontmatter has `work_packages:`/`feature:` and NO `plan:` key), distinct
-from the WP state machine above. `sdd-transition.sh` selects this table when the
+from the WP state machine above. `goalforge-transition.sh` selects this table when the
 target overview classifies as a feature. Same `|`-delimited machine-parseable
 format; a row exists **iff** the feature edge is legal.
 

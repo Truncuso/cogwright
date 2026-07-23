@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# sdd-goal-eval.sh — thin wrapper over sdd-goal-eval.py (the pure goal router).
+# goalforge-goal-eval.sh — thin wrapper over goalforge-goal-eval.py (the pure goal router).
 #
 # Usage:
-#   sdd-goal-eval.sh --wp <wp-overview.md> [--spec <feature-spec.md>]
+#   goalforge-goal-eval.sh --wp <wp-overview.md> [--spec <feature-spec.md>]
 #
 # Prints the verdict JSON {met, reason, strategy, directive?} and exits:
 #   0  → goal met        (deterministic/numeric only)

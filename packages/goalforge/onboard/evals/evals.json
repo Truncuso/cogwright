@@ -34,8 +34,8 @@
     },
     {
       "id": "functional-1-bootstrap",
-      "description": "sdd-onboard.sh bootstraps a fresh temp repo: creates plans/, installs pre-commit hook with sdd marker, and stamps ## SDD in CLAUDE.md",
-      "prompt": "functional: run sdd-onboard.sh on a fresh git-init temp dir and assert expected on-disk artifacts",
+      "description": "goalforge-onboard.sh bootstraps a fresh temp repo: creates plans/, installs pre-commit hook with sdd marker, and stamps ## SDD in CLAUDE.md",
+      "prompt": "functional: run goalforge-onboard.sh on a fresh git-init temp dir and assert expected on-disk artifacts",
       "expected_output": "plans/ directory exists; .git/hooks/pre-commit exists and contains sdd-pre-commit marker; CLAUDE.md exists with exactly one '## SDD' block",
       "expectations": [
         "plans/ directory exists after onboarding",
@@ -47,8 +47,8 @@
     },
     {
       "id": "functional-2-idempotency",
-      "description": "Running sdd-onboard.sh a second time is a safe no-op: pre-commit file stays byte-identical and ## SDD is not duplicated in CLAUDE.md",
-      "prompt": "functional: run sdd-onboard.sh twice on the same repo and assert idempotency",
+      "description": "Running goalforge-onboard.sh a second time is a safe no-op: pre-commit file stays byte-identical and ## SDD is not duplicated in CLAUDE.md",
+      "prompt": "functional: run goalforge-onboard.sh twice on the same repo and assert idempotency",
       "expected_output": "pre-commit file byte-identical after second run; CLAUDE.md has exactly one '## SDD' occurrence",
       "expectations": [
         ".git/hooks/pre-commit is byte-identical after second run",

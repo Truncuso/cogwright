@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# sdd-assumption-recheck.sh — re-run a WP's recorded `## Assumptions` checks and
+# goalforge-assumption-recheck.sh — re-run a WP's recorded `## Assumptions` checks and
 # log any mismatch as a keyed, idempotent row in the WP's findings.md.
 #
 # Usage:
-#   sdd-assumption-recheck.sh <wp-file>
-#   sdd-assumption-recheck.sh --self-test
+#   goalforge-assumption-recheck.sh <wp-file>
+#   goalforge-assumption-recheck.sh --self-test
 #
 # Args:
 #   <wp-file>  A WP markdown file (e.g. overview.md) carrying a `## Assumptions`
@@ -229,7 +229,7 @@ self_test() {
     # count_re <ERE> <file> — integer on stdout, always exit 0 (no grep-exit / pipefail trap)
     count_re() { awk -v re="$1" '$0 ~ re { n++ } END { print n+0 }' "$2"; }
 
-    echo "=== sdd-assumption-recheck.sh --self-test ==="
+    echo "=== goalforge-assumption-recheck.sh --self-test ==="
 
     # ── Fixture: a WP dir mirroring the real layout — overview.md with a
     # `## Assumptions` block (one TRUE, one seeded-FALSE, one documentation-only)
@@ -411,7 +411,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 1 ]]; then
-    echo "ERROR: usage: sdd-assumption-recheck.sh <wp-file>" >&2
+    echo "ERROR: usage: goalforge-assumption-recheck.sh <wp-file>" >&2
     exit 1
 fi
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# sdd-feature-hash.sh — deterministic hash of a feature's STRUCTURE + GOALS.
+# goalforge-feature-hash.sh — deterministic hash of a feature's STRUCTURE + GOALS.
 #
 # Single source of the Tier-1 feature-audit freshness key (schema.md §Tier-1
 # feature audit). The hash covers exactly what warrants a re-audit:
@@ -8,7 +8,7 @@
 #   3. each WP's raw `goal:` block (trailing-ws-stripped, LF-normalized)
 #   4. the spec's `## Interface Contract` section text
 #
-# Usage:   sdd-feature-hash.sh <feature-dir>
+# Usage:   goalforge-feature-hash.sh <feature-dir>
 # Output:  the 12-char hex hash on stdout (exit 0), or an error on stderr (exit 2).
 # Zero-breakage: a feature with no WPs / no spec still hashes (over whatever
 # exists), so callers never crash on a partially-decomposed feature.

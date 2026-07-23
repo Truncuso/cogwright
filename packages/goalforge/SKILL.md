@@ -70,7 +70,7 @@ the chain via the `goalforge-run` orchestrator (`run/`).
 
 The legacy `sdd-*` skills and `sdd-*.sh` scripts remain in place as
 LOCAL-pointing aliases (redirect stubs / exec-forward shims to this package),
-with one script rename: `sdd-goal-route.sh` → `goalforge-route.sh`. Deletion of
+with one script rename: `goalforge-route.sh` → `goalforge-route.sh`. Deletion of
 the `sdd-*` sources is deferred behind a separate human sign-off gate, and the
 alias layer outlives external consumers still pinned to `sdd-*` names (tangram
-ADR-0008 `sdd-status --json`; ProSIP `sdd-validate.sh --strict`).
+ADR-0008 `sdd-status --json`; ProSIP `goalforge-validate.sh --strict`).

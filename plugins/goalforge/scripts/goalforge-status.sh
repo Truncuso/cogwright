@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# sdd-status.sh — read-only tree printer: feature → WPs → tasks.
+# goalforge-status.sh — read-only tree printer: feature → WPs → tasks.
 #
 # Usage:
-#   sdd-status.sh [--feature <slug>] [--json] [<plans-dir>]
+#   goalforge-status.sh [--feature <slug>] [--json] [<plans-dir>]
 #
 # Prints a status-annotated tree of the plans directory by reading
 # frontmatter `status:` fields. Replaces gsd-stats and folder-ls.

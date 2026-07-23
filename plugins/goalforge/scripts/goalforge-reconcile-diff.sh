@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# sdd-reconcile-diff.sh — pure, deterministic WP reconcile-diff.
+# goalforge-reconcile-diff.sh — pure, deterministic WP reconcile-diff.
 #
 # Usage:
-#   sdd-reconcile-diff.sh <existing-feature-dir> <proposed-json>
-#   sdd-reconcile-diff.sh --self-test
+#   goalforge-reconcile-diff.sh <existing-feature-dir> <proposed-json>
+#   goalforge-reconcile-diff.sh --self-test
 #
 # Args:
 #   <existing-feature-dir>  Dir of wp-*/overview.md files (YAML frontmatter:
@@ -216,7 +216,7 @@ EOF
     ok() { echo "$1: PASS"; t_pass=$((t_pass+1)); }
     no() { echo "$1: FAIL — $2"; t_fail=$((t_fail+1)); }
 
-    echo "=== sdd-reconcile-diff.sh --self-test ==="
+    echo "=== goalforge-reconcile-diff.sh --self-test ==="
 
     # ── (1) identity: proposed == existing → all same, all other buckets empty ──
     mkdir -p "$d/feat-identity"
@@ -334,7 +334,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 2 ]]; then
-    echo "ERROR: usage: sdd-reconcile-diff.sh <existing-feature-dir> <proposed-json>" >&2
+    echo "ERROR: usage: goalforge-reconcile-diff.sh <existing-feature-dir> <proposed-json>" >&2
     exit 1
 fi
 
