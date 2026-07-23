@@ -24,7 +24,7 @@ Public API:
         tier string for callers that only need the tier.
 
 CLI:
-    python3 sdd-pick-agent.py --task <yaml-file> [--route ollama] [--self-test]
+    python3 goalforge-pick-agent.py --task <yaml-file> [--route ollama] [--self-test]
 """
 from __future__ import annotations
 

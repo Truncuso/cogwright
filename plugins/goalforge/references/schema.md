@@ -31,9 +31,9 @@ the above:
 A plan with no `schema_version:` field is **legacy (≤v4)** and stays fully
 exempt from the v5 goal-mandatory check — absence is not an error, it is the
 default. Only a plan that explicitly carries `schema_version: 5` (or higher)
-opts into goal-mandatory-at-ready. `sdd-validate.sh` gates strictly on the
+opts into goal-mandatory-at-ready. `goalforge-validate.sh` gates strictly on the
 field's presence: no marker ⇒ the check does not run at all (see
-`sdd-validate.sh`'s goal-mandatory-at-ready check, enforced under the
+`goalforge-validate.sh`'s goal-mandatory-at-ready check, enforced under the
 Goal-block integrity invariants).
 
 **Folder layout is flat:** `plans/<feature>/<wp-id>/files`. There are no
@@ -220,7 +220,7 @@ register: production|prototype    # optional; default production. prototype ⇒
                                   # flipping it after goal_approved_version is set
                                   # changes execution semantics silently; treat a
                                   # register change as a goal change: re-run sdd-harden.
-                                  # Mechanically gated by sdd-validate.sh check_register
+                                  # Mechanically gated by goalforge-validate.sh check_register
                                   # (ERROR under --strict): enum ∈ {production,prototype};
                                   # prototype ⇒ strategy judge|human (any status) and
                                   # exactly one task-*.md (ready+ only).
@@ -264,7 +264,7 @@ recorded risk. Two coupled pieces, both in the WP `overview.md` body:
 2. The open-question bullet marked `[risk-accepted: <id>]`, where `<id>`
    resolves to a `## Risks` entry **in the same file**.
 
-`sdd-open-questions-gate.sh` counts a `[risk-accepted: <id>]` bullet as
+`goalforge-open-questions-gate.sh` counts a `[risk-accepted: <id>]` bullet as
 resolved **iff** the id resolves; a dangling id counts as unresolved (the
 marker is the link, the Risks row is the record). `[deferred]` stays for
 genuinely-later questions that carry no risk decision; `[assumption]` stays
@@ -291,7 +291,7 @@ parallel: false                   # safe to run concurrently with sibling tasks?
 depends_on: []                    # task slugs within the same WP
 verify: "<exact cmd or check that proves the task done>"
 # expects_absent: [<repo-relative path>, ...]   # optional; deletion tasks only.
-#   Paths this task's verify: legitimately asserts ABSENT. sdd-validate.sh verify-lint
+#   Paths this task's verify: legitimately asserts ABSENT. goalforge-validate.sh verify-lint
 #   INVERTS the existence check for a listed token: it EXISTS → ERROR (deletion
 #   regressed), it is MISSING → pass. Tokens not listed keep the default check.
 #   Applies to the NON-negated verify form (e.g. `test -f <p>`); a negated form
@@ -325,7 +325,7 @@ checkpoint:
 
 `complexity` drives the model tier; the tier is instantiated to an explicit
 `{model, effort}` by `TIER_DISPATCH`/`tier_to_dispatch` in
-`sdd/scripts/sdd-pick-agent.py` — do not restate the values here (they drift).
+`sdd/scripts/goalforge-pick-agent.py` — do not restate the values here (they drift).
 `discovered_by` records how the specialist was resolved (see §5 of spec.md for
 the dispatch algorithm).
 
@@ -356,7 +356,7 @@ field (see `evals/schema-v5/fixtures/e-v5-complete-goal-present-dep/` for a live
 
 ---
 
-## Integrity invariants (enforced by `sdd-validate.sh`)
+## Integrity invariants (enforced by `goalforge-validate.sh`)
 
 - `verified` ⇒ all child tasks `verified` + `findings.md` exists.
 - `executing` ⇒ ≥1 task has a `checkpoint` block.
@@ -396,7 +396,7 @@ Every template's first body line after frontmatter is:
 ```
 
 so a stale template (missing the marker or wrong version) is detectable by
-`sdd-validate.sh`. The marker check is **additive**: v4 is current, but v3 is
+`goalforge-validate.sh`. The marker check is **additive**: v4 is current, but v3 is
 still accepted, so legacy plans never go stale on a marker bump alone.
 
 ---
@@ -404,13 +404,13 @@ still accepted, so legacy plans never go stale on a marker bump alone.
 ## Transition ledger — `<feature>/.sdd-transitions.jsonl`
 
 Append-only, git-tracked, one JSON row per WP status transition. **Single
-writer:** `sdd-transition.sh` (never hand-edit). Each row:
+writer:** `goalforge-transition.sh` (never hand-edit). Each row:
 
 ```jsonc
 { "ts": "<ISO-8601 Z>", "wp": "<wp-slug>", "from": "<status>", "to": "<status>",
   "reason": "<short why — the decision rationale>", "override": <bool>,
   "commit": "<short sha>",
-  // ── attribution stamp (auto-filled by sdd-attribution.sh; degrade → "unknown") ──
+  // ── attribution stamp (auto-filled by goalforge-attribution.sh; degrade → "unknown") ──
   "mode": "human" | "auto",          // human-gated edge vs autonomous engine
   "actor": "human:<git user.name>" | "<skill|auto>",
   "session": "<CLAUDE_CODE_SESSION_ID>",
@@ -434,7 +434,7 @@ A **goal** is a frontmatter block carrying Codex's 6-part anatomy. It lives at
 two altitudes: the **feature spec** (parent goal) and each **WP** (sub-goal).
 The block is **optional** — a plan without it validates and falls back to the
 legacy `## Goal` + task `verify:` representation (treated as
-`strategy: deterministic`). When present, `sdd-validate.sh` integrity-checks it.
+`strategy: deterministic`). When present, `goalforge-validate.sh` integrity-checks it.
 
 ### The block (both altitudes)
 
@@ -517,7 +517,7 @@ A WP with a complete goal block (no `inherits_from`, or all fields set) runs
 solo. `task_type` and `strategy` are **orthogonal**: any `task_type` may use any
 `strategy`; the code path is "the deterministic strategy."
 
-### Goal-block integrity invariants (enforced by `sdd-validate.sh`)
+### Goal-block integrity invariants (enforced by `goalforge-validate.sh`)
 
 When a `goal:` block is present:
 
@@ -609,7 +609,7 @@ verdict: pass | findings
    `goal_approved_version`: trailing-whitespace-stripped, LF-normalized),
 4. the spec's `## Interface Contract` section text (cross-WP contracts).
 
-Computed by `sdd/scripts/sdd-feature-hash.sh <feature-dir>` (single source of the
+Computed by `sdd/scripts/goalforge-feature-hash.sh <feature-dir>` (single source of the
 hash; never hand-computed — LLMs cannot hash reliably). **Freshness gate:** an
 audit is fresh iff `.tier1-audit.md`'s `audit_hash` equals the recomputed hash;
 a stale or absent audit triggers a re-run (a `feature-audit`-role dispatch).

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# sdd-harden-route.sh — route a WP's pre-harden review by complexity.
+# goalforge-harden-route.sh — route a WP's pre-harden review by complexity.
 #
 # Usage:
-#   sdd-harden-route.sh <wp-path>
-#   sdd-harden-route.sh --self-test
+#   goalforge-harden-route.sh <wp-path>
+#   goalforge-harden-route.sh --self-test
 #
 # Args:
 #   <wp-path>  Work-package directory (overview.md + task-*.md), inside a feature dir.
 #
 # Behavior:
-#   Delegates classification to sdd-wp-complexity.sh <wp-path> and maps its verdict
+#   Delegates classification to goalforge-wp-complexity.sh <wp-path> and maps its verdict
 #   to the pre-harden review route (sdd-harden/SKILL.md Step 0a):
 #     complex -> "panel"        convene skills/adjudication/panel + dissent ledger
 #     simple  -> "single-pass"  the standing single read-only review sub-agent
@@ -36,10 +36,10 @@ usage() {
 route_wp() {
     local wp="$1"
     [[ -f "$COMPLEXITY" ]] \
-        || { echo "ERROR: sdd-wp-complexity.sh not found at $COMPLEXITY" >&2; exit 1; }
+        || { echo "ERROR: goalforge-wp-complexity.sh not found at $COMPLEXITY" >&2; exit 1; }
     local cj
     cj="$(bash "$COMPLEXITY" "$wp")" \
-        || { echo "ERROR: sdd-wp-complexity.sh failed for $wp" >&2; exit 1; }
+        || { echo "ERROR: goalforge-wp-complexity.sh failed for $wp" >&2; exit 1; }
     COMPLEXITY_JSON="$cj" python3 - <<'PY'
 import json, os, sys
 try:
@@ -71,7 +71,7 @@ self_test() {
     ok() { echo "$1: PASS"; t_pass=$((t_pass+1)); }
     no() { echo "$1: FAIL — $2"; t_fail=$((t_fail+1)); }
 
-    echo "=== sdd-harden-route.sh --self-test ==="
+    echo "=== goalforge-harden-route.sh --self-test ==="
 
     # ── complex fixture → panel (S1 severity HIGH) ────────────────────────────
     # Fixtures mirror the REAL WP frontmatter shape (severity top-level, sibling
@@ -146,7 +146,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 1 ]]; then
-    echo "ERROR: usage: sdd-harden-route.sh <wp-path>" >&2
+    echo "ERROR: usage: goalforge-harden-route.sh <wp-path>" >&2
     exit 1
 fi
 

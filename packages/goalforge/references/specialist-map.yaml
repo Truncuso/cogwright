@@ -1,6 +1,6 @@
 # specialist-map.yaml — SDD dispatch seed
 # Maps file extensions, tags, and task_type to specialist agents.
-# Resolution order (sdd-pick-agent.py): by_tag → by_task_type → by_extension →
+# Resolution order (goalforge-pick-agent.py): by_tag → by_task_type → by_extension →
 # discovery agent. No catch-all default: unmatched → discovery agent.
 # New entries proposed by the discovery agent land in findings.md for human review.
 

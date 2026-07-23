@@ -12,7 +12,7 @@ the verdict). Agents never convene agents — this skill convenes the roster
 - **Scope: THIS WP's design dissent**, not the whole feature (Tier-1 already
   audited cross-WP concerns). **Retain a feature-scope cross-WP-contract +
   shared-file sweep ONLY when the `cross_wp_contract` signal (S5 from
-  `sdd-harden-route.sh`) trips** — otherwise the panel stays WP-scoped.
+  `goalforge-harden-route.sh`) trips** — otherwise the panel stays WP-scoped.
 - **Roster:** the read-only review sub-agent above (briefed identically with
   `${CLAUDE_PLUGIN_ROOT}/skills/harden/references/pre-harden-review.md` + this WP's Tier-1
   findings) plus persona lenses, so the WP design is audited from more than one
@@ -31,5 +31,5 @@ the verdict). Agents never convene agents — this skill convenes the roster
   BLOCK/HIGH finding in the planning docs first. A finding needing a human design
   call goes to the Step 2 gate.
 - **Surface improvements** the panel exposes via the improvement-surfacing helper
-  (`sdd-harden-surface.sh`) — propose-only, never widen the WP goal. See
+  (`goalforge-harden-surface.sh`) — propose-only, never widen the WP goal. See
   *Surface improvements (propose-only)* at the end of Step 1.

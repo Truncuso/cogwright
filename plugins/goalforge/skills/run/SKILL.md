@@ -35,9 +35,9 @@ routing home; absent ⇒ `standard`) and skips the steps marked
 - **`standard`** — the six-step chain, unchanged.
 - **`fast`** — capture → `sdd-decompose --add-wp` (ONE WP, complete
   self-contained goal block, no `spec.md`) → deterministic gates
-  (`sdd-validate` + `sdd-open-questions-gate.sh --check` +
-  `sdd-wp-complexity.sh` verdict `simple`, severity ≤ MEDIUM, non-migration)
-  → `sdd-transition.sh <wp> ready --mode auto` → execute → verify.
+  (`sdd-validate` + `goalforge-open-questions-gate.sh --check` +
+  `goalforge-wp-complexity.sh` verdict `simple`, severity ≤ MEDIUM, non-migration)
+  → `goalforge-transition.sh <wp> ready --mode auto` → execute → verify.
 - **Escalation:** ANY fast-gate trip leaves the WP at `spec` and re-enters the
   chain at the harden step (full treatment). The gates, not the classifier,
   are the safety net.
@@ -176,7 +176,7 @@ resolution:
   `by_writing_kind` map (scientific/research/docs), with an untagged writing WP
   escalating so the right producer is chosen. See `sdd-execute` Step 4.
 - **Strategy:** `task_type` supplies the *default* verification strategy
-  (`default_strategy_for` in `sdd-goal-eval.py`) when a WP omits one.
+  (`default_strategy_for` in `goalforge-goal-eval.py`) when a WP omits one.
 
 **Code is the primary, best-supported path** — the richest specialist coverage,
 reviewers, and build/verify tooling target code. Non-code task types are
@@ -269,5 +269,5 @@ legal `spec → ready` edge via the deterministic gates instead of harden.
 - Resume routing keys entirely off the target's on-disk `status:` — a value matching no `chain.yaml` precondition (a hand-edited label, schema drift, or a terminal `verified`/`archived`) leaves sdd-run with no step to enter, so it halts rather than guessing. Don't hand-edit `status:` to force re-entry; set it to the exact precondition the intended step expects.
 - `--dry-run` must have zero side effects: no files written, no subagents dispatched, no status fields mutated. A dry-run that modifies state makes testing the chain impossible and breaks CI verification.
 - Resume reads the CURRENT on-disk `status:` at invocation — if a parallel session or an external committer advanced the WP between your last step and this resume, sdd-run enters at the NEW status and can skip the step you expected. Re-check `status:` before resuming a long-suspended chain.
-- `chain.yaml` steps resolve their `skill:` against installed skills only at RUNTIME — a step naming a renamed, uninstalled, or typo'd skill fails when the chain REACHES it, not at load. Run `scripts/sdd-router.sh --dry-run <feature>` after any chain.yaml edit to surface an UNRESOLVED step up front.
+- `chain.yaml` steps resolve their `skill:` against installed skills only at RUNTIME — a step naming a renamed, uninstalled, or typo'd skill fails when the chain REACHES it, not at load. Run `scripts/goalforge-router.sh --dry-run <feature>` after any chain.yaml edit to surface an UNRESOLVED step up front.
 - The entry commands (`/spec`, `/plan`, `/implement`, `/verify`) call their child skills **directly** (e.g. `commands/spec.md` → `sdd-capture`/`sdd-spec`) — they do NOT route through `sdd-run`, so its resume + gate logic is bypassed when you use the slash commands. Invoke `sdd-run` (or `skill-router sdd-run`) explicitly when you need the orchestrator.

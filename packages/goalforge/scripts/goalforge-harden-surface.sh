@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# sdd-harden-surface.sh — surface a harden-panel finding as a propose-only route record.
+# goalforge-harden-surface.sh — surface a harden-panel finding as a propose-only route record.
 #
 # Usage:
-#   sdd-harden-surface.sh [<finding-json>]    # file path, or "-"/omitted = stdin
-#   sdd-harden-surface.sh --self-test
+#   goalforge-harden-surface.sh [<finding-json>]    # file path, or "-"/omitted = stdin
+#   goalforge-harden-surface.sh --self-test
 #
 # Args:
 #   <finding-json>  A single panel finding as JSON (file path, or "-"/omitted = stdin).
@@ -112,7 +112,7 @@ self_test() {
         [[ "$before" == "$after" ]] && TREE_UNCHANGED=1 || TREE_UNCHANGED=0
     }
 
-    echo "=== sdd-harden-surface.sh --self-test ==="
+    echo "=== goalforge-harden-surface.sh --self-test ==="
 
     # ── skill gap → skill-improve, propose-only, tree unchanged ───────────────
     run_in_repo '{"severity":"MEDIUM","summary":"sdd-harden panel lacks a debate-mode default","skill":"sdd-harden"}'

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# sdd-wp-complexity.sh — classify a work-package as complex or simple.
+# goalforge-wp-complexity.sh — classify a work-package as complex or simple.
 #
 # Usage:
-#   sdd-wp-complexity.sh <wp-path>
-#   sdd-wp-complexity.sh --self-test
+#   goalforge-wp-complexity.sh <wp-path>
+#   goalforge-wp-complexity.sh --self-test
 #
 # Args:
 #   <wp-path>  Work-package directory containing overview.md and task-*.md.
@@ -207,7 +207,7 @@ depends_on: $_deps
 EOF
     }
 
-    echo "=== sdd-wp-complexity.sh --self-test ==="
+    echo "=== goalforge-wp-complexity.sh --self-test ==="
 
     # ── F1: S1 only — severity HIGH ───────────────────────────────────────────
     mk_ov "$d/feat-f1/wp-01-f1" HIGH
@@ -373,7 +373,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 1 ]]; then
-    echo "ERROR: usage: sdd-wp-complexity.sh <wp-path>" >&2
+    echo "ERROR: usage: goalforge-wp-complexity.sh <wp-path>" >&2
     exit 1
 fi
 

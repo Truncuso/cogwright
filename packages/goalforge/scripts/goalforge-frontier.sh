@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# sdd-frontier.sh — harden-frontier scheduler for an SDD feature.
+# goalforge-frontier.sh — harden-frontier scheduler for an SDD feature.
 #
 # Usage:
-#   sdd-frontier.sh <feature-path>     emit frontier JSON on stdout (schema below)
-#   sdd-frontier.sh --self-test
+#   goalforge-frontier.sh <feature-path>     emit frontier JSON on stdout (schema below)
+#   goalforge-frontier.sh --self-test
 #
 # Reads each <feature-path>/wp-*/overview.md frontmatter (status, depends_on,
 # parallel) and emits a single JSON object:
@@ -148,7 +148,7 @@ EOF
     ok() { echo "$1: PASS"; t_pass=$((t_pass+1)); }
     no() { echo "$1: FAIL"; t_fail=$((t_fail+1)); }
 
-    echo "=== sdd-frontier.sh --self-test ==="
+    echo "=== goalforge-frontier.sh --self-test ==="
 
     # (1) linear chain: wp-01-a verified, wp-02-b spec deps [wp-01-a] → hardenable [wp-02-b]
     mkwp "$d/linear" wp-01-a verified "[]"
@@ -221,7 +221,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 1 ]]; then
-    echo "ERROR: usage: sdd-frontier.sh <feature-path>" >&2
+    echo "ERROR: usage: goalforge-frontier.sh <feature-path>" >&2
     exit 1
 fi
 

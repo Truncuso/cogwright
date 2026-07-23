@@ -44,4 +44,4 @@ terminal, reached only via explicit user action. Details: `references/schema.md`
 | `implement` | Reused inside `sdd-execute` sub-cycle |
 | `verify-and-simplify` | Reused inside `sdd-execute` sub-cycle |
 | `sdd-run` | Orchestrator; wires the chain via `chain.yaml` |
-| `sdd-validate.sh` | Schema + status-vs-evidence + link + staleness checks |
+| `goalforge-validate.sh` | Schema + status-vs-evidence + link + staleness checks |

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# sdd-hygiene.sh — unified per-feature reconcile. Makes ONE feature internally
+# goalforge-hygiene.sh — unified per-feature reconcile. Makes ONE feature internally
 # consistent: stamp status tables + regenerate the todo rollup. Reports drift
 # terse by default; --apply fixes it. It STOPS before archive — never moves a
 # feature, never calls sdd-archive. Composes only the existing sdd scripts.
 #
-# Usage:  sdd-hygiene.sh <feature-dir> [--show] [--apply]
+# Usage:  goalforge-hygiene.sh <feature-dir> [--show] [--apply]
 #   default : DRY-RUN. One-line drift verdict (fixable drift = tables + rollup).
 #             --show adds the validator health + commit-hash advisory.
 #   --apply : run goalforge-stamp-tables.sh + goalforge-rollup.sh to fix drift (idempotent).

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# sdd-transition.sh — the single WP- and FEATURE-status write mechanism.
+# goalforge-transition.sh — the single WP- and FEATURE-status write mechanism.
 #
 # Usage:
-#   sdd-transition.sh <path> <to> --reason "<text>" \
+#   goalforge-transition.sh <path> <to> --reason "<text>" \
 #       [--from <s>] [--actor <id>] [--override] \
 #       [--mode human|auto] [--agent <id>] [--decision-ref <ref>]
-#   sdd-transition.sh --self-test
+#   goalforge-transition.sh --self-test
 #
 # <path> is either a WP dir/overview.md (frontmatter has a `plan:` key) or a
 # FEATURE dir/overview.md (frontmatter has `work_packages:`/`feature:` and NO
@@ -13,7 +13,7 @@
 # the `## Edges` table; FEATURE targets against `## Feature edges` — both in
 #   references/state-machine.md.
 # Feature-level `→ready` skips the WP-only goal-hash gate; `archived` is not a
-# feature edge target (that terminal move lives in sdd-archive.sh only).
+# feature edge target (that terminal move lives in goalforge-archive.sh only).
 #
 # Reads the overview.md current `status:` as the authoritative `from`,
 # validates the `from→to` edge against the selected table
@@ -23,10 +23,10 @@
 #   2. appends a JSON row to `plans/<feature>/.sdd-transitions.jsonl`
 #      (git-tracked, append-only) — each row carries an auto-filled attribution
 #      stamp {mode,actor,session,model,provider,agent,decision_ref} sourced from
-#      sdd-attribution.sh (degrade-not-block: any failure → "unknown"),
-#   3. invokes sdd-stamp-tables.sh (WP/Tasks STATUS cells — the P5 autostamp)
+#      goalforge-attribution.sh (degrade-not-block: any failure → "unknown"),
+#   3. invokes goalforge-stamp-tables.sh (WP/Tasks STATUS cells — the P5 autostamp)
 #      and goalforge-rollup.sh (feature todo.md).
-# It NEVER writes table cells directly — that is sdd-stamp-tables.sh's job.
+# It NEVER writes table cells directly — that is goalforge-stamp-tables.sh's job.
 #
 # `--from` is an optimistic-lock assertion: when given it must equal the on-disk
 # status, else the transition is rejected (non-zero). The `.sdd-transitions.lock`
@@ -326,7 +326,7 @@ transition() {
             # stamp: a goal-less WP carrying a stray stamp can't be validated against
             # any hash, so refuse it rather than let it pass unchecked.
             #
-            # schema_version>=5 goal-mandatory rule (mirrors sdd-validate.sh's
+            # schema_version>=5 goal-mandatory rule (mirrors goalforge-validate.sh's
             # check_goal_mandatory): under that marker a goal-less WP is not
             # exempt — sdd-validate would fatally reject it at ready/executing/
             # verified anyway, so refuse the transition here instead of letting
@@ -336,14 +336,14 @@ transition() {
             # frontmatter-derived value into a python literal — that was an
             # injection/breakage risk on a crafted schema_version). A
             # non-numeric value fails the regex and is treated as the legacy
-            # exemption path, mirroring sdd-validate.sh's check_goal_mandatory:
+            # exemption path, mirroring goalforge-validate.sh's check_goal_mandatory:
             # it warns and skips the check on ValueError (not this check's
             # concern) rather than fatally rejecting — same effective outcome
             # (no goal required) as sv_num < 5.
             local SCHEMA_VER
             SCHEMA_VER="$(read_schema_version "$OVERVIEW")"
             if [[ -n "$SCHEMA_VER" ]] && [[ "$SCHEMA_VER" =~ ^[0-9]+$ ]] && (( SCHEMA_VER >= 5 )); then
-                echo "ready refused: schema_version >= 5 requires a goal: block (goal-mandatory rule; see sdd-validate.sh check_goal_mandatory) — none present on $(basename "$WP_DIR")" >&2
+                echo "ready refused: schema_version >= 5 requires a goal: block (goal-mandatory rule; see goalforge-validate.sh check_goal_mandatory) — none present on $(basename "$WP_DIR")" >&2
                 return 1
             fi
             APPROVED="$(read_goal_approved "$OVERVIEW")"
@@ -397,7 +397,7 @@ transition() {
     WP_NAME="$(basename "$WP_DIR")"
 
     # ── Attribution stamp (auto-filled; degrade-not-block) ───────────────────
-    # Reuse sdd-attribution.sh (→ handoff-env.sh) for session/model/provider and
+    # Reuse goalforge-attribution.sh (→ handoff-env.sh) for session/model/provider and
     # the mode-normalized actor. Any failure resolves to "unknown"; never blocks.
     local SESSION="unknown" MODEL="unknown" PROVIDER="unknown" ATTR_JSON
     ATTR_JSON="$(bash "$ATTRIB" --json --mode "$MODE" --actor "$ACTOR" --agent "$AGENT" 2>/dev/null || true)"
@@ -497,7 +497,7 @@ EOF
     ok() { echo "  PASS: $1"; t_pass=$((t_pass+1)); }
     no() { echo "  FAIL: $1"; t_fail=$((t_fail+1)); }
 
-    echo "=== sdd-transition.sh --self-test ==="
+    echo "=== goalforge-transition.sh --self-test ==="
 
     # (a) forward edge succeeds + writes a ledger row
     if bash "$SELF" "$wp" hardened --reason "fwd" >/dev/null 2>&1 \
@@ -693,7 +693,7 @@ EOF
     fi
 
     # ── (n)(o)(p) schema_version>=5 goal-mandatory rule — the wp-08 gap-close ───
-    #   sdd-validate.sh's check_goal_mandatory fatally rejects a schema_version>=5
+    #   goalforge-validate.sh's check_goal_mandatory fatally rejects a schema_version>=5
     #   WP with no goal: block once it reaches ready/executing/verified. Before this
     #   fix the (j)-style bounded exemption was schema_version-blind, so such a WP
     #   could transition to `ready` here and be immediately rejected by validate —
@@ -768,7 +768,7 @@ PY
     #   born goal_approved_version: null and takes spec→ready --mode auto with NO
     #   harden (the sole hash writer), so the null stamp made the fast route
     #   non-runnable end-to-end. (l) the bug: null stamp → REFUSED. (m) the fix:
-    #   sdd-goal-hash.sh --record, then the SAME edge SUCCEEDS → ready. Drives the
+    #   goalforge-goal-hash.sh --record, then the SAME edge SUCCEEDS → ready. Drives the
     #   real spec→ready edge through this script — the coverage gap that let it ship.
     mkdir -p "$gfeat/wp-g-fast"
     cat > "$gfeat/wp-g-fast/overview.md" <<EOF
@@ -906,7 +906,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 2 ]]; then
-    echo "ERROR: usage: sdd-transition.sh <wp-path> <to> --reason \"<text>\" [--from <s>] [--actor <id>] [--override] [--mode human|auto] [--agent <id>] [--decision-ref <ref>]" >&2
+    echo "ERROR: usage: goalforge-transition.sh <wp-path> <to> --reason \"<text>\" [--from <s>] [--actor <id>] [--override] [--mode human|auto] [--agent <id>] [--decision-ref <ref>]" >&2
     exit 1
 fi
 

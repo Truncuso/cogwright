@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# sdd-goal-hash.sh — the SINGLE hash authority for a WP goal block.
+# goalforge-goal-hash.sh — the SINGLE hash authority for a WP goal block.
 #
 # Usage:
-#   sdd-goal-hash.sh <wp-path>            print sha256[:12] of the goal: block
-#   sdd-goal-hash.sh --record <wp-path>   compute it + write goal_approved_version:
-#   sdd-goal-hash.sh --self-test
+#   goalforge-goal-hash.sh <wp-path>            print sha256[:12] of the goal: block
+#   goalforge-goal-hash.sh --record <wp-path>   compute it + write goal_approved_version:
+#   goalforge-goal-hash.sh --self-test
 #
 # Goal block = the lines from the top-level `goal:` key up to (not including) the
 # next top-level frontmatter key (`^[a-z_][a-z0-9_]*:`, no leading whitespace),
@@ -167,7 +167,7 @@ EOF
     ok() { echo "$1: PASS"; t_pass=$((t_pass+1)); }
     no() { echo "$1: FAIL"; t_fail=$((t_fail+1)); }
 
-    echo "=== sdd-goal-hash.sh --self-test ==="
+    echo "=== goalforge-goal-hash.sh --self-test ==="
 
     # (a) identical goal blocks in two files hash identically
     _fixture "$d/wp-01-a/overview.md" "the thing is done"
@@ -224,7 +224,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 1 ]]; then
-    echo "ERROR: usage: sdd-goal-hash.sh [--record] <wp-path>" >&2
+    echo "ERROR: usage: goalforge-goal-hash.sh [--record] <wp-path>" >&2
     exit 1
 fi
 

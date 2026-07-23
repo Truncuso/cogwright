@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# sdd-learning-route.sh — capture-learning Phase-1 leg for the SDD verify boundary.
+# goalforge-learning-route.sh — capture-learning Phase-1 leg for the SDD verify boundary.
 #
 # At the WP `executing → verified` boundary, sdd-verify shells out here with the
 # verified fix's root-cause/contrast (+ an optional strategic candidate). This
@@ -9,12 +9,12 @@
 # prose, NOT here).
 #
 # Usage:
-#   sdd-learning-route.sh --wp <path> --fix "..." --cause "..." --contrast "..." \
+#   goalforge-learning-route.sh --wp <path> --fix "..." --cause "..." --contrast "..." \
 #       [--strategic "..." [--dest <idea-capture|skill-improve|memory|rules>]] [--dry-run]
-#   sdd-learning-route.sh --detect-only --wp <path> --fix "..." ...   # detection record ONLY
+#   goalforge-learning-route.sh --detect-only --wp <path> --fix "..." ...   # detection record ONLY
 #       (pure/stdout-only: runs detect_boundary, no tactical/strategic write — exits 0)
-#   sdd-learning-route.sh --boundary-smoke      # task-01 self-test (detection leg)
-#   sdd-learning-route.sh --self-test           # task-02 self-test (full routing + no-commit)
+#   goalforge-learning-route.sh --boundary-smoke      # task-01 self-test (detection leg)
+#   goalforge-learning-route.sh --self-test           # task-02 self-test (full routing + no-commit)
 #
 # Args:
 #   --wp <path>        Verifying WP folder; its findings.md is the tactical sink.
@@ -248,7 +248,7 @@ Decision: this trailing entry must survive every tactical append intact.
 EOF
     }
 
-    echo "=== sdd-learning-route.sh --self-test ==="
+    echo "=== goalforge-learning-route.sh --self-test ==="
 
     # ── (a) tactical append ACTUALLY lands the entry in findings.md ──
     local wpT="$d/wp-tactical"; mkdir -p "$wpT"; seed_findings "$wpT/findings.md"
@@ -390,7 +390,7 @@ boundary_smoke() {
     # run_cap <args...> — capture stdout+stderr in _OUT, exit code in _RC; never aborts.
     run_cap() { if _OUT="$("$@" 2>&1)"; then _RC=0; else _RC=$?; fi; }
 
-    echo "=== sdd-learning-route.sh --boundary-smoke ==="
+    echo "=== goalforge-learning-route.sh --boundary-smoke ==="
 
     # ── Fixture A: a WP dir WITH findings.md (mirrors the real layout) ──
     local wpA="$d/wp-01-fixture"

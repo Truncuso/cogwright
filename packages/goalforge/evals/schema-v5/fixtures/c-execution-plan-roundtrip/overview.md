@@ -20,7 +20,7 @@ sources: []
 
 <!-- Fixture: schema-v5 case (c) — a full execution_plan: block (4-route enum
      value `wave` + steps/dispatch/parallel/tiers keys) on the FEATURE overview.
-     Expect: parses clean, round-trips through sdd-validate.sh with zero
+     Expect: parses clean, round-trips through goalforge-validate.sh with zero
      errors/warnings (exit 0). No WPs needed — the block is feature-level data,
      inert to the validator (no execution_plan-specific check exists; only
      FEATURE_REQUIRED + YAML-parses-clean apply). -->

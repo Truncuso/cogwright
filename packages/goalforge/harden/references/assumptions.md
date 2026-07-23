@@ -36,7 +36,7 @@ Keep the two separate: assumption `check`s are executed; `verify:` strings are
 linted.
 
 **Execute Step 0b re-runs them.** At the goal-resolution preflight `sdd-execute`
-calls `~/.claude/skills/sdd/scripts/sdd-assumption-recheck.sh <wp>/overview.md`,
+calls `~/.claude/skills/sdd/scripts/goalforge-assumption-recheck.sh <wp>/overview.md`,
 which runs each `check` and, on a mismatch, writes a keyed, idempotent row to the
 WP's `findings.md`:
 

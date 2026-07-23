@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# sdd-archive.sh — deterministic core of the sdd-archive skill. Archives ONE
+# goalforge-archive.sh — deterministic core of the sdd-archive skill. Archives ONE
 # completed feature to its terminal `archived` status and moves it to
 # _archived/. Fail-closed: refuses unless status: completed. Does NOT commit and
 # does NOT run ensure-committed — the CALLER commits, then verifies cleanliness
 # (so git records the frontmatter edit + folder rename in one commit).
 #
-# Usage:  sdd-archive.sh <feature> [--supersedes <old>] [--strict-refs] [--plans-root <root>]
-#         sdd-archive.sh <feature> --relocate [--strict-refs] [--plans-root <root>]
+# Usage:  goalforge-archive.sh <feature> [--supersedes <old>] [--strict-refs] [--plans-root <root>]
+#         goalforge-archive.sh <feature> --relocate [--strict-refs] [--plans-root <root>]
 #
 # Modes:
 #   (default)   completed → archived : flips status + moves to _archived/.
@@ -50,7 +50,7 @@ while [[ $# -gt 0 ]]; do
         *)             FEATURE="$1"; shift ;;
     esac
 done
-[[ -z "$FEATURE" ]] && { echo "sdd-archive: usage: sdd-archive.sh <feature> [--supersedes <old>] [--plans-root <root>]" >&2; exit 2; }
+[[ -z "$FEATURE" ]] && { echo "sdd-archive: usage: goalforge-archive.sh <feature> [--supersedes <old>] [--plans-root <root>]" >&2; exit 2; }
 
 # Resolve plans root: --plans-root → SDD_PLANS_DIR → git-root/plans → CWD/plans → ~/.claude/plans
 if [[ -z "$ROOT" ]]; then

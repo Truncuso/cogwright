@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# sdd-rewire-impact.sh — migration rewire-impact scan + post-move dangling gate.
+# goalforge-rewire-impact.sh — migration rewire-impact scan + post-move dangling gate.
 #
 # Usage:
-#   sdd-rewire-impact.sh [--root <dir>] <path>              # BEFORE a move: list references
-#   sdd-rewire-impact.sh --post-move [--root <dir>] <path>  # AFTER a move: dangling-ref gate
-#   sdd-rewire-impact.sh --deletion-advisory [--root <dir>] <path>  # DELETION: non-blocking
+#   goalforge-rewire-impact.sh [--root <dir>] <path>              # BEFORE a move: list references
+#   goalforge-rewire-impact.sh --post-move [--root <dir>] <path>  # AFTER a move: dangling-ref gate
+#   goalforge-rewire-impact.sh --deletion-advisory [--root <dir>] <path>  # DELETION: non-blocking
 #                                                           #   advisory, refs split live vs
 #                                                           #   test-only (exit 0 always)
-#   sdd-rewire-impact.sh --self-test
+#   goalforge-rewire-impact.sh --self-test
 #
 # Args:
 #   <path>          Repo-relative path being moved (matched as a FIXED string,
@@ -162,7 +162,7 @@ self_test() {
         if _OUT="$("$@" 2>&1)"; then _RC=0; else _RC=$?; fi
     }
 
-    echo "=== sdd-rewire-impact.sh --self-test ==="
+    echo "=== goalforge-rewire-impact.sh --self-test ==="
 
     # ── Seed a repo-like fixture mirroring a real move ────────────────────────
     # A module at lib/old-module.sh referenced by 3 callers; one unrelated file.
@@ -314,7 +314,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 1 ]]; then
-    echo "ERROR: usage: sdd-rewire-impact.sh [--post-move] [--root <dir>] <path>" >&2
+    echo "ERROR: usage: goalforge-rewire-impact.sh [--post-move] [--root <dir>] <path>" >&2
     exit 1
 fi
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# sdd-completed.sh — deterministic detector for archive-ready features.
+# goalforge-completed.sh — deterministic detector for archive-ready features.
 #
 # Emits every feature whose overview.md status is `completed` and that is NOT
-# already under _archived/ — i.e. the set sdd-archive-batch.sh should reconcile
-# and archive. Delegates all frontmatter reading to sdd-validate.sh
+# already under _archived/ — i.e. the set goalforge-archive-batch.sh should reconcile
+# and archive. Delegates all frontmatter reading to goalforge-validate.sh
 # (--list-status completed); it never parses YAML itself.
 #
-# Usage:  sdd-completed.sh [--show] [<plans-dir>]
+# Usage:  goalforge-completed.sh [--show] [<plans-dir>]
 #   stdout : archive-ready feature slugs, one per line (machine-readable).
 #   stderr : terse one-line summary; --show also lists the slugs.
 #   exit   : always 0 — this is a read-only query, never a gate.
@@ -23,7 +23,7 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Resolve plans dir (mirror sdd-validate.sh): arg → SDD_PLANS_DIR → git-root/plans
+# Resolve plans dir (mirror goalforge-validate.sh): arg → SDD_PLANS_DIR → git-root/plans
 # → CWD/plans → ~/.claude/plans.
 if [[ -z "$PLANS" ]]; then
     if [[ -n "${SDD_PLANS_DIR:-}" ]]; then

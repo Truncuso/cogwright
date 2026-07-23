@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# sdd-stamp-tables.sh — sync SDD status tables to frontmatter truth (lossless).
+# goalforge-stamp-tables.sh — sync SDD status tables to frontmatter truth (lossless).
 #
 # Usage:
-#   sdd-stamp-tables.sh <feature-dir>      # one feature
-#   sdd-stamp-tables.sh --all <plans-root> # every feature under <plans-root>
-#   sdd-stamp-tables.sh --check <target>   # dry-run: exit 1 if any table is stale
+#   goalforge-stamp-tables.sh <feature-dir>      # one feature
+#   goalforge-stamp-tables.sh --all <plans-root> # every feature under <plans-root>
+#   goalforge-stamp-tables.sh --check <target>   # dry-run: exit 1 if any table is stale
 #
 # For the feature-overview `## Work Packages` table and each WP-overview
 # `## Tasks` table, this rewrites ONLY the Status cell of each data row — the one
-# column sdd-validate.sh actually checks — to the referenced file's `status:`
+# column goalforge-validate.sh actually checks — to the referenced file's `status:`
 # frontmatter (the single source of truth). Rows whose id resolves to no file
 # (e.g. table-only tasks that were never expanded into task-NN files) are LEFT
 # UNTOUCHED and reported on stderr — never dropped: the table may be the only
@@ -19,7 +19,7 @@
 # It never creates a table section and never adds rows (stamp-on-create lives in
 # sdd-decompose).
 #
-# Locates the table the same way sdd-validate.sh's parse_status_table does — the
+# Locates the table the same way goalforge-validate.sh's parse_status_table does — the
 # first table under the header with a `Status` column and a wp/task id column —
 # so a regenerated table always satisfies the validator.
 set -euo pipefail
@@ -29,7 +29,7 @@ case "${1:-}" in
     --all)   MODE="all";   shift ;;
     --check) MODE="check"; shift ;;
 esac
-TARGET="${1:?usage: sdd-stamp-tables.sh [--all|--check] <feature-dir|plans-root>}"
+TARGET="${1:?usage: goalforge-stamp-tables.sh [--all|--check] <feature-dir|plans-root>}"
 TARGET="$(cd "$TARGET" && pwd)"
 
 python3 - "$MODE" "$TARGET" <<'PY'

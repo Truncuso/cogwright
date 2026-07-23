@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# sdd-archive-batch.sh — loop-safe batch archive. Finds every archive-ready
-# feature (sdd-completed.sh), reconciles it (sdd-hygiene.sh --apply), and
-# archives it (sdd-archive.sh), committing per feature.
+# goalforge-archive-batch.sh — loop-safe batch archive. Finds every archive-ready
+# feature (goalforge-completed.sh), reconciles it (goalforge-hygiene.sh --apply), and
+# archives it (goalforge-archive.sh), committing per feature.
 #
-# Usage:  sdd-archive-batch.sh [--show] [--apply] [--plans-root <root>]
+# Usage:  goalforge-archive-batch.sh [--show] [--apply] [--plans-root <root>]
 #   default : PREVIEW — list what WOULD be archived; writes nothing; loop-safe.
 #   --apply : the human gate — reconcile + archive each eligible feature.
 #

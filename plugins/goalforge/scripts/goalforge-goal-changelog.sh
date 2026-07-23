@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# sdd-goal-changelog.sh — the single mechanism for logging a goal change.
+# goalforge-goal-changelog.sh — the single mechanism for logging a goal change.
 #
 # Usage:
-#   sdd-goal-changelog.sh append <wp-path> <facet> <old> <new> --reason "<text>"
-#   sdd-goal-changelog.sh --self-test
+#   goalforge-goal-changelog.sh append <wp-path> <facet> <old> <new> --reason "<text>"
+#   goalforge-goal-changelog.sh --self-test
 #
 # Appends one versioned row to the `## Goal Changelog` section of
 # `<wp-path>/overview.md`, using the task-01 row schema:
@@ -162,7 +162,7 @@ EOF
     ok() { echo "$1: PASS"; t_pass=$((t_pass+1)); }
     no() { echo "$1: FAIL"; t_fail=$((t_fail+1)); }
 
-    echo "=== sdd-goal-changelog.sh --self-test ==="
+    echo "=== goalforge-goal-changelog.sh --self-test ==="
 
     # (a) first append creates v1
     bash "$SELF" append "$wp" outcome "old-A" "new-B" --reason "r1" >/dev/null 2>&1 || true
@@ -217,7 +217,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 1 || "${POS[0]}" != "append" ]]; then
-    echo "ERROR: usage: sdd-goal-changelog.sh append <wp-path> <facet> <old> <new> --reason \"<text>\"" >&2
+    echo "ERROR: usage: goalforge-goal-changelog.sh append <wp-path> <facet> <old> <new> --reason \"<text>\"" >&2
     exit 1
 fi
 if [[ "${#POS[@]}" -lt 5 ]]; then

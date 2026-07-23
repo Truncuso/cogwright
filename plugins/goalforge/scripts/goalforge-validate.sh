@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# sdd-validate.sh — authoritative SDD status reader + integrity validator.
+# goalforge-validate.sh — authoritative SDD status reader + integrity validator.
 #
 # Usage:
-#   sdd-validate.sh [--strict] [--require-commit] [--quiet] [--stale-days N] [<plans-dir>]
+#   goalforge-validate.sh [--strict] [--require-commit] [--quiet] [--stale-days N] [<plans-dir>]
 #
 # Walks <plans-dir> (default: ~/.claude/plans) for .md files with YAML
 # frontmatter. For each file: checks required fields, enum values, then
@@ -62,7 +62,7 @@ done
 
 # ── Self-test: evolved-goal re-harden gate (self-contained fixtures) ─────────
 # Builds a clean feature+WP in a temp dir, stamps the approved hash via the
-# single authority (sdd-goal-hash.sh), then asserts: (a) a matching goal block
+# single authority (goalforge-goal-hash.sh), then asserts: (a) a matching goal block
 # validates clean; (b) a goal block mutated after approval is flagged
 # `evolved-goal` (ERROR under --strict). Exit 0 iff both expectations hold.
 sdd_self_test() {
@@ -115,7 +115,7 @@ EOF
     ok() { echo "$1: PASS"; t_pass=$((t_pass+1)); }
     no() { echo "$1: FAIL"; t_fail=$((t_fail+1)); }
 
-    echo "=== sdd-validate.sh --self-test (evolved-goal) ==="
+    echo "=== goalforge-validate.sh --self-test (evolved-goal) ==="
 
     # Stamp the approved hash through the single authority.
     bash "$GOAL_HASH_SH" --record "$wp" >/dev/null
@@ -789,7 +789,7 @@ for _arch_name in ARCHIVE_DIRS:
 # Emit feature-level slugs whose feature status == <enum>, one per line, exit 0.
 # Pure projection: no validation, no integrity output. _archived/ is already
 # excluded by the walk (SKIP_DIRS). Gated to kind == 'feature' so WP/task
-# statuses never surface. This is the engine the sdd-completed.sh detector wraps.
+# statuses never surface. This is the engine the goalforge-completed.sh detector wraps.
 if list_status:
     for _p, _kind, _fm, _h in all_files:
         if _kind == 'feature' and str(_fm.get('status', '')) == list_status:
@@ -949,7 +949,7 @@ def check_evolved_goal(path, fm, status):
     """Evolved-goal re-harden gate (WP-only). A WP at ready+ carries the goal-block
     hash approved at the harden gate (`goal_approved_version`). If the goal block
     has since changed (recomputed hash != approved), the WP must be re-hardened.
-    The hash is recomputed by the SINGLE authority `sdd-goal-hash.sh` — never
+    The hash is recomputed by the SINGLE authority `goalforge-goal-hash.sh` — never
     reimplemented here, so record and recompute can never diverge. A plain ERROR
     (gates under --strict), NOT fatal. Skipped when `goal_approved_version` is
     null/absent or the WP is below `ready`."""
@@ -967,7 +967,7 @@ def check_evolved_goal(path, fm, status):
     if not re.fullmatch(r'[0-9a-f]{12}', approved_s):
         err(path,
             f"non-hash-stamp: goal_approved_version '{approved_s}' is not sha256[:12]",
-            f"Stamp only via the hash authority: sdd-goal-hash.sh --record {path.parent.name}")
+            f"Stamp only via the hash authority: goalforge-goal-hash.sh --record {path.parent.name}")
         return
     if status not in ('ready', 'executing', 'verified'):
         return

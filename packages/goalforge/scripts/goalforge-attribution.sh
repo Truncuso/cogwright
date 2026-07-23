@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# sdd-attribution.sh — emit the decision / answered-question attribution stamp.
+# goalforge-attribution.sh — emit the decision / answered-question attribution stamp.
 #
 # Single source of the stamp format, shared by the ledger writer
-# (sdd-transition.sh) and the findings.md authors (sdd-harden). Reuses
+# (goalforge-transition.sh) and the findings.md authors (sdd-harden). Reuses
 # ~/.claude/scripts/handoff-env.sh for {session,model,provider}; never reinvents
 # the extraction.
 #
 # Usage:
-#   sdd-attribution.sh [--mode human|auto] [--actor <id>] [--agent <id>] [--json]
+#   goalforge-attribution.sh [--mode human|auto] [--actor <id>] [--agent <id>] [--json]
 #
 # Default output — a one-line render form for a findings.md "Resolved-by" cell:
 #   auto · <provider>/<model> · session:<id8>

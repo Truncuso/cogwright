@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# sdd-install-hooks.sh — idempotent, chain-safe installer for sdd-pre-commit.sh.
+# goalforge-install-hooks.sh — idempotent, chain-safe installer for goalforge-pre-commit.sh.
 #
 # Usage:
-#   sdd-install-hooks.sh [<repo-dir>]
+#   goalforge-install-hooks.sh [<repo-dir>]
 #
 # Default repo-dir: git rev-parse --show-toplevel from CWD.
 # Hooks dir is resolved via:  git -C <repo> rev-parse --git-path hooks
