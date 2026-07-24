@@ -437,8 +437,12 @@ through the legal reverse edge, then re-run this gate — re-approval re-stamps 
 hash:
 ```bash
 bash ~/.claude/skills/goalforge/scripts/goalforge-transition.sh <wp> hardened \
+  --mode evidence --evidence "plans/<feature>/<wp>/reharden/<YYYY-MM-DD>-goal-evolved.md" \
   --reason "goal evolved: <facet>"
 ```
+(From `ready` this reverse edge is evidence-gated — author the evidence file
+from `references/templates/reharden-evidence.md` first, `kind:
+execution-learning`. From `executing` the reverse edge stays reason-only.)
 
 **Never** advance `hardened → ready` without either explicit human approval
 or the signal-scoped rule fully satisfied and recorded (`--mode auto` + signal
