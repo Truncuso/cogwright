@@ -13,10 +13,12 @@
 # Fixtures:
 #   A legal      --mode evidence + a valid evidence file → exit 0,
 #                `status: hardened` on disk, a `.sdd-transitions.jsonl` row.
-#   B refusal    three sub-cases, each REFUSED (non-zero) with `status:` still
+#   B refusal    four sub-cases, each REFUSED (non-zero) with `status:` still
 #                `ready`: (i) a bare --reason revert (no --mode evidence),
 #                (ii) an absent evidence path (--evidence points at a missing
-#                file), (iii) a malformed evidence file (missing `locator`).
+#                file), (iii) a malformed evidence file (missing `locator`),
+#                (iv) UNTERMINATED frontmatter (no closing `---` fence) whose
+#                required field survives only as a body prose line.
 #   C trace      GOALFORGE_TRACE_EMIT at the real emitter → `reharden.proposed`
 #                and `reharden.accepted` rows land in the temp trace-events.jsonl.
 #   D regression one forward edge (spec → hardened) and one reverse edge
@@ -155,6 +157,35 @@ else
 fi
 [[ "$(status_of "$WPBiii")" == "ready" ]]; assert "B(iii): status still ready" $?
 
+# (iv) --mode evidence with an UNTERMINATED-frontmatter evidence file → refused.
+# No closing `---` fence; kind+summary sit in the pseudo-frontmatter and the
+# required `locator` appears ONLY as a body prose line after `## Evidence`. The
+# pre-fix parser (break-on-`---`, never requiring the close) recovered all three
+# and ACCEPTED; the fence-tracking gate must refuse. No stray `---` anywhere — a
+# markdown rule would count as a close and defeat the guard.
+WPBiv="$(mkwp "$PARENT/Biv/feat-biv" wp-01-biv ready)"
+mkdir -p "$WPBiv/reharden"
+cat > "$WPBiv/reharden/unterminated.md" <<EOF
+---
+name: unterminated
+kind: prototype-findings
+summary: frontmatter never closes
+plan: feat-biv
+wp: wp-01-biv
+created: $DATE
+
+## Evidence
+locator: plans/feat-biv/wp-01-biv/findings.md
+EOF
+set +e; OUT="$(bash "$TRANSITION" "$WPBiv" hardened --mode evidence \
+              --evidence "$WPBiv/reharden/unterminated.md" --reason "x" 2>&1)"; RC=$?; set -e
+if [[ "$RC" -ne 0 ]] && echo "$OUT" | grep -qi 'evidence frontmatter must carry'; then
+    ok "B(iv): unterminated frontmatter refused (no closing fence)"
+else
+    bad "B(iv): unterminated frontmatter should be refused (rc=$RC)"
+fi
+[[ "$(status_of "$WPBiv")" == "ready" ]]; assert "B(iv): status still ready" $?
+
 # ── Fixture C (trace): reharden.proposed + reharden.accepted rows land ────────
 echo "=== Fixture C: trace-event emission ==="
 WPC="$(mkwp "$PARENT/C/feat-c" wp-01-c ready)"
@@ -167,6 +198,19 @@ RC=$?
 TRACE_C="$PARENT/C/feat-c/trace-events.jsonl"
 [[ -f "$TRACE_C" ]] && grep -q 'reharden.proposed' "$TRACE_C"; assert "C: reharden.proposed row present" $?
 grep -q 'reharden.accepted' "$TRACE_C" 2>/dev/null; assert "C: reharden.accepted row present" $?
+
+# payload mirror: proposed/accepted rows carry the evidence file's kind/locator/
+# summary AND the evidence path (compact JSON — no space after the colon; the
+# emitter writes json.dumps(separators=(",",":"))). Values come from write_evidence
+# above; the evidence path is asserted with grep -F (literal `/`).
+EV_C="$WPC/reharden/$DATE-ev.md"
+for ET in reharden.proposed reharden.accepted; do
+    ROW="$(grep "\"type\":\"$ET\"" "$TRACE_C" 2>/dev/null | head -n1)"
+    echo "$ROW" | grep -q '"kind":"prototype-findings"'; assert "C: $ET payload kind mirrored" $?
+    echo "$ROW" | grep -q '"locator":"plans/feat-c/wp-01-c/findings.md"'; assert "C: $ET payload locator mirrored" $?
+    echo "$ROW" | grep -q '"summary":"the ready goal no longer holds under the prototype"'; assert "C: $ET payload summary mirrored" $?
+    echo "$ROW" | grep -qF "\"evidence\":\"$EV_C\""; assert "C: $ET payload evidence path mirrored" $?
+done
 
 # ── Fixture D (regression): existing edges unchanged ─────────────────────────
 echo "=== Fixture D: regression on pre-existing edges ==="

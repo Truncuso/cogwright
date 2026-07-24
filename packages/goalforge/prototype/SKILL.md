@@ -25,8 +25,8 @@ answer and never merges as-is.
 4. **Prototype code commits only under `prototype/`.** Committed spike code is
    allowed ONLY under `prototype/<feature>/<slug>/`, and only when the close-out
    tier is `share` (the retention substrate un-ignores it); `discard` and `keep`
-   stay gitignored. Nowhere else in the repo carries spike code — no PRs, no
-   pushes of it. The one always-committed survivor is the findings doc, which
+   stay gitignored. Outside `prototype/`, no spike code is committed, PR'd,
+   or pushed. The one always-committed survivor is the findings doc, which
    lives under `plans/<feature>/<wp>/` and is kept regardless of tier.
 5. **Keep the answer, delete the code.** The findings doc (LOGIC.md / UI.md)
    is the primary survivor. Exception — logic branch only: the *pure logic
@@ -38,12 +38,10 @@ answer and never merges as-is.
 
 ## Pick the branch
 
-- **"Does this logic / state model / approach hold up?"** → **Logic branch** —
-  discipline in `references/LOGIC.md`.
-- **"What should this look like?"** → **UI branch** — discipline in
-  `references/UI.md`.
+- **"Does this logic / state model / approach hold up?"** → **Logic branch**.
+- **"What should this look like?"** → **UI branch**.
 - **"Is it fast enough / does it scale / is the optimization worth it?"** →
-  **Perf branch** — discipline in `references/PERF.md`.
+  **Perf branch**.
 - Ambiguous + user unreachable: default by surrounding code (backend module →
   logic; page/component → UI; hot path or data-volume concern → perf) and
   state the assumption at the top of the findings doc.

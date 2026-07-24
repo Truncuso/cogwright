@@ -175,8 +175,10 @@ lines = text.split("\n")
 if not lines or lines[0].strip() != "---":
     sys.exit(1)
 fm = {}
+closed = False
 for ln in lines[1:]:
     if ln.strip() == "---":
+        closed = True
         break
     if not ln or ln[0] in " \t#":
         continue
@@ -184,6 +186,8 @@ for ln in lines[1:]:
     if m:
         v = re.sub(r"\s+#.*$", "", m.group(2))          # strip YAML inline comment
         fm[m.group(1)] = v.strip().strip("'\"")
+if not closed:
+    sys.exit(1)          # unterminated frontmatter — body key:value can never satisfy the gate
 kind = fm.get("kind", "")
 locator = fm.get("locator", "")
 summary = fm.get("summary", "")
