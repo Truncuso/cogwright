@@ -4,7 +4,8 @@
 # Usage:
 #   goalforge-transition.sh <path> <to> --reason "<text>" \
 #       [--from <s>] [--actor <id>] [--override] \
-#       [--mode human|auto] [--agent <id>] [--decision-ref <ref>]
+#       [--mode human|auto|evidence] [--evidence <path>] \
+#       [--agent <id>] [--decision-ref <ref>]
 #   goalforge-transition.sh --self-test
 #
 # <path> is either a WP dir/overview.md (frontmatter has a `plan:` key) or a
@@ -148,6 +149,48 @@ for ln in text.splitlines():
             val = m.group(1).strip().strip("'\"")
             break
 print(val)
+PY
+}
+
+# ── Read + validate a re-harden evidence file's frontmatter (wp-02) ──────────
+# The evidence-gated `ready→hardened` revert exception (state-machine.md §Policy)
+# requires a typed evidence file whose frontmatter carries a non-empty `kind`
+# (one of prototype-findings|execution-learning|issue), `locator`, and `summary`
+# (references/templates/reharden-evidence.md). Prints {"kind","locator","summary"}
+# as JSON on success; exits 1 (no output) when the file is missing/unparseable or
+# any required field is absent/empty or `kind` is off-enum. A YAML inline comment
+# (whitespace-then-`#`, as the template ships on the `kind` line) is stripped;
+# a bare `#` with no leading space is preserved so a locator URL fragment survives
+# — a deliberate departure from read_status (whose fields are machine-written,
+# never commented). Validated BEFORE the flock critical section so a bad file
+# leaves `status:` untouched.
+read_evidence() {
+    python3 - "$1" <<'PY'
+import sys, re, json
+try:
+    text = open(sys.argv[1], encoding="utf-8").read()
+except OSError:
+    sys.exit(1)
+lines = text.split("\n")
+if not lines or lines[0].strip() != "---":
+    sys.exit(1)
+fm = {}
+for ln in lines[1:]:
+    if ln.strip() == "---":
+        break
+    if not ln or ln[0] in " \t#":
+        continue
+    m = re.match(r"^([A-Za-z0-9_-]+):\s*(.*)$", ln)
+    if m:
+        v = re.sub(r"\s+#.*$", "", m.group(2))          # strip YAML inline comment
+        fm[m.group(1)] = v.strip().strip("'\"")
+kind = fm.get("kind", "")
+locator = fm.get("locator", "")
+summary = fm.get("summary", "")
+ENUM = {"prototype-findings", "execution-learning", "issue"}
+if kind not in ENUM or not locator or not summary:
+    sys.exit(1)
+print(json.dumps({"kind": kind, "locator": locator, "summary": summary}))
 PY
 }
 
@@ -309,6 +352,42 @@ transition() {
         echo "ERROR: reverse transition $FROM -> $TO requires --reason" >&2; return 1
     fi
 
+    # ── ready→hardened evidence-gated revert exception (wp-02) ────────────────
+    # This one reverse edge — re-opening a `ready` WP to `hardened` to re-develop
+    # its goals — is NOT a bare FREE-REVERSE: `--reason` alone (which satisfies
+    # reason_required:yes for every other reverse edge) is REFUSED here. Legality
+    # additionally requires `--mode evidence` plus a validated `--evidence <file>`
+    # whose frontmatter carries non-empty kind/locator/summary (state-machine.md
+    # §Policy — Evidence-gated revert exception; references/templates/reharden-
+    # evidence.md). Validated BEFORE the flock critical section: on any failure
+    # exit non-zero with a clear message and leave `status:` untouched. The
+    # extracted kind/locator/summary mirror into the reharden.proposed/accepted
+    # trace payloads emitted after the lock releases. `hardened→ready` re-promotion
+    # keeps its human gate — this adds NO new autonomous edge.
+    local EV_KIND="" EV_LOCATOR="" EV_SUMMARY=""
+    if [[ "$FROM" == "ready" && "$TO" == "hardened" ]]; then
+        if [[ "$MODE" != "evidence" ]]; then
+            echo "ERROR: $FROM -> $TO revert requires --mode evidence plus --evidence <file> — a bare --reason is refused on this edge (evidence-gated revert exception; see state-machine.md §Policy)" >&2
+            return 1
+        fi
+        if [[ -z "$EVIDENCE" ]]; then
+            echo "ERROR: --mode evidence requires --evidence <path> to a re-harden evidence file (see references/templates/reharden-evidence.md)" >&2
+            return 1
+        fi
+        if [[ ! -f "$EVIDENCE" ]]; then
+            echo "ERROR: re-harden evidence file not found: $EVIDENCE" >&2
+            return 1
+        fi
+        local EV_JSON
+        EV_JSON="$(read_evidence "$EVIDENCE")" || {
+            echo "ERROR: re-harden evidence frontmatter must carry non-empty kind (prototype-findings|execution-learning|issue), locator, and summary: $EVIDENCE" >&2
+            return 1
+        }
+        EV_KIND="$(   printf '%s' "$EV_JSON" | jq -r '.kind    // ""' 2>/dev/null || true)"
+        EV_LOCATOR="$(printf '%s' "$EV_JSON" | jq -r '.locator // ""' 2>/dev/null || true)"
+        EV_SUMMARY="$(printf '%s' "$EV_JSON" | jq -r '.summary // ""' 2>/dev/null || true)"
+    fi
+
     # ── →ready hash gate (Gap 1) — WP-only (feature has no goal: block) ──────
     # A WP WITH a goal: block may reach `ready` only when goal_approved_version is
     # present AND equal to the recomputed goal-block hash. Covers BOTH ready doors
@@ -444,6 +523,23 @@ transition() {
             "model=$MODEL" "provider=$PROVIDER" "agent=$AGENT" "decision_ref=$DECISION_REF")"
     fi
 
+    # ── Re-harden trace events — the evidence-gated ready→hardened revert (wp-02).
+    #    Also OUTSIDE the flock-9 critical section (same concurrency contract as
+    #    above): reharden.proposed then reharden.accepted, both pointing at the
+    #    same evidence file and mirroring its kind/locator/summary. Guarded by the
+    #    exact edge (FROM==ready && TO==hardened ⇒ already --mode evidence with a
+    #    validated file). Zero-breakage: emit failure warns, never changes the
+    #    transition exit code. ──
+    if [[ "$FROM" == "ready" && "$TO" == "hardened" ]]; then
+        local -a RH_FIELDS=(
+            "wp=$WP_NAME" "evidence=$EVIDENCE"
+            "kind=$EV_KIND" "locator=$EV_LOCATOR" "summary=$EV_SUMMARY"
+            "actor=$ACTOR" "mode=$MODE" "override=$OVERRIDE" "session=$SESSION"
+            "model=$MODEL" "provider=$PROVIDER" "agent=$AGENT" "decision_ref=$DECISION_REF")
+        emit_trace "$FEATURE_DIR" "$(_trace_event_json reharden.proposed "${RH_FIELDS[@]}")"
+        emit_trace "$FEATURE_DIR" "$(_trace_event_json reharden.accepted "${RH_FIELDS[@]}")"
+    fi
+
     echo "transition: $WP_NAME $FROM -> $TO${HG:+ (human_gated=$HG)}"
 }
 
@@ -492,6 +588,23 @@ verify: "true"
 
 # noop
 EOF
+    # Re-harden evidence for the evidence-gated ready→hardened revert legs below.
+    mkdir -p "$wp/reharden"
+    cat > "$wp/reharden/2026-06-23-st.md" <<'EOF'
+---
+name: 2026-06-23-st
+title: "self-test re-harden trigger"
+kind: execution-learning
+locator: plans/tmpfeat/wp-01-x/findings.md
+summary: self-test evidence gating the ready->hardened revert legs
+plan: tmpfeat
+wp: wp-01-x
+created: 2026-06-23
+---
+
+## Evidence
+self-test
+EOF
 
     local ok
     ok() { echo "  PASS: $1"; t_pass=$((t_pass+1)); }
@@ -522,14 +635,14 @@ EOF
     fi
     # (a2b) idempotent: existing findings.md is never overwritten on a re-entry
     printf 'SENTINEL-KEEP\n' >> "$wp/findings.md"
-    bash "$SELF" "$wp" hardened --reason "st-back" >/dev/null 2>&1 || true
+    bash "$SELF" "$wp" hardened --mode evidence --evidence "$wp/reharden/2026-06-23-st.md" --reason "st-back" >/dev/null 2>&1 || true
     bash "$SELF" "$wp" ready >/dev/null 2>&1 || true
     if grep -q 'SENTINEL-KEEP' "$wp/findings.md" && [[ "$(read_status "$wp/overview.md")" == "ready" ]]; then
         ok "(a2b) existing findings.md preserved across hardened->ready re-entry"
     else
         no "(a2b) backstop must never overwrite an existing findings.md"
     fi
-    bash "$SELF" "$wp" hardened --reason "st-restore" >/dev/null 2>&1 || true
+    bash "$SELF" "$wp" hardened --mode evidence --evidence "$wp/reharden/2026-06-23-st.md" --reason "st-restore" >/dev/null 2>&1 || true
 
     # (b) reverse edge WITHOUT --reason is rejected (status unchanged)
     if bash "$SELF" "$wp" spec >/dev/null 2>&1; then
@@ -868,6 +981,97 @@ EOF
         no "(s) reverse feature edge with --reason should succeed"
     fi
 
+    # ── (t)(u)(v) evidence-gated ready→hardened revert — the re-harden edge (wp-02)
+    #   The `ready→hardened` revert is NOT a bare FREE-REVERSE: it additionally
+    #   requires --mode evidence plus a validated evidence file (kind/locator/
+    #   summary — state-machine.md §Policy). (t) valid evidence + --mode evidence
+    #   SUCCEEDS → hardened (ledger mode=evidence), and the (t) fixture's evidence
+    #   file RETAINS the template's trailing YAML inline comment on kind/locator to
+    #   exercise the comment-strip path; (u) a bare --reason revert on THIS edge is
+    #   REFUSED (status unchanged); (v) --mode evidence with a malformed evidence
+    #   file (missing summary) is REFUSED. Fresh fixtures per case (no order coupling).
+    _mk_reharden_wp() {  # $1=dir $2=name — a goal-less WP sitting at ready
+        mkdir -p "$1/reharden"
+        cat > "$1/overview.md" <<EOF
+---
+name: $2
+title: re-harden edge WP
+status: ready
+stage_updated: 2026-06-23
+severity: LOW
+parallel: false
+depends_on: []
+plan: gfeat
+---
+
+# re-harden wp
+EOF
+    }
+
+    # (t) valid evidence (with inline comments retained) → ready→hardened SUCCEEDS
+    _mk_reharden_wp "$gfeat/wp-g-reharden-ok" wp-g-reharden-ok
+    cat > "$gfeat/wp-g-reharden-ok/reharden/2026-06-23-proto.md" <<'EOF'
+---
+name: 2026-06-23-proto
+title: "prototype surfaced a broken goal"
+kind: prototype-findings          # prototype-findings | execution-learning | issue
+locator: plans/gfeat/wp-g-reharden-ok/findings.md   # where the evidence lives
+summary: the ready goal no longer holds under the prototype
+plan: gfeat
+wp: wp-g-reharden-ok
+created: 2026-06-23
+---
+
+## Evidence
+proto surfaced a broken goal
+EOF
+    if bash "$SELF" "$gfeat/wp-g-reharden-ok" hardened --mode evidence \
+            --evidence "$gfeat/wp-g-reharden-ok/reharden/2026-06-23-proto.md" \
+            --reason "re-harden: prototype invalidated the ready goal" >/dev/null 2>&1 \
+       && [[ "$(read_status "$gfeat/wp-g-reharden-ok/overview.md")" == "hardened" ]] \
+       && grep -q '"mode": "evidence"' "$gfeat/.sdd-transitions.jsonl"; then
+        ok "(t) evidence-gated ready→hardened revert succeeds (--mode evidence, comment-stripped kind/locator, mode=evidence ledger row)"
+    else
+        no "(t) evidence-gated ready→hardened revert should succeed with --mode evidence + a valid evidence file"
+    fi
+
+    # (u) bare --reason on THIS edge (no --mode evidence) → REFUSED, status unchanged
+    _mk_reharden_wp "$gfeat/wp-g-reharden-bare" wp-g-reharden-bare
+    local u_out u_rc
+    set +e; u_out="$(bash "$SELF" "$gfeat/wp-g-reharden-bare" hardened --reason "just reopen" 2>&1)"; u_rc=$?; set -e
+    if [[ "$u_rc" -ne 0 ]] && echo "$u_out" | grep -qi 'requires --mode evidence' \
+       && [[ "$(read_status "$gfeat/wp-g-reharden-bare/overview.md")" == "ready" ]]; then
+        ok "(u) bare --reason ready→hardened revert refused (evidence gate; status unchanged)"
+    else
+        no "(u) bare --reason ready→hardened revert should be refused (rc=$u_rc)"
+    fi
+
+    # (v) --mode evidence but a MALFORMED evidence file (no summary) → REFUSED
+    _mk_reharden_wp "$gfeat/wp-g-reharden-bad" wp-g-reharden-bad
+    cat > "$gfeat/wp-g-reharden-bad/reharden/bad.md" <<'EOF'
+---
+name: bad
+kind: prototype-findings
+locator: plans/gfeat/wp-g-reharden-bad/findings.md
+plan: gfeat
+wp: wp-g-reharden-bad
+created: 2026-06-23
+---
+
+## Evidence
+missing summary
+EOF
+    local v_out v_rc
+    set +e; v_out="$(bash "$SELF" "$gfeat/wp-g-reharden-bad" hardened --mode evidence \
+                     --evidence "$gfeat/wp-g-reharden-bad/reharden/bad.md" \
+                     --reason "re-harden" 2>&1)"; v_rc=$?; set -e
+    if [[ "$v_rc" -ne 0 ]] && echo "$v_out" | grep -qi 'evidence frontmatter must carry' \
+       && [[ "$(read_status "$gfeat/wp-g-reharden-bad/overview.md")" == "ready" ]]; then
+        ok "(v) malformed evidence file (missing summary) refused (status unchanged)"
+    else
+        no "(v) malformed evidence file should be refused with the frontmatter message (rc=$v_rc)"
+    fi
+
     echo ""
     echo "Results: $t_pass passed, $t_fail failed"
     [[ "$t_fail" -eq 0 ]]
@@ -879,6 +1083,7 @@ FROM_ASSERT=""
 ACTOR=""
 OVERRIDE="false"
 MODE="auto"
+EVIDENCE=""
 AGENT=""
 DECISION_REF=""
 SELFTEST=0
@@ -892,6 +1097,7 @@ while [[ $# -gt 0 ]]; do
         --actor)        ACTOR="${2:-}"; shift 2 ;;
         --override)     OVERRIDE="true"; shift ;;
         --mode)         MODE="${2:-auto}"; shift 2 ;;
+        --evidence)     EVIDENCE="${2:-}"; shift 2 ;;
         --agent)        AGENT="${2:-}"; shift 2 ;;
         --decision-ref) DECISION_REF="${2:-}"; shift 2 ;;
         -h|--help)      usage; exit 0 ;;
@@ -906,7 +1112,7 @@ if [[ "$SELFTEST" -eq 1 ]]; then
 fi
 
 if [[ "${#POS[@]}" -lt 2 ]]; then
-    echo "ERROR: usage: goalforge-transition.sh <wp-path> <to> --reason \"<text>\" [--from <s>] [--actor <id>] [--override] [--mode human|auto] [--agent <id>] [--decision-ref <ref>]" >&2
+    echo "ERROR: usage: goalforge-transition.sh <wp-path> <to> --reason \"<text>\" [--from <s>] [--actor <id>] [--override] [--mode human|auto|evidence] [--evidence <path>] [--agent <id>] [--decision-ref <ref>]" >&2
     exit 1
 fi
 
