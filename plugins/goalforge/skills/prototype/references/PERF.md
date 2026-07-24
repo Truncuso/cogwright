@@ -30,3 +30,21 @@ deliverable is a worth-it verdict backed by numbers.
    complexity delta the faster impl would add (Principle 2: performance wins
    arguments, but the complexity must pay for itself); harness command so the
    study is re-runnable.
+
+## Define the baseline reference
+
+A result is only a result once it answers all four of these — a perf claim
+missing any one of them is not yet measured:
+
+- **Baseline** — against what implementation is this measured? The naive /
+  current version, named explicitly (step 2's rival that everything else is
+  compared to).
+- **Cost function** — measured by what cost function? Wall-clock time,
+  allocations, memory footprint, or some other named metric — pick before
+  running, not after seeing which metric flatters the result.
+- **Optimization target** — optimizing toward what? The measurable claim from
+  step 1 (a threshold, a scaling shape), not "make it faster" — a target
+  without a number can't be missed.
+- **Algorithm comparison** — compared to which alternative algorithm? The
+  other rival implementation(s) from step 2, by name, not a vague "the old
+  way".
