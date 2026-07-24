@@ -7,6 +7,12 @@
 # is a strict ordered transaction with pre- and post-verification, and it is
 # idempotent: re-running on an already-correct install is a no-op (exit 0).
 #
+# Alongside goalforge, the same per-link state machine materializes the sibling
+# package skills as top-level symlinks:
+#     <skills>/prototype  ->  <repo>/packages/goalforge/prototype
+#     <skills>/wayfind    ->  <repo>/packages/goalforge/wayfind
+# interview/ stays PRIVATE — it is deliberately NOT linked at the top level.
+#
 # Consumer mode prints the marketplace install commands and runs
 # `claude plugin validate` when the CLI is available (the interactive `/plugin`
 # flow cannot be scripted).
@@ -98,8 +104,9 @@ real_dir_dirty() {
   # content; 1 (clean) otherwise. Transients in DRIFT_EXCLUDES are ignored, so
   # a dir carrying only __pycache__/evals-workspace scratch is CLEAN.
   local dir="$1"
+  local link_target="${2:-$GF_LINK_TARGET}"
   local out
-  out="$(diff -r -q "${DRIFT_EXCLUDES[@]}" "$dir" "$GF_LINK_TARGET" 2>/dev/null || true)"
+  out="$(diff -r -q "${DRIFT_EXCLUDES[@]}" "$dir" "$link_target" 2>/dev/null || true)"
   [[ -n "$out" ]]
 }
 
@@ -107,14 +114,15 @@ real_dir_dirty() {
 # Target-state classification
 # ---------------------------------------------------------------------------
 classify_target() {
-  local t="$GF_TARGET_DIR"
+  local t="${1:-$GF_TARGET_DIR}"
+  local lt="${2:-$GF_LINK_TARGET}"
   if [[ -L "$t" ]]; then
     if [[ ! -e "$t" ]]; then
       echo "symlinked-dangling"; return 0
     fi
     local resolved target
     resolved="$(readlink -f "$t" 2>/dev/null || true)"
-    target="$(readlink -f "$GF_LINK_TARGET" 2>/dev/null || true)"
+    target="$(readlink -f "$lt" 2>/dev/null || true)"
     if [[ -n "$resolved" && "$resolved" == "$target" && -f "$t/SKILL.md" ]]; then
       echo "symlinked-correct-target"; return 0
     fi
@@ -124,7 +132,7 @@ classify_target() {
     echo "absent"; return 0
   fi
   if [[ -d "$t" ]]; then
-    if real_dir_dirty "$t"; then echo "real-dir-dirty"; else echo "real-dir-clean"; fi
+    if real_dir_dirty "$t" "$lt"; then echo "real-dir-dirty"; else echo "real-dir-clean"; fi
     return 0
   fi
   # A plain file where a dir/link is expected — treat as a wrong, non-symlink state.
@@ -135,25 +143,35 @@ classify_target() {
 # Post-verification
 # ---------------------------------------------------------------------------
 post_verify() {
-  # SKILL.md resolves through the link AND the discovery probe enumerates it.
-  if [[ ! -f "$GF_TARGET_DIR/SKILL.md" ]]; then
-    err "post-verify: SKILL.md does not resolve through $GF_TARGET_DIR"
+  # SKILL.md resolves through the link AND (for goalforge, run_probe=1) the
+  # discovery probe enumerates it. Sibling links (run_probe=0) only assert
+  # SKILL.md resolution — the probe is goalforge-specific.
+  local target_dir="${1:-$GF_TARGET_DIR}"
+  local run_probe="${2:-1}"
+  if [[ ! -f "$target_dir/SKILL.md" ]]; then
+    err "post-verify: SKILL.md does not resolve through $target_dir"
     return 1
   fi
-  local probe="$SCRIPT_DIR/discovery-probe.sh"
-  if [[ -x "$probe" || -f "$probe" ]]; then
-    if ! bash "$probe" "$(dirname "$GF_TARGET_DIR")" >/dev/null 2>&1; then
-      err "post-verify: discovery probe failed to enumerate goalforge"
-      return 1
+  if [[ "$run_probe" -eq 1 ]]; then
+    local probe="$SCRIPT_DIR/discovery-probe.sh"
+    if [[ -x "$probe" || -f "$probe" ]]; then
+      if ! bash "$probe" "$(dirname "$target_dir")" >/dev/null 2>&1; then
+        err "post-verify: discovery probe failed to enumerate goalforge"
+        return 1
+      fi
     fi
+    info "post-verify OK: SKILL.md resolves + discovery probe enumerates goalforge"
+  else
+    info "post-verify OK: SKILL.md resolves through $target_dir"
   fi
-  info "post-verify OK: SKILL.md resolves + discovery probe enumerates goalforge"
   return 0
 }
 
 verify_target_resolves() {
-  if [[ ! -d "$GF_LINK_TARGET" || ! -f "$GF_LINK_TARGET/SKILL.md" ]]; then
-    err "link target does not resolve to a goalforge package: $GF_LINK_TARGET"
+  local link_target="${1:-$GF_LINK_TARGET}"
+  local label="${2:-goalforge}"
+  if [[ ! -d "$link_target" || ! -f "$link_target/SKILL.md" ]]; then
+    err "link target does not resolve to a $label package: $link_target"
     err "is the cogwright checkout present? (contributor mode requires it)"
     return 1
   fi
@@ -161,67 +179,112 @@ verify_target_resolves() {
 }
 
 create_link() {
-  run ln -s "$GF_LINK_TARGET" "$GF_TARGET_DIR"
+  local target_dir="${1:-$GF_TARGET_DIR}"
+  local link_target="${2:-$GF_LINK_TARGET}"
+  run ln -s "$link_target" "$target_dir"
 }
 
 # ---------------------------------------------------------------------------
-# Contributor mode
+# Real-dir → symlink swap (strict ordered transaction with tar backup)
 # ---------------------------------------------------------------------------
-run_contributor() {
+swap_real_dir() {
+  # swap_real_dir <label> <target_dir> <link_target> <run_probe> <retain_on_success>
+  # Backs up the real dir to a scratch tarball, replaces it with the symlink,
+  # and restores from the tarball if post-verify fails. retain_on_success=1
+  # (dirty real dirs) keeps the tarball on success — it is the only remaining
+  # copy of pre-swap content that differed from the tracked package.
+  # retain_on_success=0 (clean real dirs) removes it on success: a pure
+  # rollback aid, redundant with the package once the swap has verified.
+  local label="$1" target_dir="$2" link_target="$3" run_probe="$4"
+  local retain_on_success="${5:-0}"
+  info "$label: swapping real dir for symlink (transaction)"
+  local scratch=""
+  if [[ "$DRY_RUN" -eq 0 ]]; then
+    scratch="$(mktemp -d "${TMPDIR:-/tmp}/goalforge-presymlink.XXXXXX")"
+    if tar -czf "$scratch/backup.tar.gz" -C "$(dirname "$target_dir")" \
+           "$(basename "$target_dir")" 2>/dev/null; then
+      if [[ "$retain_on_success" -eq 1 ]]; then
+        info "scratch tarball (dirty-dir backup, retained on success): $scratch/backup.tar.gz"
+      else
+        info "scratch tarball (transient rollback tarball, removed on success): $scratch/backup.tar.gz"
+      fi
+    else
+      info "scratch tarball skipped (non-fatal)"
+    fi
+  fi
+  run rm -rf "$target_dir"
+  create_link "$target_dir" "$link_target"
+  if [[ "$DRY_RUN" -eq 0 ]] && ! post_verify "$target_dir" "$run_probe"; then
+    err "post-verify failed — restoring real dir from scratch tarball"
+    rm -f "$target_dir"
+    if [[ -n "$scratch" && -f "$scratch/backup.tar.gz" ]]; then
+      tar -xzf "$scratch/backup.tar.gz" \
+          -C "$(dirname "$target_dir")" 2>/dev/null || true
+    fi
+    return 1
+  fi
+  if [[ -n "$scratch" ]]; then
+    if [[ "$retain_on_success" -eq 1 && -f "$scratch/backup.tar.gz" ]]; then
+      info "dirty-dir backup retained: $scratch/backup.tar.gz"
+    else
+      rm -rf "$scratch" 2>/dev/null || true
+    fi
+  fi
+  info "$label: swap complete"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# Per-link state machine — installs ONE symlink through the full
+# classify → verify → (no-op | repair | swap) → post-verify cycle.
+#
+#   install_link <label> <target_dir> <link_target> <run_probe> <allow_dirty_swap>
+#
+# allow_dirty_swap=0 (goalforge): a real dir with tracked drift is REFUSED to
+# protect uncommitted edits to the tracked package.
+# allow_dirty_swap=1 (siblings):  a real dir — including a legacy standalone
+# skill whose content differs wholesale — is swapped (with tar backup), since
+# drift vs the new package child is expected and a refuse-gate would block the
+# migration permanently.
+# ---------------------------------------------------------------------------
+install_link() {
+  local label="$1" target_dir="$2" link_target="$3" run_probe="$4" allow_dirty_swap="$5"
   local state
-  state="$(classify_target)"
-  info "target state: $state  ($GF_TARGET_DIR)"
+  state="$(classify_target "$target_dir" "$link_target")"
+  info "$label target state: $state  ($target_dir)"
 
   # Link target must resolve before ANY swap/repair/create.
-  if ! verify_target_resolves; then
+  if ! verify_target_resolves "$link_target" "$label"; then
     return 1
   fi
 
   case "$state" in
     symlinked-correct-target)
-      info "already installed correctly — no-op"
+      info "$label already installed correctly — no-op"
       return 0
       ;;
     absent)
-      mkdir -p "$(dirname "$GF_TARGET_DIR")" 2>/dev/null || true
-      create_link
+      run mkdir -p "$(dirname "$target_dir")" 2>/dev/null || true
+      create_link "$target_dir" "$link_target"
       ;;
     symlinked-wrong-target|symlinked-dangling)
-      info "repairing $state — relinking to $GF_LINK_TARGET"
-      run rm -f "$GF_TARGET_DIR"
-      create_link
+      info "repairing $state — relinking $label to $link_target"
+      run rm -f "$target_dir"
+      create_link "$target_dir" "$link_target"
       ;;
     real-dir-clean)
-      info "swapping clean real dir for symlink (transaction)"
-      local scratch=""
-      if [[ "$DRY_RUN" -eq 0 ]]; then
-        scratch="$(mktemp -d "${TMPDIR:-/tmp}/goalforge-presymlink.XXXXXX")"
-        if tar -czf "$scratch/goalforge.tar.gz" -C "$(dirname "$GF_TARGET_DIR")" \
-               "$(basename "$GF_TARGET_DIR")" 2>/dev/null; then
-          info "scratch tarball (short TTL): $scratch/goalforge.tar.gz"
-        else
-          info "scratch tarball skipped (non-fatal)"
-        fi
-      fi
-      run rm -rf "$GF_TARGET_DIR"
-      create_link
-      if [[ "$DRY_RUN" -eq 0 ]] && ! post_verify; then
-        err "post-verify failed — restoring real dir from scratch tarball"
-        rm -f "$GF_TARGET_DIR"
-        if [[ -n "$scratch" && -f "$scratch/goalforge.tar.gz" ]]; then
-          tar -xzf "$scratch/goalforge.tar.gz" \
-              -C "$(dirname "$GF_TARGET_DIR")" 2>/dev/null || true
-        fi
-        return 1
-      fi
-      [[ -n "$scratch" ]] && rm -rf "$scratch" 2>/dev/null || true
-      info "swap complete"
+      swap_real_dir "$label" "$target_dir" "$link_target" "$run_probe" 0 || return 1
       return 0
       ;;
     real-dir-dirty)
+      if [[ "$allow_dirty_swap" -eq 1 ]]; then
+        info "$label: legacy real dir with drift — swapping (tarball retained on success)"
+        swap_real_dir "$label" "$target_dir" "$link_target" "$run_probe" 1 || return 1
+        return 0
+      fi
       err "refusing to clobber: real dir has uncommitted tracked drift vs package"
-      err "  dir:     $GF_TARGET_DIR"
-      err "  package: $GF_LINK_TARGET"
+      err "  dir:     $target_dir"
+      err "  package: $link_target"
       err "resolve the drift (commit/revert) then re-run."
       return 1
       ;;
@@ -232,9 +295,30 @@ run_contributor() {
   esac
 
   if [[ "$DRY_RUN" -eq 0 ]]; then
-    post_verify || return 1
+    post_verify "$target_dir" "$run_probe" || return 1
   fi
   return 0
+}
+
+# ---------------------------------------------------------------------------
+# Contributor mode — goalforge + sibling package skills
+# ---------------------------------------------------------------------------
+run_contributor() {
+  local skills_dir
+  skills_dir="$(dirname "$GF_TARGET_DIR")"
+
+  # goalforge — fatal-first (preserves the original single-link semantics:
+  # a broken goalforge install aborts before any sibling work).
+  install_link goalforge "$GF_TARGET_DIR" "$GF_LINK_TARGET" 1 0 || return 1
+
+  # Sibling package skills, linked alongside goalforge. interview/ stays
+  # PRIVATE — no top-level link. Legacy standalone real dirs are swapped (with
+  # tar backup) into symlinks, hence allow_dirty_swap=1. Best-effort: attempt
+  # both so one broken sibling does not suppress the other; aggregate status.
+  local rc=0
+  install_link prototype "$skills_dir/prototype" "$GF_LINK_TARGET/prototype" 0 1 || rc=1
+  install_link wayfind   "$skills_dir/wayfind"   "$GF_LINK_TARGET/wayfind"   0 1 || rc=1
+  return "$rc"
 }
 
 # ---------------------------------------------------------------------------
@@ -266,12 +350,16 @@ self_test() {
   sandbox="$(mktemp -d "${TMPDIR:-/tmp}/goalforge-selftest.XXXXXX")"
   trap 'rm -rf "$sandbox"' RETURN
 
-  # Build a minimal but structurally-real goalforge package fixture.
+  # Build a minimal but structurally-real goalforge package fixture, including
+  # the prototype/wayfind sibling children the installer links top-level.
   make_pkg() {
     local pkg="$1"
-    mkdir -p "$pkg/capture" "$pkg/evals" "$pkg/scripts"
+    mkdir -p "$pkg/capture" "$pkg/evals" "$pkg/scripts" \
+             "$pkg/prototype" "$pkg/wayfind"
     printf '# goalforge\nfront door\n'   > "$pkg/SKILL.md"
     printf '# capture\n'                  > "$pkg/capture/SKILL.md"
+    printf '# prototype\n'                > "$pkg/prototype/SKILL.md"
+    printf '# wayfind\n'                  > "$pkg/wayfind/SKILL.md"
     printf 'echo hi\n'                    > "$pkg/scripts/x.sh"
     printf '{}\n'                         > "$pkg/evals/evals.json"
   }
@@ -314,6 +402,12 @@ self_test() {
     assert "SKILL.md resolves through link" test -f "$skills/goalforge/SKILL.md" || return 1
     assert "discovery probe enumerates (symlink-following)" \
       bash "$SCRIPT_DIR/discovery-probe.sh" "$skills" || return 1
+    assert "sibling prototype linked into package" \
+      test "$(readlink -f "$skills/prototype")" = "$(readlink -f "$pkg/prototype")" || return 1
+    assert "sibling wayfind linked into package" \
+      test "$(readlink -f "$skills/wayfind")" = "$(readlink -f "$pkg/wayfind")" || return 1
+    assert "interview stays private (no top-level link)" \
+      test ! -e "$skills/interview" || return 1
   }
 
   # --- Case 2: installed-correct → idempotent no-op ---
@@ -418,7 +512,39 @@ self_test() {
       test ! -e "$skills/goalforge" || return 1
   }
 
-  printf '=== goalforge installer self-test (7 cases) ===\n'
+  # --- Case 8: sibling legacy real dir (foreign content) → swapped w/ backup ---
+  case_sibling_legacy_dir() {
+    local d="$1"
+    local pkg="$d/pkg" skills="$d/home/dotfiles/claude/skills"
+    make_pkg "$pkg"; mkdir -p "$skills"
+    # A legacy standalone wayfind dir whose content differs wholesale.
+    mkdir -p "$skills/wayfind"
+    printf '# old standalone wayfind\n' > "$skills/wayfind/SKILL.md"
+    printf 'legacy\n'                   > "$skills/wayfind/legacy.txt"
+    local cls
+    cls="$(GF_LINK_TARGET="$pkg/wayfind" GF_TARGET_DIR="$skills/wayfind" classify_target)"
+    assert "legacy sibling dir classified real-dir-dirty" \
+      test "$cls" = "real-dir-dirty" || return 1
+    local out
+    out="$(GF_LINK_TARGET="$pkg" GF_TARGET_DIR="$skills/goalforge" \
+      run_contributor 2>&1)" || return 1
+    assert "legacy wayfind swapped to symlink" test -L "$skills/wayfind" || return 1
+    assert "swap: wayfind resolves into package child" \
+      test "$(readlink -f "$skills/wayfind")" = "$(readlink -f "$pkg/wayfind")" || return 1
+    assert "swap emitted a scratch tarball backup" \
+      grep -q "scratch tarball" <<<"$out" || return 1
+    local retained_line retained_path tar_listing
+    retained_line="$(grep -o "dirty-dir backup retained: .*" <<<"$out" || true)"
+    retained_path="${retained_line#dirty-dir backup retained: }"
+    assert "dirty-dir backup tarball retained on success" \
+      test -n "$retained_path" -a -f "$retained_path" || return 1
+    tar_listing="$(tar -tzf "$retained_path" 2>/dev/null || true)"
+    assert "retained tarball contains the legacy content (recoverable)" \
+      grep -q "wayfind/legacy.txt" <<<"$tar_listing" || return 1
+    rm -rf "$(dirname "$retained_path")" 2>/dev/null || true
+  }
+
+  printf '=== goalforge installer self-test (8 cases) ===\n'
   run_case fresh
   run_case installed_correct
   run_case installed_wrong_target
@@ -426,6 +552,7 @@ self_test() {
   run_case dirty_with_transient_only
   run_case dirty_real
   run_case missing_checkout
+  run_case sibling_legacy_dir
   printf '=== self-test: %d passed, %d failed ===\n' "$pass" "$fail"
   [[ "$fail" -eq 0 ]]
 }
