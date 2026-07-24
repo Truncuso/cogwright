@@ -618,3 +618,67 @@ a stale or absent audit triggers a re-run (a `feature-audit`-role dispatch).
 is hardening. If a *sibling* WP changed since the Tier-1 snapshot (hash mismatch),
 the cross-WP findings may be stale → `sdd-harden` falls back to a whole-feature
 review rather than trusting a stale delta.
+
+---
+
+## Prototype retention
+
+The prototype layer materializes scratch/spike work under a single top-level
+`prototype/` tree, with per-prototype git treatment driven by a **retention
+tier**. `goalforge/scripts/goalforge-prototype-retain.sh <feature-slug>
+<prototype-slug> <discard|keep|share>` owns folder creation and the
+`prototype/.gitignore` line management (single source of the contract); it emits
+JSON `{"path":"prototype/<feature>/<slug>/","tier":"...","gitignore_updated":true|false}`
+and is idempotent + zero-breakage.
+
+**Root path.** Each prototype lives at `prototype/<feature-slug>/<prototype-slug>/`,
+relative to the invoking repo's worktree root.
+
+**`prototype/.gitignore` behavior.** The file defaults to two lines — `*`
+(ignore everything under `prototype/`) and `!.gitignore` (keep the ignore file
+itself tracked). The `share` tier additionally **appends** the un-ignore lines
+`!<feature>/`, `!<feature>/<slug>/`, `!<feature>/<slug>/**`. Lines are appended
+only when absent (never rewritten), so an existing tree is never corrupted. The
+parent-first order matters: git cannot re-include a child until its parent
+directory is re-included, and `*` (no slash) matches at every depth — so all
+three lines are required.
+
+**Tiers (git semantics).**
+
+| Tier | Git treatment | Intent |
+|---|---|---|
+| `discard` | folder stays ignored (default `*`) | scratch; never committed |
+| `keep` | git-identical to `discard` — ignored in place | retained locally; the tier string is the only difference from `discard` |
+| `share` | folder un-ignored via the three `!` lines → committable | promoted; the prototype ships in the repo |
+
+**Share is sticky — tier transitions are monotonic w.r.t. `share`.** The
+un-ignore lines are append-only: once `share` has written `!<feature>/`,
+`!<feature>/<slug>/`, and `!<feature>/<slug>/**`, a subsequent `discard` or
+`keep` run does **not** remove them, so the JSON `tier` string can diverge from
+the actual git behavior (the folder stays committable). Walking a prototype back
+from `share` requires manually deleting the `!<feature>/<slug>/`* lines from
+`prototype/.gitignore`.
+
+**Tolerable-error exit emits no stdout.** On a tolerable error (missing or
+invalid argument, or a slug that fails validation) the script writes a note to
+stderr and exits 0 **without emitting any stdout JSON**. Callers must treat
+empty stdout as "no-op — see the stderr note", not as success.
+
+**Findings-doc frontmatter additions.** A prototype's findings doc
+(`plans/<feature>/<wp>/{LOGIC|UI|PERF}.md`) gains two frontmatter fields:
+
+- `prototype_path: prototype/<feature-slug>/<prototype-slug>/` — the retained
+  folder (mirrors the retain script's JSON `path`).
+- `retention: discard | keep | share` — the tier applied (mirrors JSON `tier`).
+
+**`## Run Log` body convention.** The findings doc body carries a `## Run Log`
+section: an append-only table with **one row per run**, recording the date, what
+changed that run, and what was learned.
+
+```
+## Run Log
+
+| Date | Changed | Learned |
+|---|---|---|
+| 2026-07-24 | initial logic-branch spike | un-ignore order must be parent-first |
+```
