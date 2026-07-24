@@ -4,3 +4,6 @@
 .vscode/
 __pycache__/
 *.pyc
+
+# loop-safety: per-session loop state (do not commit)
+.memory/loops/
