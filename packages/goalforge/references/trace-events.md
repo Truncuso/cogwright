@@ -53,7 +53,7 @@ naming**:
 | Field | Type | Semantics |
 |---|---|---|
 | `actor` | string | Who/what drove the transition (e.g. `goalforge-harden`, `auto`). |
-| `mode` | string (`human`\|`auto`) | Human-gated vs autonomous. Kept alongside `override` so a gate-rejected-vs-forced transition stays distinguishable. |
+| `mode` | string (`human`\|`auto`\|`evidence`) | Human-gated, autonomous, or evidence-gated (`evidence` = the re-harden `ready→hardened` revert, `--mode evidence`). Kept alongside `override` so a gate-rejected-vs-forced transition stays distinguishable. |
 | `override` | boolean | `--override` was used (forced past a gate). |
 | `session` | string | Origin session id (`unknown` on degrade). |
 | `model` | string | Driving model (`unknown` on degrade). |
@@ -65,14 +65,19 @@ Degrade-not-block: any attribution lookup failure resolves to `"unknown"`/`""`;
 it never blocks the emit, and the emitter warns to stderr + exits 0 on emission
 failure so it never blocks the underlying chain operation.
 
-## Event types (9)
+## Event types (11)
 
-All nine are schema-defined here (single schema home). Producer coverage this WP:
+All eleven are schema-defined here (single schema home). Producer coverage this WP:
 `wp.status_changed`, `feature.status_changed`, `commit.linked`, `gate.result`
 have live producers (transition wiring + legacy derivation). `issue.recorded`'s
 producer is wp-15. `task.status_changed`, `finding.recorded`,
 `dispatch.launched`, `dispatch.completed` are **schema-only** this lap (no
 producer) — consumers treat those streams as **best-effort-empty** (D-OQ1).
+`reharden.proposed`/`reharden.accepted` are added by the prototype-native
+re-harden edge (this feature): their designated producer is the re-harden
+transition (`goalforge-transition.sh` on the evidence-gated `ready→hardened`
+edge), described here per the pinned contract even where that producer lands in a
+sibling task — they are NOT schema-only.
 
 ### `wp.status_changed`
 
@@ -193,6 +198,40 @@ contract).
 | `summary` | string | no | One-line description. |
 | `wp` | string | no | WP the issue attaches to, if any. |
 
+### `reharden.proposed`
+
+A proposal to re-open a `ready` WP back to `hardened` for goal re-development,
+carrying the typed evidence that triggered it. Emitted when a stage proposes the
+evidence-gated `ready→hardened` revert (see `references/state-machine.md`
+§Policy — Evidence-gated revert exception). Producer: the re-harden transition
+(`goalforge-transition.sh` on the `--mode evidence` `ready→hardened` edge).
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | yes | WP proposed for re-harden. |
+| `evidence` | string | yes | Path to the re-harden evidence file (`plans/<feature>/<wp>/reharden/<YYYY-MM-DD>-<slug>.md`). |
+| `kind` | string | no | Evidence kind — the SAME value as the evidence file's frontmatter `kind` (`prototype-findings`\|`execution-learning`\|`issue`); distinct vocabulary from `issue.recorded`'s `kind`. |
+| `locator` | string | no | Evidence locator (path-or-url) — mirrors the evidence file's `locator`. |
+| `summary` | string | no | One-line evidence summary — mirrors the evidence file's `summary`. |
+
+Plus attribution fields (as above), with `mode: evidence` on the re-harden revert.
+
+### `reharden.accepted`
+
+The acceptance record for a proposed re-harden: emitted when the evidence-gated
+`ready→hardened` revert is written (the WP moves back to `hardened`). Same
+payload shape as `reharden.proposed`, pointing at the same evidence file.
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | yes | WP reverted to `hardened`. |
+| `evidence` | string | yes | Path to the re-harden evidence file (as in `reharden.proposed`). |
+| `kind` | string | no | Evidence kind — same value as the evidence file's frontmatter `kind`. |
+| `locator` | string | no | Evidence locator (path-or-url) — mirrors the evidence file's `locator`. |
+| `summary` | string | no | One-line evidence summary — mirrors the evidence file's `summary`. |
+
+Plus attribution fields (as above), with `mode: evidence`.
+
 ## Legacy `.sdd-transitions.jsonl` derivation cross-check (task-04)
 
 The legacy ledger row shape (from `goalforge-transition.sh` `do_write`) is:
@@ -289,7 +328,9 @@ these; validators select the branch set by the row's `schema_version`.
         "finding.recorded",
         "dispatch.launched",
         "dispatch.completed",
-        "issue.recorded"
+        "issue.recorded",
+        "reharden.proposed",
+        "reharden.accepted"
       ]
     },
     "schema_version": { "type": "integer", "minimum": 1 }
@@ -459,6 +500,48 @@ these; validators select the branch set by the row's `schema_version`.
         "decision_ref": { "type": "string" }
       },
       "required": ["type", "kind"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "reharden.proposed" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "evidence": { "type": "string" },
+        "kind": { "type": "string" },
+        "locator": { "type": "string" },
+        "summary": { "type": "string" },
+        "actor": { "type": "string" },
+        "mode": { "type": "string" },
+        "override": { "type": "boolean" },
+        "session": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type", "wp", "evidence"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "reharden.accepted" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "evidence": { "type": "string" },
+        "kind": { "type": "string" },
+        "locator": { "type": "string" },
+        "summary": { "type": "string" },
+        "actor": { "type": "string" },
+        "mode": { "type": "string" },
+        "override": { "type": "boolean" },
+        "session": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type", "wp", "evidence"],
       "additionalProperties": false
     }
   ]

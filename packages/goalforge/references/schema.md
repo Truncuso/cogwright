@@ -682,3 +682,41 @@ changed that run, and what was learned.
 |---|---|---|
 | 2026-07-24 | initial logic-branch spike | un-ignore order must be parent-first |
 ```
+
+---
+
+## Re-harden evidence
+
+An evidence-gated re-harden re-opens a `ready` WP back to `hardened` so its goals
+can be re-developed (see `state-machine.md` §Policy — Evidence-gated revert
+exception). The trigger is a **typed evidence file** committed under a
+`reharden/` subfolder of the WP.
+
+**Layout.** The flat WP folder (`plans/<feature>/<wp-id>/`) gains one subfolder:
+
+```
+plans/<feature>/<wp-id>/reharden/<YYYY-MM-DD>-<slug>.md
+```
+
+One file per re-harden proposal; the date-prefixed slug keeps successive
+proposals ordered and non-colliding. The subfolder is committed with the WP —
+it is the durable audit trail for why goals were revised, indexed by
+validators/authors alongside the WP's own artifacts.
+
+**Evidence-file shape.** Frontmatter (template:
+`references/templates/reharden-evidence.md`):
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `kind` | enum | yes | `prototype-findings` \| `execution-learning` \| `issue` — what class of evidence triggered the re-harden. |
+| `locator` | string (path-or-url) | yes | Where the evidence lives (findings doc, PR, issue, trace row). Pointer, not a copy. |
+| `summary` | string | yes | One-line statement of what the evidence shows. |
+
+**Consumed by the transition mechanism.** The revert is written with the
+evidence gate — `goalforge-transition.sh <wp> hardened --mode evidence
+--evidence <path>` — which validates the file exists and carries the frontmatter
+above; a bare-`--reason` revert on the `ready→hardened` edge is refused. The
+transition emits `reharden.proposed` / `reharden.accepted` trace events whose
+payloads mirror `kind`/`locator`/`summary` plus the evidence path (see
+`references/trace-events.md`). The reverse `hardened→ready` re-promotion keeps
+its human gate unchanged.

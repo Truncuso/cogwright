@@ -39,6 +39,24 @@ WP states are linearly ordered:
   signal, HIGH/CRITICAL severity, or migration WP keeps the human gate. The
   feature `draft→ready` gate has NO auto-advance exception. *(Deliberate
   guardrail change — ADR: adaptive-chain-routing.)*
+- **Evidence-gated revert exception (`ready→hardened` only).** This one reverse
+  edge — re-opening a `ready` WP back to `hardened` to re-develop its goals — is
+  NOT a bare FREE-REVERSE move. The edge row stays legal
+  (`| ready | hardened | yes | no |`), but the calling stage MUST write the
+  transition with `mode: evidence` plus a validated re-harden evidence file
+  (`--mode evidence --evidence <path>`; frontmatter `kind`/`locator`/`summary`
+  per `references/templates/reharden-evidence.md`,
+  `plans/<feature>/<wp>/reharden/<YYYY-MM-DD>-<slug>.md`). A bare-`--reason`
+  revert for THIS specific edge is **refused** by the guard: `--reason` alone
+  satisfies `reason_required: yes` for every other reverse edge, but the
+  `ready→hardened` revert additionally requires the evidence gate. The re-harden
+  is PROPOSED with typed evidence attached and recorded via the `reharden.proposed`
+  / `reharden.accepted` trace events (see `references/trace-events.md`). The
+  reverse `hardened→ready` **re-promotion keeps its human gate unchanged** — this
+  exception adds NO new autonomous edge; goals are revised while the WP sits at
+  `hardened`, then re-promoted through the same `human_gated: yes` WP gate (or its
+  signal-scoped auto-advance) as before. *(Evidence MANDATORY on `ready→hardened`
+  — ledgered decision; ADR: prototype-native-goalforge re-harden edge.)*
 
 `archived` is a terminal state reached only by explicit user action via
 `goalforge-archive` — it is intentionally **not** an edge target here, so the
