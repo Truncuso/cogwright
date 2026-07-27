@@ -81,7 +81,8 @@ it only decides whether to invoke `goalforge-verify` (Step 10), the sole authori
 ### Step 0 — Entry
 
 0. **Prototype-register WP?** If frontmatter carries `register: prototype`
-   (schema.md §WP frontmatter), the WP is a declared spike whose task loop
+   (schema.md §WP frontmatter), the WP is a declared spike — fidelity rung 3,
+   `~/.claude/skills/goalforge/references/fidelity.md` — whose task loop
    collapses to its single task (goalforge-decompose stamps prototype WPs with
    exactly one task for this reason): after the status advance below, run the
    `prototype` skill (one design question + success criteria from the goal

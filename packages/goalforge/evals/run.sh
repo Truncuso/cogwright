@@ -177,6 +177,39 @@ if [ "$DOC_PIN_OK" = "pass" ]; then
 fi
 check "doc restatements of TIER_DISPATCH match code (drift pin)" "$DOC_PIN_OK"
 
+# ── Fidelity ladder tests ────────────────────────────────────────────────────
+echo ""
+echo "[ Fidelity ladder tests ]"
+
+FIDELITY_MD="$SKILL_DIR/references/fidelity.md"
+
+# F1: the canonical ladder reference exists
+[ -f "$FIDELITY_MD" ] \
+  && check "references/fidelity.md exists" "pass" \
+  || check "references/fidelity.md exists" "fail"
+
+# F2: all three ladder rungs are named
+if [ -f "$FIDELITY_MD" ] \
+  && grep -qE '^1\. \*\*Discussion' "$FIDELITY_MD" \
+  && grep -qE '^2\. \*\*Interview' "$FIDELITY_MD" \
+  && grep -qE '^3\. \*\*Prototype' "$FIDELITY_MD"; then
+  check "fidelity.md names all three rungs (discussion/interview/prototype)" "pass"
+else
+  check "fidelity.md names all three rungs (discussion/interview/prototype)" "fail"
+fi
+
+# F3: the canonical trigger criterion has its own section
+{ [ -f "$FIDELITY_MD" ] && grep -qE '^## Trigger' "$FIDELITY_MD"; } \
+  && check "fidelity.md carries a ## Trigger section" "pass" \
+  || check "fidelity.md carries a ## Trigger section" "fail"
+
+# F4-F7: every stage skill links the ladder rather than restating it
+for STAGE in spec harden decompose execute; do
+  grep -q "fidelity.md" "$SKILL_DIR/$STAGE/SKILL.md" \
+    && check "$STAGE/SKILL.md links references/fidelity.md" "pass" \
+    || check "$STAGE/SKILL.md links references/fidelity.md" "fail"
+done
+
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 

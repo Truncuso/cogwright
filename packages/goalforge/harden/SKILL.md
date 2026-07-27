@@ -227,8 +227,9 @@ question in scope is either:
   is *deferrable at a named cost* — never for an incomplete goal facet
   (outcome/verification must always be driven to complete).
 
-A question of kind **"how should it behave / which approach wins / how should
-it look"** that more interviewing will not settle is a spike candidate: route
+A question that more interviewing will not settle because its answer depends on
+observing the built thing — how it looks, behaves, performs, or scales (criterion:
+`~/.claude/skills/goalforge/references/fidelity.md`) — is a spike candidate: route
 it to the `prototype` skill (via handoff mode `prototype`) instead of
 grinding the interview — its LOGIC.md/UI.md findings come back as the answer.
 

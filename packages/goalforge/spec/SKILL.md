@@ -82,6 +82,14 @@ Conduct a design pass to produce the content of `spec.md`. This involves:
 4. **Open Questions**: unresolved questions that must be answered before
    decomposition or execution.
 
+If a section is blocked by a question that meets the **spike-candidate trigger**
+— a how-should-it-look / behave / perform question that more talking will not
+settle (criterion: `~/.claude/skills/goalforge/references/fidelity.md`) — spike it to
+unblock the section instead of writing the section around the gap; the findings
+feed the spec text and any ADR candidates. Most blockers do not qualify and stay
+in `## Open Questions` for `goalforge-harden` — this is guidance inside the
+design pass, not a step.
+
 ### Step 2b — Author the feature goal block
 
 Author the **feature-level goal block** in the `spec.md` frontmatter. This is

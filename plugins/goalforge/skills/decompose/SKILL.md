@@ -96,8 +96,9 @@ pattern from the `deprecation-and-migration` skill — expand the new form besid
 the old, migrate call sites in batches sized by blast radius (one WP or task per
 batch, CI green after each), then contract the old form away in a final WP.
 
-**Prototype WPs.** A WP whose goal is answering ONE design question ("how
-should it behave / which approach wins / how should it look / does it scale")
+**Prototype WPs.** A WP whose goal is answering ONE design question that only a
+built thing can settle — how it looks, behaves, performs, or scales (criterion:
+`~/.claude/skills/goalforge/references/fidelity.md`) —
 rather than shipping production code is a **declared spike**: set
 `register: prototype` in its frontmatter (schema.md §WP frontmatter), give the
 goal block a `judge` or `human` strategy over the findings doc, name the
