@@ -221,6 +221,74 @@ done
   && check "spec/SKILL.md carries both fidelity hooks (>=2 links)" "pass" \
   || check "spec/SKILL.md carries both fidelity hooks (>=2 links)" "fail"
 
+
+# ── Interview specialization tests ─────────────────────────────────────────────────────────
+echo ""
+echo "[ Interview specialization tests ]"
+
+INTERVIEW_MD="$SKILL_DIR/interview/SKILL.md"
+HARDEN_MD="$SKILL_DIR/harden/SKILL.md"
+
+# I1: interview/SKILL.md exists
+[ -f "$INTERVIEW_MD" ] \
+  && check "interview/SKILL.md exists" "pass" \
+  || check "interview/SKILL.md exists" "fail"
+
+# I2: name field is pinned to 'goalforge-interview'
+{ [ -f "$INTERVIEW_MD" ] && grep -q "^name: goalforge-interview$" "$INTERVIEW_MD"; } \
+  && check "interview/SKILL.md name field is 'goalforge-interview'" "pass" \
+  || check "interview/SKILL.md name field is 'goalforge-interview'" "fail"
+
+# I3: escape-hatch phrase present (consumed by harden Step 1)
+{ [ -f "$INTERVIEW_MD" ] && grep -qF "above discussion fidelity" "$INTERVIEW_MD"; } \
+  && check "interview/SKILL.md carries the escape-hatch phrase" "pass" \
+  || check "interview/SKILL.md carries the escape-hatch phrase" "fail"
+
+# I4: high-fidelity token present -- the engine contract this wrapper consumes
+{ [ -f "$INTERVIEW_MD" ] && grep -q "high-fidelity" "$INTERVIEW_MD"; } \
+  && check "interview/SKILL.md carries the 'high-fidelity' token" "pass" \
+  || check "interview/SKILL.md carries the 'high-fidelity' token" "fail"
+
+# I5: links the canonical fidelity ladder rather than restating it
+{ [ -f "$INTERVIEW_MD" ] && grep -q "fidelity.md" "$INTERVIEW_MD"; } \
+  && check "interview/SKILL.md links references/fidelity.md" "pass" \
+  || check "interview/SKILL.md links references/fidelity.md" "fail"
+
+# I6: fork-guard -- must not reimplement the engine's stopping logic
+{ [ -f "$INTERVIEW_MD" ] && ! grep -q "predictive-confidence stopping" "$INTERVIEW_MD"; } \
+  && check "interview/SKILL.md does not fork interview-loop's stopping logic" "pass" \
+  || check "interview/SKILL.md does not fork interview-loop's stopping logic" "fail"
+
+# I7: harden/SKILL.md references goalforge-interview at least twice (call
+# site + delegation description; a single stray mention isn't real wiring)
+[ "$(grep -c "goalforge-interview" "$HARDEN_MD" 2>/dev/null || true)" -ge 2 ] \
+  && check "harden/SKILL.md references goalforge-interview (>=2 mentions)" "pass" \
+  || check "harden/SKILL.md references goalforge-interview (>=2 mentions)" "fail"
+
+# I8: parent SKILL.md Children table carries the goalforge-interview row
+grep -qF '`goalforge-interview`' "$SKILL_MD" \
+  && check "parent SKILL.md Children table lists goalforge-interview" "pass" \
+  || check "parent SKILL.md Children table lists goalforge-interview" "fail"
+
+# I9: fidelity.md's escape-hatch row names goalforge-interview and carries no
+# stale planned-marker (wiring, not a roadmap note)
+{ [ -f "$FIDELITY_MD" ] && grep -qE '\| `goalforge-interview` escape hatch' "$FIDELITY_MD"; } \
+  && ! grep -q "planned — wp-06" "$FIDELITY_MD" \
+  && check "fidelity.md escape-hatch row wired, no planned-wp-06 marker" "pass" \
+  || check "fidelity.md escape-hatch row wired, no planned-wp-06 marker" "fail"
+
+# I10: engine-drift guard -- cross-boundary dependency on the global engine's
+# consumed contract tokens. Skip with a WARN (not a FAIL) if the engine path
+# is absent on this machine.
+ENGINE_MD="$HOME/.claude/skills/interview-loop/SKILL.md"
+if [ -f "$ENGINE_MD" ]; then
+  { grep -q "HANDOFF_SUGGESTION" "$ENGINE_MD" && grep -q "high-fidelity" "$ENGINE_MD"; } \
+    && check "engine interview-loop/SKILL.md still exposes consumed contract tokens" "pass" \
+    || check "engine interview-loop/SKILL.md still exposes consumed contract tokens" "fail"
+else
+  echo "  WARN: $ENGINE_MD absent -- skipping engine-drift guard (foreign machine)"
+fi
+
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 
