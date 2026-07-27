@@ -1,16 +1,14 @@
 # Fidelity Ladder (discussion → interview → prototype)
 
 A design question deserves the **cheapest fidelity that can settle it**, and no
-more. Talking is cheaper than a structured interview; a structured interview is
-cheaper than building something. This file is the single home of the ladder, the
-trigger criterion, and one routing row per surface that consults them — stage
-skills link here rather than restating. Nothing here is a gate: a feature that
-needs no prototype runs the chain exactly as before.
+more. This file is the single home of the ladder, the trigger criterion, and one
+routing row per surface that consults them. Nothing here is a gate: a feature
+that needs no prototype runs the chain exactly as before.
 
 ## Ladder
 
-Three rungs, cheapest first. Start at the bottom; climb only when the rung below
-has demonstrably failed to settle the question.
+Three rungs, cheapest first. Start at rung 1; climb only when the rung below has
+demonstrably failed to settle the question.
 
 1. **Discussion** — reading the code, docs, or prior art and talking it through.
    Settles most questions. Climb when two passes leave the answer contested or
@@ -21,13 +19,15 @@ has demonstrably failed to settle the question.
    answer depends on how the thing actually looks, behaves, performs, or scales,
    and no further questioning will produce it.
 3. **Prototype** — a declared spike that answers ONE question by building the
-   cheapest thing that produces evidence. Owned by the `prototype` skill; spike
-   code lives in a worktree and never commits, only the findings doc does.
+   cheapest thing that produces evidence. Owned by the `prototype` skill;
+   retention and what survives are governed by its Contract
+   (`prototype/SKILL.md` §Contract §4-§5).
 
 ## Trigger
 
-Canonical criterion — the only full statement in the repo; stage decision sites
-carry a one-line cue plus a link back here.
+Canonical criterion — the only full statement outside the `prototype` skill's own
+description (a discovery surface that must stay self-contained); stage decision
+sites carry a one-line cue plus a link back here.
 
 > A question is a **spike candidate** when both hold:
 > 1. it is of kind **"how should it look / how should it behave / which approach
@@ -46,11 +46,10 @@ carry a one-line cue plus a link back here.
 |---|---|
 | `capture` | Step 3 — a Goal sentence that turns on a question meeting the trigger carries a one-line downstream spike-candidate note; capture flags, it never spikes. |
 | `spec` | A blocked spec section whose blocker meets the trigger is a spike to unblock it; findings feed the spec text and any ADR candidates. |
-| `harden` | Step 1 applies the trigger as the criterion for **flagging** a spike candidate. `interview-loop` remains the sole open-question resolver; escalation mechanics are owned by the interview specialization, not by this file. |
+| `harden` | Step 1 applies the trigger to flag a spike candidate and routes it to the `prototype` skill (handoff mode `prototype`); `interview-loop` stays the sole resolver for everything else. Escalation refinement is owned by the interview specialization (wp-06). |
 | `decompose` | §Prototype WPs — a WP whose whole goal meets the trigger is a declared spike: `register: prototype`, one task, findings doc as deliverable. |
 | `execute` | Step 0 — a WP carrying `register: prototype` runs the `prototype` skill and commits only the findings doc. |
-| issue / triage | See §issue-routing. |
-| `interview-loop` escape hatch | When a question resists resolution, ask once: *"this is above discussion fidelity — spike it?"* rather than grinding further. |
+| `interview-loop` escape hatch | When a question resists resolution, ask once: *"this is above discussion fidelity — spike it?"* rather than grinding further (planned — wp-06 interview specialization; not yet implemented in `interview-loop`). |
 
 ## issue-routing
 
@@ -58,10 +57,9 @@ Scope: **goalforge-side only**. The global triage skill is deliberately left
 untouched; that integration is deferred to the idea `triage-fidelity-routing`,
 gated on wp-04 verified.
 
-A captured issue (`scripts/goalforge-issue`) or an unresolved open question is
-normally prose that some later stage reads. When one instead meets the
-spike-candidate trigger (§Trigger), it routes **up** the ladder to a declared
-spike rather than staying prose. The kinds that most plausibly carry a design
+A captured issue (`scripts/goalforge-issue`) or an unresolved open question that
+meets the spike-candidate trigger (§Trigger) routes **up** the ladder to a
+declared spike instead of staying prose. The kinds that most plausibly carry a design
 question are `spec-gap` (a design facet the spec never settled) and
 `dispatch-mismatch` (vocabulary-only until a `dispatch.*` producer lands, so
 expect `spec-gap` in practice); the other kinds are operational and never route

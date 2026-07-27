@@ -87,8 +87,7 @@ If a section is blocked by a question that meets the **spike-candidate trigger**
 settle (criterion: `~/.claude/skills/goalforge/references/fidelity.md`) — spike it to
 unblock the section instead of writing the section around the gap; the findings
 feed the spec text and any ADR candidates. Most blockers do not qualify and stay
-in `## Open Questions` for `goalforge-harden` — this is guidance inside the
-design pass, not a step.
+in `## Open Questions` for `goalforge-harden` — this is guidance, not a step.
 
 ### Step 2b — Author the feature goal block
 

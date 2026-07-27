@@ -203,12 +203,23 @@ fi
   && check "fidelity.md carries a ## Trigger section" "pass" \
   || check "fidelity.md carries a ## Trigger section" "fail"
 
-# F4-F7: every stage skill links the ladder rather than restating it
-for STAGE in spec harden decompose execute; do
+# F4: the issue/open-question routing rule has its own section
+{ [ -f "$FIDELITY_MD" ] && grep -qE '^## issue-routing' "$FIDELITY_MD"; } \
+  && check "fidelity.md carries a ## issue-routing section" "pass" \
+  || check "fidelity.md carries a ## issue-routing section" "fail"
+
+# F5-F9: every stage skill links the ladder rather than restating it
+for STAGE in capture spec harden decompose execute; do
   grep -q "fidelity.md" "$SKILL_DIR/$STAGE/SKILL.md" \
     && check "$STAGE/SKILL.md links references/fidelity.md" "pass" \
     || check "$STAGE/SKILL.md links references/fidelity.md" "fail"
 done
+
+# F10: spec carries BOTH fidelity hooks (Step 2 blocked-section spike +
+# the goal.outcome facet flag) — deleting either must fail this check.
+[ "$(grep -c 'fidelity.md' "$SKILL_DIR/spec/SKILL.md" || true)" -ge 2 ] \
+  && check "spec/SKILL.md carries both fidelity hooks (>=2 links)" "pass" \
+  || check "spec/SKILL.md carries both fidelity hooks (>=2 links)" "fail"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
