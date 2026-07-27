@@ -7,3 +7,7 @@ __pycache__/
 
 # loop-safety: per-session loop state (do not commit)
 .memory/loops/
+
+# private planning artifacts (not for public repo)
+plans/
+docs/handoffs/
