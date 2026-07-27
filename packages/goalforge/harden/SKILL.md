@@ -16,7 +16,8 @@ hooks:
 
 Advances a WP through two transitions:
 
-1. `spec → hardened` (automated, driven by `interview-loop`)
+1. `spec → hardened` (automated, driven by `goalforge-interview`, which
+   wraps the `interview-loop` engine)
 2. `hardened → ready` (human-gated by default; auto-advances only under the
    signal-scoped rule — Step 2)
 
@@ -176,7 +177,7 @@ every BLOCK/HIGH in the planning docs first). Surface improvements via
 
 Each review lens owns one concern; none re-litigates another's resolved finding.
 Tier-1 owns feature-scope cross-WP concerns, the Tier-2 delta WP-local defects,
-`interview-loop` the open questions (sole resolver), `goalforge-arbiter` architectural
+`goalforge-interview` the open questions (drives `interview-loop`, sole resolver), `goalforge-arbiter` architectural
 bets, the panel this WP's design dissent. A finding resolved upstream is consumed
 (cited, not re-raised); one still unresolved or regressed re-fires. Full ownership
 table + attribution rule: `${CLAUDE_SKILL_DIR}/references/review-topology.md`.
@@ -213,8 +214,9 @@ before/after command protocol + Recommended Agents:
 
 ## Step 1 — Drive open questions to zero (`spec → hardened`)
 
-Delegate to `interview-loop` with the WP's `overview.md` and any linked
-task files as input context. The interview continues until every open
+Delegate to `goalforge-interview` with the WP's `overview.md` and any linked
+task files as input context (it frames the session, then drives the global
+`interview-loop` engine, the sole resolver). The interview continues until every open
 question in scope is either:
 - resolved (answer recorded),
 - marked as an explicit assumption (recorded with rationale), or
@@ -493,7 +495,8 @@ global `~/.claude/plans/`.
 - `skills/adjudication/panel` (Step 0a, complex) — reused as-is; returns
   `{verdict, findings[], dissent_ledger[], met, severity_gate}`.
 - `qmd query` over `.memory` (Step 0b) — best-effort prior-learnings read.
-- `interview-loop` (Step 1) — drives open questions to zero, one at a time.
+- `goalforge-interview` (Step 1) — frames the session and delegates to
+  `interview-loop`, which drives open questions to zero, one at a time.
 - `goalforge-harden-surface.sh` (Step 1) — propose-only route record; writes nothing.
 - `hooks/goalforge-open-questions-gate.sh --check` (Step 2) — hard backstop; non-zero
   blocks the `hardened → ready` gate. Zero-breakage (prints `0` on internal error).

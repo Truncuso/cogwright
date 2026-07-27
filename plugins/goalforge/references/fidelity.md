@@ -49,7 +49,7 @@ sites carry a one-line cue plus a link back here.
 | `harden` | Step 1 applies the trigger to flag a spike candidate and routes it to the `prototype` skill (handoff mode `prototype`); `interview-loop` stays the sole resolver for everything else. Escalation refinement is owned by the interview specialization (wp-06). |
 | `decompose` | §Prototype WPs — a WP whose whole goal meets the trigger is a declared spike: `register: prototype`, one task, findings doc as deliverable. |
 | `execute` | Step 0 — a WP carrying `register: prototype` runs the `prototype` skill and commits only the findings doc. |
-| `interview-loop` escape hatch | When a question resists resolution, ask once: *"this is above discussion fidelity — spike it?"* rather than grinding further (planned — wp-06 interview specialization; not yet implemented in `interview-loop`). |
+| `goalforge-interview` escape hatch | When a question resists resolution, ask once: *"this is above discussion fidelity — spike it?"* rather than grinding further; see `interview/`. |
 
 ## issue-routing
 
