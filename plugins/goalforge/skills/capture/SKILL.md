@@ -54,7 +54,10 @@ Create `<PLANS_ROOT>/<feature>/overview.md` from the `feature-overview.md`
 template. Frontmatter: `name` (slug), `title` (un-slugified, title-cased),
 `status: draft`, `created`, `feature`, and empty
 `work_packages`/`relationships`/`sources`. Body sections from user intent:
-**Problem**, **Goal** (one measurable success sentence), **Scope — In/Out**
+**Problem**, **Goal** (one measurable success sentence — when the goal turns on a
+how-should-it-look / behave / perform question that talking will not settle, note it
+as a downstream **spike candidate**: `~/.claude/skills/goalforge/references/fidelity.md`),
+**Scope — In/Out**
 (best-effort; template placeholder if unspecified), **Work Packages table**
 (empty, filled by `goalforge-decompose`), **Links** (keep `spec.md`, `todo.md`).
 

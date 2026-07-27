@@ -44,6 +44,7 @@ carry a one-line cue plus a link back here.
 
 | stage / surface | hook |
 |---|---|
+| `capture` | Step 3 — a Goal sentence that turns on a question meeting the trigger carries a one-line downstream spike-candidate note; capture flags, it never spikes. |
 | `spec` | A blocked spec section whose blocker meets the trigger is a spike to unblock it; findings feed the spec text and any ADR candidates. |
 | `harden` | Step 1 applies the trigger as the criterion for **flagging** a spike candidate. `interview-loop` remains the sole open-question resolver; escalation mechanics are owned by the interview specialization, not by this file. |
 | `decompose` | §Prototype WPs — a WP whose whole goal meets the trigger is a declared spike: `register: prototype`, one task, findings doc as deliverable. |
@@ -53,4 +54,22 @@ carry a one-line cue plus a link back here.
 
 ## issue-routing
 
-_STUB — body owned by task-03 (goalforge-side issue routing hook)._
+Scope: **goalforge-side only**. The global triage skill is deliberately left
+untouched; that integration is deferred to the idea `triage-fidelity-routing`,
+gated on wp-04 verified.
+
+A captured issue (`scripts/goalforge-issue`) or an unresolved open question is
+normally prose that some later stage reads. When one instead meets the
+spike-candidate trigger (§Trigger), it routes **up** the ladder to a declared
+spike rather than staying prose. The kinds that most plausibly carry a design
+question are `spec-gap` (a design facet the spec never settled) and
+`dispatch-mismatch` (vocabulary-only until a `dispatch.*` producer lands, so
+expect `spec-gap` in practice); the other kinds are operational and never route
+here.
+
+Routing happens at the stage that owns the surface, never at capture time:
+
+- names a blocked spec section → the `spec` hook (spike to unblock it);
+- reads as an open question → `harden` Step 1, flagged for `interview-loop` as
+  a spike candidate;
+- WP-sized on its own → `decompose` §Prototype WPs (`register: prototype`).

@@ -93,7 +93,9 @@ Schema: `~/.claude/skills/goalforge/references/schema.md` §Goal object. Set:
   The dominant nature of the work; defaults to `code`. Picked here so dispatch
   and the default-strategy map have a feature-level anchor.
 - **`goal.outcome`** — one measurable sentence stating what is true when the
-  feature is done. Not a task list — the end state.
+  feature is done. Not a task list — the end state. An outcome facet that is
+  itself a spike-candidate question belongs in `## Open Questions`, flagged as
+  such (criterion: `~/.claude/skills/goalforge/references/fidelity.md`).
 - **`goal.verification.strategy`** — `deterministic | numeric | judge | human`,
   and **`goal.verification.check`** in that strategy's shape (see the
   per-strategy `check` table in the schema). This is the Verification Surface
