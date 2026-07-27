@@ -4,7 +4,12 @@
 # exactly one piece of the interview wiring in a fresh scratch copy of the
 # package, and run.sh must go red for it. Offline, no network.
 #
-# Exit 0 only if: baseline is green AND all 4 mutations turn run.sh red.
+# Exit 0 only if: baseline is green AND all 6 mutations turn run.sh red.
+#
+# Not covered here: a paraphrase-fork mutation (rewording interview/SKILL.md's
+# delegation language so it drifts from interview-loop's actual contract while
+# keeping every grepped token intact) — that is a semantic check no grep guard
+# can catch; left as a human/reviewer concern, not a mutation case.
 
 set -euo pipefail
 
@@ -93,6 +98,43 @@ if bash "$DIR_D/evals/run.sh" >/dev/null 2>&1; then
   FAIL=1
 else
   echo "PASS: mutation (d) delete fidelity.md escape-hatch row turns run.sh red"
+fi
+
+# ── Mutation (e): reinsert the stale 'planned — wp-06' marker into fidelity.md's
+# escape-hatch row ─────────────────────────────────────────────────────────
+DIR_E="$(fresh_copy mutation-e)"
+python3 - "$DIR_E/references/fidelity.md" <<'PYEOF'
+import sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+text = text.replace(
+    "`goalforge-interview` escape hatch",
+    "`goalforge-interview` escape hatch (planned — wp-06)",
+)
+open(path, "w", encoding="utf-8").write(text)
+PYEOF
+if bash "$DIR_E/evals/run.sh" >/dev/null 2>&1; then
+  echo "FAIL: mutation (e) reinsert planned-wp-06 marker turns run.sh red"
+  FAIL=1
+else
+  echo "PASS: mutation (e) reinsert planned-wp-06 marker turns run.sh red"
+fi
+
+# ── Mutation (f): delete the goalforge-interview row from the parent SKILL.md's
+# Children table ────────────────────────────────────────────────────────────
+DIR_F="$(fresh_copy mutation-f)"
+python3 - "$DIR_F/SKILL.md" <<'PYEOF'
+import sys
+path = sys.argv[1]
+lines = open(path, encoding="utf-8").read().splitlines(keepends=True)
+lines = [l for l in lines if "`goalforge-interview`" not in l]
+open(path, "w", encoding="utf-8").writelines(lines)
+PYEOF
+if bash "$DIR_F/evals/run.sh" >/dev/null 2>&1; then
+  echo "FAIL: mutation (f) delete goalforge-interview row from parent SKILL.md turns run.sh red"
+  FAIL=1
+else
+  echo "PASS: mutation (f) delete goalforge-interview row from parent SKILL.md turns run.sh red"
 fi
 
 if [ "$FAIL" -eq 0 ]; then

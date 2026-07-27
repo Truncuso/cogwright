@@ -223,6 +223,8 @@ done
 
 
 # ── Interview specialization tests ─────────────────────────────────────────────────────────
+# Mutation coverage for this block: evals/interview-mutations.sh (run by the
+# WP verification check; not auto-invoked here to avoid recursion).
 echo ""
 echo "[ Interview specialization tests ]"
 

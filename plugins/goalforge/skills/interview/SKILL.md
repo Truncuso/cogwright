@@ -9,10 +9,8 @@ metadata:
 
 ## Visibility
 
-PRIVATE child of the `goalforge` package. Discovery is one level deep, so this
-nested SKILL is never a user-invocable front door. Its **only** call site is
-`goalforge-harden` Step 1, which invokes it by name to drive a WP's open
-questions to zero.
+PRIVATE child of the `goalforge` package (frontmatter `description`); sole
+call site is detailed in §Consumed by.
 
 ## What this adds over bare interview-loop
 
@@ -24,10 +22,8 @@ goal-hardening framing the engine needs:
   question in the WP's scope is resolved, recorded as an explicit assumption,
   or risk-accepted (harden Step 1's own exit criteria).
 - **Fidelity vocabulary** — a question can outgrow discussion fidelity mid-loop;
-  see `references/fidelity.md` for the ladder and the trigger criterion this
+  see `~/.claude/skills/goalforge/references/fidelity.md` for the ladder and the trigger criterion this
   specialization applies.
-- Nothing here reimplements the engine's question technique or output
-  contract — those stay entirely in `interview-loop`.
 
 ## Procedure (frame -> delegate -> escape hatch -> return)
 
@@ -38,10 +34,14 @@ goal-hardening framing the engine needs:
    question technique, confidence signaling, and stopping behavior belong to
    the engine; this specialization does not reimplement or shadow it.
 3. **Escape hatch** — when a question meets the spike-candidate trigger
-   (`references/fidelity.md` §Trigger), ask once: *"this is above discussion fidelity — spike it?"*
+   (`~/.claude/skills/goalforge/references/fidelity.md` §Trigger), ask once: *"this is above discussion fidelity — spike it?"*
    Surface this by consuming the engine's existing `HANDOFF_SUGGESTION: high-fidelity`
-   token (no parallel signal invented) and route per `references/fidelity.md`
-   §Per-stage routing — `harden` row — to the `prototype` skill.
+   token (no parallel signal invented) and route per `~/.claude/skills/goalforge/references/fidelity.md`
+   §Per-stage routing — `harden` row — to the `prototype` skill. The engine's
+   `high-fidelity` token is the signal, the Trigger is the filter — a token whose
+   question fails the kind test (Trigger condition 1) goes back to harden Step 1's
+   open-question/risk-accept path, not to `prototype`; a Trigger-matching question
+   routes even if the engine emits no token.
 4. **Return** the engine's structured outputs (resolved terms, ADR candidates,
    handoff suggestions) untouched to the caller; this specialization does not
    post-process or filter them.
@@ -55,6 +55,4 @@ consumer of this specialization (it keeps its own wp-04 spike hook).
 
 - The engine (`interview-loop`) stays global and unmodified — do not fork its
   question loop or stopping logic into this file.
-- Drift between this wrapper's framing and the engine's actual contract is
-  guarded by evals, not by restating the engine's mechanics here.
 - Package-private: no top-level installer symlink for this child skill.

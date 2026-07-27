@@ -50,7 +50,8 @@ check "skill name declared" "name: goalforge-harden"
 check "precondition status is spec" "$SK spec"
 
 # Delegated skill
-check "delegates to interview-loop" "interview-loop"
+check "delegates to goalforge-interview" "goalforge-interview"
+check "engine still named interview-loop" "interview-loop"
 
 # State transitions
 check "spec → hardened transition documented" "spec → hardened"
