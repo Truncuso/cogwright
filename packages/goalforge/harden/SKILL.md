@@ -358,6 +358,11 @@ does **not** gate (script detects; human decides). Block format, the
 `check`-vs-`verify:` trust boundary, and the mismatch-row schema:
 `${CLAUDE_SKILL_DIR}/references/assumptions.md`.
 
+Negative checks and count assertions earn their keep before they gate:
+red-baseline them on HEAD at the panel, and mutation-test any eval-block check
+(including reviewer-PROPOSED checks) on a scratch copy —
+`${CLAUDE_SKILL_DIR}/references/mutation-testing.md`.
+
 ## Step 2 — The `hardened → ready` gate (human by default, signal-scoped auto)
 
 This transition requires a complete, validating goal block **and** approval —
