@@ -12,6 +12,8 @@ description: >
   straight to goalforge-capture with no map. SKIP for a bounded one-off edit, and
   for anything already past spec (that is the SDD chain, not wayfind).
 argument-hint: "<effort-slug> [chart]"
+metadata:
+  version: 0.1.0
 ---
 
 # Wayfind
@@ -207,3 +209,31 @@ which point the map is simply `working` again (no status unwind needed).
   triages every candidate.
 - **Claim is stamp-only** (`claimed_by` + `claimed_at`); status stays `open`.
 - **Grilling and quiz-back run HITL in the main session**, never dispatched.
+
+## Gotchas
+
+- **A stale claim is not a free ticket.** `claimed_by` + `claimed_at` are
+  stamp-only and the ticket status stays `open`, so a claimed ticket is excluded
+  from `frontier` while still counting against `converged`. A session that dies
+  mid-ticket therefore silently stalls the whole loop: the frontier script emits
+  the ticket under `stale_claims` (WARN on stderr past 7 days) and **never
+  auto-resets it**. Do not treat a stale claim as unclaimed and dispatch over it
+  — confirm the owning session is dead, then clear `claimed_by` / `claimed_at`
+  explicitly (or resolve the ticket) before re-picking it.
+
+- **Guard against a premature graduation: `converged: true` is not the same as
+  "no fog left".** Convergence counts open tickets only; fog recorded in map
+  `## Not yet specified` or never ticketed at all is invisible to the frontier
+  script. That is exactly why graduate is gated: the blind-spot re-check and the
+  HITL quiz-back both run AFTER `converged: true`, and any accepted candidate or
+  surfaced gap ABORTS graduation back to `working`. Skipping either gate, or
+  converting a real gap into an "accepted risk" to keep moving, ships the fog
+  into `goalforge-capture` where it becomes an underspecified spec.
+
+- **End every session in a consistent commit state.** The map IS the resume
+  point — there is no wayfind handoff mode — so a half-committed map/ticket set
+  is the resume point being wrong. Commit `map.md`, the ticket files, and
+  `findings/` together: a committed `resolution:` pointer to an uncommitted
+  `findings/ticket-NN.md`, a committed claim stamp with no findings, or a
+  `status: resolved` ticket whose map pointer was not updated all leave the next
+  session computing a frontier from a state that never existed.
