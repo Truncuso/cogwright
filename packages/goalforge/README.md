@@ -17,7 +17,7 @@ Orchestrated by `goalforge-run` (sibling `chain.yaml`). Flat on-disk layout:
 | `goalforge-capture` | Elicit raw input; write the feature `overview.md` (status: draft) |
 | `goalforge-spec` | Write `spec.md`; define measurable goal + verification criteria (status: draft → spec) |
 | `goalforge-decompose` | Break the spec into WP `overview.md` files with task stubs |
-| `goalforge-harden` | Grill each WP via `interview-loop`; resolve open questions; advance to `ready` |
+| `goalforge-harden` | Grill each WP via `goalforge-interview` (which drives the global `interview-loop` engine); resolve open questions; advance to `ready` |
 | `goalforge-execute` | Run the execute sub-cycle per task (pick-agent → dispatch → checkpoint → verify) |
 | `goalforge-verify` | Run `superpowers:verification-before-completion`; mark WP `verified` |
 
@@ -40,7 +40,7 @@ terminal, reached only via explicit user action. Details: `references/schema.md`
 
 | Skill | Relationship |
 |---|---|
-| `interview-loop` | Delegated to by `goalforge-harden` |
+| `interview-loop` | Engine driven by `goalforge-interview`, the Step-1 delegate of `goalforge-harden` |
 | `implement` | Reused inside `goalforge-execute` sub-cycle |
 | `verify-and-simplify` | Reused inside `goalforge-execute` sub-cycle |
 | `goalforge-run` | Orchestrator; wires the chain via `chain.yaml` |

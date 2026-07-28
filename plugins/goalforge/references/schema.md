@@ -87,7 +87,7 @@ Every work package moves through six stages, stored as `status:` in frontmatter:
 |---|---|---|
 | `draft` | Rough capture — problem stated, target files guessed | WP exists; problem statement non-empty |
 | `spec` | Goal + verification defined | Measurable goal written; verification rows drafted |
-| `hardened` | Grilled, open questions resolved | `interview-loop` run; zero `open` items in OPEN_QUESTIONS |
+| `hardened` | Grilled, open questions resolved | `goalforge-interview` run (which drives the global `interview-loop` engine); zero `open` items in OPEN_QUESTIONS |
 | `ready` | Approved for exec | Human approval recorded; `depends_on` WPs are `ready`+ |
 | `executing` | `goalforge-execute` running | ≥1 task has a `checkpoint` block |
 | `verified` | Passed verification | `goalforge-verify` PASS with evidence; review + simplify clean |

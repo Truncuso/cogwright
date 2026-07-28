@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # evals/run.sh — goalforge-harden static-contract checks
 #
-# All checks are STATIC-CONTRACT — the skill delegates to interview-loop
-# (a conversational agent) so behavioral output requires a model.
+# All checks are STATIC-CONTRACT — the skill delegates to goalforge-interview (which drives the global interview-loop engine)
+# — a conversational agent — so behavioral output requires a model.
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"

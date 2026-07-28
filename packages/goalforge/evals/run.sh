@@ -291,6 +291,41 @@ else
   echo "  WARN: $ENGINE_MD absent -- skipping engine-drift guard (foreign machine)"
 fi
 
+
+# ── wp-07 conformance tests ─────────────────────────────────────────────
+# Re-asserts the facts wp-07 establishes (tasks 01-03) so they survive the WP.
+echo ""
+echo "[ wp-07 conformance tests ]"
+
+WAYFIND_MD="$SKILL_DIR/wayfind/SKILL.md"
+
+# C1: every child SKILL.md carries a nested metadata.skill-kind (18 children)
+SKILL_KIND_COUNT="$(grep -lE '^  skill-kind: (capability|preference)$' "$SKILL_DIR"/*/SKILL.md 2>/dev/null | wc -l || true)"
+[ "$SKILL_KIND_COUNT" -eq 18 ] \
+  && check "all 18 child SKILL.md files declare metadata.skill-kind" "pass" \
+  || check "all 18 child SKILL.md files declare metadata.skill-kind (got $SKILL_KIND_COUNT)" "fail"
+
+# C2: wayfind/SKILL.md carries a metadata block with a nested semver version
+{ [ -f "$WAYFIND_MD" ] && grep -q '^metadata:$' "$WAYFIND_MD" \
+    && grep -qE '^  version: [0-9]+\.[0-9]+\.[0-9]+$' "$WAYFIND_MD"; } \
+  && check "wayfind/SKILL.md has metadata: with nested semver version:" "pass" \
+  || check "wayfind/SKILL.md has metadata: with nested semver version:" "fail"
+
+# C3: wayfind/SKILL.md carries the required Gotchas section
+{ [ -f "$WAYFIND_MD" ] && grep -q '^## Gotchas$' "$WAYFIND_MD"; } \
+  && check "wayfind/SKILL.md has a ## Gotchas section" "pass" \
+  || check "wayfind/SKILL.md has a ## Gotchas section" "fail"
+
+# C4: parent SKILL.md carries the co-tenancy note naming both non-chain tenants
+{ grep -qF 'prototype/' "$SKILL_MD" && grep -qF 'wayfind/' "$SKILL_MD"; } \
+  && check "parent SKILL.md co-tenancy note names prototype/ and wayfind/" "pass" \
+  || check "parent SKILL.md co-tenancy note names prototype/ and wayfind/" "fail"
+
+# C5: NEGATIVE -- non-chain tenants must NOT appear as Children-table rows
+grep -qE '^\| `(prototype|wayfind)` \|' "$SKILL_MD" \
+  && check "parent SKILL.md Children table has no prototype/wayfind row" "fail" \
+  || check "parent SKILL.md Children table has no prototype/wayfind row" "pass"
+
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
 

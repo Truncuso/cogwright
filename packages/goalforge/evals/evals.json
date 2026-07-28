@@ -16,7 +16,7 @@
     {
       "id": 3,
       "prompt": "What's the difference between goalforge-harden and goalforge-execute? When do I use each?",
-      "expected_output": "goalforge-harden: takes WP at status spec, grills the goal block via interview-loop, human-gated transition to ready. goalforge-execute: takes WP at status ready, runs the actual implementation sub-cycle. Clear distinction between planning/hardening vs execution.",
+      "expected_output": "goalforge-harden: takes WP at status spec, grills the goal block via goalforge-interview (which drives the global interview-loop engine), human-gated transition to ready. goalforge-execute: takes WP at status ready, runs the actual implementation sub-cycle. Clear distinction between planning/hardening vs execution.",
       "files": []
     },
     {

@@ -49,7 +49,7 @@ steps:
 
   - skill: goalforge/harden
     when_route: standard     # fast path replaces harden with the deterministic gates above, then records the goal hash (goalforge-goal-hash.sh --record) before spec->ready --mode auto, exactly as harden's auto door does; a tripped fast WP re-enters HERE
-    purpose: "Grill each WP goal block facets via interview-loop; resolve open questions (status: spec → hardened → ready); delegate to goalforge-arbiter when ≥2 architectural approaches involve a hard-to-reverse bet (advisory)"
+    purpose: "Grill each WP goal block facets via goalforge-interview (which drives the global interview-loop engine); resolve open questions (status: spec → hardened → ready); delegate to goalforge-arbiter when ≥2 architectural approaches involve a hard-to-reverse bet (advisory)"
     precondition:
       target: wp
       status: spec
@@ -72,7 +72,7 @@ steps:
     precondition: null   # loop-back: triggered by a learning, not the linear status flow
 
 recommended_agents:
-  - interview-loop     # delegated by goalforge-harden
+  - interview-loop     # engine driven by goalforge-interview, the Step-1 delegate of goalforge-harden
   - general-purpose    # discovery agent for specialist resolution inside goalforge-execute
 
 on_failure:

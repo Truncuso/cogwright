@@ -68,6 +68,6 @@ here.
 Routing happens at the stage that owns the surface, never at capture time:
 
 - names a blocked spec section → the `spec` hook (spike to unblock it);
-- reads as an open question → `harden` Step 1, flagged for `interview-loop` as
+- reads as an open question → `harden` Step 1, flagged for `goalforge-interview` (which drives the global `interview-loop` engine) as
   a spike candidate;
 - WP-sized on its own → `decompose` §Prototype WPs (`register: prototype`).
