@@ -71,6 +71,10 @@ Note: `prototype/` and `wayfind/` are non-chain tenants co-located in this
 package (not chain stages), reachable via the installer's top-level symlinks
 (Interface Contract §5).
 
+Note: `brief/` is a chain-support asset — not a chain stage (no status edge)
+and not a co-tenant (no top-level symlink): the `brief` skill authors task
+briefs that `goalforge-execute` consumes.
+
 ## Alias layer (copy-first migration)
 
 The legacy `sdd-*` skills and `sdd-*.sh` scripts remain in place as
