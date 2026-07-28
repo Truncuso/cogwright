@@ -67,6 +67,10 @@ the entry commands and the orchestrator, or referenced here.
 `/spec`, `/plan`, `/implement`, `/verify` are the human entry points; they drive
 the chain via the `goalforge-run` orchestrator (`run/`).
 
+Note: `prototype/` and `wayfind/` are non-chain tenants co-located in this
+package (not chain stages), reachable via the installer's top-level symlinks
+(Interface Contract §5).
+
 ## Alias layer (copy-first migration)
 
 The legacy `sdd-*` skills and `sdd-*.sh` scripts remain in place as
