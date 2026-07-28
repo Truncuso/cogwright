@@ -1474,13 +1474,19 @@ for path, kind, fm, has_ckpt in all_files:
         if task_complexity in ('medium', 'high') and status in ('implemented', 'verified'):
             m = re.match(r'(task-\d+)', os.path.basename(str(path)))
             if m:
-                brief_sibling = os.path.join(os.path.dirname(str(path)),
-                                             'brief-%s.md' % m.group(1))
-                if not os.path.exists(brief_sibling):
+                # Canonical sibling is brief-<full-task-slug>.md (the name
+                # execute/brief-staleness.sh resolves); the short
+                # brief-task-NN.md form is accepted as legacy.
+                task_slug = os.path.basename(str(path))[:-3]
+                wp_dir = os.path.dirname(str(path))
+                candidates = ('brief-%s.md' % task_slug,
+                              'brief-%s.md' % m.group(1))
+                if not any(os.path.exists(os.path.join(wp_dir, c))
+                           for c in candidates):
                     warn(path,
                          'gated task (complexity=%s) at status `%s` has no '
                          'sibling brief-%s.md — brief stage was skipped'
-                         % (task_complexity, status, m.group(1)))
+                         % (task_complexity, status, task_slug))
 
         # Task-level depends_on within same WP
         raw_deps = fm.get('depends_on', []) or []

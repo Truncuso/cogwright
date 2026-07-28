@@ -1,6 +1,6 @@
 ---
 name: goalforge-brief
-description: "PRIVATE child of goalforge. Authors a delta-only brief-task-NN.md for a complexity-gated (medium/high) task, ONCE, at the task's pending→briefed transition. A strong tier (resolved via tier-map.md) writes pointers + doc context + skeleton signatures + a pointer to task-NN.md — never frozen implementation code — so a cheap tier can then execute the task. Invoked only by goalforge-execute's pre-dispatch flow; not a user-facing front door."
+description: "PRIVATE child of goalforge. Authors a delta-only brief-<task-slug>.md (full task slug, e.g. brief-task-02-wire-stages.md) for a complexity-gated (medium/high) task, ONCE, at the task's pending→briefed transition. A strong tier (resolved via tier-map.md) writes pointers + doc context + skeleton signatures + a pointer to task-NN.md — never frozen implementation code — so a cheap tier can then execute the task. Invoked only by goalforge-execute's pre-dispatch flow; not a user-facing front door."
 metadata:
   skill-kind: preference
   version: 1.0.0
@@ -28,10 +28,13 @@ is a per-task read).
 
 - `complexity: low` → **skip** briefing entirely; the executor dispatches the
   task directly with no brief artifact.
-- `complexity: medium | high` → author exactly one `brief-task-NN.md` sibling.
+- `complexity: medium | high` → author exactly one `brief-<task-slug>.md` sibling
+  (full task filename minus `.md` — `brief-task-NN-<slug>.md`, the name
+  `execute/brief-staleness.sh` resolves; a bare `brief-task-NN.md` is invisible
+  to it).
 
 Author once. A brief is **immutable** after authoring; re-authoring a task that
-already has a sibling `brief-task-NN.md` is a no-op (staleness handling is the
+already has a sibling `brief-<task-slug>.md` is a no-op (staleness handling is the
 executor's re-validation step, wp-06/task-04 — it records a re-brief request to
 the task checkpoint block, it never mutates the brief in place).
 
@@ -46,7 +49,7 @@ once to author the brief, then let a cheap tier consume it per execution.
 
 ## Brief-authoring flow (delta-only)
 
-Emit `<wp>/brief-task-NN.md` with frontmatter `{task, created, brief_tier}` and
+Emit `<wp>/brief-<task-slug>.md` with frontmatter `{task, created, brief_tier}` and
 these sections (per Interface Contract §4 as amended by decision A-FOLD —
 delta-only, no duplication):
 
@@ -76,7 +79,7 @@ Hard constraints:
 
 ## Brief artifact schema (canonical template)
 
-The emitted `<wp>/brief-task-NN.md` conforms exactly to this shape — frontmatter
+The emitted `<wp>/brief-<task-slug>.md` conforms exactly to this shape — frontmatter
 is the three keys `{task, created, brief_tier}` and nothing else (no
 `staleness_checked`, per A-FOLD: the brief is immutable, so a staleness result
 never lives in it — it records to the task checkpoint block instead):
@@ -92,8 +95,8 @@ brief_tier: <resolved-strong-tier>
 
 | file:line | git blob SHA |
 |---|---|
-| `path/to/file.ext:LINE` | `<blob-sha>` |
-| `goal:<wp-slug>` | `<goal-hash>` |
+| path/to/file.ext:LINE | <blob-sha> |
+| goal:<wp-slug> | <goal-hash> |
 
 ## Context
 
@@ -118,6 +121,21 @@ compares. The single `goal:<wp-slug>` row's value is the WP goal-block hash from
 way and compares recorded-vs-current. The `Skeleton` fence carries signatures/stubs only — asserting it never
 holds a complete function body is a brief-authoring invariant (fixture-checked in
 wp-06/task-05).
+
+## Gotchas
+
+- **References cells are BARE — never backtick-wrap them.** The staleness
+  parser (`execute/brief-staleness.sh`) splits each row on `|` and uses the
+  cell text verbatim: a backticked path fails `os.path.exists`, a backticked
+  SHA never equals the recomputed hash, and a backticked `goal:` prefix is
+  misread as a file path. Backticked cells make every anchor report drift or
+  MISSING.
+- **Never anchor a References row on the WP's own `overview.md` or on the
+  task file being briefed.** The pending→briefed status write mutates both
+  immediately after authoring, so the recorded blob SHA is stale by
+  construction (self-invalidation). For goal-block context use the
+  `goal:<wp-slug>` hash row — it re-computes over the goal block only and
+  survives status-line writes.
 
 ## Consumed by
 
