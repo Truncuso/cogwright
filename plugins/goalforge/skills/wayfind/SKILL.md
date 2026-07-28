@@ -13,6 +13,7 @@ description: >
   for anything already past spec (that is the SDD chain, not wayfind).
 argument-hint: "<effort-slug> [chart]"
 metadata:
+  skill-kind: preference
   version: 0.1.0
 ---
 

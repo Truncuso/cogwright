@@ -2,6 +2,7 @@
 name: goalforge-verify
 description: "Verify a WP at status `executing`: the SINGLE semantic gate. Confirms all child tasks are `implemented` and findings.md exists, runs ONE cumulative-diff review+simplify+second-opinion pass plus the WP goal.verification router, then promotes each task `implemented → verified`, backfills commit hashes, and advances `executing → verified`. Delegates to `superpowers:verification-before-completion`. TRIGGER: /goalforge-verify <wp-path> or when goalforge-run reaches the verify step in the chain. REFUSES to proceed if any child task is not at least `implemented` or `findings.md` is missing."
 metadata:
+  skill-kind: preference
   version: 2.0.0
 hooks:
   Stop:

@@ -2,6 +2,7 @@
 name: goalforge-harden
 description: "Drive a WP from status `spec` to `hardened` by first running a read-only Tier-2 pre-harden review (a WP-scoped delta that consumes the feature-level Tier-1 audit as data, skipped entirely for a simple WP with a fresh, finding-free Tier-1, and falling back to a whole-feature review when a sibling WP drifted), then delegating to `goalforge-interview` (which drives the global `interview-loop` engine) to resolve all open questions — a question may stay open only as a recorded `[risk-accepted]` risk — then advancing `hardened → ready` via human approval, or autonomously under the signal-scoped rule (simple + severity ≤ MEDIUM + non-migration). Use when a WP's open questions must be driven to zero before execution. TRIGGER: /goalforge-harden <wp-path>."
 metadata:
+  skill-kind: preference
   version: 1.9.0
 hooks:
   Stop:

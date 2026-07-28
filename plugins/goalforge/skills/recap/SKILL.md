@@ -2,6 +2,7 @@
 name: goalforge-recap
 description: "Maintain a living, resumable recap.md per feature that traces the per-WP execution loop. The authoritative trace is ONE row per WP (record-wp): the task list, loop-back entries, and a per-WP status line carrying the SINGLE WP commit at WP altitude (no per-task commit column — the answer to 'trace too many commits'). append-task is optional live-progress. Regenerates the feature rollup on demand. Invoked by goalforge-execute (optional live append) and goalforge-verify (record-wp at WP finalization). Trigger: goalforge-execute or goalforge-verify delegates a record-wp, append-task, append-loopback, or rollup operation for a feature WP."
 metadata:
+  skill-kind: preference
   version: 2.0.0
 ---
 

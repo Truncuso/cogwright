@@ -2,6 +2,7 @@
 name: goalforge-capture
 description: "Capture free-text user intent and scaffold the initial feature plan files. Creates plans/<feature>/overview.md (status: draft) by stamping the feature-overview template, then classifies the chain route (fast vs full) via goalforge-route.sh and stamps `route:` — a small clean goal takes the fast path (single WP, no spec.md); everything else takes the full chain. The feature-level todo.md is auto-generated later by goalforge-decompose via goalforge-rollup.sh after WPs are created. Idempotent: if the folder already exists, updates in place without clobbering. Use when starting a new feature from scratch, after brainstorming, or when invoked via /spec. Trigger: the user describes a new feature, change, or work item in natural language."
 metadata:
+  skill-kind: preference
   version: 1.1.0
 hooks:
   Stop:

@@ -2,6 +2,7 @@
 name: goalforge-redecompose
 description: "Reconcile a proposed re-decomposition against a partially-executed feature's verified WPs. Calls goalforge-reconcile-diff.sh to produce a 5-bucket diff, then routes: same → untouched (no-op), changed+new → status: spec and onto the harden frontier via goalforge-transition.sh, dropped-verified → supersede in place (ledger row, never delete), ambiguous (slug changed, goal matches a verified WP) → judgment/human — never auto-rename or auto-supersede. Logs goal mutations via goalforge-goal-changelog.sh. Idempotent: re-run on unchanged decomposition is a byte-identical no-op. TRIGGER: /goalforge-redecompose <feature-dir> --learning '<text>' or when goalforge-run loops back on a learning event."
 metadata:
+  skill-kind: preference
   version: 1.0.0
 ---
 

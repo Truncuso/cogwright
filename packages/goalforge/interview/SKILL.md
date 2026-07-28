@@ -2,6 +2,7 @@
 name: goalforge-interview
 description: "PRIVATE child of goalforge. Fidelity-aware goal-hardening specialization: frames a WP's open questions for a grilling session, delegates the Q&A loop to the global interview-loop engine, and implements the discussion-fidelity escape hatch. Invoked only by goalforge-harden Step 1; not a user-facing front door."
 metadata:
+  skill-kind: preference
   version: 1.0.0
 hooks:
   Stop:

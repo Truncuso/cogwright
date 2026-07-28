@@ -2,6 +2,7 @@
 name: goalforge-execute
 description: "Execute all tasks in a WP at status `ready`, running the per-task clean → deterministic-eval → commit sub-cycle (each task reaches the interim status `implemented`). The expensive semantic review + simplify are amortized to the WP boundary (goalforge-verify), not run per task. TRIGGER: /goalforge-execute <wp-path> or when goalforge-run reaches the execute step in the chain."
 metadata:
+  skill-kind: preference
   version: 2.0.0
 hooks:
   Stop:

@@ -2,6 +2,7 @@
 name: goalforge-arbiter
 description: "Approach arbitration for SDD hardening. Invoked by goalforge-harden when the spec marks decision-required OR when two or more approaches involve a hard-to-reverse bet. Normalizes each candidate approach into comparable claims along seven axes (objective, assumptions, files touched, sequencing, validation, rollback, cost), cross-reviews them dimension-by-dimension, and emits a decision memo — chosen direction, rejected alternatives with reasons, verification gates for the chosen path. Advisory input to goalforge-harden; does NOT change the human-gated hardened→ready transition. Trigger: goalforge-harden delegates a multi-approach arbitration for a WP, or a user asks to arbitrate competing implementation approaches."
 metadata:
+  skill-kind: preference
   version: 1.1.0
 ---
 

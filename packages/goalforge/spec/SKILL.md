@@ -2,6 +2,7 @@
 name: goalforge-spec
 description: "Run a design pass on a captured feature and produce the spec document. Reads plans/<feature>/overview.md, optionally invokes personas or architect for a multi-lens review, writes plans/<feature>/spec.md from the feature-spec template, and advances the feature status draft → ready. HUMAN-GATED: must receive explicit user approval before advancing status. Trigger: the user asks to spec, design, or elaborate on a feature that already has an overview.md (status: draft)."
 metadata:
+  skill-kind: preference
   version: 1.1.0
 hooks:
   Stop:

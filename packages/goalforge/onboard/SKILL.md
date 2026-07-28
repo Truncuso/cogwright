@@ -9,6 +9,7 @@ description: >
   or "scaffold plans/". Uses the current status vocabulary only — not
   the legacy GSD lifecycle. Idempotent: safe to re-run.
 metadata:
+  skill-kind: preference
   version: 1.1.0
 hooks:
   Stop:
