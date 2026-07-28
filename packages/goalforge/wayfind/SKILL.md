@@ -149,7 +149,7 @@ NOT stored — except the one `task` override):
 | ticket_type | mode | Machinery | Model / effort |
 |---|---|---|---|
 | research | AFK | dispatched `research-analyst` → web+docs sweep → `findings/` summary, consumed as DATA | opus / medium (pure scan legs → sonnet / low) |
-| grilling | HITL | `goalforge-interview` (which drives the global `interview-loop` engine) in the **main session** | not dispatched |
+| grilling | HITL | `interview-loop` engine directly in the **main session** (`goalforge-interview` is harden-only) | not dispatched |
 | prototype | HITL | `prototype` skill in a worktree (owns its own branches + dispatch) | opus / medium (delegated) |
 | task | AFK default | agent-driven `implement` dispatch (or human checklist) | mechanical → haiku / low; standard → opus / low |
 
@@ -233,8 +233,9 @@ which point the map is simply `working` again (no status unwind needed).
   "no fog left".** Convergence counts open tickets only; fog recorded in map
   `## Not yet specified` or never ticketed at all is invisible to the frontier
   script. That is exactly why graduate is gated: the blind-spot re-check and the
-  HITL quiz-back both run AFTER `converged: true`, and any accepted candidate or
-  surfaced gap ABORTS graduation back to `working`. Skipping either gate, or
+  HITL quiz-back both run AFTER `converged: true`: any accepted candidate
+  ABORTS graduation back to `working`, and a surfaced gap aborts unless it is
+  deliberately recorded as an accepted risk. Skipping either gate, or
   converting a real gap into an "accepted risk" to keep moving, ships the fog
   into `goalforge-capture` where it becomes an underspecified spec.
 

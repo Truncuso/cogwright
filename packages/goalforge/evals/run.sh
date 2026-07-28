@@ -317,14 +317,23 @@ SKILL_KIND_COUNT="$(grep -lE '^  skill-kind: (capability|preference)$' "$SKILL_D
   || check "wayfind/SKILL.md has a ## Gotchas section" "fail"
 
 # C4: parent SKILL.md carries the co-tenancy note naming both non-chain tenants
-{ grep -qF 'prototype/' "$SKILL_MD" && grep -qF 'wayfind/' "$SKILL_MD"; } \
+# (anchored to the note line itself, not presence-anywhere — WP-gate F2)
+grep -qE '^Note: `prototype/` and `wayfind/` are non-chain tenants' "$SKILL_MD" \
   && check "parent SKILL.md co-tenancy note names prototype/ and wayfind/" "pass" \
   || check "parent SKILL.md co-tenancy note names prototype/ and wayfind/" "fail"
 
 # C5: NEGATIVE -- non-chain tenants must NOT appear as Children-table rows
-grep -qE '^\| `(prototype|wayfind)` \|' "$SKILL_MD" \
+# (backticks optional so an unbackticked row cannot slip past — WP-gate F2)
+grep -qE '^\| *`?(prototype|wayfind)`? *\|' "$SKILL_MD" \
   && check "parent SKILL.md Children table has no prototype/wayfind row" "fail" \
   || check "parent SKILL.md Children table has no prototype/wayfind row" "pass"
+
+# C6: Children table stays at exactly 15 chain-stage rows (catches a
+# prototype/wayfind row added in ANY form, backticked or not — WP-gate F2)
+CHILD_ROW_COUNT="$(grep -c '^| `goalforge-' "$SKILL_MD" || true)"
+[ "$CHILD_ROW_COUNT" -eq 15 ] \
+  && check "parent SKILL.md Children table has exactly 15 chain-stage rows" "pass" \
+  || check "parent SKILL.md Children table has exactly 15 chain-stage rows (got $CHILD_ROW_COUNT)" "fail"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="
