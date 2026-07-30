@@ -195,10 +195,16 @@ if [ -f "$SPIKE_SPEC" ]; then
   FID_PTR_COUNT=$(awk '/^\| stage \/ surface \| hook \|/{f=1} f&&/^## /{exit} f' \
     "$SKILL_DIR/references/fidelity.md" | grep -cF "$SPIKE_PTR" || true)
   [ "$FID_PTR_COUNT" -eq 6 ] || SPIKE_SPEC_OK="fail"
-  awk '/Escape hatch/{f=1} f&&/^## /{exit} f' "$SKILL_DIR/interview/SKILL.md" \
-    | grep -qF "$SPIKE_PTR" || SPIKE_SPEC_OK="fail"
-  awk '/Prototype WPs/{f=1} f&&/^### /{exit} f' "$SKILL_DIR/decompose/SKILL.md" \
-    | grep -qF "$SPIKE_PTR" || SPIKE_SPEC_OK="fail"
+  # Each window is captured into a variable BEFORE grepping it: `awk … | grep -q`
+  # under `set -o pipefail` lets grep exit on first match, SIGPIPE the awk, and
+  # turn a SUCCESSFUL match into a pipeline failure. TRAP: the opener regex and
+  # the window-terminating heading test run on the SAME record, so the anchor
+  # phrase must never appear IN a heading — 'Escape hatch' / 'Prototype WPs'
+  # capitalised inside a `## `/`### ` line would empty the window and red F14.
+  IV_WIN=$(awk '/Escape hatch/{f=1} f&&/^## /{exit} f' "$SKILL_DIR/interview/SKILL.md" || true)
+  grep -qF "$SPIKE_PTR" <<<"$IV_WIN" || SPIKE_SPEC_OK="fail"
+  DEC_WIN=$(awk '/Prototype WPs/{f=1} f&&/^### /{exit} f' "$SKILL_DIR/decompose/SKILL.md" || true)
+  grep -qF "$SPIKE_PTR" <<<"$DEC_WIN" || SPIKE_SPEC_OK="fail"
 else
   SPIKE_SPEC_OK="fail"
 fi
