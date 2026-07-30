@@ -14,7 +14,7 @@ description: >
 argument-hint: "<effort-slug> [chart]"
 metadata:
   skill-kind: preference
-  version: 0.1.0
+  version: 0.1.1
 ---
 
 # Wayfind
@@ -202,7 +202,7 @@ which point the map is simply `working` again (no status unwind needed).
 ## Constraints (inline)
 
 - **Frontier script is read-only** and the **sole computer of convergence** —
-  SKILL.md never re-implements frontier logic; `sdd-frontier.sh` is never
+  SKILL.md never re-implements frontier logic; `goalforge-frontier.sh` is never
   modified (wayfind ships a sibling).
 - **No new handoff mode** — the map is the resume point.
 - **`map.md` is a pointer-index** — decision bodies live in tickets/findings.
@@ -239,3 +239,17 @@ which point the map is simply `working` again (no status unwind needed).
   `findings/ticket-NN.md`, a committed claim stamp with no findings, or a
   `status: resolved` ticket whose map pointer was not updated all leave the next
   session computing a frontier from a state that never existed.
+
+## Dependencies
+
+Dispatch targets wayfind reaches for, and what it does when one is absent. A
+missing dependency **degrades, never blocks** — wayfind ships no vendored copy
+of any of them.
+
+| Target | Kind | Availability | Degrade path |
+|---|---|---|---|
+| `research-analyst` | agent | dotfiles `agents/research-analyst.md`; NOT shipped with the plugin | dispatch a general-purpose agent with an explicit research brief |
+| `interview-loop` | skill | dotfiles; NOT shipped with the plugin | one-question-at-a-time `AskUserQuestion` loop in the main session |
+| `adr-write` | skill (private child of the `knowledge-write` router) | dotfiles; NOT shipped with the plugin | skip the ADR gate; log the skipped decisions in the graduation brief |
+| `prototype` | skill | in-package co-tenant | always available |
+| `goalforge-capture` | skill | in-package chain stage | always available |
