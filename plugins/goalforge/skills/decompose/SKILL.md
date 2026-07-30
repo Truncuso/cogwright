@@ -111,6 +111,11 @@ doc commits. A design
 question smaller than a WP does not get its own prototype WP — it surfaces as
 an open question and routes to `prototype` via `goalforge-harden` Step 1.
 
+Stamp sections 1/2/4/5 (Design Question, Trigger Evidence, Branch, Expected
+Findings Shape) of `~/.claude/skills/goalforge/prototype/references/spike-spec.md`
+into the spike WP's overview body; Success Criteria is not stamped — it is
+represented by the WP's `goal.verification`.
+
 ### Step 3 — Derive WP metadata
 
 For each WP, determine:
