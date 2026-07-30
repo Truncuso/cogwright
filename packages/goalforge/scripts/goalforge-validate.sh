@@ -1435,9 +1435,13 @@ def _verify_path_tokens(verify):
     skip flags (-x/--x). Token text stays byte-identical to the source word for
     unquoted literal paths (callers key on the exact text).
 
-    NOTE for callers: because a dropped word never reaches the caller, an
-    `expects_absent:` entry MUST be a literal path — a glob, a `$` expansion or a
-    quoted span there would silently never be enforced."""
+    NOTE for callers: a dropped word never reaches the caller, so NO dropped
+    class is ever existence-checked — any `$VAR`-rooted path in a `verify:` is
+    silently unchecked (a dangling `$VAR/suffix` reference goes undetected);
+    verify: paths that must be gated should be literal repo-relative paths.
+    Likewise an `expects_absent:` entry MUST be a literal path — a glob, a `$`
+    expansion, a quoted span or a mid-word-opened quoted span there would
+    silently never be enforced."""
     for line in verify.splitlines():
         s = line.strip()
         if not s or s.startswith('#'):

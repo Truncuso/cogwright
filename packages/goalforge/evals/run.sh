@@ -190,6 +190,11 @@ SPIKE_PTR='~/.claude/skills/goalforge/prototype/references/spike-spec.md'
 if [ -f "$SPIKE_SPEC" ]; then
   SPIKE_H2=$(grep -c '^## ' "$SPIKE_SPEC" || true)
   [ "$SPIKE_H2" -eq 5 ] || SPIKE_SPEC_OK="fail"
+  # Names, not just count: decompose/SKILL.md stamps four of these by NAME —
+  # a renamed H2 would silently desync that instruction with the count green.
+  for h in 'Design Question' 'Trigger Evidence' 'Success Criteria' 'Branch' 'Expected Findings Shape'; do
+    grep -qxF "## $h" "$SPIKE_SPEC" || SPIKE_SPEC_OK="fail"
+  done
   grep -qF 'spikes/' "$SPIKE_SPEC" || SPIKE_SPEC_OK="fail"
   grep -qiF 'not stamped' "$SPIKE_SPEC" || SPIKE_SPEC_OK="fail"
   FID_PTR_COUNT=$(awk '/^\| stage \/ surface \| hook \|/{f=1} f&&/^## /{exit} f' \
