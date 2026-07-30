@@ -403,6 +403,75 @@ verify: "test -f skills/__ea__/gone.py"
 # expects_absent missing
 EOF
 
+    # (g) VERIFIED task whose verify: suffixes a QUOTED shell var with a path
+    #     (`"$b"/report.md`): the path fragment belongs to a shell-expanded word,
+    #     never a literal file ⇒ NO verify-path finding.
+    cat > "$vwp/task-07-vqvar.md" <<'EOF'
+---
+name: task-07-vqvar
+title: quoted-var suffix task
+status: verified
+commit: abc1234
+verify: 'diff "$a" "$b"/report.md'
+---
+
+# quoted var suffix
+EOF
+    # (h) VERIFIED task whose verify: names a SINGLE-STAR glob (`out/*.md`): a glob
+    #     is a pattern, not a path ⇒ NO verify-path finding.
+    cat > "$vwp/task-08-vglob.md" <<'EOF'
+---
+name: task-08-vglob
+title: single-star glob task
+status: verified
+commit: abc1234
+verify: "ls out/*.md"
+---
+
+# single-star glob
+EOF
+    # (i) GREEN-BOTH-WAYS guard: a QUOTED slash-containing grep PATTERN
+    #     (`'src/foo'`) must stay dropped — unquoting it into a candidate is the
+    #     forbidden regression ⇒ NO verify-path finding.
+    cat > "$vwp/task-09-vqpat.md" <<'EOF'
+---
+name: task-09-vqpat
+title: quoted slash pattern task
+status: verified
+commit: abc1234
+verify: "grep -n 'src/foo' file"
+---
+
+# quoted slash pattern
+EOF
+    # (j) GREEN-BOTH-WAYS guard: `**` glob stays dropped ⇒ NO verify-path finding.
+    cat > "$vwp/task-10-vdglob.md" <<'EOF'
+---
+name: task-10-vdglob
+title: double-star glob task
+status: verified
+commit: abc1234
+verify: "ls docs/**/*.md"
+---
+
+# double-star glob
+EOF
+    # (k) GREEN-BOTH-WAYS guard: a COMMENTED path reference is skipped line-wise;
+    #     the live line names an existing fixture path ⇒ NO verify-path finding.
+    cat > "$vwp/task-11-vcomment.md" <<'EOF'
+---
+name: task-11-vcomment
+title: commented path reference task
+status: verified
+commit: abc1234
+verify: |
+  # docs/__gf_comment_skip__/note.md — commented reference, must be skipped
+  test -f skills/__ea__/present.sh
+---
+
+# commented path reference
+EOF
+
     # --show prints every finding and exits 0 (the message check is independent of
     # the exit code); a separate --strict run probes that the high-confidence ERROR
     # forces a non-zero exit. Isolating the two avoids conflating "message printed"
@@ -453,6 +522,41 @@ EOF
         echo "$vout" >&2; no "expects-absent-missing-suppressed"
     else
         ok "expects-absent-missing-suppressed"
+    fi
+
+    # (g) quoted-var suffix (`"$b"/report.md`) ⇒ NO verify-path finding for that task.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-07-vqvar'; then
+        echo "$vout" >&2; no "verify-path-quoted-var-suffix-not-errored"
+    else
+        ok "verify-path-quoted-var-suffix-not-errored"
+    fi
+
+    # (h) single-star glob (`out/*.md`) ⇒ NO verify-path finding for that task.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-08-vglob'; then
+        echo "$vout" >&2; no "verify-path-single-star-glob-not-errored"
+    else
+        ok "verify-path-single-star-glob-not-errored"
+    fi
+
+    # (i) quoted slash-containing pattern stays dropped ⇒ NO verify-path finding.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-09-vqpat'; then
+        echo "$vout" >&2; no "verify-path-quoted-pattern-still-dropped"
+    else
+        ok "verify-path-quoted-pattern-still-dropped"
+    fi
+
+    # (j) `**` glob stays dropped ⇒ NO verify-path finding.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-10-vdglob'; then
+        echo "$vout" >&2; no "verify-path-double-star-glob-still-dropped"
+    else
+        ok "verify-path-double-star-glob-still-dropped"
+    fi
+
+    # (k) commented path reference skipped line-wise ⇒ NO verify-path finding.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-11-vcomment'; then
+        echo "$vout" >&2; no "verify-path-comment-line-skipped"
+    else
+        ok "verify-path-comment-line-skipped"
     fi
 
     echo ""
