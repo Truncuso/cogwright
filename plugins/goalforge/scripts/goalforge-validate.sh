@@ -608,6 +608,7 @@ import sys
 import os
 import re
 import subprocess
+import shlex
 from pathlib import Path
 from datetime import date, timedelta
 
@@ -1238,26 +1239,63 @@ def _verb_on_path(verb):
     _verb_on_path_cache[verb] = ok
     return ok
 
+def _shell_words(line):
+    """Split a line into shell WORDS with quote provenance retained.
+
+    `shlex.split(posix=False)` keeps the quote characters (that is the whole point
+    — posix=True would UNQUOTE, turning a grep pattern `'src/foo'` into a path
+    candidate) but it also breaks a word at every closing quote, so
+    `"$b"/report.md` comes back as `['"$b"', '/report.md']`. Re-merge adjacent
+    tokens that had no whitespace between them, so a word carries the quotes of
+    every span it contains. On an unbalanced quote shlex raises ValueError — the
+    caller yields nothing for that line rather than propagating.
+    """
+    words, cur, prev_end = [], 0, -1
+    for tok in shlex.split(line, posix=False):
+        i = line.index(tok, cur)
+        if words and i == prev_end:
+            words[-1] += tok
+        else:
+            words.append(tok)
+        prev_end = cur = i + len(tok)
+    return words
+
 def _verify_path_tokens(verify):
     """Yield FILE-PATH candidate tokens from a verify: string (ratified heuristic):
-    drop comment/blank lines and quoted spans (grep/sed patterns, --include='*.sh'),
-    then keep a token only if it contains '/' or ends in a known extension; skip
-    flags (-x/--x) and ** globs."""
+    drop comment/blank lines, then tokenize shell-aware and drop a word that
+    (a) contained a quoted span (grep/sed patterns, --include='*.sh'),
+    (b) contains `$` (shell expansion — not a literal path), or
+    (c) contains a glob metacharacter (`*`, `?`, `[`) — a pattern, not a path.
+    Keep a surviving token only if it contains '/' or ends in a known extension;
+    skip flags (-x/--x). Token text stays byte-identical to the source word for
+    unquoted literal paths (callers key on the exact text).
+
+    NOTE for callers: because a dropped word never reaches the caller, an
+    `expects_absent:` entry MUST be a literal path — a glob, a `$` expansion or a
+    quoted span there would silently never be enforced."""
     for line in verify.splitlines():
         s = line.strip()
         if not s or s.startswith('#'):
             continue
-        cleaned = re.sub(r"'[^']*'", ' ', s)
-        cleaned = re.sub(r'"[^"]*"', ' ', cleaned)
         # A negated file test asserts NON-existence (`! test -f x`, `[ ! -f x ]`,
         # `! -d x`): the path is SUPPOSED to be gone, so never ERROR on it
         # (false-negative > false-positive). task-02 of this feature adds exactly
         # such a post-move dangling-reference check.
-        if re.search(r'!\s+(test\s+)?-[efds]\b', cleaned):
+        if re.search(r'!\s+(test\s+)?-[efds]\b', s):
             continue
-        for raw in cleaned.split():
-            tok = raw.strip("()`;|&!<>$\"'").rstrip(',')
-            if not tok or tok.startswith('-') or '**' in tok:
+        try:
+            words = _shell_words(s)
+        except ValueError:        # unbalanced quote — degrade, never raise
+            continue
+        for raw in words:
+            if '"' in raw or "'" in raw:                   # (a) quoted span
+                continue
+            if '$' in raw:                                 # (b) shell expansion
+                continue
+            if any(c in raw for c in '*?['):               # (c) glob pattern
+                continue
+            tok = raw.strip("()`;|&!<>").rstrip(',')
+            if not tok or tok.startswith('-'):
                 continue
             if ('/' in tok) or tok.endswith(VERIFY_PATH_EXT):
                 yield tok
