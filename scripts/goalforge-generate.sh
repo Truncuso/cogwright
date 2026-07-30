@@ -26,7 +26,8 @@
 #   vi.  cross-skill prose (autopilot / idea / capture-learning)            -> left verbatim
 #   vii. ${CLAUDE_PLUGIN_ROOT:-<local-fallback>} dual-mode form             -> used for the class-ii executable climbs
 #
-# Non-package plugin-packaging files (hooks/, commands/, .vendored-allowlist.txt)
+# Non-package plugin-packaging files (hooks/, commands/, relations.yaml,
+# .vendored-allowlist.txt)
 # are hand-authored and NOT derived from the package; they are PRESERVED, never
 # regenerated and never deleted by this script.
 #
@@ -67,7 +68,7 @@ PLUGIN_DESC="Goal-and-verification-driven development chain for Claude Code — 
 GF_PLUGIN_VERSION="${GF_PLUGIN_VERSION-33b31eab96c9}"
 
 # Hand-authored, non-package plugin files preserved across regeneration.
-PRESERVE=(hooks commands .vendored-allowlist.txt)
+PRESERVE=(hooks commands relations.yaml .vendored-allowlist.txt)
 
 [ -d "$SRC" ] || { echo "FATAL: source not found: $SRC" >&2; exit 1; }
 mkdir -p "$DST"
