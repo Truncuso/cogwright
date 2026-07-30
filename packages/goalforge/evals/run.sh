@@ -177,6 +177,33 @@ if [ "$DOC_PIN_OK" = "pass" ]; then
 fi
 check "doc restatements of TIER_DISPATCH match code (drift pin)" "$DOC_PIN_OK"
 
+# F14: spike-spec fragment + wiring pointers (durable feature facts only).
+# Asserts the fragment exists with its five H2s and both greppable anchors, and
+# that the EXACT full pointer string is present at every wiring site: 6 fidelity
+# routing rows (window delimited by the routing-table stage labels, never
+# absolute line numbers), the interview escape hatch, and decompose §Prototype
+# WPs. Validator --self-test is covered transitively via F9 → evals/schema-v5.
+# No plans/ path and no repo-root climb: $SKILL_DIR resolution only.
+SPIKE_SPEC_OK="pass"
+SPIKE_SPEC="$SKILL_DIR/prototype/references/spike-spec.md"
+SPIKE_PTR='~/.claude/skills/goalforge/prototype/references/spike-spec.md'
+if [ -f "$SPIKE_SPEC" ]; then
+  SPIKE_H2=$(grep -c '^## ' "$SPIKE_SPEC" || true)
+  [ "$SPIKE_H2" -eq 5 ] || SPIKE_SPEC_OK="fail"
+  grep -qF 'spikes/' "$SPIKE_SPEC" || SPIKE_SPEC_OK="fail"
+  grep -qiF 'not stamped' "$SPIKE_SPEC" || SPIKE_SPEC_OK="fail"
+  FID_PTR_COUNT=$(awk '/^\| stage \/ surface \| hook \|/{f=1} f&&/^## /{exit} f' \
+    "$SKILL_DIR/references/fidelity.md" | grep -cF "$SPIKE_PTR" || true)
+  [ "$FID_PTR_COUNT" -eq 6 ] || SPIKE_SPEC_OK="fail"
+  awk '/Escape hatch/{f=1} f&&/^## /{exit} f' "$SKILL_DIR/interview/SKILL.md" \
+    | grep -qF "$SPIKE_PTR" || SPIKE_SPEC_OK="fail"
+  awk '/Prototype WPs/{f=1} f&&/^### /{exit} f' "$SKILL_DIR/decompose/SKILL.md" \
+    | grep -qF "$SPIKE_PTR" || SPIKE_SPEC_OK="fail"
+else
+  SPIKE_SPEC_OK="fail"
+fi
+check "spike-spec fragment + wiring pointers present (6 fidelity rows, interview, decompose)" "$SPIKE_SPEC_OK"
+
 # ── Fidelity ladder tests ────────────────────────────────────────────────────
 echo ""
 echo "[ Fidelity ladder tests ]"
