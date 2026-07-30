@@ -44,12 +44,12 @@ sites carry a one-line cue plus a link back here.
 
 | stage / surface | hook |
 |---|---|
-| `capture` | Step 3 — a Goal sentence that turns on a question meeting the trigger carries a one-line downstream spike-candidate note; capture flags, it never spikes. — spike spec: ~/.claude/skills/goalforge/prototype/references/spike-spec.md |
-| `spec` | A blocked spec section whose blocker meets the trigger is a spike to unblock it; findings feed the spec text and any ADR candidates. — spike spec: ~/.claude/skills/goalforge/prototype/references/spike-spec.md |
-| `harden` | Step 1 applies the trigger to flag a spike candidate and routes it to the `prototype` skill (handoff mode `prototype`); `interview-loop` stays the sole resolver for everything else. Escalation refinement is owned by `goalforge-interview` (see `interview/`). — spike spec: ~/.claude/skills/goalforge/prototype/references/spike-spec.md |
-| `decompose` | §Prototype WPs — a WP whose whole goal meets the trigger is a declared spike: `register: prototype`, one task, findings doc as deliverable. — spike spec: ~/.claude/skills/goalforge/prototype/references/spike-spec.md |
-| `execute` | Step 0 — a WP carrying `register: prototype` runs the `prototype` skill and commits only the findings doc. — spike spec: ~/.claude/skills/goalforge/prototype/references/spike-spec.md |
-| `goalforge-interview` escape hatch | When a question resists resolution, ask once: *"this is above discussion fidelity — spike it?"* rather than grinding further; see `interview/`. — spike spec: ~/.claude/skills/goalforge/prototype/references/spike-spec.md |
+| `capture` | Step 3 — a Goal sentence that turns on a question meeting the trigger carries a one-line downstream spike-candidate note; capture flags, it never spikes. — spike spec: `~/.claude/skills/goalforge/prototype/references/spike-spec.md` |
+| `spec` | A blocked spec section whose blocker meets the trigger is a spike to unblock it; findings feed the spec text and any ADR candidates. — spike spec: `~/.claude/skills/goalforge/prototype/references/spike-spec.md` |
+| `harden` | Step 1 applies the trigger to flag a spike candidate and routes it to the `prototype` skill (handoff mode `prototype`); `interview-loop` stays the sole resolver for everything else. Escalation refinement is owned by `goalforge-interview` (see `interview/`). — spike spec: `~/.claude/skills/goalforge/prototype/references/spike-spec.md` |
+| `decompose` | §Prototype WPs — a WP whose whole goal meets the trigger is a declared spike: `register: prototype`, one task, findings doc as deliverable. — spike spec: `~/.claude/skills/goalforge/prototype/references/spike-spec.md` |
+| `execute` | Step 0 — a WP carrying `register: prototype` runs the `prototype` skill and commits only the findings doc. — spike spec: `~/.claude/skills/goalforge/prototype/references/spike-spec.md` |
+| `goalforge-interview` escape hatch | When a question resists resolution, ask once: *"this is above discussion fidelity — spike it?"* rather than grinding further; see `interview/`. — spike spec: `~/.claude/skills/goalforge/prototype/references/spike-spec.md` |
 
 ## issue-routing
 

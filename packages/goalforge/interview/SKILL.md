@@ -46,10 +46,10 @@ goal-hardening framing the engine needs:
    Surface this by consuming the engine's existing `HANDOFF_SUGGESTION: high-fidelity`
    token (no parallel signal invented) and route per `~/.claude/skills/goalforge/references/fidelity.md`
    §Per-stage routing — `harden` row — to the `prototype` skill. On routing to
-   `prototype`, the spike question is written up as a standalone spike spec at
-   `~/.claude/skills/goalforge/prototype/references/spike-spec.md` (exact
-   absolute string), which the grill checks section-by-section (is the
-   question sharp? are criteria observable?). The engine's
+   `prototype`, the spike question is written up as a standalone one-pager at
+   `plans/<feature>/spikes/<slug>.md` following the template
+   `~/.claude/skills/goalforge/prototype/references/spike-spec.md`, which the
+   grill checks section-by-section. The engine's
    `high-fidelity` token is the signal, the Trigger is the filter — a token whose
    question fails the kind test (Trigger condition 1) goes back to harden Step 1's
    open-question/risk-accept path, not to `prototype`; a Trigger-matching question
