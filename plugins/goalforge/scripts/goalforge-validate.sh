@@ -403,6 +403,165 @@ verify: "test -f skills/__ea__/gone.py"
 # expects_absent missing
 EOF
 
+    # (g) VERIFIED task whose verify: suffixes a QUOTED shell var with a path
+    #     (`"$b"/report.md`): the path fragment belongs to a shell-expanded word,
+    #     never a literal file ⇒ NO verify-path finding.
+    cat > "$vwp/task-07-vqvar.md" <<'EOF'
+---
+name: task-07-vqvar
+title: quoted-var suffix task
+status: verified
+commit: abc1234
+verify: 'diff "$a" "$b"/report.md'
+---
+
+# quoted var suffix
+EOF
+    # (h) VERIFIED task whose verify: names a SINGLE-STAR glob (`out/*.md`): a glob
+    #     is a pattern, not a path ⇒ NO verify-path finding.
+    cat > "$vwp/task-08-vglob.md" <<'EOF'
+---
+name: task-08-vglob
+title: single-star glob task
+status: verified
+commit: abc1234
+verify: "ls out/*.md"
+---
+
+# single-star glob
+EOF
+    # (i) GREEN-BOTH-WAYS guard: a QUOTED slash-containing grep PATTERN
+    #     (`'src/foo'`) must stay dropped — unquoting it into a candidate is the
+    #     forbidden regression ⇒ NO verify-path finding.
+    cat > "$vwp/task-09-vqpat.md" <<'EOF'
+---
+name: task-09-vqpat
+title: quoted slash pattern task
+status: verified
+commit: abc1234
+verify: "grep -n 'src/foo' file"
+---
+
+# quoted slash pattern
+EOF
+    # (j) GREEN-BOTH-WAYS guard: `**` glob stays dropped ⇒ NO verify-path finding.
+    cat > "$vwp/task-10-vdglob.md" <<'EOF'
+---
+name: task-10-vdglob
+title: double-star glob task
+status: verified
+commit: abc1234
+verify: "ls docs/**/*.md"
+---
+
+# double-star glob
+EOF
+    # (k) GREEN-BOTH-WAYS guard: a COMMENTED path reference is skipped line-wise;
+    #     the live line names an existing fixture path ⇒ NO verify-path finding.
+    cat > "$vwp/task-11-vcomment.md" <<'EOF'
+---
+name: task-11-vcomment
+title: commented path reference task
+status: verified
+commit: abc1234
+verify: |
+  # docs/__gf_comment_skip__/note.md — commented reference, must be skipped
+  test -f skills/__ea__/present.sh
+---
+
+# commented path reference
+EOF
+    # (l) VERIFIED task whose verify: opens a quoted span MID-WORD around a
+    #     path-shaped segment (`--pattern='a X/leak.md b'`): shlex's non-posix
+    #     tokenizer does NOT enter quote state for a mid-word quote, so the middle
+    #     fragment arrives carrying no quote char — only the independent
+    #     `_quoted_regions` overlap check drops it ⇒ NO verify-path finding.
+    cat > "$vwp/task-12-vmidq.md" <<'EOF'
+---
+name: task-12-vmidq
+title: mid-word-opened quoted span task
+status: verified
+commit: abc1234
+verify: "grep -n --pattern='a skills/__gf_midq__/leak.md b' file"
+---
+
+# mid-word quoted span
+EOF
+    # (m) VERIFIED task whose verify: names an UNQUOTED shell expansion
+    #     (`$GF_ROOT/...`): drop rule (b). Unguarded before this fixture — with the
+    #     rule deleted the token takes the slash+known-ext ERROR branch.
+    cat > "$vwp/task-13-vexpand.md" <<'EOF'
+---
+name: task-13-vexpand
+title: unquoted expansion task
+status: verified
+commit: abc1234
+verify: "test -f $GF_ROOT/references/tier-map.md"
+---
+
+# unquoted expansion
+EOF
+    # (n) VERIFIED task whose verify: names LITERAL `?` / `[` glob metacharacters:
+    #     drop rule (c) beyond `*`. Unguarded before this fixture — narrowing (c)
+    #     to `*` alone left the suite green.
+    cat > "$vwp/task-14-vqglob.md" <<'EOF'
+---
+name: task-14-vqglob
+title: question/bracket glob task
+status: verified
+commit: abc1234
+verify: "ls skills/__gf_glob__/a[1].md skills/__gf_glob__/b?.md"
+---
+
+# question/bracket glob
+EOF
+    # (o) VERIFIED task whose verify: carries an UNBALANCED quote: shlex raises
+    #     ValueError and the lexer degrades to "no candidates for this line".
+    #     Pins BOTH halves — no traceback, and no verify-path finding.
+    cat > "$vwp/task-15-vunbal.md" <<'EOF'
+---
+name: task-15-vunbal
+title: unbalanced quote task
+status: verified
+commit: abc1234
+verify: "test -f 'skills/__gf_unbal__/x.md"
+---
+
+# unbalanced quote
+EOF
+    # (p) VERIFIED task whose verify: names a path containing a literal APOSTROPHE
+    #     alongside an unrelated missing path. Pins the drop as WORD-scoped: the
+    #     apostrophe word is dropped (accepted false negative — "contains a quote
+    #     char" is the proxy for "was quoted"), while the OTHER candidate on the
+    #     same line still ERRORs. shlex does not raise on a mid-word quote, so
+    #     nothing degrades line-wise.
+    cat > "$vwp/task-16-vapos.md" <<'EOF'
+---
+name: task-16-vapos
+title: literal apostrophe path task
+status: verified
+commit: abc1234
+verify: "test -f skills/__gf_apos__/it's.md skills/__gf_apos__/real.md"
+---
+
+# literal apostrophe
+EOF
+    # (q) VERIFIED task whose verify: carries a QUOTED `! -f` (a grep PATTERN, not a
+    #     negated file test): the negation skip runs on the quote-blanked copy, so
+    #     the pattern must NOT suppress the unrelated missing path on that line
+    #     ⇒ the path still ERRORs. Contrast with (d), where the negation is real.
+    cat > "$vwp/task-17-vqneg.md" <<'EOF'
+---
+name: task-17-vqneg
+title: quoted negation pattern task
+status: verified
+commit: abc1234
+verify: "grep -q '! -f' skills/__gf_qneg__/real.md"
+---
+
+# quoted negation pattern
+EOF
+
     # --show prints every finding and exits 0 (the message check is independent of
     # the exit code); a separate --strict run probes that the high-confidence ERROR
     # forces a non-zero exit. Isolating the two avoids conflating "message printed"
@@ -455,6 +614,88 @@ EOF
         ok "expects-absent-missing-suppressed"
     fi
 
+    # (g) quoted-var suffix (`"$b"/report.md`) ⇒ NO verify-path finding for that task.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-07-vqvar'; then
+        echo "$vout" >&2; no "verify-path-quoted-var-suffix-not-errored"
+    else
+        ok "verify-path-quoted-var-suffix-not-errored"
+    fi
+
+    # (h) single-star glob (`out/*.md`) ⇒ NO verify-path finding for that task.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-08-vglob'; then
+        echo "$vout" >&2; no "verify-path-single-star-glob-not-errored"
+    else
+        ok "verify-path-single-star-glob-not-errored"
+    fi
+
+    # (i) quoted slash-containing pattern stays dropped ⇒ NO verify-path finding.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-09-vqpat'; then
+        echo "$vout" >&2; no "verify-path-quoted-pattern-still-dropped"
+    else
+        ok "verify-path-quoted-pattern-still-dropped"
+    fi
+
+    # (j) `**` glob stays dropped ⇒ NO verify-path finding.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-10-vdglob'; then
+        echo "$vout" >&2; no "verify-path-double-star-glob-still-dropped"
+    else
+        ok "verify-path-double-star-glob-still-dropped"
+    fi
+
+    # (k) commented path reference skipped line-wise ⇒ NO verify-path finding.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-11-vcomment'; then
+        echo "$vout" >&2; no "verify-path-comment-line-skipped"
+    else
+        ok "verify-path-comment-line-skipped"
+    fi
+
+    # (l) mid-word-opened quoted span ⇒ NO verify-path finding for that task.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-12-vmidq'; then
+        echo "$vout" >&2; no "verify-path-midword-quoted-span-dropped"
+    else
+        ok "verify-path-midword-quoted-span-dropped"
+    fi
+
+    # (m) unquoted `$` expansion ⇒ NO verify-path finding for that task.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-13-vexpand'; then
+        echo "$vout" >&2; no "verify-path-unquoted-expansion-dropped"
+    else
+        ok "verify-path-unquoted-expansion-dropped"
+    fi
+
+    # (n) literal `?` / `[` glob metacharacters ⇒ NO verify-path finding.
+    if echo "$vout" | grep -i 'verify-path' | grep -q 'task-14-vqglob'; then
+        echo "$vout" >&2; no "verify-path-question-bracket-glob-dropped"
+    else
+        ok "verify-path-question-bracket-glob-dropped"
+    fi
+
+    # (o) unbalanced quote ⇒ no traceback anywhere in the run AND no verify-path
+    #     finding for that task (the ValueError degrade path).
+    if echo "$vout" | grep -q 'Traceback (most recent call last)' \
+        || { echo "$vout" | grep -i 'verify-path' | grep -q 'task-15-vunbal'; }; then
+        echo "$vout" >&2; no "verify-path-unbalanced-quote-degrades"
+    else
+        ok "verify-path-unbalanced-quote-degrades"
+    fi
+
+    # (p) apostrophe word dropped BUT the unrelated candidate on the same line is
+    #     still reported ⇒ the drop is word-scoped, not line-scoped.
+    vapos="$(echo "$vout" | grep -i 'verify-path' | grep 'task-16-vapos')"
+    if echo "$vapos" | grep -q '__gf_apos__/real.md' \
+        && ! echo "$vapos" | grep -q "it's"; then
+        ok "verify-path-apostrophe-drop-is-word-scoped"
+    else
+        echo "$vout" >&2; no "verify-path-apostrophe-drop-is-word-scoped"
+    fi
+
+    # (q) a QUOTED `! -f` pattern must not suppress the line ⇒ path still ERRORs.
+    if echo "$vout" | grep -i 'verify-path' | grep 'task-17-vqneg' | grep -q '__gf_qneg__/real.md'; then
+        ok "verify-path-quoted-negation-does-not-suppress"
+    else
+        echo "$vout" >&2; no "verify-path-quoted-negation-does-not-suppress"
+    fi
+
     echo ""
     echo "Results: $t_pass passed, $t_fail failed"
     [[ "$t_fail" -eq 0 ]]
@@ -504,6 +745,7 @@ import sys
 import os
 import re
 import subprocess
+import shlex
 from pathlib import Path
 from datetime import date, timedelta
 
@@ -1134,26 +1376,105 @@ def _verb_on_path(verb):
     _verb_on_path_cache[verb] = ok
     return ok
 
+def _quoted_regions(line):
+    """Source spans of the CLOSED quoted regions of `line`, left-to-right scan.
+
+    Independent of shlex: a quote opens a region wherever it occurs, including
+    MID-WORD (`--pattern='a b c'`), which is exactly the case shlex's non-posix
+    tokenizer does not treat as quoted. An unterminated trailing quote yields NO
+    region — the drop must stay word-scoped, so a literal apostrophe
+    (`it's/fine.md`) never suppresses the rest of the line (shlex does not raise
+    on a mid-word quote, so the line is still tokenized).
+    """
+    regions, q, start = [], None, 0
+    for i, ch in enumerate(line):
+        if q is None:
+            if ch in '"\'':
+                q, start = ch, i
+        elif ch == q:
+            regions.append((start, i + 1))
+            q = None
+    return regions
+
+def _shell_words(line):
+    """Split a line into shell WORDS — `(word, start, end)` source spans — with
+    quote provenance retained.
+
+    `shlex.split(posix=False)` keeps the quote characters (that is the whole point
+    — posix=True would UNQUOTE, turning a grep pattern `'src/foo'` into a path
+    candidate). It enters quote state ONLY for a quote that STARTS a token; such a
+    leading-quote span terminates the token at its closing quote, so
+    `"$b"/report.md` comes back as `['"$b"', '/report.md']`. Re-merge adjacent
+    tokens that had no whitespace between them, so a word carries the quotes of
+    every span it contains. RESIDUAL: a quote that opens MID-word is an ordinary
+    word character to shlex, so whitespace inside that span still splits the token
+    and the re-merge cannot repair it — hence the caller also drops a word whose
+    span overlaps a `_quoted_regions` span. On an unbalanced LEADING quote shlex
+    raises ValueError — the caller yields nothing for that line rather than
+    propagating.
+    """
+    words, cur = [], 0
+    for tok in shlex.split(line, posix=False):
+        i = line.index(tok, cur)
+        if words and i == cur:
+            words[-1] = (words[-1][0] + tok, words[-1][1], i + len(tok))
+        else:
+            words.append((tok, i, i + len(tok)))
+        cur = i + len(tok)
+    return words
+
 def _verify_path_tokens(verify):
     """Yield FILE-PATH candidate tokens from a verify: string (ratified heuristic):
-    drop comment/blank lines and quoted spans (grep/sed patterns, --include='*.sh'),
-    then keep a token only if it contains '/' or ends in a known extension; skip
-    flags (-x/--x) and ** globs."""
+    drop comment/blank lines, then tokenize shell-aware and drop a word that
+    (a) contains a quote char OR overlaps a quoted span of the line — the second
+        clause catches a span opened MID-word, whose inner fragments carry no
+        quote char at all (grep/sed patterns, --include='*.sh', --pattern='a b'),
+    (b) contains `$` (shell expansion — not a literal path), or
+    (c) contains a glob metacharacter (`*`, `?`, `[`) — a pattern, not a path.
+    Keep a surviving token only if it contains '/' or ends in a known extension;
+    skip flags (-x/--x). Token text stays byte-identical to the source word for
+    unquoted literal paths (callers key on the exact text).
+
+    NOTE for callers: a dropped word never reaches the caller, so NO dropped
+    class is ever existence-checked — any `$VAR`-rooted path in a `verify:` is
+    silently unchecked (a dangling `$VAR/suffix` reference goes undetected);
+    verify: paths that must be gated should be literal repo-relative paths.
+    Likewise an `expects_absent:` entry MUST be a literal path — a glob, a `$`
+    expansion, a quoted span or a mid-word-opened quoted span there would
+    silently never be enforced."""
     for line in verify.splitlines():
         s = line.strip()
         if not s or s.startswith('#'):
             continue
-        cleaned = re.sub(r"'[^']*'", ' ', s)
-        cleaned = re.sub(r'"[^"]*"', ' ', cleaned)
+        # Every span below is an offset into `s` (the STRIPPED line) — never the
+        # raw `line`, whose indent under a `verify: |` block scalar would shift
+        # them all and silently disable the overlap drop.
+        regions = _quoted_regions(s)
+        blanked = s
+        for a, b in regions:      # length-preserving: offsets stay valid
+            blanked = blanked[:a] + ' ' * (b - a) + blanked[b:]
         # A negated file test asserts NON-existence (`! test -f x`, `[ ! -f x ]`,
         # `! -d x`): the path is SUPPOSED to be gone, so never ERROR on it
         # (false-negative > false-positive). task-02 of this feature adds exactly
-        # such a post-move dangling-reference check.
-        if re.search(r'!\s+(test\s+)?-[efds]\b', cleaned):
+        # such a post-move dangling-reference check. Matched on the quote-blanked
+        # copy so a quoted `! -f` (a grep PATTERN) cannot suppress the whole line.
+        if re.search(r'!\s+(test\s+)?-[efds]\b', blanked):
             continue
-        for raw in cleaned.split():
-            tok = raw.strip("()`;|&!<>$\"'").rstrip(',')
-            if not tok or tok.startswith('-') or '**' in tok:
+        try:
+            words = _shell_words(s)
+        except ValueError:        # unbalanced quote — degrade, never raise
+            continue
+        for raw, w_start, w_end in words:
+            if '"' in raw or "'" in raw:                   # (a) quote char
+                continue
+            if any(w_start < b and a < w_end for a, b in regions):   # (a) in a span
+                continue
+            if '$' in raw:                                 # (b) shell expansion
+                continue
+            if any(c in raw for c in '*?['):               # (c) glob pattern
+                continue
+            tok = raw.strip("()`;|&!<>").rstrip(',')
+            if not tok or tok.startswith('-'):
                 continue
             if ('/' in tok) or tok.endswith(VERIFY_PATH_EXT):
                 yield tok

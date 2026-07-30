@@ -177,6 +177,44 @@ if [ "$DOC_PIN_OK" = "pass" ]; then
 fi
 check "doc restatements of TIER_DISPATCH match code (drift pin)" "$DOC_PIN_OK"
 
+# F14: spike-spec fragment + wiring pointers (durable feature facts only).
+# Asserts the fragment exists with its five H2s and both greppable anchors, and
+# that the EXACT full pointer string is present at every wiring site: 6 fidelity
+# routing rows (window delimited by the routing-table stage labels, never
+# absolute line numbers), the interview escape hatch, and decompose §Prototype
+# WPs. Validator --self-test is covered transitively via F9 → evals/schema-v5.
+# No plans/ path and no repo-root climb: $SKILL_DIR resolution only.
+SPIKE_SPEC_OK="pass"
+SPIKE_SPEC="$SKILL_DIR/prototype/references/spike-spec.md"
+SPIKE_PTR='~/.claude/skills/goalforge/prototype/references/spike-spec.md'
+if [ -f "$SPIKE_SPEC" ]; then
+  SPIKE_H2=$(grep -c '^## ' "$SPIKE_SPEC" || true)
+  [ "$SPIKE_H2" -eq 5 ] || SPIKE_SPEC_OK="fail"
+  # Names, not just count: decompose/SKILL.md stamps four of these by NAME —
+  # a renamed H2 would silently desync that instruction with the count green.
+  for h in 'Design Question' 'Trigger Evidence' 'Success Criteria' 'Branch' 'Expected Findings Shape'; do
+    grep -qxF "## $h" "$SPIKE_SPEC" || SPIKE_SPEC_OK="fail"
+  done
+  grep -qF 'spikes/' "$SPIKE_SPEC" || SPIKE_SPEC_OK="fail"
+  grep -qiF 'not stamped' "$SPIKE_SPEC" || SPIKE_SPEC_OK="fail"
+  FID_PTR_COUNT=$(awk '/^\| stage \/ surface \| hook \|/{f=1} f&&/^## /{exit} f' \
+    "$SKILL_DIR/references/fidelity.md" | grep -cF "$SPIKE_PTR" || true)
+  [ "$FID_PTR_COUNT" -eq 6 ] || SPIKE_SPEC_OK="fail"
+  # Each window is captured into a variable BEFORE grepping it: `awk … | grep -q`
+  # under `set -o pipefail` lets grep exit on first match, SIGPIPE the awk, and
+  # turn a SUCCESSFUL match into a pipeline failure. TRAP: the opener regex and
+  # the window-terminating heading test run on the SAME record, so the anchor
+  # phrase must never appear IN a heading — 'Escape hatch' / 'Prototype WPs'
+  # capitalised inside a `## `/`### ` line would empty the window and red F14.
+  IV_WIN=$(awk '/Escape hatch/{f=1} f&&/^## /{exit} f' "$SKILL_DIR/interview/SKILL.md" || true)
+  grep -qF "$SPIKE_PTR" <<<"$IV_WIN" || SPIKE_SPEC_OK="fail"
+  DEC_WIN=$(awk '/Prototype WPs/{f=1} f&&/^### /{exit} f' "$SKILL_DIR/decompose/SKILL.md" || true)
+  grep -qF "$SPIKE_PTR" <<<"$DEC_WIN" || SPIKE_SPEC_OK="fail"
+else
+  SPIKE_SPEC_OK="fail"
+fi
+check "spike-spec fragment + wiring pointers present (6 fidelity rows, interview, decompose)" "$SPIKE_SPEC_OK"
+
 # ── Fidelity ladder tests ────────────────────────────────────────────────────
 echo ""
 echo "[ Fidelity ladder tests ]"
