@@ -135,7 +135,8 @@ The **authoritative shape and semantics are the archived spec's Interface
 Contract** — `~/.claude/plans/_archived/wayfind/spec.md`
 §"wayfind-frontier.sh CLI contract" — do not re-derive them here. Key points:
 `frontier` = open tickets with all `depends_on` satisfied and `claimed_by` null;
-`converged` = zero open tickets; `stale_claims` = claims older than 7 days (WARN
+`converged` = zero open tickets; `stale_claims` = **open-ticket** claims older
+than 7 days (a resolved ticket never reports claimed or stale) (WARN
 on stderr, never auto-reset); `blocked` is human-diagnostic-only (no automation
 consumes it). The script is **read-only and the sole computer of convergence** —
 SKILL.md never re-implements frontier logic.
@@ -146,10 +147,13 @@ SKILL.md never re-implements frontier logic.
 
 | Signal | Diagnosis | Action |
 |---|---|---|
-| `blocked` non-empty, every `waiting_on` names a ticket that is itself blocked or claimed | ordinary dependency wait behind a live claim | resolve the claimed ticket first; nothing else to pick this session |
-| `claimed` covers every open ticket, all ages ≤ 7 days | all work is claimed by (possibly live) sessions | do not dispatch over a live claim — end the session, or take over a claim only after confirming its session is dead |
 | `stale_claims` non-empty | owning session died mid-ticket | confirm it is dead, clear `claimed_by` / `claimed_at` to null, then re-pick |
-| `blocked` and `claimed` both empty | every open ticket depends on something unsatisfiable | inspect `waiting_on`; the dependency is open-with-no-path — break the cycle by re-scoping or marking a ticket `out-of-scope` |
+| `claimed` non-empty, all ages ≤ 7 days, and every `blocked` chain terminates in a claimed ticket | ordinary dependency wait behind a live claim | do not dispatch over a live claim — resolve the claimed ticket first, or end the session; there is nothing else to pick |
+| `blocked` non-empty, `claimed` empty (or no `waiting_on` chain reaches a claimed ticket) | no open ticket has a satisfiable path — a `depends_on` **cycle**, or a chain rooted in a ticket nobody will work | trace `waiting_on` to the cycle or the root; break it by re-scoping a ticket, splitting it, or marking one `out-of-scope` |
+
+Every open ticket lands in exactly one of `frontier` / `blocked` / `claimed`, so
+an empty `frontier` with `converged: false` always leaves at least one of
+`blocked` / `claimed` non-empty — one of the rows above always applies.
 
 A dependency naming a ticket that does not exist (typo, deleted ticket, or a
 zero-padding slip like `ticket-1` for `ticket-01-<slug>.md`) is a structural
