@@ -208,6 +208,14 @@ else
   contains "$brief_lc" "surprising-without-context" || missing="$missing surprising"
   contains "$brief_lc" "real-trade-off"    || missing="$missing real-trade-off"
   contains "$brief_lc" "overview.md"       || missing="$missing ends-at-overview"
+  # §2 must carry the completed-work vs scope-bullet discriminator (audit-11):
+  # convergence resolves every task ticket, so a §2 selecting scope on
+  # "resolved" alone hands executed work to goalforge-decompose as scope. Scoped
+  # to the §2 slice — the discriminator has to live where the brief is composed.
+  brief_s2="$(lc "$(awk '/^## 2\./,/^## 3\./' "$BRIEF_MD")")"
+  contains "$brief_s2" "completed work" || missing="$missing s2-completed-work"
+  contains "$brief_s2" "decision about future work" \
+                                        || missing="$missing s2-scope-discriminator"
   # §3's reference `type` vocabulary must be the CANONICAL enum, not the
   # divergent subset `file | repo | video | url` — that subset rejects
   # `type: session`, which the first flight and the idea stub both use. Scoped

@@ -268,6 +268,20 @@ else
   fail "$name" "graduation not shown as ordered with converged-precondition before transfer (pre=$pre_ln xfer=$xfer_ln)"
 fi
 
+# audit-11: the scope discriminator. Convergence resolves every task ticket, so
+# "resolved" alone cannot select scope bullets — the graduate-flow slice must
+# state POSITIVELY that only a resolution which is a decision about future work
+# becomes scope, and that executed work is reported as completed work. Scoped to
+# the slice so a mention in graduation-brief.md or elsewhere cannot satisfy it.
+name=doc-graduate-scope-discriminator
+if contains "$grad_lc" 'decision about future work' \
+   && contains "$grad_lc" 'completed work' \
+   && contains "$grad_lc" 'never as scope'; then
+  pass "$name"
+else
+  fail "$name" "graduate flow slice missing the completed-work vs scope-bullet discriminator"
+fi
+
 name=doc-ticket-type-dispatch
 if skgrep "ticket_type" && skgrep "research" && skgrep "grilling" \
    && skgrep "prototype" && skgrep "task"; then pass "$name"

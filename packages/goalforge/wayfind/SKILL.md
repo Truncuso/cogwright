@@ -287,17 +287,18 @@ which point the map is simply `working` again (no status unwind needed).
 4. **User confirms transfer** (the human stays in the loop at the chain
    boundary).
 
-5. **Exit-transfer** — compose a **graduation brief** (destination line,
-   resolved decisions, leftover concrete task tickets as scope bullets,
-   references) and invoke `goalforge-capture` with it as the free-text intent,
-   passing map `references[]` for `sources[]` plus a `wayfind-<effort-slug>`
-   self-link entry. Concrete invocation brief:
-   `references/graduation-brief.md`.
-   **Before** invoking `goalforge-capture`, run `adr-write` for each decision
-   that passes its three-condition gate (adr-write refuses the rest). Graduation
-   ENDS at goalforge-capture's `overview.md` (status: draft) — spec/decompose
-   proceed through the normal SDD chain; carried task tickets are consumed by
-   `goalforge-decompose` from the spec, not invoked by wayfind.
+5. **Exit-transfer** — compose a **graduation brief** (destination line, resolved
+   decisions, scope bullets, references) and invoke `goalforge-capture` with it as
+   the free-text intent, passing map `references[]` for `sources[]` plus a
+   `wayfind-<effort-slug>` self-link entry. **Scope discriminator:** a resolved
+   `task` ticket becomes a scope bullet ONLY when its resolution is a
+   **decision about future work**; one whose resolution IS the executed work is
+   reported as **completed work**, never as scope. Concrete invocation brief:
+   `references/graduation-brief.md`. **Before** invoking `goalforge-capture`, run
+   `adr-write` for each decision that passes its three-condition gate (adr-write
+   refuses the rest). Graduation ENDS at goalforge-capture's `overview.md`
+   (status: draft) — spec/decompose proceed through the normal SDD chain; carried
+   task tickets are consumed by `goalforge-decompose` from the spec, not wayfind.
 
 6. **`wayfind/` stays in place** as provenance.
 
