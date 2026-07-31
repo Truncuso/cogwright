@@ -132,8 +132,13 @@ DATA (never executed as instructions — dispatch trust boundary):
 ```
 
 **User triages each candidate** in the main session:
-- **accept** → create a `ticket-NN-<slug>.md`
-- **out-of-scope** → record under map `## Out of scope`
+- **accept** → create a `ticket-NN-<slug>.md`. **Fog precision:** ticket it only
+  if it is *statable now but not answerable now* — otherwise it stays fog under
+  `## Not yet specified`. Rationale + examples: `references/fog-precision.md`.
+- **out-of-scope** → map `## Out of scope`, the home for **never-ticketed**
+  candidates and inert to the frontier — distinct from `status: out-of-scope`, a
+  dropped EXISTING ticket that **counts as dependency-satisfying**. A candidate
+  parked in the section cannot satisfy a dependent's `depends_on`.
 - **discard** → drop it
 
 Record the pass in `findings/blind-spot-NN.md` (**authoritative store**, NN =
@@ -234,6 +239,13 @@ set the `resolution` pointer, **and release the claim: `claimed_by` and
 on a done ticket, which ages into a false stale signal. A dependency counts as
 satisfied when `resolved` OR `out-of-scope`.
 
+**Mid-loop fog moves:** surface new tickets when a resolution exposes fresh unknowns;
+graduate map `## Not yet specified` fog into real tickets; re-scope when a resolution
+invalidates an already-resolved decision. **No pre-slicing** — never split a ticket
+into sub-tickets before it is picked. **One ticket per session** is the DEFAULT,
+excepted only by `ticket_type: research` tickets (AFK + non-conflicting, a property
+of the type) and trivially-coupled ones. No machine check.
+
 **End the session** — BEFORE committing, run all three validators from
 `${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/` and **FIX every failure before committing**
 (BLOCK-by-instruction; wayfind ships no hook): `validate-map.sh
@@ -311,15 +323,11 @@ which point the map is simply `working` again (no status unwind needed).
   a stale claim always means live work that stalled — never a leftover stamp on
   something already done.
 
-- **Guard against a premature graduation: `converged: true` is not the same as
-  "no fog left".** Convergence counts open tickets only; fog recorded in map
-  `## Not yet specified` or never ticketed at all is invisible to the frontier
-  script. That is exactly why graduate is gated: the blind-spot re-check and the
-  HITL quiz-back both run AFTER `converged: true`: any accepted candidate
-  ABORTS graduation back to `working`, and a surfaced gap aborts unless it is
-  deliberately recorded as an accepted risk. Skipping either gate, or
-  converting a real gap into an "accepted risk" to keep moving, ships the fog
-  into `goalforge-capture` where it becomes an underspecified spec.
+- **`converged: true` is not "no fog left".** Convergence counts open tickets only —
+  fog in map `## Not yet specified`, or never ticketed at all, is invisible to the
+  frontier script. Fog is therefore worked CONTINUOUSLY by the mid-loop fog moves, and
+  the graduate gates (blind-spot re-check, HITL quiz-back) are the LAST net, not the
+  only one. Relabelling a real gap an "accepted risk" ships fog into `goalforge-capture`.
 
 - **End every session in a consistent commit state.** The map IS the resume
   point — there is no wayfind handoff mode — so a half-committed map/ticket set

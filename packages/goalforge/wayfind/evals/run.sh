@@ -390,6 +390,80 @@ if contains "$chart2" '## Resolution notes' \
    && contains "$chart2_lc" 'optional'; then pass "$name"
 else fail "$name" "chart step 2 does not name the OPTIONAL ## Resolution notes ticket body section"; fi
 
+# --- fog semantics, section-sliced ------------------------------------------
+# Three INDEPENDENT rules (fog precision, no pre-slicing, one ticket per
+# session) get three INDEPENDENT cases, never one bundle — plus the two-homes
+# split and the rewritten Gotcha. Each is scoped to the flow slice that owns it;
+# the triage step owns the two out-of-scope homes, the work loop owns the
+# mid-loop moves, and a mention in the wrong flow must NOT satisfy the case.
+chart3="$(section '3. Dispatched blind-spot pass' '4. Close chart')"
+chart3_lc="$(lc "$chart3")"
+work_lc="$(lc "$work")"
+
+# The two out-of-scope homes are NOT interchangeable: the map body section is
+# inert to the frontier, the ticket status is dependency-satisfying.
+name=doc-out-of-scope-split
+missing=""
+contains "$chart3"    '## Out of scope'        || missing="$missing map-section-home"
+contains "$chart3"    'status: out-of-scope'   || missing="$missing ticket-status-home"
+contains "$chart3_lc" 'never-ticketed'         || missing="$missing never-ticketed"
+contains "$chart3_lc" 'inert to the frontier'  || missing="$missing section-inert"
+contains "$chart3_lc" 'dependency-satisfying'  || missing="$missing dep-satisfying"
+contains "$chart3_lc" "depends_on"             || missing="$missing cannot-satisfy-dependent"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "chart step 3 slice does not disambiguate the two out-of-scope homes:$missing"; fi
+
+# JUDGMENT-SHAPED RULE: this case asserts the rule TEXT is present in its slice.
+# It CANNOT assert the judgment ("is this candidate statable-but-not-answerable?")
+# was actually applied — no deterministic check can. Stated so no task over-promises.
+name=doc-fog-precision
+if contains "$chart3_lc" 'statable now but not answerable now' \
+   && contains "$chart3" 'references/fog-precision.md'; then pass "$name"
+else fail "$name" "chart step 3 slice missing the fog-precision rule and/or its rationale pointer"; fi
+
+# fog is worked mid-loop, not only at chart time and the graduate gates.
+name=doc-mid-loop-fog-moves
+missing=""
+contains "$work_lc" 'mid-loop fog moves'          || missing="$missing header"
+contains "$work_lc" 'exposes fresh unknowns'      || missing="$missing surface-new-tickets"
+contains "$work_lc" 'not yet specified'           || missing="$missing graduate-fog"
+contains "$work_lc" 're-scope'                    || missing="$missing rescope"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "work-flow slice missing the three mid-loop fog moves:$missing"; fi
+
+name=doc-no-pre-slicing
+if contains "$work_lc" 'no pre-slicing' && contains "$work_lc" 'before it is picked'; then pass "$name"
+else fail "$name" "work-flow slice missing the no-pre-slicing rule"; fi
+
+# a DEFAULT with a NAMED exception list — asserting the default alone would pass
+# on a hard rule, which the WP explicitly does not ship (no machine check exists).
+name=doc-one-ticket-per-session
+missing=""
+contains "$work_lc" 'one ticket'                  || missing="$missing rule"
+contains "$work_lc" 'default'                     || missing="$missing stated-as-default"
+contains "$work_lc" 'ticket_type: research'       || missing="$missing research-exception"
+contains "$work_lc" 'trivially-coupled'           || missing="$missing coupled-exception"
+contains "$work_lc" 'no machine check'            || missing="$missing no-machine-check"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "work-flow slice missing one-ticket-per-session as a DEFAULT + named exceptions:$missing"; fi
+
+# The converged≠no-fog Gotcha must COMPOSE with the mid-loop moves. The negative
+# grep is the load-bearing half: the superseded phrasing implied fog is handled
+# only at chart time and the graduate gates, which now contradicts the work flow.
+name=doc-converged-not-no-fog
+gotchas="$(section '## Gotchas' '## Dependencies')"
+gotchas_lc="$(lc "$gotchas")"
+missing=""
+contains "$gotchas_lc" 'is not "no fog left"'     || missing="$missing headline"
+contains "$gotchas_lc" 'continuously'             || missing="$missing continuous-handling"
+contains "$gotchas_lc" 'mid-loop fog moves'       || missing="$missing composes-with-moves"
+contains "$gotchas_lc" 'last net'                 || missing="$missing gates-are-last-net"
+if contains "$gotchas_lc" 'that is exactly why graduate is gated'; then
+  missing="$missing SUPERSEDED-PHRASING-STILL-PRESENT"
+fi
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "Gotchas slice: converged-vs-fog not rewritten to compose with the mid-loop moves:$missing"; fi
+
 # ============================================================================
 # Family 3 — trigger evals over the frontmatter description STRING only
 # ============================================================================
