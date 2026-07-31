@@ -24,6 +24,39 @@
 # Testability: SKILL_MD env var overrides the SKILL.md path (used by the
 # negative-control mutation test). Defaults to the sibling skill's SKILL.md.
 #
+# The mutation pass itself is `evals/mutate.sh`, invoked at the END of a normal
+# run (it re-enters this script once per mutation with a gutted SKILL_MD copy).
+# WAYFIND_MUTATION_CHILD=1 suppresses that call in the child runs.
+#
+# COVERAGE MAP (wp-01 task-07 consolidation audit) — every new rule/assertion of
+# this WP to the case that gates it:
+#   audit-1  typed references[] + enum   → validate-map-invalid-reference-entry,
+#                                          validate-map-bare-string-reference,
+#                                          doc-references-canonical-citation,
+#                                          doc-references-bare-string-lossy
+#                                          (graduation-brief §3 enum: e2e.sh)
+#   audit-2  ticket cross-field + NN     → validate-ticket-{resolved-no-resolution,
+#                                          resolution-nn-mismatch,claim-half,
+#                                          claim-half-mirror,filename-width,
+#                                          filename-width-control},
+#                                          doc-nn-width-cross-surface
+#   audit-3  linkage + invocation point  → validate-linkage-* (6 cases),
+#                                          validate-linkage-no-convergence,
+#                                          doc-end-session-validators
+#   audit-4  invocation surface          → doc-work-loop-plans-root,
+#                                          doc-plans-root-citation (+ e2e.sh)
+#   audit-9  two out-of-scope homes      → doc-out-of-scope-split
+#   audit-10 claim-before-dispatch       → doc-claim-before-dispatch (prose only)
+#   audit-11 scope discriminator         → doc-graduate-scope-discriminator
+#   stream-1a `## Notes` override        → validate-map-invalid-notes-table,
+#                                          doc-map-notes-section
+#   stream-1b `## Resolution notes`      → doc-ticket-resolution-notes
+#   stream-2  mid-loop fog moves         → doc-mid-loop-fog-moves,
+#                                          doc-converged-not-no-fog
+#   stream-3  fog precision / slicing /  → doc-fog-precision, doc-no-pre-slicing,
+#             one-ticket-per-session       doc-one-ticket-per-session
+#   package   version + prose budget     → skill-version, skill-line-budget
+#
 # Exit codes:
 #   0  every case passed
 #   1  one or more cases failed (each failing case name is printed)
@@ -97,6 +130,18 @@ copy_as() {
   local d; d="$(mktemp -d "$COPY_ROOT/XXXXXX")"
   cp "$ARTIFACTS/$1" "$d/$2"
   printf '%s' "$d/$2"
+}
+
+# repaired_as <fixture-basename> <intended-name> <sed-arg…> → prints the path.
+# Same copy, with ONE field repaired by the sed program — the mutate-one-field
+# control below. Repairing the single intended violation must flip the fixture
+# to exit 0; if it does not, the fixture fails for some OTHER reason and its
+# invalid-case is not actually testing what it claims.
+repaired_as() {
+  local fx="$1" nm="$2"; shift 2
+  local d; d="$(mktemp -d "$COPY_ROOT/XXXXXX")"
+  sed "$@" "$ARTIFACTS/$fx" > "$d/$nm"
+  printf '%s' "$d/$nm"
 }
 
 name=validate-map-valid
@@ -195,6 +240,44 @@ name=validate-ticket-filename-width-control
 run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-filename-width.md ticket-14-width.md)"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "width fixture failed under a CONFORMANT name — it fails incidentally, not on NN width (got $RC)"
 
+# --- mutate-one-field controls over every new INVALID fixture ----------------
+# Each invalid fixture must fail for its INTENDED assertion and not incidentally.
+# The width fixture already carries its control above (same content, conformant
+# name → 0); the other five repair their single offending field and must flip to
+# exit 0. The map fixtures keep their on-disk names (validate-map.sh has no
+# filename check); the ticket ones stay under their intended names.
+name=control-map-reference-entry-repaired
+run_rc "$VALIDATE_MAP" "$(repaired_as map-invalid-reference-entry.md map.md \
+  -e 's|^    type: url$|    type: url\n    locator: "Matt Pocock — wayfinder SKILL.md"|')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "reference-entry fixture still fails once locator is supplied — it fails incidentally (got $RC)"
+
+name=control-map-context-pointers-repaired
+run_rc "$VALIDATE_MAP" "$(repaired_as map-invalid-context-pointers.md map.md \
+  -e 's|^  - ""$|  - src/billing/**|')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "context_pointers fixture still fails once the empty entry is non-empty — it fails incidentally (got $RC)"
+
+name=control-map-notes-table-repaired
+run_rc "$VALIDATE_MAP" "$(repaired_as map-invalid-notes-table.md map.md \
+  -e 's@^| ticket_type | model | effort |$@| ticket_type | machinery | model | effort |@' \
+  -e 's@^|---|---|---|$@|---|---|---|---|@' \
+  -e 's@^| research | opus | medium |$@| research | research-analyst | opus | medium |@')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "## Notes fixture still fails once the table is the pinned 4-column shape — it fails incidentally (got $RC)"
+
+name=control-ticket-resolved-no-resolution-repaired
+run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-resolved-no-resolution.md ticket-11-resolved-no-resolution.md \
+  -e 's|^resolution: null$|resolution: ./findings/ticket-11.md|')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "resolved-no-resolution fixture still fails once resolution is set — it fails incidentally (got $RC)"
+
+name=control-ticket-resolution-nn-mismatch-repaired
+run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-resolution-nn-mismatch.md ticket-12-nn-mismatch.md \
+  -e 's|^resolution: ./findings/ticket-07.md$|resolution: ./findings/ticket-12.md|')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "nn-mismatch fixture still fails once the pointer NN matches the filename — it fails incidentally (got $RC)"
+
+name=control-ticket-claim-half-repaired
+run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-claim-half.md ticket-13-claim-half.md \
+  -e 's|^claimed_at: null$|claimed_at: 2026-07-31|')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "claim-half fixture still fails once both claim fields are set — it fails incidentally (got $RC)"
+
 # the documented spec templates carrying their inline `#` comments must VALIDATE
 # (quote-aware trailing-comment strip → real values behind the comments).
 name=validate-map-template-comments
@@ -233,6 +316,21 @@ else pass "$name"; fi
 # ============================================================================
 # Family 2 — contract-documentation checks over SKILL.md
 # ============================================================================
+# The package version is asserted HERE and nowhere else in the harness — a
+# batch of 4 streams + 7 audit items is a minor bump, and an unasserted version
+# silently drifts from the contract it names.
+name=skill-version
+if grep -qE '^[[:space:]]+version: 0\.2\.0$' "$SKILL_MD"; then pass "$name"
+else fail "$name" "SKILL.md frontmatter does not read metadata.version: 0.2.0"; fi
+
+# Prose budget as an ASSERTION, not an inspection: SKILL.md is always-loaded, so
+# growth is a real cost. Ceiling 361 = 301 baseline as-built + the 60-line net
+# budget this WP allows. An unmeasured budget is not a constraint.
+name=skill-line-budget
+sk_lines="$(wc -l < "$SKILL_MD")"
+if [ "$sk_lines" -le 361 ]; then pass "$name"
+else fail "$name" "SKILL.md is $sk_lines lines, over the 361 ceiling (301 as-built + 60)"; fi
+
 name=doc-chart-flow
 skgrep "chart flow" && pass "$name" || fail "$name" "SKILL.md missing 'chart flow' section"
 
@@ -453,7 +551,10 @@ else fail "$name" "work-flow slice missing the no-pre-slicing rule"; fi
 # on a hard rule, which the WP explicitly does not ship (no machine check exists).
 name=doc-one-ticket-per-session
 missing=""
-contains "$work_lc" 'one ticket'                  || missing="$missing rule"
+# the rule phrase in FULL — a bare 'one ticket' also matches the End-the-session
+# handoff sentence ("only when ONE ticket's resolution is mid-flight"), which the
+# mutation pass caught: the case survived deletion of the rule it guards.
+contains "$work_lc" 'one ticket per session'      || missing="$missing rule"
 contains "$work_lc" 'default'                     || missing="$missing stated-as-default"
 contains "$work_lc" 'ticket_type: research'       || missing="$missing research-exception"
 contains "$work_lc" 'trivially-coupled'           || missing="$missing coupled-exception"
@@ -502,6 +603,20 @@ name=trigger-negative-skip-clause
 if contains "$DESC" "skip" && contains "$DESC" "goalforge-capture" \
    && { contains "$DESC" "already clear" || contains "$DESC" "one session"; }; then pass "$name"
 else fail "$name" "description lacks a SKIP clause routing the clear one-session case to goalforge-capture"; fi
+
+# ============================================================================
+# Family 4 — negative-control mutation pass (delegated to evals/mutate.sh)
+# ============================================================================
+# Each Family 2 case must FAIL when its rule is deleted from its slice. mutate.sh
+# re-enters THIS script once per mutation with a gutted SKILL_MD copy, so the
+# child runs are suppressed via WAYFIND_MUTATION_CHILD to avoid recursion. It is
+# part of gate (1): a green run.sh means the prose cases are load-bearing.
+if [ -z "${WAYFIND_MUTATION_CHILD:-}" ]; then
+  name=mutation-negative-control
+  set +e; bash "$EVALS_DIR/mutate.sh" > /dev/null 2>&1; RC=$?; set -e
+  if [ "$RC" -eq 0 ]; then pass "$name"
+  else fail "$name" "evals/mutate.sh reports undetected mutation(s) — re-run 'bash evals/mutate.sh' for the list (rc=$RC)"; fi
+fi
 
 # ============================================================================
 # aggregate
