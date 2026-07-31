@@ -241,8 +241,13 @@ set the `resolution` pointer, **and release the claim: `claimed_by` and
 on a done ticket, which ages into a false stale signal. A dependency counts as
 satisfied when `resolved` OR `out-of-scope`.
 
-**End the session** by committing map + tickets in a **consistent state**. The
-map IS the resume point — no wayfind handoff mode. A generic `session`-mode
+**End the session** — BEFORE committing, run all three validators from
+`${CLAUDE_SKILL_DIR}/scripts/` and **FIX every failure before committing**
+(BLOCK-by-instruction; wayfind ships no hook): `validate-map.sh
+<effort>/wayfind/map.md`, `validate-ticket.sh` on every `ticket-NN-*.md`, and
+`validate-linkage.sh <effort>` (resolved ↔ map-pointer ↔ findings agreement;
+read-only, and never a computer of convergence). Then commit map + tickets in a
+**consistent state**. The map IS the resume point — no wayfind handoff mode. A generic `session`-mode
 handoff is used only when ONE ticket's resolution is mid-flight and needs
 conversational context (e.g. an interrupted grilling).
 

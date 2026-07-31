@@ -43,6 +43,8 @@ ARTIFACTS="$EVALS_DIR/fixtures/artifacts"
 
 VALIDATE_MAP="$SCRIPTS_DIR/validate-map.sh"
 VALIDATE_TICKET="$SCRIPTS_DIR/validate-ticket.sh"
+VALIDATE_LINKAGE="$SCRIPTS_DIR/validate-linkage.sh"
+LINKAGE="$EVALS_DIR/fixtures/linkage"
 FRONTIER="$SCRIPTS_DIR/wayfind-frontier.sh"
 SKILL_MD="${SKILL_MD:-$SKILL_DIR/SKILL.md}"
 
@@ -203,6 +205,31 @@ name=validate-ticket-template-comments
 run_rc "$VALIDATE_TICKET" "$(copy_as ticket-template-comments.md ticket-03-template-comments.md)"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on ticket-template-comments.md (as ticket-03-template-comments.md), got $RC"
 
+# --- validate-linkage.sh over the linkage fixture tree ----------------------
+# Cross-file invariants: every resolved ticket is pointed at from map
+# `## Decisions so far`; no pointer targets an open ticket; every `resolution:`
+# target file exists. `empty` exits 0 — the DELIBERATE divergence from the
+# frontier's zero-tickets fail-close (nothing to link is not a structural error).
+for lk in "ok 0" "missing-map-pointer 1" "pointer-to-open 1" "missing-findings 1" \
+          "empty 0" "no-wayfind-subdir 2"; do
+  set -- $lk
+  name="validate-linkage-$1"
+  run_rc "$VALIDATE_LINKAGE" "$LINKAGE/$1"
+  [ "$RC" -eq "$2" ] && pass "$name" || fail "$name" "expected exit $2 on fixtures/linkage/$1, got $RC"
+done
+
+# NEGATIVE CONTROL: the linkage validator must never fork the frontier's sole
+# authority over convergence — no `converged` key, no convergence claim, on
+# either stream, in the clean case or the violating one.
+name=validate-linkage-no-convergence
+lk_out=""
+for lk in ok missing-map-pointer empty; do
+  set +e; lk_out="$lk_out$(bash "$VALIDATE_LINKAGE" "$LINKAGE/$lk" 2>&1)"; set -e
+done
+if printf '%s' "$lk_out" | grep -qi 'converg'; then
+  fail "$name" "validate-linkage.sh output claims/reports convergence: $lk_out"
+else pass "$name"; fi
+
 # ============================================================================
 # Family 2 — contract-documentation checks over SKILL.md
 # ============================================================================
@@ -344,6 +371,19 @@ if grep -oh 'ticket-\[0-9\]{2[^}]*}' "$VALIDATE_TICKET" "$FRONTIER" \
      | grep -qv 'ticket-\[0-9\]{2,}'; then missing="$missing exact-two-pin-present"; fi
 if [ -z "$missing" ]; then pass "$name"
 else fail "$name" "NN-width pin inconsistent across surfaces:$missing"; fi
+
+# The End-the-session step is the FIRST validator invocation point the skill has
+# ever had — all three validators are inert unless the flow runs them. Sliced to
+# that step: a validator mention anywhere else must NOT satisfy this.
+name=doc-end-session-validators
+endsess_lc="$(lc "$(section '**End the session**' 'graduate flow')")"
+missing=""
+contains "$endsess_lc" 'validate-map.sh'     || missing="$missing validate-map"
+contains "$endsess_lc" 'validate-ticket.sh'  || missing="$missing validate-ticket"
+contains "$endsess_lc" 'validate-linkage.sh' || missing="$missing validate-linkage"
+contains "$endsess_lc" 'before committing'   || missing="$missing fix-before-commit"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "End-the-session slice missing:$missing"; fi
 
 name=doc-ticket-resolution-notes
 if contains "$chart2" '## Resolution notes' \
