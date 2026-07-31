@@ -4,7 +4,8 @@
 # wayfind effort. Reads plans/<effort>/wayfind/ticket-*.md frontmatter and emits
 # a pinned JSON shape describing the decision frontier.
 #
-# Contract: plans/wayfind/spec.md §"wayfind-frontier.sh CLI contract".
+# Contract: ~/.claude/plans/_archived/wayfind/spec.md
+#           §"wayfind-frontier.sh CLI contract".
 #
 #   wayfind-frontier.sh <effort-dir>   # dir containing wayfind/ticket-*.md
 #   wayfind-frontier.sh --self-test    # fixtures self-test
@@ -17,8 +18,8 @@
 #      --self-test with every case passing
 #   1  --self-test with one or more failing cases
 #   2  fail-close: usage / structural failure (missing dir, no wayfind/, zero
-#      tickets, duplicate ticket number) OR malformed ticket frontmatter
-#      (stderr names the offending file)
+#      tickets, duplicate ticket number, dangling depends_on target) OR
+#      malformed ticket frontmatter (stderr names the offending file)
 #
 set -euo pipefail
 
@@ -217,6 +218,36 @@ if [ "${1:-}" = "--self-test" ]; then
   elif ! contains "$ERR" 'ticket-01-glob.md'; then fail "$name" "stderr does not name offending file: $ERR"
   else pass "$name"; fi
 
+  # 13. resolved-stale-claim: a RESOLVED ticket carrying an aged claim stamp is
+  #     neither `claimed` nor `stale_claims`, and emits no stderr WARN (the
+  #     claim block is gated on status == open).
+  run_case "$FIXROOT/resolved-stale-claim"
+  name=resolved-stale-claim
+  if [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
+  elif ! contains "$OUT" '"stale_claims": []'; then fail "$name" "resolved ticket reported stale: $OUT"
+  elif ! contains "$OUT" '"claimed": []'; then fail "$name" "resolved ticket reported claimed: $OUT"
+  elif [ -n "$ERR" ]; then fail "$name" "expected empty stderr, got: $ERR"
+  elif ! contains "$OUT" '"frontier": ["ticket-02-live"]'; then fail "$name" "open dependent not in frontier: $OUT"
+  else pass "$name"; fi
+
+  # 14. dangling-dep: depends_on target with no matching ticket-NN -> exit 2,
+  #     stderr names the referencing file AND the unresolvable token.
+  run_case "$FIXROOT/dangling-dep"
+  name=dangling-dep
+  if [ "$RC" -ne 2 ]; then fail "$name" "exit $RC != 2 (silent deadlock): $OUT"
+  elif ! { contains "$ERR" 'ticket-01-orphan.md' && contains "$ERR" 'ticket-99'; }; then
+    fail "$name" "stderr does not name both the file and the token: $ERR"
+  else pass "$name"; fi
+
+  # 15. pad-mismatch: depends_on [ticket-1] against ticket-01-base.md -> the
+  #     zero-padding rule violation is a dangling ref, not a silent deadlock.
+  run_case "$FIXROOT/pad-mismatch"
+  name=pad-mismatch
+  if [ "$RC" -ne 2 ]; then fail "$name" "exit $RC != 2 (silent deadlock): $OUT"
+  elif ! { contains "$ERR" 'ticket-02-unpadded-ref.md' && contains "$ERR" 'ticket-1 '; }; then
+    fail "$name" "stderr does not name both the file and the unpadded token: $ERR"
+  else pass "$name"; fi
+
   if [ "$st_fail" -eq 0 ]; then
     printf '\nself-test: ALL PASS (WAYFIND_NOW=%s)\n' "$WAYFIND_NOW"
     exit 0
@@ -319,7 +350,7 @@ parse_ticket() {
 }
 
 # --- first pass: parse every ticket, index by basename & nn -----------------
-declare -A ST DEPS CBY CAT
+declare -A ST DEPS CBY CAT FILE
 declare -A NN_STATUS NN_FILE
 BASES=()
 
@@ -336,11 +367,26 @@ for f in "${TICKET_FILES[@]}"; do
   fi
   NN_FILE["$nn"]="$f"
   BASES+=("$base")
+  FILE["$base"]="$f"
   ST["$base"]="$P_STATUS"
   DEPS["$base"]="$P_DEPS"
   CBY["$base"]="$P_CBY"
   CAT["$base"]="$P_CAT"
   NN_STATUS["$nn"]="$P_STATUS"
+done
+
+# --- dangling-dep pass: every depends_on token must name an existing ticket --
+# Runs AFTER the whole index is built, so a legitimate FORWARD reference
+# (ticket-02 depending on ticket-07) resolves normally. A token with no
+# matching ticket-NN — a typo, a deleted ticket, or a zero-padding mismatch
+# (ticket-1 vs ticket-01) — would otherwise deadlock the map forever at exit 0:
+# permanently unsatisfied, never converged, never reported. Same fail-close
+# class as duplicate-NN.
+for base in "${BASES[@]}"; do
+  for dep in ${DEPS[$base]}; do
+    [ -n "${NN_STATUS[$dep]:-}" ] \
+      || die "dangling depends_on: ${FILE[$base]} references $dep (no matching ticket-NN)"
+  done
 done
 
 # dep satisfied iff the matching ticket is resolved or out-of-scope
@@ -387,8 +433,11 @@ for base in "${SORTED_BASES[@]}"; do
     blocked_items+=("{\"ticket\": \"$base_j\", \"waiting_on\": [$waiting]}")
   fi
 
-  # claimed: claimed_by set (status stays open while claimed)
-  if [ -n "$claimed_by" ]; then
+  # claimed: OPEN ticket with claimed_by set (claim is stamp-only, so a claimed
+  # ticket is open by construction). Gating on status keeps a leftover claim
+  # stamp on a resolved/out-of-scope ticket out of `claimed` and `stale_claims`
+  # — otherwise a done ticket emits a false stale WARN forever.
+  if [ "$status" = "open" ] && [ -n "$claimed_by" ]; then
     claimed_at="${CAT[$base]}"
     age=0
     if [ -n "$claimed_at" ]; then
