@@ -68,13 +68,15 @@ Rules:
 Map `references[]` entries land in the graduated feature's `overview.md`
 `sources[]`, PLUS a `wayfind-<effort-slug>` self-link entry — the mirror of the
 idea-promotion provenance path (idea `references[]` → promoted feature
-`sources[]`). Shape written by goalforge-capture:
+`sources[]`). The entry shape and its `type` vocabulary are CANONICAL and cited,
+never redefined here: `~/.claude/skills/idea/references/provenance-mapping.md`.
+Shape written by goalforge-capture:
 
 ```yaml
 sources:
   # ── carried verbatim from map.md references[] ──
   - id: <ref-id-from-map>
-    type: file | repo | video | url
+    type: url | file | spec | paper | repo | session | conversation | image | video
     locator: <path-or-url>
     note: <why it matters>
     retrieved: YYYY-MM-DD

@@ -88,6 +88,46 @@ name=validate-map-invalid
 run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-invalid.md"
 [ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on map-invalid.md, got $RC"
 
+# --- map contract: references[] / context_pointers / `## Notes` -------------
+# One INVALID fixture per new assertion — a valid fixture alone cannot prove an
+# assertion fires. Each must exit EXACTLY 1 (contract violation), never 2.
+name=validate-map-invalid-reference-entry
+run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-invalid-reference-entry.md"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a typed references[] entry missing locator, got $RC"
+
+name=validate-map-invalid-context-pointers
+run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-invalid-context-pointers.md"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on context_pointers carrying an empty string, got $RC"
+
+name=validate-map-invalid-notes-table
+run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-invalid-notes-table.md"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a non-pinned-shape ## Notes table, got $RC"
+
+# references[] entry form (ii) — a bare `- <string>` — is LEGAL and unchecked
+# beyond non-emptiness (it reads as {locator: <string>}, lossy but legal).
+# Asserted POSITIVELY on a map whose references[] carries ONLY the bare form, so
+# map-valid.md's typed-form extension cannot mask a regression here.
+name=validate-map-bare-string-reference
+BARE_MAP="$(mktemp -d)/map.md"
+cat > "$BARE_MAP" <<'EOF'
+---
+type: wayfind-map
+status: working
+destination: "Legacy map whose references[] carries only bare-string entries"
+created: 2026-07-16
+context_pointers: []
+references:
+  - plans/ideas/payments-rearchitecture.md
+---
+
+## Destination
+
+Form (ii) legality regression fixture.
+EOF
+run_rc "$VALIDATE_MAP" "$BARE_MAP"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on a bare-string references[] entry, got $RC"
+rm -rf "$(dirname "$BARE_MAP")"
+
 name=validate-ticket-valid
 run_rc "$VALIDATE_TICKET" "$ARTIFACTS/ticket-valid.md"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on ticket-valid.md, got $RC"
@@ -180,6 +220,44 @@ name=doc-plans-root-citation
 if skgrep 'goalforge/references/schema.md' && skgrep 'PLANS_ROOT resolution' \
    && skgrep 'SDD_PLANS_DIR'; then pass "$name"
 else fail "$name" "SKILL.md does not cite schema.md §PLANS_ROOT resolution"; fi
+
+# --- map contract prose, section-sliced -------------------------------------
+# chart step 1 owns the map frontmatter + body-section list; chart step 2 owns
+# the ticket body sections. Slice each rule to the step it constrains — a
+# presence-anywhere grep would pass on a mention in the wrong flow.
+chart1="$(section '1. Write `map.md`' '2. Seed initial tickets')"
+chart1_lc="$(lc "$chart1")"
+chart2="$(section '2. Seed initial tickets' '3. Dispatched blind-spot pass')"
+chart2_lc="$(lc "$chart2")"
+
+# references[] CITES the canonical typed shape; it is never redefined in-skill.
+name=doc-references-canonical-citation
+if contains "$chart1_lc" 'idea/references/provenance-mapping.md' \
+   && contains "$chart1_lc" 'locator' \
+   && contains "$chart1_lc" 'conversation'; then pass "$name"
+else fail "$name" "chart step 1 does not cite provenance-mapping.md as the canonical references[] shape"; fi
+
+# a bare-string entry is documented as LEGAL-but-lossy, not as broken.
+name=doc-references-bare-string-lossy
+if contains "$chart1_lc" 'lossily' || contains "$chart1_lc" 'lossy'; then pass "$name"
+else fail "$name" "chart step 1 does not record that a bare-string references[] entry carries over lossily"; fi
+
+# the map body-section list names `## Notes` and pins the override semantics:
+# FULL ROW including machinery, and never retroactive to an in-flight dispatch.
+name=doc-map-notes-section
+if contains "$chart1" '## Notes' \
+   && contains "$chart1" '| ticket_type | machinery | model | effort |' \
+   && contains "$chart1_lc" 'full row' \
+   && contains "$chart1_lc" 'including machinery' \
+   && contains "$chart1_lc" 'retroactively'; then pass "$name"
+else fail "$name" "chart step 1 map body-section list missing ## Notes / the pinned table / FULL-ROW-incl-machinery / not-retroactive rule"; fi
+
+# the ticket body gains an OPTIONAL `## Resolution notes` home for mid-loop
+# partial answers, so `## Question` is never rewritten to carry its own answer.
+name=doc-ticket-resolution-notes
+if contains "$chart2" '## Resolution notes' \
+   && contains "$chart2_lc" 'optional'; then pass "$name"
+else fail "$name" "chart step 2 does not name the OPTIONAL ## Resolution notes ticket body section"; fi
 
 # ============================================================================
 # Family 3 — trigger evals over the frontmatter description STRING only

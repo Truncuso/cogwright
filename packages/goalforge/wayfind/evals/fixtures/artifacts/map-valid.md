@@ -7,7 +7,12 @@ context_pointers:
   - src/payments/**
   - docs/adr/000*-payments*.md
 references:
-  - plans/ideas/payments-rearchitecture.md
+  - id: payments-idea
+    type: file
+    locator: plans/ideas/payments-rearchitecture.md
+    note: originating idea stub
+    retrieved: 2026-07-16
+  - docs/adr/0004-payments-provider.md
 ---
 
 ## Destination
@@ -27,3 +32,9 @@ subsystem: settlement model, idempotency boundary, and provider abstraction.
 ## Out of scope
 
 - Multi-currency ledger (deferred to a later effort).
+
+## Notes
+
+| ticket_type | machinery | model | effort |
+|---|---|---|---|
+| research | topic-research | sonnet | low |

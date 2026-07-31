@@ -54,6 +54,8 @@ contains() { case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac }
 
 # lowercase a file's content into one blob (case-insensitive substring checks)
 lc_file() { tr '[:upper:]' '[:lower:]' < "$1" | tr -s '[:space:]' ' '; }
+# lowercase a string (for slice-scoped, case-insensitive substring checks)
+lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 # ============================================================================
 # Case: frontier-converged — the graduation precondition.
@@ -201,6 +203,16 @@ else
   contains "$brief_lc" "surprising-without-context" || missing="$missing surprising"
   contains "$brief_lc" "real-trade-off"    || missing="$missing real-trade-off"
   contains "$brief_lc" "overview.md"       || missing="$missing ends-at-overview"
+  # §3's reference `type` vocabulary must be the CANONICAL enum, not the
+  # divergent subset `file | repo | video | url` — that subset rejects
+  # `type: session`, which the first flight and the idea stub both use. Scoped
+  # to the §3 slice: a `session` mention elsewhere in the brief cannot satisfy
+  # it, and the superseded subset string must be GONE from the slice.
+  brief_s3="$(awk '/^## 3\./,/^## 4\./' "$BRIEF_MD")"
+  contains "$(lc "$brief_s3")" "session"   || missing="$missing s3-canonical-enum"
+  case "$brief_s3" in
+    *"file | repo | video | url"*) missing="$missing s3-divergent-enum-survives" ;;
+  esac
   if [ -z "$missing" ]; then pass "$name"
   else fail "$name" "brief missing contract elements:$missing"; fi
 fi

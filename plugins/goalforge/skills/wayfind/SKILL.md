@@ -73,9 +73,30 @@ context_pointers: []            # paths/globs the blind-spot pass sweeps (set at
 references: []                  # provenance; bridges into the graduated feature's sources[]
 ```
 
+`references[]` uses the CANONICAL typed shape — cited, never re-invented:
+`~/.claude/skills/idea/references/provenance-mapping.md` (`id` / `type` /
+`locator` required, `note` / `retrieved` optional; `type` from
+`url|file|spec|paper|repo|session|conversation|image|video`). A bare `- <string>`
+entry stays legal and reads as `{locator: <string>}` — legacy prose entries carry
+over LOSSILY (id/type/note/retrieved dropped), not unexecutably.
+
 Body sections: `## Destination`, `## Decisions so far` (pointers to resolved
 tickets), `## Not yet specified` (the fog — seeded/refreshed by the blind-spot
-pass), `## Out of scope`. Set `status: charting`.
+pass), `## Out of scope`, and the OPTIONAL `## Notes` — the per-effort dispatch
+override, a fixed-shape table validated for shape by `validate-map.sh`:
+
+```markdown
+## Notes
+| ticket_type | machinery | model | effort |
+|---|---|---|---|
+| research | research-analyst | opus | medium |
+```
+
+A row replaces the **FULL ROW** of the dispatch table for that `ticket_type`,
+**INCLUDING machinery** — an effort may reroute e.g. research to a different
+agent entirely. Absent section or absent row = the SKILL.md dispatch default. An
+override never applies retroactively to a dispatch already in flight. Set
+`status: charting`.
 
 **2. Seed initial tickets** — one decision per file (frontmatter verbatim):
 
@@ -90,7 +111,10 @@ resolution: null             # ./findings/ticket-NN.md — pointer, set on resol
 # mode: HITL                 # OPTIONAL, only on ticket_type: task (AFK default); other types derive mode
 ```
 
-Body: `## Question` — one decision, sized to one agent session. Filenames are the
+Body: `## Question` — one decision, sized to one agent session; it states the
+question and is never rewritten to carry its own answer. OPTIONAL
+`## Resolution notes` — the home for mid-loop partial answers and the decision
+log, added when a ticket accumulates them before it resolves. Filenames are the
 IDs: `ticket-NN-<slug>`, NN zero-padded, assigned at create; wire `depends_on` in
 the same pass (no two-pass create-then-wire).
 

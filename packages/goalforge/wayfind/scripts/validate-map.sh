@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 #
-# validate-map.sh — read-only frontmatter shape check for a wayfind map.md.
+# validate-map.sh — read-only frontmatter + `## Notes`-table shape check for a
+# wayfind map.md.
 # Contract (AUTHORITATIVE): SKILL.md §"chart flow" step 1 — the in-skill map
-#           frontmatter template.
+#           frontmatter template and the map body-section list.
+# references[] entry shape is CANONICAL and cited, never redefined here:
+#           ~/.claude/skills/idea/references/provenance-mapping.md
+#           (id/type/locator required; note/retrieved optional).
 # Provenance note only, NOT an authority (unresolvable from an installed
 #           plugin): ~/.claude/plans/_archived/wayfind/spec.md
 #           §"map.md frontmatter".
@@ -68,6 +72,11 @@ MAP="$1"
 M_TYPE=""; M_STATUS=""; M_DEST=""; M_CREATED=""
 have_type=0; have_status=0; have_dest=0; have_created=0
 cp_islist=0; ref_islist=0; have_cp=0; have_ref=0
+# raw element capture for the two list-shaped fields: CP_/REF_INLINE hold the
+# `[...]` body for the inline form; CP_/REF_LINES hold the trimmed block-form
+# lines (one per line, including a typed entry's sub-keys). No nested parser —
+# grouping is by leading `-` and nothing deeper.
+CP_INLINE=""; REF_INLINE=""; CP_LINES=""; REF_LINES=""
 
 first=1; in_fm=0; closed=0
 # track the key whose block-form list we might be reading
@@ -81,14 +90,21 @@ while IFS= read -r line || [ -n "$line" ]; do
   [ "$in_fm" -eq 1 ] || continue
   [ "$(trim "$line")" = "---" ] && { closed=1; break; }
 
-  # a block-list continuation line ("  - item") for a pending list key
+  # a block-list continuation line for a pending list key: any INDENTED or blank
+  # line belongs to the list; the first dedented non-blank line ends it.
   if [ -n "$pending" ]; then
     t="$(trim "$line")"
-    case "$t" in
-      -*) [ "$pending" = "cp" ] && cp_islist=1 || ref_islist=1; continue ;;
-      "") continue ;;
-      *) pending="" ;;   # next key begins; fall through to parse it
+    case "$line" in
+      [![:space:]]*) pending="" ;;   # dedented, non-blank ⇒ next key begins
     esac
+  fi
+  if [ -n "$pending" ]; then
+    case "$t" in
+      -*) [ "$pending" = "cp" ] && cp_islist=1 || ref_islist=1 ;;
+    esac
+    if [ "$pending" = "cp" ]; then CP_LINES="$CP_LINES$t"$'\n'
+    else REF_LINES="$REF_LINES$t"$'\n'; fi
+    continue
   fi
 
   case "$line" in
@@ -109,7 +125,7 @@ while IFS= read -r line || [ -n "$line" ]; do
       have_cp=1
       v="$(strip_comment "$(trim "${line#context_pointers:}")")"
       case "$v" in
-        "["*"]") cp_islist=1 ;;
+        "["*"]") cp_islist=1; CP_INLINE="${v#[}"; CP_INLINE="${CP_INLINE%]}" ;;
         "") pending="cp" ;;            # possible block form; confirm on next lines
         *) cp_islist=0 ;;             # a bare scalar — not a list
       esac ;;
@@ -118,7 +134,7 @@ while IFS= read -r line || [ -n "$line" ]; do
       have_ref=1
       v="$(strip_comment "$(trim "${line#references:}")")"
       case "$v" in
-        "["*"]") ref_islist=1 ;;
+        "["*"]") ref_islist=1; REF_INLINE="${v#[}"; REF_INLINE="${REF_INLINE%]}" ;;
         "") pending="ref" ;;
         *) ref_islist=0 ;;
       esac ;;
@@ -149,5 +165,116 @@ esac
 
 [ "$have_ref" -eq 1 ] || bad "references" "field missing"
 [ "$ref_islist" -eq 1 ] || bad "references" "must be a YAML list (inline [] or block form)"
+
+# --- context_pointers: a list of non-empty STRINGS and nothing more ---------
+# SKILL.md defines context_pointers as paths/globs the blind-spot pass sweeps,
+# so an entry must be a plain non-empty string — never a nested list or a map.
+cp_elem() {
+  local e; e="$(unquote "$(strip_comment "$(trim "$1")")")"
+  [ -n "$e" ] || bad "context_pointers" "list contains an empty entry"
+  case "$e" in
+    '{'*|'['*|-*) bad "context_pointers" "entry is not a plain string: '$e'" ;;
+  esac
+}
+
+if [ -n "$CP_INLINE" ]; then
+  IFS=',' read -r -a _cp_items <<< "$CP_INLINE"
+  for _it in "${_cp_items[@]}"; do cp_elem "$_it"; done
+fi
+while IFS= read -r _l; do
+  [ -n "$_l" ] || continue
+  case "$_l" in
+    -*) cp_elem "${_l#-}" ;;
+    *)  bad "context_pointers" "entry is not a plain string: '$_l'" ;;
+  esac
+done <<< "$CP_LINES"
+
+# --- references[]: three LEGAL entry forms ---------------------------------
+#   (i)   a typed object entry beginning `- id:` — MUST carry `type` + `locator`
+#         (`note` / `retrieved` optional). Canonical shape, see header.
+#   (ii)  a bare `- <string>` entry — legal and UNCHECKED beyond non-emptiness
+#         (reads as `{locator: <string>}`, lossy but legal).
+#   (iii) `references: []`.
+# Grouping is by leading `-` only; sub-keys are matched by name, never parsed
+# as nested YAML.
+ref_typed=0; ref_type=0; ref_loc=0; ref_id=""
+ref_flush() {
+  [ "$ref_typed" -eq 1 ] || return 0
+  [ "$ref_type" -eq 1 ] || bad "references" "typed entry '$ref_id' missing required key: type"
+  [ "$ref_loc"  -eq 1 ] || bad "references" "typed entry '$ref_id' missing required key: locator"
+}
+
+if [ -n "$REF_INLINE" ]; then
+  IFS=',' read -r -a _ref_items <<< "$REF_INLINE"
+  for _it in "${_ref_items[@]}"; do
+    [ -n "$(unquote "$(strip_comment "$(trim "$_it")")")" ] \
+      || bad "references" "list contains an empty entry"
+  done
+fi
+
+while IFS= read -r _l; do
+  [ -n "$_l" ] || continue
+  case "$_l" in
+    -*)
+      ref_flush
+      ref_typed=0; ref_type=0; ref_loc=0; ref_id=""
+      _item="$(trim "${_l#-}")"
+      case "$_item" in
+        id:*) ref_typed=1; ref_id="$(fieldval "${_item#id:}")" ;;
+        *)    [ -n "$(unquote "$(strip_comment "$_item")")" ] \
+                || bad "references" "list contains an empty entry" ;;
+      esac ;;
+    type:*)    ref_type=1 ;;
+    locator:*) ref_loc=1 ;;
+  esac
+done <<< "$REF_LINES"
+ref_flush
+
+# --- `## Notes` body pass (OPTIONAL section, fixed-shape table) -------------
+# A SECOND, body-only pass that runs after the frontmatter loop closed. Bounded
+# to a line-scanner over the `## Notes` block: locate the heading, read to the
+# next `## ` or EOF, split rows on `|`. No general markdown parsing.
+if grep -q '^## Notes[[:space:]]*$' "$MAP"; then
+  NOTES="$(awk 'inx && /^## /{exit} inx{print} /^## Notes[[:space:]]*$/{inx=1}' "$MAP")"
+  rows=(); while IFS= read -r _l; do
+    case "$(trim "$_l")" in '|'*) rows+=("$(trim "$_l")") ;; esac
+  done <<< "$NOTES"
+
+  [ "${#rows[@]}" -ge 2 ] \
+    || bad "## Notes" "section present but carries no | ticket_type | machinery | model | effort | table"
+
+  cells() {                      # $1 = row → CELLS[] (trimmed, outer pipes dropped)
+    local r="$1"; r="${r#|}"; r="${r%|}"
+    local _old="$IFS"; IFS='|'; read -r -a CELLS <<< "$r"; IFS="$_old"
+    local i; for i in "${!CELLS[@]}"; do CELLS[$i]="$(trim "${CELLS[$i]}")"; done
+  }
+
+  cells "${rows[0]}"
+  [ "${#CELLS[@]}" -eq 4 ] \
+    || bad "## Notes" "header row must have exactly 4 columns, got ${#CELLS[@]}"
+  [ "${CELLS[0]}" = "ticket_type" ] && [ "${CELLS[1]}" = "machinery" ] \
+    && [ "${CELLS[2]}" = "model" ] && [ "${CELLS[3]}" = "effort" ] \
+    || bad "## Notes" "header row must be | ticket_type | machinery | model | effort |"
+
+  cells "${rows[1]}"
+  [ "${#CELLS[@]}" -eq 4 ] \
+    || bad "## Notes" "delimiter row must have exactly 4 columns, got ${#CELLS[@]}"
+  for c in "${CELLS[@]}"; do
+    [[ "$c" =~ ^:?-+:?$ ]] || bad "## Notes" "row 2 must be the table delimiter, got '$c'"
+  done
+
+  for (( r=2; r<${#rows[@]}; r++ )); do
+    cells "${rows[$r]}"
+    [ "${#CELLS[@]}" -eq 4 ] \
+      || bad "## Notes" "override row must have exactly 4 columns, got ${#CELLS[@]}: ${rows[$r]}"
+    case "${CELLS[0]}" in
+      research|grilling|prototype|task) ;;
+      *) bad "## Notes" "ticket_type must be research|grilling|prototype|task, got '${CELLS[0]}'" ;;
+    esac
+    for c in "${CELLS[@]}"; do
+      [ -n "$c" ] || bad "## Notes" "override row has an empty cell: ${rows[$r]}"
+    done
+  done
+fi
 
 exit 0
