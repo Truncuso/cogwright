@@ -4,7 +4,10 @@
 # wayfind effort. Reads plans/<effort>/wayfind/ticket-*.md frontmatter and emits
 # a pinned JSON shape describing the decision frontier.
 #
-# Contract: ~/.claude/plans/_archived/wayfind/spec.md
+# Contract (AUTHORITATIVE): SKILL.md §"work flow" — the inlined CLI contract:
+#           stdout JSON keys, their semantics, and the exit mapping.
+# Provenance note only, NOT an authority (it ships inside the plugin where no
+#           consumer can resolve it): ~/.claude/plans/_archived/wayfind/spec.md
 #           §"wayfind-frontier.sh CLI contract".
 #
 #   wayfind-frontier.sh <effort-dir>   # dir containing wayfind/ticket-*.md

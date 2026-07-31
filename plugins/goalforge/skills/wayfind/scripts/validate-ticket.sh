@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 #
 # validate-ticket.sh — read-only frontmatter shape check for a wayfind ticket.
-# Contract: ~/.claude/plans/_archived/wayfind/spec.md §"ticket-NN-<slug>.md frontmatter".
+# Contract (AUTHORITATIVE): SKILL.md §"chart flow" step 2 — the in-skill ticket
+#           frontmatter template.
+# Provenance note only, NOT an authority (unresolvable from an installed
+#           plugin): ~/.claude/plans/_archived/wayfind/spec.md
+#           §"ticket-NN-<slug>.md frontmatter".
 #
 #   validate-ticket.sh <ticket.md>
 #

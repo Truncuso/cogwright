@@ -5,7 +5,7 @@ description: >
   — when the work is too big to spec yet, spans multiple sessions, and needs a
   decision map before anyone can write a real spec. Triggers: "chart this foggy
   effort", "multi-session decision map", "too big to spec yet", "map the unknowns
-  before we plan". Establishes plans/<effort>/wayfind/ (map.md pointer-index +
+  before we plan". Establishes <PLANS_ROOT>/<effort>/wayfind/ (map.md pointer-index +
   one-decision-per-ticket files), drives a frontier-computed work loop across
   sessions, and graduates the converged map into goalforge-capture. SKIP when the
   effort is one session and already clear — a single well-understood feature goes
@@ -32,7 +32,7 @@ straight to `goalforge-capture`.
 ## Artifact layout
 
 ```
-plans/<effort-slug>/
+<PLANS_ROOT>/<effort-slug>/
   wayfind/
     map.md                     # pointer-index only
     ticket-NN-<slug>.md        # one decision per file, NN zero-padded, assigned at create
@@ -47,6 +47,10 @@ The same `<effort-slug>` becomes the feature slug — **graduation is in-place**
 `map.md` is a **pointer-index**: decision bodies live in tickets/findings, never
 in the map.
 
+Resolve `<PLANS_ROOT>` per `~/.claude/skills/goalforge/references/schema.md`
+§PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
+global `~/.claude/plans/`. Wayfind cites that rule, never its own convention.
+
 **Auto-phase (`/wayfind <effort-slug>`):** no `wayfind/` map present → **chart**;
 map present → **work** (work offers graduate when the frontier script reports
 `converged: true`). `/wayfind <effort-slug> chart` forces a re-chart / add-tickets pass.
@@ -55,8 +59,8 @@ map present → **work** (work offers graduate when the frontier script reports
 
 ## chart flow
 
-Establish `plans/<effort>/wayfind/` from a foggy effort description (or a
-graduating idea).
+Establish `<PLANS_ROOT>/<effort-slug>/wayfind/` from a foggy effort
+description (or a graduating idea).
 
 **1. Write `map.md`** (frontmatter verbatim from the Interface Contract):
 
@@ -127,19 +131,29 @@ at chart completion; nothing else.)
 The multi-session loop. **ALWAYS run the frontier script first:**
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-frontier.sh plans/<effort-slug>
+bash ${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-frontier.sh <PLANS_ROOT>/<effort-slug>
 ```
 
-Consume its stdout JSON `{frontier, blocked, claimed, stale_claims, converged}`.
-The **authoritative shape and semantics are the archived spec's Interface
-Contract** — `~/.claude/plans/_archived/wayfind/spec.md`
-§"wayfind-frontier.sh CLI contract" — do not re-derive them here. Key points:
-`frontier` = open tickets with all `depends_on` satisfied and `claimed_by` null;
-`converged` = zero open tickets; `stale_claims` = **open-ticket** claims older
-than 7 days (a resolved ticket never reports claimed or stale) (WARN
-on stderr, never auto-reset); `blocked` is human-diagnostic-only (no automation
-consumes it). The script is **read-only and the sole computer of convergence** —
-SKILL.md never re-implements frontier logic.
+Consume its stdout JSON. **This section is the authoritative CLI contract** —
+the archived spec `~/.claude/plans/_archived/wayfind/spec.md` is provenance
+only (it ships inside the plugin where no consumer can resolve it):
+
+```json
+{"frontier": ["ticket-NN-slug"], "converged": false,
+ "blocked": [{"ticket": "ticket-NN-slug", "waiting_on": ["ticket-NN"]}],
+ "claimed": [{"ticket": "ticket-NN-slug", "by": "<session>", "age_days": 9}],
+ "stale_claims": ["ticket-NN-slug"]}
+```
+
+`frontier` = open tickets with all `depends_on` satisfied and `claimed_by` null
+(a dependency is satisfied when `resolved` OR `out-of-scope`); `claimed` = open
+tickets with `claimed_by` set; `converged` = zero open tickets; `stale_claims` =
+**open-ticket** claims older than 7 days (a resolved ticket never reports
+claimed or stale) (WARN on stderr, never auto-reset); `blocked` is
+human-diagnostic-only (no automation consumes it). Exit 0 in any valid state;
+exit 2 fail-close (missing dir, no `wayfind/`, zero tickets, or malformed
+frontmatter — naming the file). The script is **read-only and the sole computer
+of convergence** — SKILL.md never re-implements frontier logic.
 
 **Pick** the next unclaimed `frontier` ticket. If `frontier` is empty while
 `converged` is false, do **NOT** pick — the loop has stalled. Diagnose from

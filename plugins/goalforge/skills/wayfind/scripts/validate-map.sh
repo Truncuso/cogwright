@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 #
 # validate-map.sh — read-only frontmatter shape check for a wayfind map.md.
-# Contract: ~/.claude/plans/_archived/wayfind/spec.md §"map.md frontmatter".
+# Contract (AUTHORITATIVE): SKILL.md §"chart flow" step 1 — the in-skill map
+#           frontmatter template.
+# Provenance note only, NOT an authority (unresolvable from an installed
+#           plugin): ~/.claude/plans/_archived/wayfind/spec.md
+#           §"map.md frontmatter".
 #
 #   validate-map.sh <map.md>
 #

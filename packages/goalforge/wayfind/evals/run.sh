@@ -164,6 +164,23 @@ else
   fail "$name" "work section does not show the frontier-script JSON-consuming loop"
 fi
 
+# the work loop must pass the <PLANS_ROOT>-resolved effort dir to the frontier
+# script — scoped to the work-flow slice, not presence-anywhere — and no
+# cwd-relative `plans/<effort-slug>` may survive anywhere in SKILL.md.
+name=doc-work-loop-plans-root
+if contains "$work" 'wayfind-frontier.sh <PLANS_ROOT>/<effort-slug>' \
+   && ! grep -qF -- 'plans/<effort-slug>' "$SKILL_MD"; then
+  pass "$name"
+else
+  fail "$name" "work flow does not pass <PLANS_ROOT>/<effort-slug> to the frontier script (or a cwd-relative plans/<effort-slug> survives)"
+fi
+
+# <PLANS_ROOT> is CITED from the goalforge schema, never re-invented here.
+name=doc-plans-root-citation
+if skgrep 'goalforge/references/schema.md' && skgrep 'PLANS_ROOT resolution' \
+   && skgrep 'SDD_PLANS_DIR'; then pass "$name"
+else fail "$name" "SKILL.md does not cite schema.md §PLANS_ROOT resolution"; fi
+
 # ============================================================================
 # Family 3 — trigger evals over the frontmatter description STRING only
 # ============================================================================

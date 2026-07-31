@@ -33,7 +33,15 @@ SCRIPTS_DIR="$SKILL_DIR/scripts"
 
 FRONTIER="$SCRIPTS_DIR/wayfind-frontier.sh"
 CONVERGED_FIXTURE="${CONVERGED_FIXTURE:-$EVALS_DIR/fixtures/converged}"
-CMD_MD="${WAYFIND_CMD_MD:-$HOME/.claude/commands/wayfind.md}"
+# The AUTHORITATIVE command file is the in-repo, hand-authored
+# plugins/goalforge/commands/wayfind.md (generator PRESERVE list) — NOT the
+# dotfiles mirror. The repo's own gate must not depend on a file in another
+# repo, so there is no $HOME in this default. evals/ is package-only (the
+# generator does not ship it into plugins/), so SKILL_DIR is always
+# <repo>/packages/goalforge/wayfind and the climb is unconditional.
+# WAYFIND_CMD_MD overrides it — a caller-facing testability override; before
+# negative-control-command-plans-root below there was no consumer at all.
+CMD_MD="${WAYFIND_CMD_MD:-$SKILL_DIR/../../../plugins/goalforge/commands/wayfind.md}"
 BRIEF_MD="${WAYFIND_BRIEF_MD:-$SKILL_DIR/references/graduation-brief.md}"
 
 # --- case-runner scaffolding ------------------------------------------------
@@ -120,6 +128,48 @@ else
     pass "$name"
   else
     fail "$name" "command missing auto-phase chart/work/graduate/converged branches"
+  fi
+fi
+
+# ============================================================================
+# Case: command-plans-root — the authoritative command file passes the
+# <PLANS_ROOT>-resolved effort dir to the frontier script, and no cwd-relative
+# `plans/<effort-slug>` survives. Mentioning PLANS_ROOT is NOT enough: the
+# frontier invocation itself must carry it as the argument.
+# ============================================================================
+cmd_plans_root_ok() {
+  local f="$1"
+  grep -q 'PLANS_ROOT' "$f" || return 1
+  grep -q 'wayfind-frontier\.sh <PLANS_ROOT>/<effort-slug>' "$f" || return 1
+  if grep -q 'plans/<effort-slug>' "$f"; then return 1; fi
+  return 0
+}
+
+name=command-plans-root
+if [ ! -f "$CMD_MD" ]; then fail "$name" "command file not found: $CMD_MD"
+elif cmd_plans_root_ok "$CMD_MD"; then pass "$name"
+else fail "$name" "command file does not pass <PLANS_ROOT>/<effort-slug> to the frontier script: $CMD_MD"; fi
+
+# ============================================================================
+# Case: negative-control-command-plans-root — command-plans-root alone is
+# presence-only and would pass on any file that happens to carry the token.
+# Copy the authoritative file, rewrite the resolved effort-dir argument back to
+# the cwd-relative form (the exact regression), and assert the check FAILS.
+# The copy KEEPS a PLANS_ROOT mention, so a lax grep-for-the-word check cannot
+# satisfy this case.
+# ============================================================================
+name=negative-control-command-plans-root
+if [ ! -f "$CMD_MD" ]; then fail "$name" "command file not found: $CMD_MD"
+else
+  TMP_CMD="$(mktemp -d)"
+  trap 'rm -rf "$TMP_EFFORT" "$TMP_CMD"' EXIT
+  sed 's|<PLANS_ROOT>/<effort-slug>|plans/<effort-slug>|g' "$CMD_MD" > "$TMP_CMD/wayfind.md"
+  # (the check is invoked directly on the copy; WAYFIND_CMD_MD stays the
+  # caller-facing override that points the WHOLE harness at another file.)
+  if cmd_plans_root_ok "$TMP_CMD/wayfind.md"; then
+    fail "$name" "stripped command copy still passed the <PLANS_ROOT> contract check"
+  else
+    pass "$name"
   fi
 fi
 
