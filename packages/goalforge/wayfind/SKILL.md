@@ -122,8 +122,11 @@ Body: `## Question` — one decision, sized to one agent session; it states the
 question and is never rewritten to carry its own answer. OPTIONAL
 `## Resolution notes` — the home for mid-loop partial answers and the decision
 log, added when a ticket accumulates them before it resolves. Filenames are the
-IDs: `ticket-NN-<slug>`, NN zero-padded, assigned at create; wire `depends_on` in
-the same pass (no two-pass create-then-wire).
+IDs: `ticket-NN-<slug>`, NN zero-padded to **at least two digits**
+(`ticket-[0-9]{2,}` — an AUTHORING rule enforced by `validate-ticket.sh`;
+the readers stay tolerant so a padding slip surfaces as a dangling reference),
+assigned at create; wire `depends_on` in the same pass (no two-pass
+create-then-wire).
 
 **3. Dispatched blind-spot pass** (propose-only — Shihipar "finding your
 unknowns"). Dispatch **opus / medium**. The agent receives: the `destination`
@@ -206,7 +209,11 @@ error, not a stall: the frontier script fail-closes with exit 2 naming the file
 and the token. Fix the reference and re-run.
 
 **Claim** — stamp `claimed_by` + `claimed_at` **only**. Status stays `open` (the
-ticket status enum has no `claimed` value). Claim is stamp-only.
+ticket status enum has no `claimed` value). Claim is stamp-only. Claiming is
+**MANDATORY before dispatch or resolve** — never dispatch or resolve an
+unclaimed ticket; the stamp is the only signal another session has that the
+ticket is live work, so working one unclaimed invites a concurrent dispatch over
+the same decision.
 
 **Dispatch** per the ticket's `ticket_type` (mode is a pure derivation of type,
 NOT stored — except the one `task` override):

@@ -4,7 +4,9 @@
 #
 # Aggregates three families of checks, each a named case (ok / FAIL):
 #   1. Validator behaviour over the artifacts/ fixtures (valid→0, invalid→1,
-#      documented-template-with-comments→0).
+#      documented-template-with-comments→0). Ticket fixtures run through the
+#      copy-harness below — validate-ticket.sh checks the FILENAME, so each
+#      fixture is copied under its INTENDED `ticket-NN-<slug>.md` name first.
 #   2. Contract-documentation greps over SKILL.md (the skill documents its
 #      contract — chart/work/graduate flows, blind-spot propose-only, quiz-back
 #      gate, ordered graduation, ticket_type dispatch table, no-fog early exit,
@@ -41,6 +43,7 @@ ARTIFACTS="$EVALS_DIR/fixtures/artifacts"
 
 VALIDATE_MAP="$SCRIPTS_DIR/validate-map.sh"
 VALIDATE_TICKET="$SCRIPTS_DIR/validate-ticket.sh"
+FRONTIER="$SCRIPTS_DIR/wayfind-frontier.sh"
 SKILL_MD="${SKILL_MD:-$SKILL_DIR/SKILL.md}"
 
 # --- case-runner scaffolding (style donor: wayfind-frontier.sh --self-test) --
@@ -77,6 +80,22 @@ line_of() {
 # Family 1 — validator behaviour over fixtures
 # ============================================================================
 run_rc() { set +e; bash "$1" "$2" >/dev/null 2>&1; RC=$?; set -e; }
+
+# --- artifact copy-harness ---------------------------------------------------
+# validate-ticket.sh checks the FILENAME (`ticket-NN-<slug>.md`, NN >= 2 digits)
+# and NO artifact fixture on disk carries a conformant name — the fixture names
+# are cited across the audit trail and stay as they are. So every ticket fixture
+# is copied into a fresh temp dir under its INTENDED name before the validator
+# is invoked; the intended name is what the case is actually asserting about.
+COPY_ROOT="$(mktemp -d)"
+trap 'rm -rf "$COPY_ROOT"' EXIT
+
+# copy_as <fixture-basename> <intended-name> → prints the copied path
+copy_as() {
+  local d; d="$(mktemp -d "$COPY_ROOT/XXXXXX")"
+  cp "$ARTIFACTS/$1" "$d/$2"
+  printf '%s' "$d/$2"
+}
 
 name=validate-map-valid
 run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-valid.md"
@@ -129,12 +148,50 @@ run_rc "$VALIDATE_MAP" "$BARE_MAP"
 rm -rf "$(dirname "$BARE_MAP")"
 
 name=validate-ticket-valid
-run_rc "$VALIDATE_TICKET" "$ARTIFACTS/ticket-valid.md"
-[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on ticket-valid.md, got $RC"
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-valid.md ticket-01-valid.md)"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on ticket-valid.md (as ticket-01-valid.md), got $RC"
 
 name=validate-ticket-invalid
-run_rc "$VALIDATE_TICKET" "$ARTIFACTS/ticket-invalid.md"
-[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on ticket-invalid.md, got $RC"
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid.md ticket-02-invalid.md)"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on ticket-invalid.md (as ticket-02-invalid.md), got $RC"
+
+# --- ticket cross-field assertions ------------------------------------------
+# One INVALID fixture per new assertion, each copied under its intended name and
+# each required to exit EXACTLY 1 (contract violation), never 2 (fail-close).
+name=validate-ticket-resolved-no-resolution
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-resolved-no-resolution.md ticket-11-resolved-no-resolution.md)"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on status: resolved with resolution: null, got $RC"
+
+name=validate-ticket-resolution-nn-mismatch
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-resolution-nn-mismatch.md ticket-12-nn-mismatch.md)"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a resolution pointer NN != filename NN, got $RC"
+
+name=validate-ticket-claim-half
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-claim-half.md ticket-13-claim-half.md)"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on claimed_by set with claimed_at null, got $RC"
+
+# the MIRROR direction (claimed_at set, claimed_by null) — generated from the
+# same fixture rather than shipped as an eighth artifact file, so the fixture
+# inventory stays at the seven the WP budgets.
+name=validate-ticket-claim-half-mirror
+MIRROR_DIR="$(mktemp -d "$COPY_ROOT/XXXXXX")"
+sed -e 's/^claimed_by: .*/claimed_by: null/' -e 's/^claimed_at: .*/claimed_at: 2026-07-31/' \
+  "$ARTIFACTS/ticket-invalid-claim-half.md" > "$MIRROR_DIR/ticket-14-claim-half-mirror.md"
+run_rc "$VALIDATE_TICKET" "$MIRROR_DIR/ticket-14-claim-half-mirror.md"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on claimed_at set with claimed_by null, got $RC"
+
+# --- filename width, both directions ----------------------------------------
+# The width fixture must fail for its single-digit NN and for NOTHING else, so
+# the SAME content copied under a conformant name must exit 0. Without the
+# second half the case cannot distinguish a width violation from an incidental
+# frontmatter defect.
+name=validate-ticket-filename-width
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-filename-width.md ticket-1-width.md)"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a single-digit NN filename, got $RC"
+
+name=validate-ticket-filename-width-control
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-filename-width.md ticket-14-width.md)"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "width fixture failed under a CONFORMANT name — it fails incidentally, not on NN width (got $RC)"
 
 # the documented spec templates carrying their inline `#` comments must VALIDATE
 # (quote-aware trailing-comment strip → real values behind the comments).
@@ -143,8 +200,8 @@ run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-template-comments.md"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on map-template-comments.md, got $RC"
 
 name=validate-ticket-template-comments
-run_rc "$VALIDATE_TICKET" "$ARTIFACTS/ticket-template-comments.md"
-[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on ticket-template-comments.md, got $RC"
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-template-comments.md ticket-03-template-comments.md)"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on ticket-template-comments.md (as ticket-03-template-comments.md), got $RC"
 
 # ============================================================================
 # Family 2 — contract-documentation checks over SKILL.md
@@ -254,6 +311,40 @@ else fail "$name" "chart step 1 map body-section list missing ## Notes / the pin
 
 # the ticket body gains an OPTIONAL `## Resolution notes` home for mid-loop
 # partial answers, so `## Question` is never rewritten to carry its own answer.
+# --- ticket NN width + claim discipline, section-sliced ---------------------
+# The Claim step owns claim-before-dispatch: a mandatory-claim sentence anywhere
+# else in the file (or in the Gotchas) must NOT satisfy this.
+name=doc-claim-before-dispatch
+claim_lc="$(lc "$(section '**Claim** —' '**Dispatch** per')")"
+if contains "$claim_lc" 'mandatory before dispatch or resolve'; then pass "$name"
+else fail "$name" "work-flow Claim slice does not state that claiming is MANDATORY before dispatch or resolve"; fi
+
+# Cross-surface NN-width consistency. The rule is pinned ONCE as an AUTHORING
+# rule on exactly two surfaces (SKILL.md chart step 2, validate-ticket.sh's
+# filename check); the two READERS stay tolerant. Asserting the same regex on
+# all four would certify a pin that MUST NOT happen — so the reader assertions
+# here are positive assertions that they were NOT tightened.
+name=doc-nn-width-cross-surface
+missing=""
+contains "$chart2" 'ticket-[0-9]{2,}'      || missing="$missing skill-md-regex"
+contains "$chart2_lc" 'at least two digits' || missing="$missing skill-md-statement"
+grep -qF -- '^ticket-[0-9]{2,}-[a-z0-9-]+\.md$' "$VALIDATE_TICKET" \
+                                           || missing="$missing validate-ticket-filename-check"
+grep -qF -- 'at least two digits' "$VALIDATE_TICKET" \
+                                           || missing="$missing validate-ticket-statement"
+# tolerant readers, UNCHANGED (frontier L334, validate-ticket depends_on L159+)
+grep -qF -- '^ticket-[0-9]+$' "$FRONTIER"  || missing="$missing frontier-reader-tightened"
+grep -qF -- '^ticket-[0-9]+$' "$VALIDATE_TICKET" \
+                                           || missing="$missing depends-on-reader-tightened"
+grep -qiF -- 'deliberately tolerant' "$VALIDATE_TICKET" \
+                                           || missing="$missing depends-on-rationale-comment"
+# and never an exact-two pin anywhere (it would cap a map at 100 tickets):
+# every `ticket-[0-9]{2…}` occurrence in the scripts must be the `{2,}` form.
+if grep -oh 'ticket-\[0-9\]{2[^}]*}' "$VALIDATE_TICKET" "$FRONTIER" \
+     | grep -qv 'ticket-\[0-9\]{2,}'; then missing="$missing exact-two-pin-present"; fi
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "NN-width pin inconsistent across surfaces:$missing"; fi
+
 name=doc-ticket-resolution-notes
 if contains "$chart2" '## Resolution notes' \
    && contains "$chart2_lc" 'optional'; then pass "$name"

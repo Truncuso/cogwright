@@ -92,9 +92,14 @@ done
 if [ -z "$FLIP" ]; then
   fail "$name" "no resolved ticket to flip in $CONVERGED_FIXTURE"
 else
-  # portable in-place edit: rewrite the single status line.
+  # portable in-place edit: rewrite the status line, and null the resolution
+  # pointer with it — validate-ticket.sh pins `status: resolved` ⇔ non-null
+  # `resolution` in BOTH directions, so an open ticket still carrying its
+  # findings pointer is itself a contract violation and would fail the
+  # still-validates assertion below for a reason unrelated to convergence.
   tmp_tk="$(mktemp)"
-  sed 's/^status: resolved$/status: open/' "$FLIP" > "$tmp_tk" && mv "$tmp_tk" "$FLIP"
+  sed -e 's/^status: resolved$/status: open/' -e 's|^resolution: .*|resolution: null|' \
+    "$FLIP" > "$tmp_tk" && mv "$tmp_tk" "$FLIP"
   # the mutated ticket must still validate (frontmatter kept valid).
   if ! bash "$SCRIPTS_DIR/validate-ticket.sh" "$FLIP" >/dev/null 2>&1; then
     fail "$name" "flipped ticket no longer validates: $FLIP"
