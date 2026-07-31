@@ -46,7 +46,10 @@ Resolved decisions:
 
 Scope (carried task tickets — concrete work, consumed later by goalforge-decompose):
 - <leftover `ticket_type: task` title> — see ticket-07-wire-cli.md
-- <one scope bullet per remaining task ticket>
+- <one scope bullet per task ticket whose resolution is a DECISION about future work>
+
+Completed work (already executed during the map — NOT scope, do not re-plan):
+- <task ticket whose resolution IS the executed work> — see ticket-04-spike-parser.md
 
 Accepted risks (from findings/quiz-back.md):
 - <recorded accepted-risk, if any>
@@ -60,21 +63,33 @@ Rules:
 - **Resolved decisions**: one bullet per resolved ticket, each carrying a pointer
   to its resolution (the ticket file / its `findings/` summary), never the full
   body — pointers, not copies.
-- **Scope bullets** are the surviving `ticket_type: task` tickets only. They are
-  passed as prose scope, NOT as pre-decomposed WPs.
+- **Scope bullets** are surviving `ticket_type: task` tickets, passed as prose
+  scope, NOT as pre-decomposed WPs.
+- **Completed work vs scope (the discriminator).** Convergence resolves every
+  task ticket, so "resolved" alone does not make a ticket a scope bullet. A
+  resolved `task` ticket becomes a **scope bullet** ONLY when its resolution is a
+  **decision about future work** — the work it names is still ahead. A resolved
+  `task` ticket whose resolution **IS the executed work** (the spike was run, the
+  CLI was wired) is reported under **Completed work**, never as scope. Reporting
+  executed work as scope makes `goalforge-decompose` cut a WP for work already
+  done. When a resolved task ticket carries both — work executed AND a decision
+  about further work — split it: the executed half to Completed work, the
+  forward-looking half to Scope.
 
 ## 3. Provenance bridge (references[] → sources[])
 
 Map `references[]` entries land in the graduated feature's `overview.md`
 `sources[]`, PLUS a `wayfind-<effort-slug>` self-link entry — the mirror of the
 idea-promotion provenance path (idea `references[]` → promoted feature
-`sources[]`). Shape written by goalforge-capture:
+`sources[]`). The entry shape and its `type` vocabulary are CANONICAL and cited,
+never redefined here: `~/.claude/skills/idea/references/provenance-mapping.md`.
+Shape written by goalforge-capture:
 
 ```yaml
 sources:
   # ── carried verbatim from map.md references[] ──
   - id: <ref-id-from-map>
-    type: file | repo | video | url
+    type: url | file | spec | paper | repo | session | conversation | image | video
     locator: <path-or-url>
     note: <why it matters>
     retrieved: YYYY-MM-DD

@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 #
-# validate-ticket.sh — read-only frontmatter shape check for a wayfind ticket.
-# Contract: ~/.claude/plans/_archived/wayfind/spec.md §"ticket-NN-<slug>.md frontmatter".
+# validate-ticket.sh — read-only frontmatter + FILENAME shape check for a
+# wayfind ticket.
+# Contract (AUTHORITATIVE): SKILL.md §"chart flow" step 2 — the in-skill ticket
+#           frontmatter template.
+# Provenance note only, NOT an authority (unresolvable from an installed
+#           plugin): ~/.claude/plans/_archived/wayfind/spec.md
+#           §"ticket-NN-<slug>.md frontmatter".
 #
 #   validate-ticket.sh <ticket.md>
 #
@@ -58,6 +63,18 @@ fieldval() { unquote "$(strip_comment "$(trim "$1")")"; }
 [ $# -eq 1 ] || die "usage: $PROG <ticket.md>"
 TICKET="$1"
 [ -f "$TICKET" ] || die "ticket file not found: $TICKET"
+
+# --- filename shape (AUTHORING surface) -------------------------------------
+# The NN width rule, pinned once with SKILL.md chart step 2: NN is zero-padded
+# to AT LEAST two digits — `ticket-[0-9]{2,}`, never `[0-9]{2}` (an exact-two
+# pin would cap a map at 100 tickets). This AUTHORING check is deliberately
+# STRICTER than the tolerant READERS (the depends_on check below and
+# wayfind-frontier.sh), which must keep parsing `ticket-1` so a padding slip
+# surfaces as a dangling reference rather than as malformed frontmatter.
+BASE="$(basename "$TICKET")"
+[[ "$BASE" =~ ^ticket-[0-9]{2,}-[a-z0-9-]+\.md$ ]] \
+  || bad "filename" "expected ticket-NN-<slug>.md with NN at least two digits, got '$BASE'"
+NN="${BASE#ticket-}"; NN="${NN%%-*}"
 
 # --- read frontmatter -------------------------------------------------------
 T_TYPE=""; T_TT=""; T_STATUS=""; T_CBY=""; T_CAT=""; T_RES=""; T_MODE=""
@@ -154,6 +171,11 @@ esac
 
 # every depends_on element must name a ticket (ticket-NN) — a bare glob (*) or
 # any other token is rejected, matching the frontier's fail-closed shape check.
+# DELIBERATELY TOLERANT (`[0-9]+`, not `[0-9]{2,}`) and NOT an inconsistency with
+# the filename check above: `depends_on` is READ exactly as wayfind-frontier.sh
+# L334 reads it, so a padding slip like `ticket-1` still PARSES and surfaces as a
+# dangling reference naming both file and token. Tightening this tolerant reader
+# would turn that diagnosis into "malformed frontmatter". Do not "fix" it.
 for _dt in "${DEPS_TOKENS[@]:-}"; do
   [ -z "$_dt" ] && continue
   [[ "$_dt" =~ ^ticket-[0-9]+$ ]] \
@@ -171,6 +193,40 @@ case "$T_CAT" in
 esac
 
 [ "$have_res" -eq 1 ] || bad "resolution" "field missing"
+
+# --- cross-field assertions -------------------------------------------------
+res_null=0; case "$T_RES" in null|"") res_null=1 ;; esac
+
+# status: resolved <=> non-null resolution, BOTH directions — a resolved ticket
+# must point at its findings, and a non-resolved ticket must not carry a stale
+# pointer.
+if [ "$T_STATUS" = "resolved" ] && [ "$res_null" -eq 1 ]; then
+  bad "resolution" "status: resolved requires a non-null resolution pointer"
+fi
+if [ "$T_STATUS" != "resolved" ] && [ "$res_null" -eq 0 ]; then
+  bad "resolution" "a non-null resolution requires status: resolved, got '$T_STATUS'"
+fi
+
+# the resolution pointer's NN must match the filename NN — SHAPE ONLY. Target
+# EXISTENCE belongs to validate-linkage.sh, which owns the effort dir; this
+# script takes a single file and never grows effort-dir awareness.
+if [ "$res_null" -eq 0 ]; then
+  rbase="$(basename "$T_RES")"
+  if [[ "$rbase" =~ ^ticket-([0-9]+) ]]; then
+    [ "${BASH_REMATCH[1]}" = "$NN" ] \
+      || bad "resolution" "pointer NN '${BASH_REMATCH[1]}' does not match filename NN '$NN'"
+  else
+    bad "resolution" "pointer must name ticket-NN, got '$T_RES'"
+  fi
+fi
+
+# claimed_by <=> claimed_at — both set or both null, never one alone. A half
+# claim is either a claim with no age (never goes stale) or an age with no
+# owner (nobody to confirm dead before clearing it).
+cby_null=0; case "$T_CBY" in null|"") cby_null=1 ;; esac
+cat_null=0; case "$T_CAT" in null|"") cat_null=1 ;; esac
+[ "$cby_null" -eq "$cat_null" ] \
+  || bad "claimed_by/claimed_at" "both must be set or both null, got claimed_by='$T_CBY' claimed_at='$T_CAT'"
 
 # mode is ONLY valid on ticket_type: task, and its value is pinned to {HITL, AFK}
 # (spec: HITL override, AFK default).

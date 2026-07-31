@@ -33,7 +33,15 @@ SCRIPTS_DIR="$SKILL_DIR/scripts"
 
 FRONTIER="$SCRIPTS_DIR/wayfind-frontier.sh"
 CONVERGED_FIXTURE="${CONVERGED_FIXTURE:-$EVALS_DIR/fixtures/converged}"
-CMD_MD="${WAYFIND_CMD_MD:-$HOME/.claude/commands/wayfind.md}"
+# The AUTHORITATIVE command file is the in-repo, hand-authored
+# plugins/goalforge/commands/wayfind.md (generator PRESERVE list) — NOT the
+# dotfiles mirror. The repo's own gate must not depend on a file in another
+# repo, so there is no $HOME in this default. evals/ is package-only (the
+# generator does not ship it into plugins/), so SKILL_DIR is always
+# <repo>/packages/goalforge/wayfind and the climb is unconditional.
+# WAYFIND_CMD_MD overrides it — a caller-facing testability override; before
+# negative-control-command-plans-root below there was no consumer at all.
+CMD_MD="${WAYFIND_CMD_MD:-$SKILL_DIR/../../../plugins/goalforge/commands/wayfind.md}"
 BRIEF_MD="${WAYFIND_BRIEF_MD:-$SKILL_DIR/references/graduation-brief.md}"
 
 # --- case-runner scaffolding ------------------------------------------------
@@ -46,6 +54,8 @@ contains() { case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac }
 
 # lowercase a file's content into one blob (case-insensitive substring checks)
 lc_file() { tr '[:upper:]' '[:lower:]' < "$1" | tr -s '[:space:]' ' '; }
+# lowercase a string (for slice-scoped, case-insensitive substring checks)
+lc() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 # ============================================================================
 # Case: frontier-converged — the graduation precondition.
@@ -82,9 +92,14 @@ done
 if [ -z "$FLIP" ]; then
   fail "$name" "no resolved ticket to flip in $CONVERGED_FIXTURE"
 else
-  # portable in-place edit: rewrite the single status line.
+  # portable in-place edit: rewrite the status line, and null the resolution
+  # pointer with it — validate-ticket.sh pins `status: resolved` ⇔ non-null
+  # `resolution` in BOTH directions, so an open ticket still carrying its
+  # findings pointer is itself a contract violation and would fail the
+  # still-validates assertion below for a reason unrelated to convergence.
   tmp_tk="$(mktemp)"
-  sed 's/^status: resolved$/status: open/' "$FLIP" > "$tmp_tk" && mv "$tmp_tk" "$FLIP"
+  sed -e 's/^status: resolved$/status: open/' -e 's|^resolution: .*|resolution: null|' \
+    "$FLIP" > "$tmp_tk" && mv "$tmp_tk" "$FLIP"
   # the mutated ticket must still validate (frontmatter kept valid).
   if ! bash "$SCRIPTS_DIR/validate-ticket.sh" "$FLIP" >/dev/null 2>&1; then
     fail "$name" "flipped ticket no longer validates: $FLIP"
@@ -124,6 +139,48 @@ else
 fi
 
 # ============================================================================
+# Case: command-plans-root — the authoritative command file passes the
+# <PLANS_ROOT>-resolved effort dir to the frontier script, and no cwd-relative
+# `plans/<effort-slug>` survives. Mentioning PLANS_ROOT is NOT enough: the
+# frontier invocation itself must carry it as the argument.
+# ============================================================================
+cmd_plans_root_ok() {
+  local f="$1"
+  grep -q 'PLANS_ROOT' "$f" || return 1
+  grep -q 'wayfind-frontier\.sh <PLANS_ROOT>/<effort-slug>' "$f" || return 1
+  if grep -q 'plans/<effort-slug>' "$f"; then return 1; fi
+  return 0
+}
+
+name=command-plans-root
+if [ ! -f "$CMD_MD" ]; then fail "$name" "command file not found: $CMD_MD"
+elif cmd_plans_root_ok "$CMD_MD"; then pass "$name"
+else fail "$name" "command file does not pass <PLANS_ROOT>/<effort-slug> to the frontier script: $CMD_MD"; fi
+
+# ============================================================================
+# Case: negative-control-command-plans-root — command-plans-root alone is
+# presence-only and would pass on any file that happens to carry the token.
+# Copy the authoritative file, rewrite the resolved effort-dir argument back to
+# the cwd-relative form (the exact regression), and assert the check FAILS.
+# The copy KEEPS a PLANS_ROOT mention, so a lax grep-for-the-word check cannot
+# satisfy this case.
+# ============================================================================
+name=negative-control-command-plans-root
+if [ ! -f "$CMD_MD" ]; then fail "$name" "command file not found: $CMD_MD"
+else
+  TMP_CMD="$(mktemp -d)"
+  trap 'rm -rf "$TMP_EFFORT" "$TMP_CMD"' EXIT
+  sed 's|<PLANS_ROOT>/<effort-slug>|plans/<effort-slug>|g' "$CMD_MD" > "$TMP_CMD/wayfind.md"
+  # (the check is invoked directly on the copy; WAYFIND_CMD_MD stays the
+  # caller-facing override that points the WHOLE harness at another file.)
+  if cmd_plans_root_ok "$TMP_CMD/wayfind.md"; then
+    fail "$name" "stripped command copy still passed the <PLANS_ROOT> contract check"
+  else
+    pass "$name"
+  fi
+fi
+
+# ============================================================================
 # Case: brief-contract — references/graduation-brief.md documents the
 # goalforge-capture brief composition (destination, decisions, scope bullets),
 # the references→sources bridge + wayfind self-link, the adr-write
@@ -151,6 +208,24 @@ else
   contains "$brief_lc" "surprising-without-context" || missing="$missing surprising"
   contains "$brief_lc" "real-trade-off"    || missing="$missing real-trade-off"
   contains "$brief_lc" "overview.md"       || missing="$missing ends-at-overview"
+  # §2 must carry the completed-work vs scope-bullet discriminator (audit-11):
+  # convergence resolves every task ticket, so a §2 selecting scope on
+  # "resolved" alone hands executed work to goalforge-decompose as scope. Scoped
+  # to the §2 slice — the discriminator has to live where the brief is composed.
+  brief_s2="$(lc "$(awk '/^## 2\./,/^## 3\./' "$BRIEF_MD")")"
+  contains "$brief_s2" "completed work" || missing="$missing s2-completed-work"
+  contains "$brief_s2" "decision about future work" \
+                                        || missing="$missing s2-scope-discriminator"
+  # §3's reference `type` vocabulary must be the CANONICAL enum, not the
+  # divergent subset `file | repo | video | url` — that subset rejects
+  # `type: session`, which the first flight and the idea stub both use. Scoped
+  # to the §3 slice: a `session` mention elsewhere in the brief cannot satisfy
+  # it, and the superseded subset string must be GONE from the slice.
+  brief_s3="$(awk '/^## 3\./,/^## 4\./' "$BRIEF_MD")"
+  contains "$(lc "$brief_s3")" "session"   || missing="$missing s3-canonical-enum"
+  case "$brief_s3" in
+    *"file | repo | video | url"*) missing="$missing s3-divergent-enum-survives" ;;
+  esac
   if [ -z "$missing" ]; then pass "$name"
   else fail "$name" "brief missing contract elements:$missing"; fi
 fi
