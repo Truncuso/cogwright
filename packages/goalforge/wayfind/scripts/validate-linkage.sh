@@ -49,6 +49,12 @@ unquote() {
 
 # --- argument handling ------------------------------------------------------
 [ $# -eq 1 ] || die "usage: $PROG <effort-dir>"
+# This script takes NO options. Reject any `--*` token by name — letting it fall
+# through into effort-dir handling reports "effort dir not found: --self-test",
+# which misdescribes the mistake.
+case "$1" in
+  --*) die "unknown option: $1 (usage: $PROG <effort-dir>)" ;;
+esac
 EFFORT_DIR="$1"
 [ -d "$EFFORT_DIR" ] || die "effort dir not found: $EFFORT_DIR"
 WAYFIND_DIR="$EFFORT_DIR/wayfind"

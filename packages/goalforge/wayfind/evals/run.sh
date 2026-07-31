@@ -49,7 +49,8 @@
 #   audit-10 claim-before-dispatch       → doc-claim-before-dispatch (prose only)
 #   audit-11 scope discriminator         → doc-graduate-scope-discriminator
 #   stream-1a `## Notes` override        → validate-map-invalid-notes-table,
-#                                          doc-map-notes-section
+#                                          doc-map-notes-section,
+#                                          doc-dispatch-notes-override
 #   stream-1b `## Resolution notes`      → doc-ticket-resolution-notes
 #   stream-2  mid-loop fog moves         → doc-mid-loop-fog-moves,
 #                                          doc-converged-not-no-fog
@@ -384,6 +385,18 @@ name=doc-ticket-type-dispatch
 if skgrep "ticket_type" && skgrep "research" && skgrep "grilling" \
    && skgrep "prototype" && skgrep "task"; then pass "$name"
 else fail "$name" "SKILL.md missing ticket_type dispatch table rows"; fi
+
+# The Dispatch step must POINT AT the per-effort override, not just define it in
+# chart step 1 — a dispatcher reading only the work flow would otherwise apply
+# the default table blind. Sliced to Dispatch: the chart-step-1 definition (or
+# any mention elsewhere) must NOT satisfy this.
+name=doc-dispatch-notes-override
+dispatch_lc="$(lc "$(section '**Dispatch** per' '**Resolve** —')")"
+if contains "$dispatch_lc" '## notes' && contains "$dispatch_lc" 'full row'; then
+  pass "$name"
+else
+  fail "$name" "work-flow Dispatch slice does not say a map ## Notes row replaces the full row below"
+fi
 
 name=doc-no-fog-early-exit
 if skgrep "No-fog" && skgrep "goalforge-capture"; then pass "$name"

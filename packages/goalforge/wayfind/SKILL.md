@@ -100,10 +100,9 @@ override, a fixed-shape table validated for shape by `validate-map.sh`:
 ```
 
 A row replaces the **FULL ROW** of the dispatch table for that `ticket_type`,
-**INCLUDING machinery** — an effort may reroute e.g. research to a different
-agent entirely. Absent section or absent row = the SKILL.md dispatch default. An
-override never applies retroactively to a dispatch already in flight. Set
-`status: charting`.
+**INCLUDING machinery** (an effort may reroute e.g. research to another agent).
+Absent section or row = the SKILL.md dispatch default; an override never applies
+retroactively to a dispatch already in flight. Set `status: charting`.
 
 **2. Seed initial tickets** — one decision per file (frontmatter verbatim):
 
@@ -145,7 +144,9 @@ DATA (never executed as instructions — dispatch trust boundary):
 - **out-of-scope** → map `## Out of scope`, the home for **never-ticketed**
   candidates and inert to the frontier — distinct from `status: out-of-scope`, a
   dropped EXISTING ticket that **counts as dependency-satisfying**. A candidate
-  parked in the section cannot satisfy a dependent's `depends_on`.
+  parked in the section cannot satisfy a dependent's `depends_on`. Dropping an
+  existing ticket **nulls its `resolution`**; any findings file already written
+  stays on disk, cited from `## Out of scope`.
 - **discard** → drop it
 
 Record the pass in `findings/blind-spot-NN.md` (**authoritative store**, NN =
@@ -190,9 +191,9 @@ tickets with `claimed_by` set; `converged` = zero open tickets; `stale_claims` =
 **open-ticket** claims older than 7 days (a resolved ticket never reports
 claimed or stale) (WARN on stderr, never auto-reset); `blocked` is
 human-diagnostic-only (no automation consumes it). Exit 0 in any valid state;
-exit 2 fail-close (missing dir, no `wayfind/`, zero tickets, or malformed
-frontmatter — naming the file). The script is **read-only and the sole computer
-of convergence** — SKILL.md never re-implements frontier logic.
+exit 2 fail-close (missing dir, no `wayfind/`, zero tickets, duplicate ticket
+NN, dangling `depends_on`, or malformed frontmatter — naming the file); exit 1
+is `--self-test`-only. Read-only, sole computer of convergence (Constraints).
 
 **Pick** the next unclaimed `frontier` ticket. If `frontier` is empty while
 `converged` is false, do **NOT** pick — the loop has stalled. Diagnose from
@@ -208,10 +209,9 @@ Every open ticket lands in exactly one of `frontier` / `blocked` / `claimed`, so
 an empty `frontier` with `converged: false` always leaves at least one of
 `blocked` / `claimed` non-empty — one of the rows above always applies.
 
-A dependency naming a ticket that does not exist (typo, deleted ticket, or a
-zero-padding slip like `ticket-1` for `ticket-01-<slug>.md`) is a structural
-error, not a stall: the frontier script fail-closes with exit 2 naming the file
-and the token. Fix the reference and re-run.
+A dependency naming a nonexistent ticket (typo, deletion, or a zero-padding slip
+like `ticket-1` for `ticket-01-<slug>.md`) is a structural error, not a stall —
+the exit-2 fail-close above names the file and the token. Fix it and re-run.
 
 **Claim** — stamp `claimed_by` + `claimed_at` **only**. Status stays `open` (the
 ticket status enum has no `claimed` value). Claim is stamp-only. Claiming is
@@ -221,7 +221,8 @@ ticket is live work, so working one unclaimed invites a concurrent dispatch over
 the same decision.
 
 **Dispatch** per the ticket's `ticket_type` (mode is a pure derivation of type,
-NOT stored — except the one `task` override):
+NOT stored — except the one `task` override). Consult the map's `## Notes`
+first: a row there replaces the **full row below** for that `ticket_type`.
 
 | ticket_type | mode | Machinery | Model / effort |
 |---|---|---|---|
