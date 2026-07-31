@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # validate-ticket.sh — read-only frontmatter shape check for a wayfind ticket.
-# Contract: plans/wayfind/spec.md §"ticket-NN-<slug>.md frontmatter".
+# Contract: ~/.claude/plans/_archived/wayfind/spec.md §"ticket-NN-<slug>.md frontmatter".
 #
 #   validate-ticket.sh <ticket.md>
 #

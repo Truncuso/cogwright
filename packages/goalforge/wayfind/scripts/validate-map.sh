@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # validate-map.sh — read-only frontmatter shape check for a wayfind map.md.
-# Contract: plans/wayfind/spec.md §"map.md frontmatter".
+# Contract: ~/.claude/plans/_archived/wayfind/spec.md §"map.md frontmatter".
 #
 #   validate-map.sh <map.md>
 #
