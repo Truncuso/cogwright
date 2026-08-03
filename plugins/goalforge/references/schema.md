@@ -195,7 +195,11 @@ block says so.
 name: wp-01-<slug>                # kebab, matches WP folder name
 title: <human title>
 status: draft|spec|hardened|ready|executing|verified|archived
-# archived is reserved-for-future (sdd-lifecycle-redesign)
+# `archived` is a LIVE second WP terminal, reached only by an explicit out-of-band
+#     edit — NO goalforge script writes it to a WP (`goalforge-archive` flips FEATURE
+#     overviews only; `goalforge-transition` rejects it as an edge target). It is
+#     dep-satisfying: `goalforge-frontier.sh` and `goalforge-validate.sh` treat an
+#     `archived` dep exactly as `verified`. See references/state-machine.md.
 # NB: there is NO `superseded` WP status — supersession is expressed by the
 #     `superseded_by` relationship edge (feature-level); a superseded WP stays
 #     `verified`/`archived`. Adding a WP status here would double-own the concept.
@@ -335,7 +339,7 @@ the dispatch algorithm).
 
 | Edge | Meaning |
 |---|---|
-| `depends_on` | This WP/task cannot start until the target is `ready`+ |
+| `depends_on` | This WP/task cannot start until the target is `ready`+ — a WP dep at `archived` also satisfies (it is off the linear `ready`+ chain; see the WP status note above) |
 | `blocks` | Inverse of `depends_on` |
 | `related_to` | Non-blocking association |
 | `supersedes` | This WP replaces the target |

@@ -36,11 +36,13 @@ Classify per `~/.claude/skills/autopilot/references/autonomy-policy.md`. Unset
 
 ## Step 0 — Dependency-frontier gate (the harden frontier)
 
-A WP may not be hardened until its dependencies are **`verified`** — the *harden
-frontier*. This is the first gate, run before any review or interview work is
-spent. The harden threshold is **deps all `verified`** — strictly tighter than the
-execute threshold of `ready+`: a WP whose dep is merely `ready`/`hardened` is NOT
-yet hardenable.
+A WP may not be hardened until its dependencies are **`verified` or `archived`** —
+the *harden frontier*. This is the first gate, run before any review or interview
+work is spent. The harden threshold is **deps all `verified`/`archived`** — strictly
+tighter than the execute threshold of `ready+`: a WP whose dep is merely
+`ready`/`hardened` is NOT yet hardenable. (`archived` is the second WP terminal,
+set only by an out-of-band edit — no goalforge script writes it to a WP, see
+`references/state-machine.md` — and it satisfies a dep exactly as `verified`.)
 
 1. **Resolve the frontier.** Run the frontier scheduler on the **feature dir**
    (not the WP):
@@ -52,9 +54,9 @@ yet hardenable.
 
 2. **Refuse when not hardenable.** If the WP being hardened is **not** in
    `hardenable[]`, do not proceed. Look it up in `blocked[]`, surface its
-   `waiting_on` (the unverified dependency slugs), and **halt via
+   `waiting_on` (the not-yet-dep-satisfying dependency slugs), and **halt via
    `AskUserQuestion`** — never silently continue. State plainly that those deps
-   must reach `verified` first, or the user may override.
+   must reach `verified` (or `archived`) first, or the user may override.
 
 3. **Override (logged on the transition).** `--override --reason "<text>"` proceeds
    despite unverified deps. `--reason` is **REQUIRED** with `--override`. The
@@ -510,7 +512,7 @@ advancing status. Do not advance `status:` while a blocking item is open.
 
 - The Step 0a review is the **Tier-2 WP-scoped delta** — read-only, tier-resolved (role `wp-harden-delta`), defect-detection not design. The expensive **whole-feature** audit already ran once in `goalforge-decompose` (Tier-1, `.tier1-audit.md`); this step consumes it as DATA and reviews only WP-local concerns, widening back to the whole feature **only** on the stale-Tier-1 fallback (feature-hash mismatch ⇒ a sibling drifted). Do not let it advance status, edit files, or make architectural decisions. Skipping it because "the decomposition looks fine" is exactly when it pays off — authors are blind to their own gaps.
 - A Step 0a **BLOCK** is a hard stop on entering Step 1, but BLOCKs are almost always cheap authoring fixes (a non-deterministic check moved to a manual note, a stale open question marked resolved, a cross-WP path pinned) — fix them in place, don't escalate to the human unless the finding needs a design decision.
-- The Step 0 dependency gate is **distinct** from the Step 0a review: it refuses to harden a WP whose `depends_on` are not all `verified` (the harden frontier), and `--override --reason` is logged on the `spec → hardened` transition, not in a separate file. A `deadlock: true` frontier is escalated to the user, never silently stalled.
+- The Step 0 dependency gate is **distinct** from the Step 0a review: it refuses to harden a WP whose `depends_on` are not all `verified`/`archived` (the harden frontier), and `--override --reason` is logged on the `spec → hardened` transition, not in a separate file. A `deadlock: true` frontier is escalated to the user, never silently stalled.
 - `hardened → ready` has exactly two doors: explicit human approval, or the signal-scoped auto-advance (Step 2.3: verdict `simple` + severity ≤ MEDIUM + non-migration, recorded `--mode auto` with signal evidence). There is still no bypass flag and no `--yes` — a path that advances to `ready` through neither door is a contract violation, and the three conditions are conjunctive: one tripped signal, one HIGH severity, or one migration flag re-imposes the human gate.
 - The Step 2 open-questions gate is **marker-based, not count-of-bullets**: a `## Open Questions` bullet counts as resolved only when its text begins `[resolved]` / `[assumption]` / `[deferred]` / `[risk-accepted: <id>]` (id resolving to a `## Risks` row in the same file) / `~~…~~`. A raw `- OQ#: …?` bullet left in `overview.md` blocks the `ready` gate even if it was answered in `findings.md` — mark the bullet (or remove the section) so the resolution is visible at the gate, not buried in findings. A `[risk-accepted]` without its id, or with an id no Risks row carries, still blocks — the row IS the record.
 - Incomplete goal facets (vague outcome, missing verification strategy) are treated as interview targets and driven to zero, not as abort conditions — the skill only escalates when `interview-loop` cannot even surface the question as answerable. An inconclusive interview should not silently pass.

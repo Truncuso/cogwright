@@ -13,10 +13,10 @@
 #
 # Definitions (deterministic):
 #   hardenable — WP status == spec AND every depends_on slug resolves to a sibling
-#                WP with status == verified (harden threshold = deps all verified,
-#                distinct from the execute threshold of ready+).
-#   blocked    — WP status == spec with >=1 depends_on not yet verified; waiting_on
-#                lists exactly those non-verified dep slugs.
+#                WP with status in {verified, archived} (harden threshold = deps all
+#                dep-satisfying, distinct from the execute threshold of ready+).
+#   blocked    — WP status == spec with >=1 depends_on not yet dep-satisfying;
+#                waiting_on lists exactly those not-yet-dep-satisfying dep slugs.
 #   deadlock   — hardenable empty AND >=1 WP non-terminal (spec|hardened) AND no WP
 #                in-flight toward verification (none at hardened|ready|executing).
 #
@@ -93,13 +93,18 @@ for d in wp_dirs:
     status_by_slug[slug] = status
     status_by_slug[d.name] = status     # also resolvable by folder name
 
+# A dep counts as satisfied when it resolves to a sibling at one of these
+# statuses. `archived` is a second WP terminal set only by an out-of-band edit —
+# no goalforge script writes it to a WP (references/state-machine.md) — and it
+# satisfies a dependency exactly as `verified` does.
+DEP_SATISFIED = ("verified", "archived")
+
 hardenable = []
 blocked = []
 for slug, status, deps in wps:
     if status != "spec":
         continue
-    # A dep counts as satisfied only when it resolves to a verified sibling.
-    unverified = [dep for dep in deps if status_by_slug.get(dep) != "verified"]
+    unverified = [dep for dep in deps if status_by_slug.get(dep) not in DEP_SATISFIED]
     if not unverified:
         hardenable.append(slug)
     else:
@@ -121,7 +126,7 @@ PY
 # ── Self-test ────────────────────────────────────────────────────────────────
 _ST_TMP=""
 self_test() {
-    local t_pass=0 t_fail=0 d out h dl
+    local t_pass=0 t_fail=0 d out h dl b
     _ST_TMP="$(mktemp -d)"
     trap '[[ -n "${_ST_TMP:-}" ]] && rm -rf "$_ST_TMP"' EXIT
     d="$_ST_TMP"
@@ -195,6 +200,20 @@ EOF
         ok "deadlock-cycle"
     else
         no "deadlock-cycle (hardenable=$h deadlock=$dl)"
+    fi
+
+    # (5) archived dep satisfies: wp-01-a archived, wp-02-b spec deps [wp-01-a]
+    #     → hardenable [wp-02-b], blocked []. `archived` is the second WP
+    #     terminal and is dep-satisfying exactly as `verified`.
+    mkwp "$d/archdep" wp-01-a archived "[]"
+    mkwp "$d/archdep" wp-02-b spec     "[wp-01-a]"
+    out="$(bash "$SELF" "$d/archdep")"
+    h="$(echo "$out" | command jq -c '.hardenable')"
+    b="$(echo "$out" | command jq -c '.blocked')"
+    if [[ "$h" == '["wp-02-b"]' && "$b" == '[]' ]]; then
+        ok "archived-dep-satisfies"
+    else
+        no "archived-dep-satisfies (hardenable=$h blocked=$b)"
     fi
 
     echo ""
