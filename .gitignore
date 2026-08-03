@@ -11,3 +11,6 @@ __pycache__/
 # private planning artifacts (not for public repo)
 plans/
 docs/handoffs/
+
+# skill-trace: per-session skill/agent trace (do not commit)
+.memory/trace/

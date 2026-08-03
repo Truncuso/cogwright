@@ -48,11 +48,38 @@ link. The cost: **a dotfiles clone alone no longer carries goalforge** — run
 `scripts/install.sh --mode contributor` from a cogwright checkout (or install the
 plugin via the marketplace) before goalforge is available on a new machine.
 
+## Repository layout
+
+Two trees hold each system, and only one of them is authored by hand:
+
+| Path | Role |
+|---|---|
+| `packages/<name>/` | **Source of truth.** The nested v2 package: a public parent `SKILL.md` owning private child skills, plus shared `references/`, `scripts/`, and `evals/`. Edit here. |
+| `plugins/<name>/` | **Generated installable artifact.** The flat, plugin-discoverable shape Claude Code loads (`skills/<child>/`, root-level `scripts/` and `references/`). Do not hand-edit. |
+| `scripts/`, `.claude-plugin/` | Generator + marketplace manifest. `.claude-plugin/marketplace.json` points consumers at `plugins/<name>/`. |
+
+The generator (`scripts/goalforge-generate.sh`) is a pure, offline file
+transformation — no LLM calls, no network, byte-stable and idempotent:
+
+```
+scripts/goalforge-generate.sh            # regenerate plugins/goalforge in place
+scripts/goalforge-generate.sh --check    # exit 2 if the tree drifted from the package
+```
+
+`--check` is wired into pre-commit, so a package edit that was never regenerated
+cannot land. **The exception:** `hooks/`, `commands/`, `relations.yaml`, and
+`.vendored-allowlist.txt` inside `plugins/<name>/` are plugin-packaging concerns
+with no package counterpart — they are hand-authored there and the generator
+preserves them, never regenerating or deleting them.
+
+Full package→plugin pipeline, relations map, and the daily workflow:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
 ## Catalog
 
 | System | Status | What it is |
 |---|---|---|
-| **goalforge** | **shipped** (v0.1.0) | Goal-and-verification-driven development chain: capture → spec → decompose → harden → execute → verify. Work packages are *goal objects* — outcome, verification strategy, constraints, boundaries — so "done" is machine-decidable wherever possible. 14 skills. |
+| **goalforge** | **shipped** (v0.1.0) | Goal-and-verification-driven development chain: capture → spec → decompose → harden → execute → verify. Work packages are *goal objects* — outcome, verification strategy, constraints, boundaries — so "done" is machine-decidable wherever possible. 18 skills — 15 chain stages plus `wayfind`, `prototype`, and `brief`. |
 | **project-onboard** | in development | One front door that sets up a new *or* existing project with the full agentic surface: git + guardrail hooks, intent interview, memory/doc spine, retrieval indexes — interactive for new projects, plan-only auto mode for existing ones. |
 | **agent-dispatch** | planned (next) | Route work to the right model/provider (Anthropic, DeepSeek, Z.AI, Ollama, OpenRouter) with explicit model+effort per dispatch. |
 | **agentic-memory** | planned *(working name — final name pending)* | File-backed typed memory vault with session injection, semantic recall, and distillation. |
@@ -60,6 +87,42 @@ plugin via the marketplace) before goalforge is available on a new machine.
 | **command-center** | planned | A host application with an **extension point**: other systems contribute pluggable status panels (goalforge WP status, memory browser, dispatch monitor). Under design. |
 
 **Honest-status legend:** *shipped* = installable now, evals pass; *in development* = spec public, code landing; *planned* = design exists, nothing installable yet. Nothing here is labelled further along than it is.
+
+### Inside goalforge
+
+The chain is fifteen stage skills, but two of them are worth naming separately —
+they are the parts that handle the work *before* a spec is writable, and the
+work a spec cannot answer on paper:
+
+| Sub-capability | Status | What it is |
+|---|---|---|
+| **wayfind** (v0.2.0) | shipped | Pre-spec on-ramp for a foggy, multi-session effort: builds a decision map (`map.md` pointer-index + one-decision-per-ticket files), drives a frontier-computed work loop across sessions, and graduates in place into `goalforge-capture` once the fog clears. Skipped entirely when a feature is already clear. |
+| **prototype** (v0.3.0) | shipped | Declared spike register: one design question, explicit success criteria, throwaway code in a logic / UI / perf branch. The findings doc is the survivor; the code is deleted or absorbed through review at production rigor — never merged in spike form. |
+
+`brief` is the third non-stage skill: it authors the task briefs that
+`goalforge-execute` consumes.
+
+```mermaid
+flowchart LR
+    F([foggy effort]) --> W[wayfind<br/><i>decision map</i>]
+    C([clear feature]) --> CAP
+    W -->|graduates in place| CAP[capture]
+    CAP --> SP[spec]
+    SP --> D[decompose]
+    D --> H[harden]
+    H --> E[execute]
+    E --> V[verify]
+    H -.->|open question<br/>a spec can't settle| P[prototype]
+    P -.->|findings| H
+    V -.->|learning event| D
+
+    classDef gate stroke-dasharray: 4 3;
+    class W,P gate;
+```
+
+Human sign-off gates sit at draft → spec and hardened → ready; everything from
+`execute` onward runs automated against the goal object's declared verification
+strategy.
 
 ## Adjacent systems (not plugins)
 
