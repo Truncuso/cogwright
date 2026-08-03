@@ -208,9 +208,10 @@ is `--self-test`-only. Read-only, sole computer of convergence (Constraints).
 | `claimed` non-empty, all ages ≤ 7 days, and every `blocked` chain terminates in a claimed ticket | ordinary dependency wait behind a live claim | do not dispatch over a live claim — resolve the claimed ticket first, or end the session; there is nothing else to pick |
 | `blocked` non-empty, `claimed` empty (or no `waiting_on` chain reaches a claimed ticket) | no open ticket has a satisfiable path — a `depends_on` **cycle**, or a chain rooted in a ticket nobody will work | trace `waiting_on` to the cycle or the root; break it by re-scoping a ticket, splitting it, or marking one `out-of-scope` |
 
-Every open ticket lands in exactly one of `frontier` / `blocked` / `claimed`, so
-an empty `frontier` with `converged: false` always leaves at least one of
-`blocked` / `claimed` non-empty — one of the rows above always applies.
+Every open ticket lands in at least one — NOT exactly one — of `frontier` /
+`blocked` / `claimed`: a claimed ticket with unsatisfied deps is in BOTH `blocked`
+(`waiting_on` stays traceable through dep-cycles) and `claimed`. An empty `frontier`
+with `converged: false` thus leaves one non-empty — a row above always applies.
 
 A dependency naming a nonexistent ticket (typo, deletion, or a zero-padding slip
 like `ticket-1` for `ticket-01-<slug>.md`) is a structural error, not a stall —
