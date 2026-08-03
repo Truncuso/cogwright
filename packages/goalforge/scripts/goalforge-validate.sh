@@ -11,7 +11,9 @@
 #   1. status:verified  ⇒ every sibling task-*.md is verified
 #                         AND findings.md exists in the same folder.
 #   2. status:executing ⇒ ≥1 sibling task-*.md has a `checkpoint:` block.
-#   3. depends_on: [x]  ⇒ x exists (by name: field) and is ready/executing/verified.
+#   3. depends_on: [x]  ⇒ x exists (by name: field) and is dep-satisfying: `ready`+
+#                         for a WP dep, plus `archived` (WP_DEP_SATISFIED); the TASK
+#                         dep gate keeps its own set (`ready`+ ∪ implemented/verified).
 #   4. stage_updated older than N days on non-terminal status → WARN (staleness).
 #
 # Flags:
@@ -836,6 +838,14 @@ TASK_STATUS_ENUM = {'pending','briefed','in-progress','implemented','verified'}
 TASK_REQUIRED    = {'name','title','status'}
 
 READY_PLUS = {'ready','executing','verified','completed','active'}  # "ready+" — dep satisfied
+# WP-level only: `archived` is a second WP terminal set by an out-of-band edit — no
+# goalforge script writes it to a WP (references/state-machine.md) — and it satisfies a
+# WP dependency exactly as `verified` does. Deliberately NOT folded into READY_PLUS: the
+# TASK dep check below also consumes READY_PLUS, and `archived` is not in
+# TASK_STATUS_ENUM, so widening the shared constant would make the task dep gate go
+# quiet on a status that is illegal for a task in the first place — masking the enum
+# violation rather than reporting both.
+WP_DEP_SATISFIED = READY_PLUS | {'archived'}
 TERMINAL   = {'verified','archived','completed'}
 
 # Goal layer (schema v4). The goal block is OPTIONAL; checked only when present.
@@ -1751,11 +1761,11 @@ for path, kind, fm, has_ckpt in all_files:
                 # executing). A spec/draft WP whose dep is not yet ready is normal
                 # pre-execution state — goalforge-execute orders the work at run time.
                 # Existence of the target (checked above) is always enforced.
-                if dep_status not in READY_PLUS and status in ('ready', 'executing'):
+                if dep_status not in WP_DEP_SATISFIED and status in ('ready', 'executing'):
                     err(path,
                         f"`depends_on: {dep_slug}` exists but is `{dep_status}` "
-                        f"(need ready/executing/verified/completed/active)",
-                        f"Advance {dep_slug} to `ready` before this WP can proceed")
+                        f"(need ready/executing/verified/completed/active/archived)",
+                        f"Advance {dep_slug} to `ready`+ (or `archived`) before this WP can proceed")
 
         # ── Invariant 3b: optional_depends_on — non-gating existence check ───
         # NEVER gates frontier/harden/execute: missing target is WARN only,

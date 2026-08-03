@@ -117,6 +117,19 @@ if [ -f "$VALIDATE" ] && [ -d "$BAD_FIXTURE" ]; then
   fi
 fi
 
+# Frontier scheduler self-test (deterministic regression). Step 0's gate is
+# computed by goalforge-frontier.sh, and no eval harness in the package invoked
+# its `--self-test` before this block, so those cases never ran under CI.
+# COVERAGE, not a red-before-green proof: over an unmodified frontier this
+# block is green — it only earns its keep when a frontier case regresses.
+if bash "$SKILL_DIR/../scripts/goalforge-frontier.sh" --self-test >/dev/null 2>&1; then
+  echo "  PASS: goalforge-frontier.sh --self-test green"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL: goalforge-frontier.sh --self-test failed"
+  FAIL=$((FAIL+1))
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then

@@ -58,9 +58,14 @@ WP states are linearly ordered:
   signal-scoped auto-advance) as before. *(Evidence MANDATORY on `ready→hardened`
   — ledgered decision; ADR: prototype-native-goalforge re-harden edge.)*
 
-`archived` is a terminal state reached only by explicit user action via
-`goalforge-archive` — it is intentionally **not** an edge target here, so the
-transition mechanism never moves a WP to/from `archived`.
+For a WP, `archived` is a terminal state reached only by an explicit out-of-band
+edit: it is intentionally **not** an edge target here, so the transition mechanism
+never moves a WP to/from `archived`, and no goalforge script writes it either —
+`goalforge-archive` flips FEATURE overviews only (`set_field('status','archived')`
+is invoked on the feature overview and, under `--supersedes`, the superseded
+feature's overview; never on a `wp-*/overview.md`). It **is**
+dep-satisfying: `goalforge-frontier.sh` and `goalforge-validate.sh` treat an
+`archived` dep exactly as `verified` when resolving a sibling's `depends_on`.
 
 ## Edges
 
