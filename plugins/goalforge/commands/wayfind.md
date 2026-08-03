@@ -7,7 +7,7 @@ argument-hint: "<effort-slug> [chart]"
 
 <!-- AUTHORITATIVE command file (hand-authored, generator PRESERVE list).
      MIRROR-SYNC OBLIGATION: the dotfiles copy ~/.claude/commands/wayfind.md
-     (repo /home/cunger/dotfiles/claude) is the downstream mirror loaded by a
+     (in the maintainer's dotfiles repo) is the downstream mirror loaded by a
      direct, non-plugin /wayfind through the ~/.claude/skills/wayfind symlink.
      Any contract change here must be propagated there in the same lap; only
      the skill-path form differs (${CLAUDE_PLUGIN_ROOT}/skills/wayfind/ here,
