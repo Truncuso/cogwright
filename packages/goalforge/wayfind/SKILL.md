@@ -62,6 +62,16 @@ global `~/.claude/plans/`. Wayfind cites that rule, never its own convention.
 map present → **work** (work offers graduate when the frontier script reports
 `converged: true`). `/wayfind <effort-slug> chart` forces a re-chart / add-tickets pass.
 
+**Discovery (`/wayfind` with NO slug)** — the session-resume entry point: run
+`bash ${CLAUDE_SKILL_DIR}/scripts/wayfind-status.sh <PLANS_ROOT>` and present the
+active efforts it lists (slug, `open` count, `frontier`) to pick from; the pick
+continues into the auto-phase above. Read-only; `frontier`/`converged`/`stale_claims`
+pass through verbatim from the sibling frontier script; `open` is counted directly
+from ticket files with `status: open` (the arrays are no disjoint partition). stdout `{"efforts": [{"slug", "status": working|charting, "frontier",
+"open", "converged", "stale_claims"}]}`; exit 0 in every valid state (zero
+efforts → `{"efforts": []}`), exit 2 only on a missing `<PLANS_ROOT>`; a
+malformed effort degrades to `{"slug", "error"}` and never hides the rest.
+
 ---
 
 ## chart flow
