@@ -185,8 +185,8 @@ def collect(root: Path) -> tuple[dict, list, list]:
         if not arch.is_dir():
             continue
         for entry in sorted(arch.iterdir()):
-            if entry.name.startswith("."):
-                continue
+            if entry.name.startswith((".", "_")):
+                continue  # infrastructure dirs (e.g. _scratch), not archived features
             if not entry.is_dir():
                 continue
             ov = entry / "overview.md"
