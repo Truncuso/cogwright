@@ -30,11 +30,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 
 DEP_KINDS = {"follows", "depends_on"}  # target must precede this feature
-INV_KINDS = {"enables"}                # this feature precedes target
+INV_KINDS = {"enables", "blocks"}      # this feature precedes target
 # Same set as goalforge-validate.sh / goalforge-stamp-tables.sh / goalforge-status.sh
 ARCHIVE_DIRS = ("_archived", "_archive")
 
@@ -101,6 +102,35 @@ def _mini_parse(block: str) -> dict:
     return data
 
 
+def _dep_slug(raw) -> str:
+    """Normalize one edge target. Mirrors goalforge-validate.sh resolve_dep_slug:
+    unwrap nested 1-elem lists (`[[x]]` parses to `[['x']]`), strip the
+    `[[wikilink]]` brackets and surrounding quotes."""
+    while isinstance(raw, list):
+        if not raw:
+            return ""
+        raw = raw[0]
+    return re.sub(r"^\[\[|\]\]$", "", str(raw)).strip().strip("'\"")
+
+
+def _rel_pairs(r: dict):
+    """Yield (kind, raw_target) for one `relationships:` item.
+
+    Canonical vocabulary (schema.md, and what goalforge-validate.sh reads) is a
+    list of SINGLE-KEY mappings -- `- depends_on: [[other]]`. Also accepted:
+    the explicit `{kind|type, feature|target}` mapping form. A `note:` key is
+    metadata, never an edge.
+    """
+    if "target" in r or "feature" in r:
+        kind = r.get("kind", r.get("type", ""))
+        yield str(kind).strip(), r.get("target", r.get("feature"))
+        return
+    for k, v in r.items():
+        if k == "note":
+            continue
+        yield str(k).strip(), v
+
+
 def _norm_edges(feat: str, rels) -> list[tuple[str, str]]:
     """Return forward edges (A -> B = A precedes B) for one feature's rels."""
     edges: list[tuple[str, str]] = []
@@ -109,14 +139,19 @@ def _norm_edges(feat: str, rels) -> list[tuple[str, str]]:
     for r in rels:
         if not isinstance(r, dict):
             continue
-        kind = str(r.get("kind", "")).strip()
-        target = str(r.get("feature", "")).strip().strip("[]")
-        if not target:
-            continue
-        if kind in DEP_KINDS:
-            edges.append((target, feat))
-        elif kind in INV_KINDS:
-            edges.append((feat, target))
+        for kind, raw in _rel_pairs(r):
+            if kind not in DEP_KINDS and kind not in INV_KINDS:
+                continue
+            # a list value declares several targets: `- requires: [a, b]`
+            raws = raw if isinstance(raw, list) else [raw]
+            for one in raws:
+                target = _dep_slug(one)
+                if not target:
+                    continue
+                if kind in DEP_KINDS:
+                    edges.append((target, feat))
+                else:
+                    edges.append((feat, target))
     return edges
 
 

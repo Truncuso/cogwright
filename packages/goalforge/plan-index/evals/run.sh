@@ -82,6 +82,20 @@ if [ -f "$GEN" ]; then
   else echo "  FAIL [BEHAVIORAL]: archived row missing under the flag"; FAIL=$((FAIL+1)); fi
   rm -rf "$A"
 
+  # canonical single-key relationships form resolves to a real edge — the only
+  # fixture that discriminates the edge-vocab fix (a revert reads 0 edges again)
+  V="$(mktemp -d)"; mkdir -p "$V/plans/a" "$V/plans/b"
+  printf -- '---\nfeature: a\nstatus: draft\n---\n' > "$V/plans/a/overview.md"
+  printf -- '---\nfeature: b\nstatus: draft\nrelationships:\n  - depends_on: [[a]]\n---\n' > "$V/plans/b/overview.md"
+  vlog="$(python3 "$GEN" --plans-root "$V/plans" -o /dev/null 2>&1)"
+  if echo "$vlog" | grep -q '1 edges'; then
+    echo "  PASS [BEHAVIORAL]: single-key depends_on wikilink yields an edge"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: single-key depends_on produced no edge ($vlog)"; FAIL=$((FAIL+1)); fi
+  if echo "$vlog" | grep -q 'dangling'; then
+    echo "  FAIL [BEHAVIORAL]: canonical edge reported dangling"; FAIL=$((FAIL+1))
+  else echo "  PASS [BEHAVIORAL]: canonical edge resolves (not dangling)"; PASS=$((PASS+1)); fi
+  rm -rf "$V"
+
   # unresolvable target -> explicit dangling diagnostic, not a silent drop
   D="$(mktemp -d)"; mkdir -p "$D/plans/b"
   printf -- '---\nfeature: b\nstatus: draft\nrelationships:\n  - kind: depends_on\n    feature: ghost\n---\n' > "$D/plans/b/overview.md"
