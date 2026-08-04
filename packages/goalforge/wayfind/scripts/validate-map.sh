@@ -267,14 +267,50 @@ if grep -q '^## Notes[[:space:]]*$' "$MAP"; then
     cells "${rows[$r]}"
     [ "${#CELLS[@]}" -eq 4 ] \
       || bad "## Notes" "override row must have exactly 4 columns, got ${#CELLS[@]}: ${rows[$r]}"
+    # enum kept in lockstep with validate-ticket.sh and the SKILL.md dispatch
+    # table: an override row may target ANY ticket_type that has a table row,
+    # `learning` included (references/learning-goals.md §3).
     case "${CELLS[0]}" in
-      research|grilling|prototype|task) ;;
-      *) bad "## Notes" "ticket_type must be research|grilling|prototype|task, got '${CELLS[0]}'" ;;
+      research|grilling|prototype|task|learning) ;;
+      *) bad "## Notes" "ticket_type must be research|grilling|prototype|task|learning, got '${CELLS[0]}'" ;;
     esac
     for c in "${CELLS[@]}"; do
       [ -n "$c" ] || bad "## Notes" "override row has an empty cell: ${rows[$r]}"
     done
   done
+fi
+
+# --- `## Learning goals` body pass (OPTIONAL section, row shape) ------------
+# Learning goals are OPT-IN: an ABSENT section is valid on every map, which is
+# why this pass is guarded by the same grep as `## Notes` above. When present,
+# each list row must be `- <kebab-slug>: <non-empty objective>`; the documented
+# `(why: <driver>)` tail is a CONVENTION carried inside the objective text, not
+# a validated field. Contract: references/learning-goals.md §2.
+# Same bounded line-scanner shape as the `## Notes` pass — locate the heading,
+# read to the next `## ` or EOF. No general markdown parsing.
+if grep -q '^## Learning goals[[:space:]]*$' "$MAP"; then
+  LG="$(awk 'inx && /^## /{exit} inx{print} /^## Learning goals[[:space:]]*$/{inx=1}' "$MAP")"
+  lg_rows=0
+  while IFS= read -r _l; do
+    _t="$(trim "$_l")"
+    case "$_t" in
+      "") continue ;;
+      -*) ;;
+      # a non-list, non-blank line in the section is prose the pointer-index
+      # contract does not allow — the section carries rows and nothing else.
+      *) bad "## Learning goals" "section carries a non-row line: '$_t'" ;;
+    esac
+    lg_rows=$((lg_rows + 1))
+    [[ "$_t" =~ ^-[[:space:]]+([a-z0-9]+(-[a-z0-9]+)*):[[:space:]]+(.+)$ ]] \
+      || bad "## Learning goals" "row must be '- <kebab-slug>: <objective>', got '$_t'"
+    [ -n "$(trim "${BASH_REMATCH[3]}")" ] \
+      || bad "## Learning goals" "row has an empty objective: '$_t'"
+  done <<< "$LG"
+
+  # a present-but-empty section is a section that should have been left out —
+  # the same posture as the `## Notes` "present but carries no table" rule.
+  [ "$lg_rows" -ge 1 ] \
+    || bad "## Learning goals" "section present but carries no '- <slug>: <objective>' row"
 fi
 
 exit 0

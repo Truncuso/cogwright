@@ -158,9 +158,13 @@ done < "$TICKET"
 [ "$T_TYPE" = "wayfind-ticket" ] || bad "type" "expected wayfind-ticket, got '$T_TYPE'"
 
 [ "$have_tt" -eq 1 ] || bad "ticket_type" "field missing"
+# `learning` is the fifth value (contract: references/learning-goals.md §3). It
+# is an ORDINARY ticket — the whole existing rule set applies to it unchanged,
+# and it deliberately gains NO new field: `mode` stays task-only and `fan_out`
+# stays research-only, so both reject it below like any other non-owning type.
 case "$T_TT" in
-  research|grilling|prototype|task) ;;
-  *) bad "ticket_type" "expected research|grilling|prototype|task, got '$T_TT'" ;;
+  research|grilling|prototype|task|learning) ;;
+  *) bad "ticket_type" "expected research|grilling|prototype|task|learning, got '$T_TT'" ;;
 esac
 
 [ "$have_status" -eq 1 ] || bad "status" "field missing"
