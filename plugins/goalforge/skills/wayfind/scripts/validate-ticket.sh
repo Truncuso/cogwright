@@ -77,9 +77,9 @@ BASE="$(basename "$TICKET")"
 NN="${BASE#ticket-}"; NN="${NN%%-*}"
 
 # --- read frontmatter -------------------------------------------------------
-T_TYPE=""; T_TT=""; T_STATUS=""; T_CBY=""; T_CAT=""; T_RES=""; T_MODE=""
+T_TYPE=""; T_TT=""; T_STATUS=""; T_CBY=""; T_CAT=""; T_RES=""; T_MODE=""; T_FAN=""
 have_type=0; have_tt=0; have_status=0; have_cby=0; have_cat=0; have_res=0
-have_mode=0; deps_islist=0; have_deps=0
+have_mode=0; have_fan=0; deps_islist=0; have_deps=0
 DEPS_TOKENS=()
 
 first=1; in_fm=0; closed=0
@@ -128,6 +128,9 @@ while IFS= read -r line || [ -n "$line" ]; do
     mode:*)
       [ "$have_mode" -eq 0 ] || bad "mode" "duplicate key"
       T_MODE="$(fieldval "${line#mode:}")"; have_mode=1 ;;
+    fan_out:*)
+      [ "$have_fan" -eq 0 ] || bad "fan_out" "duplicate key"
+      T_FAN="$(fieldval "${line#fan_out:}")"; have_fan=1 ;;
     depends_on:*)
       [ "$have_deps" -eq 0 ] || bad "depends_on" "duplicate key"
       have_deps=1
@@ -236,6 +239,19 @@ if [ "$have_mode" -eq 1 ]; then
     HITL|AFK) ;;
     *) bad "mode" "expected HITL|AFK, got '$T_MODE'" ;;
   esac
+fi
+
+# fan_out (ticket fan-out) is ONLY valid on ticket_type: research, and its value
+# is an integer >= 2 — one probe is not a fan-out. ABSENT is valid on every
+# type: fan-out is opt-in and this field is never required. Same shape as the
+# `mode`-only-on-task rule above; contract: references/ticket-fanout.md §1.
+if [ "$have_fan" -eq 1 ]; then
+  [ "$T_TT" = "research" ] \
+    || bad "fan_out" "field only valid on ticket_type: research (found on ticket_type: $T_TT)"
+  [[ "$T_FAN" =~ ^[0-9]+$ ]] \
+    || bad "fan_out" "expected an integer >= 2, got '$T_FAN'"
+  [ "$T_FAN" -ge 2 ] \
+    || bad "fan_out" "expected an integer >= 2 (one probe is not a fan-out), got '$T_FAN'"
 fi
 
 exit 0
