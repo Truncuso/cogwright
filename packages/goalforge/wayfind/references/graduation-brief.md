@@ -51,6 +51,10 @@ Scope (carried task tickets — concrete work, consumed later by goalforge-decom
 Completed work (already executed during the map — NOT scope, do not re-plan):
 - <task ticket whose resolution IS the executed work> — see ticket-04-spike-parser.md
 
+Learning goals (from map `## Learning goals` — omit the subsection entirely if the map has none):
+- <slug>: <objective> — RESOLVED, learned enough to <decide/do X>, see findings/ticket-NN.md
+- <slug>: <objective> — UNRESOLVED at graduation
+
 Accepted risks (from findings/quiz-back.md):
 - <recorded accepted-risk, if any>
 
@@ -75,6 +79,15 @@ Rules:
   done. When a resolved task ticket carries both — work executed AND a decision
   about further work — split it: the executed half to Completed work, the
   forward-looking half to Scope.
+- **Learning goals** ride the brief as **prose intent only** — one bullet per
+  map `## Learning goals` row plus its resolution state, resolved ones pointing
+  at their `findings/ticket-NN.md`. Learning is opt-in, so a map with no
+  `## Learning goals` section omits the subsection entirely; an UNRESOLVED goal
+  is reported as unresolved and never quietly dropped. `goalforge-capture`'s
+  schema is **untouched** — there is no `learning_goals` field and no
+  `overview.md` section, because a learning goal is provenance about how the
+  map was reached, not a work item the SDD chain plans against. Contract:
+  `references/learning-goals.md` §6.
 
 ## 3. Provenance bridge (references[] → sources[])
 

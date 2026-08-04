@@ -216,6 +216,15 @@ else
   contains "$brief_s2" "completed work" || missing="$missing s2-completed-work"
   contains "$brief_s2" "decision about future work" \
                                         || missing="$missing s2-scope-discriminator"
+  # §2 must also carry the `Learning goals:` subsection alongside the other
+  # brief subsections, WITH its two load-bearing properties: the subsection is
+  # omitted when the map has none (learning is opt-in, default none), and an
+  # unresolved goal is reported as unresolved rather than dropped. Scoped to §2
+  # — the subsection has to live where the brief is composed, and a mention in
+  # references/learning-goals.md cannot satisfy it.
+  contains "$brief_s2" "learning goals" || missing="$missing s2-learning-goals"
+  contains "$brief_s2" "unresolved"     || missing="$missing s2-learning-unresolved"
+  contains "$brief_s2" "omit"           || missing="$missing s2-learning-opt-in-omission"
   # §3's reference `type` vocabulary must be the CANONICAL enum, not the
   # divergent subset `file | repo | video | url` — that subset rejects
   # `type: session`, which the first flight and the idea stub both use. Scoped
