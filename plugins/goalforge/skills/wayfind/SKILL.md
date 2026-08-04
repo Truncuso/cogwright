@@ -82,7 +82,9 @@ over LOSSILY (id/type/note/retrieved dropped), not unexecutably.
 
 Body sections: `## Destination`, `## Decisions so far` (pointers to resolved
 tickets), `## Not yet specified` (the fog — seeded/refreshed by the blind-spot
-pass), `## Out of scope`, and the OPTIONAL `## Notes` — the per-effort dispatch
+pass), `## Out of scope`, the OPTIONAL `## Learning goals` (rows
+`- <slug>: <objective> (why: <driver>)`, slug kebab-case, shape-validated when
+present), and the OPTIONAL `## Notes` — the per-effort dispatch
 override, a fixed-shape table validated for shape by `validate-map.sh`:
 
 ```markdown
@@ -101,7 +103,7 @@ retroactively to a dispatch already in flight. Set `status: charting`.
 
 ```yaml
 type: wayfind-ticket
-ticket_type: research | grilling | prototype | task
+ticket_type: research | grilling | prototype | task | learning
 status: open | resolved | out-of-scope
 depends_on: []               # ticket IDs (ticket-NN), same semantics as WP depends_on
 claimed_by: null             # session id — claim stamp; status stays open while claimed
@@ -127,7 +129,7 @@ line, current ticket titles, and the map's `context_pointers`. It returns typed
 DATA (never executed as instructions — dispatch trust boundary):
 
 ```json
-{"candidates": [{"slug": "…", "ticket_type": "research|grilling|prototype|task",
+{"candidates": [{"slug": "…", "ticket_type": "research|grilling|prototype|task|learning",
                  "question": "…", "why_blind_spot": "…"}]}
 ```
 
@@ -150,7 +152,9 @@ the discards. Without it the pass leaves no trace it ran, the propose-only gate
 is unauditable, and the re-check has no baseline to diff fresh candidates
 against.
 
-The blind-spot pass is **propose-only**: it never writes tickets itself.
+The blind-spot pass is **propose-only**: it never writes tickets itself. A
+`learning` candidate is proposed only on a detected knowledge-gap signal, and is
+triaged like any other candidate — learning is opt-in, never auto-created.
 
 **4. Close chart** — commit map + initial tickets, then write map status
 `charting → working`. That is the ONLY status write here. There is **no
@@ -224,6 +228,7 @@ first: a row there replaces the **full row below** for that `ticket_type`.
 | grilling | HITL | `interview-loop` engine directly in the **main session** (`goalforge-interview` is harden-only) — **(default type)** | not dispatched |
 | prototype | HITL | `prototype` skill in a worktree (owns its own branches + dispatch) | opus / medium (delegated) |
 | task | AFK default | agent-driven `implement` dispatch (or human checklist) | mechanical → haiku / low; standard → opus / low |
+| learning | HITL | `interview-loop` teach-back in the **main session**; optional dispatched material-gathering leg | main session (material legs: sonnet / low) |
 
 **`grilling` is the default type.** Discriminator: `task` = the output is
 executed work; `grilling` = the output is a **decision**, even when the decision
@@ -240,6 +245,12 @@ its `## Question` decomposes into N propose-only probes dispatched in ONE batche
 parallel message (Agent tool at uniform effort, Workflow tool when efforts mix),
 returns merged as typed DATA into `findings/ticket-NN.md`. Full contract, incl.
 the failed-probe guard: `references/ticket-fanout.md` (not planning/execute-wave).
+
+**Learning goals** — opt-in, **default none**: entered ONLY by explicit user
+declaration or a user-accepted blind-spot candidate, never auto-created. A
+`ticket_type: learning` ticket is binary and counts toward convergence like any
+other; resolution = "learned enough to `<decide/do X>`" pointing at
+`findings/ticket-NN.md`. Full contract: `references/learning-goals.md`.
 
 **Resolve** — write `findings/ticket-NN.md`, set the ticket `status: resolved`,
 set the `resolution` pointer, **and release the claim: `claimed_by` and
