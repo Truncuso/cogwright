@@ -26,7 +26,9 @@ python3 ~/.claude/skills/goalforge/scripts/goalforge-plan-index.py \
 
 - **Plans root** resolves like the rest of the SDD chain: `--plans-root` -> env
   `SDD_PLANS_DIR` -> git-root `plans/` -> CWD `plans/` -> `~/.claude/plans/`.
-- **Output**: default writes `<PLANS_ROOT>/INDEX.md`; `-o -` streams to stdout
+- **Output**: default writes `<PLANS_ROOT>/INDEX.md` — which project-track-sweep's
+  `backfill_wps.py` also generates (see the header line in an existing INDEX.md);
+  pass `-o` to avoid clobbering a sweep-generated index. `-o -` streams to stdout
   (preview without touching disk); `-o <file>` writes elsewhere.
 - `--include-archived` is **render-only**: it folds `_archived/` features in as
   `status: archived` rows/tier slots. Archived features are **always** loaded for
