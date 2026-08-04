@@ -90,8 +90,8 @@ over LOSSILY (id/type/note/retrieved dropped), not unexecutably.
 Body sections: `## Destination`, `## Decisions so far` (pointers to resolved
 tickets), `## Not yet specified` (the fog — seeded/refreshed by the blind-spot
 pass), `## Out of scope`, the OPTIONAL `## Learning goals` (rows
-`- <slug>: <objective> (why: <driver>)`, slug kebab-case, shape-validated when
-present), and the OPTIONAL `## Notes` — the per-effort dispatch
+`- <slug>: <objective>`, slug kebab-case, shape-validated; the `(why: …)` tail
+is convention), and the OPTIONAL `## Notes` — the per-effort dispatch
 override, a fixed-shape table validated for shape by `validate-map.sh`:
 
 ```markdown

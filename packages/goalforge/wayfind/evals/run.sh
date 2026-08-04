@@ -117,6 +117,12 @@ line_of() {
 # ============================================================================
 run_rc() { set +e; bash "$1" "$2" >/dev/null 2>&1; RC=$?; set -e; }
 
+# Same, but ALSO captures the validator's stderr into ERR. Used where exit-code
+# equality is too coarse to discriminate: an rc-only assertion passes even when
+# the intended guard is deleted and bash itself errors out, so a case guarding a
+# specific rule asserts that the rule's own message named the field and reason.
+run_rc_err() { set +e; ERR="$(bash "$1" "$2" 2>&1 >/dev/null)"; RC=$?; set -e; }
+
 # --- artifact copy-harness ---------------------------------------------------
 # validate-ticket.sh checks the FILENAME (`ticket-NN-<slug>.md`, NN >= 2 digits)
 # and NO artifact fixture on disk carries a conformant name — the fixture names
@@ -133,17 +139,23 @@ copy_as() {
   printf '%s' "$d/$2"
 }
 
-# repaired_as <fixture-basename> <intended-name> <sed-arg…> → prints the path.
-# Same copy, with ONE field repaired by the sed program — the mutate-one-field
-# control below. Repairing the single intended violation must flip the fixture
-# to exit 0; if it does not, the fixture fails for some OTHER reason and its
-# invalid-case is not actually testing what it claims.
+# repaired_as / derived_as <fixture-basename> <intended-name> <sed-arg…> →
+# prints the path. One mechanism (copy the fixture through a sed program), TWO
+# polarities, named apart so a call site declares which one it is:
+#
+#   repaired_as — INVALID fixture, single offending field REPAIRED. The
+#     mutate-one-field control: the copy must flip to exit 0, otherwise the
+#     fixture fails for some OTHER reason and its invalid-case proves nothing.
+#   derived_as  — VALID fixture, one field BROKEN (or a legal variant applied).
+#     Generates a negative (or a second positive) without shipping another
+#     artifact, keeping the on-disk fixture inventory minimal.
 repaired_as() {
   local fx="$1" nm="$2"; shift 2
   local d; d="$(mktemp -d "$COPY_ROOT/XXXXXX")"
   sed "$@" "$ARTIFACTS/$fx" > "$d/$nm"
   printf '%s' "$d/$nm"
 }
+derived_as() { repaired_as "$@"; }
 
 name=validate-map-valid
 run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-valid.md"
@@ -298,10 +310,26 @@ run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-fan-out-value.md ticket-23-f
 
 # the non-integer half of the value rule, generated from the VALID fixture
 # rather than shipped as a fourth artifact — the inventory stays at three.
+# rc ALONE is not discriminating here. Delete the digit guard and the `-ge`
+# test below still exits 1 with a typed message — bash's `[` returns 2 on a
+# non-integer operand, which trips the same `|| bad`. What the guard actually
+# buys is a CLEAN stderr, so both value cases assert the validator's own typed
+# message (field + reason) AND the absence of bash's raw arithmetic complaint.
 name=validate-ticket-fan-out-non-integer
-run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-valid-fan-out.md ticket-24-fan-out-non-integer.md \
+run_rc_err "$VALIDATE_TICKET" "$(derived_as ticket-valid-fan-out.md ticket-24-fan-out-non-integer.md \
   -e 's|^fan_out: 3$|fan_out: many|')"
-[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a non-integer fan_out value, got $RC"
+if [ "$RC" -eq 1 ] && contains "$(lc "$ERR")" 'fan_out' && contains "$(lc "$ERR")" 'expected an integer' \
+   && ! contains "$ERR" 'integer expression expected'; then pass "$name"
+else fail "$name" "expected exit 1 with only the typed fan_out message on a non-integer value, got rc=$RC stderr='$ERR'"; fi
+
+# the out-of-range half of the same guard: a digit run too long for a signed
+# 64-bit integer is rejected by SHAPE, before `-ge` ever sees the operand.
+name=validate-ticket-fan-out-overlong
+run_rc_err "$VALIDATE_TICKET" "$(derived_as ticket-valid-fan-out.md ticket-26-fan-out-overlong.md \
+  -e 's|^fan_out: 3$|fan_out: 99999999999999999999|')"
+if [ "$RC" -eq 1 ] && contains "$(lc "$ERR")" 'fan_out' && contains "$(lc "$ERR")" 'expected an integer' \
+   && ! contains "$ERR" 'integer expression expected'; then pass "$name"
+else fail "$name" "expected exit 1 with only the typed fan_out message on an out-of-range value, got rc=$RC stderr='$ERR'"; fi
 
 name=control-ticket-fan-out-non-research-repaired
 run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-fan-out-non-research.md ticket-22-fan-out-non-research.md \
@@ -317,7 +345,7 @@ run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-fan-out-value.md ticket-
 # by stripping the field from the valid fixture AND by every pre-existing ticket
 # fixture above, none of which carries it.
 name=validate-ticket-fan-out-absent
-run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-valid-fan-out.md ticket-25-fan-out-absent.md \
+run_rc "$VALIDATE_TICKET" "$(derived_as ticket-valid-fan-out.md ticket-25-fan-out-absent.md \
   -e '/^fan_out: 3$/d')"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 with fan_out absent on a research ticket, got $RC"
 
@@ -339,6 +367,20 @@ run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-learning-mode.md ticket-
   -e '/^mode: HITL$/d')"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "learning-mode fixture still fails once mode is dropped — it fails incidentally (got $RC)"
 
+# the `## Notes` ticket_type enum was WIDENED to accept `learning` (an override
+# row may target any type the dispatch table carries). A widening is only proven
+# by a POSITIVE that the old enum rejected, paired with a NEGATIVE showing the
+# enum still rejects a type that is not in it — otherwise "accepts learning" is
+# indistinguishable from "accepts anything".
+name=validate-map-notes-learning-override
+run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-valid-notes-learning-override.md"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on a ## Notes override row targeting ticket_type learning, got $RC"
+
+name=validate-map-notes-bogus-ticket-type
+run_rc "$VALIDATE_MAP" "$(derived_as map-valid-notes-learning-override.md map.md \
+  -e 's@^| learning | interview-loop | main | n/a |$@| coaching | interview-loop | main | n/a |@')"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a ## Notes override row with a ticket_type outside the enum, got $RC"
+
 name=validate-map-learning-goals-valid
 run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-valid-learning-goals.md"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on a well-formed ## Learning goals section, got $RC"
@@ -352,17 +394,29 @@ run_rc "$VALIDATE_MAP" "$(repaired_as map-invalid-learning-goals.md map.md \
   -e 's|^- PG_Isolation_Levels: |- pg-isolation-levels: |')"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "learning-goals fixture still fails once the slug is kebab-case — it fails incidentally (got $RC)"
 
-# an empty objective is the OTHER half of the row rule, generated from the VALID
-# fixture rather than shipped as a third map artifact.
-name=validate-map-learning-goals-empty-objective
-run_rc "$VALIDATE_MAP" "$(repaired_as map-valid-learning-goals.md map.md \
+# a row that carries a slug and no objective is the OTHER half of the row rule,
+# generated from the VALID fixture rather than shipped as a third map artifact.
+# The row fails the SHAPE match (the trimmed line has nothing after the colon) —
+# there is no separate empty-objective branch to reach, which is why the case is
+# named for the missing objective and not for a blank one.
+name=validate-map-learning-goals-objective-missing
+run_rc "$VALIDATE_MAP" "$(derived_as map-valid-learning-goals.md map.md \
   -e 's|^- pg-isolation-levels: .*$|- pg-isolation-levels:|')"
-[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a ## Learning goals row with an empty objective, got $RC"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a ## Learning goals row with no objective, got $RC"
+
+# the section carries ROWS AND NOTHING ELSE: a prose line inside it is a
+# contract violation, the same posture ## Notes takes toward non-table content.
+# Contract: references/learning-goals.md §2.
+name=validate-map-learning-goals-prose-line
+run_rc "$VALIDATE_MAP" "$(derived_as map-valid-learning-goals.md map.md \
+  -e '/^- rate-limiter-semantics: /i\
+These two goals both block the retry decision.')"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a ## Learning goals section carrying a prose line, got $RC"
 
 # a present-but-row-less section is invalid: an empty section should have been
 # left out entirely (same posture as the ## Notes present-but-tableless rule).
 name=validate-map-learning-goals-no-rows
-run_rc "$VALIDATE_MAP" "$(repaired_as map-valid-learning-goals.md map.md \
+run_rc "$VALIDATE_MAP" "$(derived_as map-valid-learning-goals.md map.md \
   -e '/^- rate-limiter-semantics: /d' -e '/^- pg-isolation-levels: /d')"
 [ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a ## Learning goals section carrying no rows, got $RC"
 
@@ -370,7 +424,7 @@ run_rc "$VALIDATE_MAP" "$(repaired_as map-valid-learning-goals.md map.md \
 # section existed carries one. Proven by stripping the section from the valid
 # fixture AND by every other map fixture above, none of which has one.
 name=validate-map-learning-goals-absent
-run_rc "$VALIDATE_MAP" "$(repaired_as map-valid-learning-goals.md map.md \
+run_rc "$VALIDATE_MAP" "$(derived_as map-valid-learning-goals.md map.md \
   -e '/^## Learning goals$/d' -e '/^- rate-limiter-semantics: /d' -e '/^- pg-isolation-levels: /d')"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 with the ## Learning goals section absent, got $RC"
 
@@ -656,10 +710,15 @@ work_lc="$(lc "$work")"
 # slice must NOT satisfy any of them. Contract: references/learning-goals.md.
 name=doc-learning-map-section
 missing=""
-contains "$chart1"    '## Learning goals'                    || missing="$missing section-name"
-contains "$chart1"    '- <slug>: <objective> (why: <driver>)' || missing="$missing row-format"
-contains "$chart1_lc" 'kebab-case'                           || missing="$missing slug-case"
-contains "$chart1_lc" 'optional'                             || missing="$missing stated-as-optional"
+# the VALIDATED shape is `- <slug>: <objective>`; the `(why: …)` tail is a
+# documented CONVENTION (references/learning-goals.md §2 owns it), so the case
+# asserts the validated shape and that the tail is labelled as convention —
+# never that SKILL.md restates the tail as if it were part of the shape.
+contains "$chart1"    '## Learning goals'      || missing="$missing section-name"
+contains "$chart1"    '- <slug>: <objective>'  || missing="$missing row-format"
+contains "$chart1_lc" 'kebab-case'             || missing="$missing slug-case"
+contains "$chart1_lc" 'convention'             || missing="$missing why-tail-is-convention"
+contains "$chart1_lc" 'optional'               || missing="$missing stated-as-optional"
 if [ -z "$missing" ]; then pass "$name"
 else fail "$name" "chart step 1 map body-section list missing the OPTIONAL ## Learning goals section:$missing"; fi
 

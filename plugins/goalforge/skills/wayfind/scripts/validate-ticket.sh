@@ -252,7 +252,10 @@ fi
 if [ "$have_fan" -eq 1 ]; then
   [ "$T_TT" = "research" ] \
     || bad "fan_out" "field only valid on ticket_type: research (found on ticket_type: $T_TT)"
-  [[ "$T_FAN" =~ ^[0-9]+$ ]] \
+  # BOUNDED digit run (1-9 digits): an unbounded `[0-9]+` would hand `-ge` a
+  # value outside bash's signed-64-bit integer range and leak a raw
+  # "integer expression expected" to stderr instead of this typed message.
+  [[ "$T_FAN" =~ ^[0-9]{1,9}$ ]] \
     || bad "fan_out" "expected an integer >= 2, got '$T_FAN'"
   [ "$T_FAN" -ge 2 ] \
     || bad "fan_out" "expected an integer >= 2 (one probe is not a fan-out), got '$T_FAN'"

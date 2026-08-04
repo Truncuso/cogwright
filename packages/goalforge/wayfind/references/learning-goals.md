@@ -61,8 +61,15 @@ Row format, enforced by `scripts/validate-map.sh`:
 | Row shape | `- <slug>: <objective>` — one goal per row, list item |
 | `<slug>` | **kebab-case** — `[a-z0-9]+(-[a-z0-9]+)*`. Stable identifier for the goal across the map, its ticket, and the graduation brief |
 | `<objective>` | non-empty text. The convention is `<objective> (why: <driver>)`, where the driver names what the goal unblocks — the `(why: …)` tail is a documented CONVENTION, not a validated field |
+| Line discipline | one row = one physical line; no wrapping, no sub-bullets |
+| Other content | none — the section carries rows only (exit 1) |
 | Section present with no rows | invalid (exit 1) — an empty section is a section that should have been left out |
 | Section absent | valid (exit 0) |
+
+The section **carries rows and nothing else**: a non-blank, non-list line
+inside it — an introductory sentence, a caveat, a sub-bullet continuation — is
+a contract violation (exit 1), the same posture `## Notes` takes toward
+non-table content. Prose about a goal belongs in its ticket, not the index.
 
 The section is a **pointer-index entry like everything else in the map**: it
 names the goal and its driver, never the material, the notes, or what was
@@ -103,6 +110,10 @@ The resolution of a learning ticket is a **capability statement**, phrased:
 with the `resolution:` pointer at `./findings/ticket-NN.md`, exactly as for
 every other resolved ticket. The findings file holds what was actually learned:
 the teach-back record, the material consulted, and the residual gaps.
+
+On resolve, the learning ticket is also pointed at from map `## Decisions so
+far` like every other resolved ticket (`validate-linkage.sh` invariant 1). The
+`## Learning goals` row is NOT a substitute for that pointer.
 
 "Learned enough to" is the whole discipline. A learning goal has no natural
 terminus — one can always read more — so the goal is resolved against the

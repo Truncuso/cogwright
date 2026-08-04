@@ -301,10 +301,11 @@ if grep -q '^## Learning goals[[:space:]]*$' "$MAP"; then
       *) bad "## Learning goals" "section carries a non-row line: '$_t'" ;;
     esac
     lg_rows=$((lg_rows + 1))
+    # `_t` is already trimmed, so the trailing `(.+)` cannot match blank-only
+    # text: a row whose objective is missing or whitespace fails the SHAPE
+    # match here. No separate empty-objective check is reachable.
     [[ "$_t" =~ ^-[[:space:]]+([a-z0-9]+(-[a-z0-9]+)*):[[:space:]]+(.+)$ ]] \
       || bad "## Learning goals" "row must be '- <kebab-slug>: <objective>', got '$_t'"
-    [ -n "$(trim "${BASH_REMATCH[3]}")" ] \
-      || bad "## Learning goals" "row has an empty objective: '$_t'"
   done <<< "$LG"
 
   # a present-but-empty section is a section that should have been left out —

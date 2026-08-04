@@ -38,7 +38,7 @@ same answer and N sets of merge work.
 Fan-out happens at **claim time**, inside the ordinary work loop — claim first
 (the claim stamp is still MANDATORY before any dispatch), then decompose.
 
-The claimer reads the ticket's `## Question` and decomposes it into exactly `N`
+The claimer reads the ticket's `## Question` and decomposes it into AT MOST `N`
 **probe briefs**. Each brief is a self-contained sub-question:
 
 - **Independent** — no probe consumes another probe's output; they run
@@ -60,6 +60,10 @@ ticket. Do not pad the split to hit `N`.
 All `N` probes are dispatched in **ONE batched parallel message** — a single
 assistant turn carrying N tool calls. Sequential dispatch is not fan-out; it is
 the ordinary research route run N times at N times the latency.
+
+Each probe runs the `research` row's machinery (default `research-analyst`, or
+the map `## Notes` override); the fan-out replaces the single research dispatch
+— the main session, not an analyst, issues the N calls.
 
 The surface is picked by the effort knob, per the canonical rule in
 `packages/goalforge/execute/references/dispatch-resolution.md` §"Dispatch surface
@@ -180,7 +184,9 @@ prevent.
   fan-out ticket and any other research ticket.
 - **N is a declaration, not a quota.** If the question splits into three clean
   probes and the ticket says `fan_out: 4`, dispatch three and say so. Padding
-  produces overlapping probes and a de-duplication merge.
+  produces overlapping probes and a de-duplication merge. If the honest split
+  is one probe, it is not a fan-out — drop the field and run the ordinary
+  research route.
 - **Probes never write.** The single most likely regression is a probe brief
   that says "write your findings to `findings/…`". That breaks the propose-only
   gate and races N writers on one file.
