@@ -57,6 +57,54 @@ if [ -f "$GEN" ]; then
   rc=0; python3 "$GEN" --plans-root "$E/plans" -o - >/dev/null 2>&1 || rc=$?
   ok "$rc" 3 "no features exits 3"
   rm -rf "$E"
+
+  # archived dep resolves WITHOUT --include-archived, and an archived dir with no
+  # overview.md still resolves (directory existence is the predicate)
+  A="$(mktemp -d)"; mkdir -p "$A/plans/b" "$A/plans/_archived/a"
+  printf -- '---\nfeature: b\nstatus: draft\nrelationships:\n  - kind: depends_on\n    feature: a\n---\n' > "$A/plans/b/overview.md"
+  out="$(python3 "$GEN" --plans-root "$A/plans" -o - 2>/dev/null)"
+  if echo "$out" | grep -q 'a (archived)'; then
+    echo "  PASS [BEHAVIORAL]: archived dep resolves without --include-archived"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: archived dep not resolved"; FAIL=$((FAIL+1)); fi
+  if echo "$out" | grep -q 'Dangling edges'; then
+    echo "  FAIL [BEHAVIORAL]: archived dep reported as dangling"; FAIL=$((FAIL+1))
+  else echo "  PASS [BEHAVIORAL]: archived dep is not dangling"; PASS=$((PASS+1)); fi
+  if echo "$out" | grep -q 'Orphans'; then
+    echo "  FAIL [BEHAVIORAL]: archived-dep feature reported as orphan"; FAIL=$((FAIL+1))
+  else echo "  PASS [BEHAVIORAL]: archived-dep feature is not an orphan"; PASS=$((PASS+1)); fi
+  # archived node is render-gated: no row without the flag, a row with it
+  if echo "$out" | grep -q '^| a |'; then
+    echo "  FAIL [BEHAVIORAL]: archived feature rendered without the flag"; FAIL=$((FAIL+1))
+  else echo "  PASS [BEHAVIORAL]: --include-archived is render-only"; PASS=$((PASS+1)); fi
+  out="$(python3 "$GEN" --plans-root "$A/plans" --include-archived -o - 2>/dev/null)"
+  if echo "$out" | grep -q '^| a | archived |'; then
+    echo "  PASS [BEHAVIORAL]: --include-archived renders the archived row"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: archived row missing under the flag"; FAIL=$((FAIL+1)); fi
+  rm -rf "$A"
+
+  # canonical single-key relationships form resolves to a real edge — the only
+  # fixture that discriminates the edge-vocab fix (a revert reads 0 edges again)
+  V="$(mktemp -d)"; mkdir -p "$V/plans/a" "$V/plans/b"
+  printf -- '---\nfeature: a\nstatus: draft\n---\n' > "$V/plans/a/overview.md"
+  printf -- '---\nfeature: b\nstatus: draft\nrelationships:\n  - depends_on: [[a]]\n---\n' > "$V/plans/b/overview.md"
+  vlog="$(python3 "$GEN" --plans-root "$V/plans" -o /dev/null 2>&1)"
+  if echo "$vlog" | grep -q '1 edges'; then
+    echo "  PASS [BEHAVIORAL]: single-key depends_on wikilink yields an edge"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: single-key depends_on produced no edge ($vlog)"; FAIL=$((FAIL+1)); fi
+  if echo "$vlog" | grep -q 'dangling'; then
+    echo "  FAIL [BEHAVIORAL]: canonical edge reported dangling"; FAIL=$((FAIL+1))
+  else echo "  PASS [BEHAVIORAL]: canonical edge resolves (not dangling)"; PASS=$((PASS+1)); fi
+  rm -rf "$V"
+
+  # unresolvable target -> explicit dangling diagnostic, not a silent drop
+  D="$(mktemp -d)"; mkdir -p "$D/plans/b"
+  printf -- '---\nfeature: b\nstatus: draft\nrelationships:\n  - kind: depends_on\n    feature: ghost\n---\n' > "$D/plans/b/overview.md"
+  rc=0; out="$(python3 "$GEN" --plans-root "$D/plans" -o - 2>/dev/null)" || rc=$?
+  ok "$rc" 0 "dangling edge still exits 0"
+  if echo "$out" | grep -q 'missing: ghost'; then
+    echo "  PASS [BEHAVIORAL]: unresolved edge reported as dangling"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: unresolved edge dropped silently"; FAIL=$((FAIL+1)); fi
+  rm -rf "$D"
 fi
 
 echo ""

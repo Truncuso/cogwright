@@ -14,6 +14,12 @@ Edge normalization (all -> "A must come before B"):
   A enables B      => A -> B
 `part_of` is recorded as a grouping note, not a build-order edge.
 
+Archived features are ALWAYS loaded (by directory existence under `_archived/`,
+overview.md optional) so that edges pointing into the archive RESOLVE;
+`--include-archived` is render-only -- it decides whether archived features get
+their own register row / tier slot. Edges whose endpoint resolves to neither a
+live nor an archived feature are reported as DANGLING, never dropped silently.
+
 Usage:
   goalforge-plan-index.py [--plans-root <root>] [--include-archived] [-o <file>]
   (no -o => writes <PLANS_ROOT>/INDEX.md; '-' => stdout)
@@ -24,11 +30,14 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 
 DEP_KINDS = {"follows", "depends_on"}  # target must precede this feature
-INV_KINDS = {"enables"}                # this feature precedes target
+INV_KINDS = {"enables", "blocks"}      # this feature precedes target
+# Same set as goalforge-validate.sh / goalforge-stamp-tables.sh / goalforge-status.sh
+ARCHIVE_DIRS = ("_archived", "_archive")
 
 
 def _split_frontmatter(text: str) -> str:
@@ -93,6 +102,35 @@ def _mini_parse(block: str) -> dict:
     return data
 
 
+def _dep_slug(raw) -> str:
+    """Normalize one edge target. Mirrors goalforge-validate.sh resolve_dep_slug:
+    unwrap nested 1-elem lists (`[[x]]` parses to `[['x']]`), strip the
+    `[[wikilink]]` brackets and surrounding quotes."""
+    while isinstance(raw, list):
+        if not raw:
+            return ""
+        raw = raw[0]
+    return re.sub(r"^\[\[|\]\]$", "", str(raw)).strip().strip("'\"")
+
+
+def _rel_pairs(r: dict):
+    """Yield (kind, raw_target) for one `relationships:` item.
+
+    Canonical vocabulary (schema.md, and what goalforge-validate.sh reads) is a
+    list of SINGLE-KEY mappings -- `- depends_on: [[other]]`. Also accepted:
+    the explicit `{kind|type, feature|target}` mapping form. A `note:` key is
+    metadata, never an edge.
+    """
+    if "target" in r or "feature" in r:
+        kind = r.get("kind", r.get("type", ""))
+        yield str(kind).strip(), r.get("target", r.get("feature"))
+        return
+    for k, v in r.items():
+        if k == "note":
+            continue
+        yield str(k).strip(), v
+
+
 def _norm_edges(feat: str, rels) -> list[tuple[str, str]]:
     """Return forward edges (A -> B = A precedes B) for one feature's rels."""
     edges: list[tuple[str, str]] = []
@@ -101,42 +139,69 @@ def _norm_edges(feat: str, rels) -> list[tuple[str, str]]:
     for r in rels:
         if not isinstance(r, dict):
             continue
-        kind = str(r.get("kind", "")).strip()
-        target = str(r.get("feature", "")).strip().strip("[]")
-        if not target:
-            continue
-        if kind in DEP_KINDS:
-            edges.append((target, feat))
-        elif kind in INV_KINDS:
-            edges.append((feat, target))
+        for kind, raw in _rel_pairs(r):
+            if kind not in DEP_KINDS and kind not in INV_KINDS:
+                continue
+            # a list value declares several targets: `- requires: [a, b]`
+            raws = raw if isinstance(raw, list) else [raw]
+            for one in raws:
+                target = _dep_slug(one)
+                if not target:
+                    continue
+                if kind in DEP_KINDS:
+                    edges.append((target, feat))
+                else:
+                    edges.append((feat, target))
     return edges
 
 
-def collect(root: Path, include_archived: bool) -> tuple[dict, list]:
-    """Return ({feature: {status,title}}, [forward edges])."""
+def _read_fm(path: Path) -> dict:
+    return _load_yaml(_split_frontmatter(path.read_text(encoding="utf-8", errors="replace")))
+
+
+def collect(root: Path) -> tuple[dict, list, list]:
+    """Return ({feature: {status,title,archived}}, [forward edges], [dangling edges]).
+
+    Archived features are ALWAYS collected so edges into the archive resolve --
+    an archived feature is a completed dependency, not a missing one. Presence is
+    keyed on DIRECTORY existence under `_archived/` (overview.md is optional:
+    legacy archived features predate it); non-directory entries are ignored.
+    A live feature always wins over an archived homonym.
+    """
     feats: dict = {}
     edges: list[tuple[str, str]] = []
     for ov in sorted(root.glob("*/overview.md")):
         feats_name = ov.parent.name
-        fm = _load_yaml(_split_frontmatter(ov.read_text(encoding="utf-8", errors="replace")))
+        fm = _read_fm(ov)
         name = str(fm.get("feature") or fm.get("name") or feats_name).strip()
         feats[name] = {
             "status": str(fm.get("status", "?")).strip(),
             "title": str(fm.get("title", "")).strip(),
+            "archived": False,
         }
         edges.extend(_norm_edges(name, fm.get("relationships")))
-    if include_archived:
-        arch = root / "_archived"
-        for ov in sorted(arch.glob("*/overview.md")) if arch.is_dir() else []:
-            name = ov.parent.name
-            fm = _load_yaml(_split_frontmatter(ov.read_text(encoding="utf-8", errors="replace")))
-            feats[str(fm.get("feature") or name).strip()] = {
-                "status": "archived",
-                "title": str(fm.get("title", "")).strip(),
-            }
-    # keep only edges whose endpoints are known features
+    for arch_name in ARCHIVE_DIRS:
+        arch = root / arch_name
+        if not arch.is_dir():
+            continue
+        for entry in sorted(arch.iterdir()):
+            if entry.name.startswith("."):
+                continue
+            if not entry.is_dir():
+                continue
+            ov = entry / "overview.md"
+            fm = _read_fm(ov) if ov.is_file() else {}
+            name = str(fm.get("feature") or entry.name).strip()
+            if name and name not in feats:
+                feats[name] = {
+                    "status": "archived",
+                    "title": str(fm.get("title", "")).strip(),
+                    "archived": True,
+                }
+    # an edge whose endpoint is no known feature (live or archived) is DANGLING
+    dangling = [(a, b) for (a, b) in edges if a not in feats or b not in feats]
     edges = [(a, b) for (a, b) in edges if a in feats and b in feats]
-    return feats, sorted(set(edges))
+    return feats, sorted(set(edges)), sorted(set(dangling))
 
 
 def tiers(feats: dict, edges: list) -> tuple[list, list]:
@@ -163,7 +228,11 @@ def tiers(feats: dict, edges: list) -> tuple[list, list]:
     return out, remaining
 
 
-def render(root: Path, feats: dict, edges: list, tier_list: list, cycle: list) -> str:
+def render(root: Path, feats: dict, visible: dict, edges: list, tier_list: list,
+           cycle: list, dangling: list) -> str:
+    """Render INDEX.md. `feats` is every resolvable node (incl. archived);
+    `visible` is the subset that gets rows/tiers (all of `feats` under
+    --include-archived, the live features otherwise)."""
     dep_of: dict = {f: [] for f in feats}
     for a, b in edges:
         dep_of[b].append(a)
@@ -171,7 +240,8 @@ def render(root: Path, feats: dict, edges: list, tier_list: list, cycle: list) -
     L.append("# Plans -- Index & Dependency Graph (DERIVED)")
     L.append("")
     L.append("- **Status:** reference (generated by `goalforge-plan-index.py`)")
-    L.append(f"- **Features:** {len(feats)}  |  **edges:** {len(edges)}")
+    L.append(f"- **Features:** {len(visible)}  |  **edges:** {len(edges)}"
+             + (f"  |  **dangling:** {len(dangling)}" if dangling else ""))
     L.append("")
     L.append("> Generated from each `overview.md` `relationships:` frontmatter -- DO NOT hand-edit;")
     L.append("> re-run the generator. Edges normalized to forward (A -> B = A precedes B).")
@@ -180,8 +250,9 @@ def render(root: Path, feats: dict, edges: list, tier_list: list, cycle: list) -
     L.append("")
     L.append("| Feature | Status | depends on (precedes it) |")
     L.append("|---------|--------|--------------------------|")
-    for f in sorted(feats):
-        deps = ", ".join(sorted(dep_of[f])) or "--"
+    for f in sorted(visible):
+        deps = ", ".join(f"{d} (archived)" if feats[d]["archived"] else d
+                         for d in sorted(dep_of[f])) or "--"
         L.append(f"| {f} | {feats[f]['status']} | {deps} |")
     L.append("")
     L.append("## Build order (dependency tiers)")
@@ -198,12 +269,23 @@ def render(root: Path, feats: dict, edges: list, tier_list: list, cycle: list) -
         L.append("These features form a cycle (not topologically orderable): "
                  + ", ".join(cycle))
         L.append("")
-    orphans = sorted([f for f in feats
+    orphans = sorted([f for f in visible
                       if not dep_of[f] and all(f != a for a, _ in edges)])
     if orphans:
         L.append("## Orphans (no edges in or out)")
         L.append("")
         L.append(", ".join(orphans))
+        L.append("")
+    if dangling:
+        L.append("## Dangling edges (target resolves to no feature)")
+        L.append("")
+        L.append("Neither a live feature nor an archived one -- fix the `relationships:`")
+        L.append("frontmatter (typo, renamed feature, or a plan that was deleted rather")
+        L.append("than archived).")
+        L.append("")
+        for a, b in dangling:
+            missing = " + ".join(x for x in (a, b) if x not in feats)
+            L.append(f"- `{a}` -> `{b}` (missing: {missing})")
         L.append("")
     return "\n".join(L) + "\n"
 
@@ -229,19 +311,24 @@ def main(argv) -> int:
         print(f"goalforge-plan-index: plans root not found: {root}", file=sys.stderr)
         return 2
 
-    feats, edges = collect(root, args.include_archived)
-    if not feats:
+    feats, edges, dangling = collect(root)
+    # --include-archived is RENDER-only: archived nodes always participate in edge
+    # resolution above, and only get their own row/tier slot when asked for.
+    visible = {f: v for f, v in feats.items() if args.include_archived or not v["archived"]}
+    if not visible:
         print(f"goalforge-plan-index: no features under {root}", file=sys.stderr)
         return 3
-    tier_list, cycle = tiers(feats, edges)
-    out = render(root, feats, edges, tier_list, cycle)
+    tier_list, cycle = tiers(visible, [(a, b) for (a, b) in edges
+                                       if a in visible and b in visible])
+    out = render(root, feats, visible, edges, tier_list, cycle, dangling)
 
     dest = args.output or str(root / "INDEX.md")
     if dest == "-":
         sys.stdout.write(out)
     else:
         Path(dest).write_text(out, encoding="utf-8")
-        print(f"goalforge-plan-index: wrote {dest} ({len(feats)} features, {len(edges)} edges)",
+        print(f"goalforge-plan-index: wrote {dest} ({len(visible)} features, {len(edges)} edges"
+              + (f", {len(dangling)} dangling" if dangling else "") + ")",
               file=sys.stderr)
     return 4 if cycle else 0
 

@@ -36,6 +36,9 @@ python3 - "$MODE" "$TARGET" <<'PY'
 import sys, re, pathlib
 
 mode, target = sys.argv[1], pathlib.Path(sys.argv[2])
+# ARCHIVE-DIRS: same set as goalforge-validate.sh / goalforge-stamp-tables.sh /
+#   goalforge-status.sh / goalforge-plan-index.py -- keep in sync (no shared
+#   constant: three of the four sites are quoted python heredocs with no importable module).
 ARCHIVE = {'_archived', '_archive'}
 
 def parse_fm(path):

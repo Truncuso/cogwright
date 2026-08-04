@@ -25,6 +25,8 @@ between a replacing feature and the one it replaced.
 archival; this skill performs it on request.
 
 Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
+Archive-consumer contract (what an archived slug guarantees to edge consumers):
+`~/.claude/skills/goalforge/references/archive-contract.md`.
 
 ## Plans root
 
@@ -158,8 +160,13 @@ and had to be reverted.
   own folder and outside `_archived/`, across `<PLANS_ROOT>` and the sibling
   `docs/`. The search is `grep -F` (literal) so a slug with regex chars is safe.
 - **What is NOT flagged:** relationship wikilinks `[[<slug>]]` — those are graph
-  edges the validator resolves even for archived targets, so archiving never breaks
-  them.
+  edges, and an archived target is meant to stay resolvable (edges survive
+  archiving and resolve terminal). Scope of that claim: **verified for
+  `goalforge-validate.sh`**, which re-adds archived slugs to its name index. Every
+  other consumer is *required to conform* to
+  `~/.claude/skills/goalforge/references/archive-contract.md` — conformance is not
+  verified here, so a consumer bug shows up as a dangling edge, not as a reason to
+  refuse the archive.
 - **Behavior:** WARN by default (prints the offending refs + the relocate-then-move
   remedy, exit 0 — non-blocking so the unattended `goalforge-archive-batch.sh` loop is
   unchanged). Under `--strict-refs` it **REFUSES with exit 6**. The remedy in both
@@ -246,9 +253,12 @@ Check the <old> slug spelling, or confirm the feature exists.
 
 - **Reference-gate flags PATH refs, not wikilinks.** Step 4b greps for `<slug>/`
   (literal, `grep -F`) from outside the feature + outside `_archived/`. A
-  `[[<slug>]]` relationship edge is NOT a path ref and is correctly ignored — only
-  refs that point INTO the feature's files (a cross-cited `findings.md`, a
-  frontmatter `locator:`) dangle after the move. WARN by default keeps the
+  `[[<slug>]]` relationship edge is NOT a path ref and is correctly ignored — the
+  archived target stays resolvable per
+  `~/.claude/skills/goalforge/references/archive-contract.md` (validator-verified;
+  other consumers conform to the contract rather than being guaranteed by this
+  skill). Only refs that point INTO the feature's files (a cross-cited
+  `findings.md`, a frontmatter `locator:`) dangle after the move. WARN by default keeps the
   unattended batch loop working; `--strict-refs` makes it a hard gate (exit 6).
   Do NOT "fix" a flagged ref by deleting it — relocate the artifact and repoint.
 - The status gate is fail-closed on exactly `completed` — `active`, `ready`, `draft`, and an already-`archived` feature all REFUSE in the default mode. There is no "force archive"; advance the feature to `completed` via `goalforge-verify`'s last-WP rule first. The one exception is `--relocate`, whose gate is the *inverse* (`status: archived` required) and which only moves a stranded archived feature into `_archived/` — it never flips a non-archived status.

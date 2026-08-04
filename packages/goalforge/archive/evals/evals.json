@@ -86,6 +86,20 @@
         "SKILL.md runs goalforge-ensure-committed.sh on the new _archived/<feature>/ path, not the original",
         "SKILL.md report shows the new path _archived/<feature>/overview.md"
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "Archive feature-completed while another live feature declares depends_on: [[feature-completed]].",
+      "expected_output": "Archiving PROCEEDS. Typed relation edges (wikilinks) are graph edges that survive archiving and resolve to the archived target — only PATH refs (<slug>/) gate under --strict-refs. The inbound edge is left byte-identical; it is never rewritten or used as a refusal reason.",
+      "files": [
+        "evals/fixtures/feature-inbound-edge/overview.md"
+      ],
+      "expectations": [
+        "SKILL.md ref-gate flags PATH refs, not wikilinks",
+        "Archiving a completed feature with inbound typed relation edges exits 0 even under --strict-refs",
+        "The inbound relationships edge is not rewritten by the archive",
+        "Fixture feature-inbound-edge declares depends_on: [[feature-completed]]"
+      ]
     }
   ]
 }

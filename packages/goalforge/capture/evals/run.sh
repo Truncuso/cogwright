@@ -41,6 +41,21 @@ check_order() {
   fi
 }
 
+# Regex-aware check: the archived-collision guard is prose whose exact wording is
+# not pinned by the contract — assert its load-bearing tokens, not a sentence.
+check_re() {
+  local desc="$1"
+  local pattern="$2"
+  if grep -qE "$pattern" "$SKILL_MD"; then
+    echo "  PASS: $desc"
+    PASS=$((PASS+1))
+  else
+    echo "  FAIL: $desc"
+    echo "        expected to match: $pattern"
+    FAIL=$((FAIL+1))
+  fi
+}
+
 echo "=== goalforge-capture: static-contract checks ==="
 
 # Identity
@@ -58,6 +73,35 @@ check "template marker present" "<!-- Template: feature-overview v4 (frontmatter
 
 # Idempotency
 check "idempotency: folder present + overview present = update in place" "Folder present, \`overview.md\` present"
+
+# Idempotency — archived-collision branch. A slug absent from the ACTIVE root may
+# still exist ARCHIVED; stamping a fresh `status: draft` then yields two nodes for
+# one slug (okf-substrate duplicate stub, 2026-08-03).
+check_re "idempotency probes plans/_archived/ for the slug" "_archived/(<feature>|<slug>)/"
+check_re "idempotency probes ideas/_archived/<slug>.md" "ideas/_archived/(<feature>|<slug>)\\.md"
+check_re "archived collision HALTs instead of stamping a fresh draft" "HALT"
+check_re "archived collision presents restore vs new slug" "[Rr]estore"
+
+# FIXTURE: the tree shape Step 2 must probe (slug absent live, present archived)
+FIX="$SKILL_DIR/evals/fixtures/plans-archived-collision"
+for f in "$FIX/_archived/okf-substrate/overview.md" \
+         "$FIX/ideas/_archived/okf-substrate.md" \
+         "$FIX/live-feature/overview.md"; do
+  if [ -f "$f" ]; then
+    echo "  PASS: fixture present: ${f#"$FIX/"}"
+    PASS=$((PASS+1))
+  else
+    echo "  FAIL: fixture missing: $f"
+    FAIL=$((FAIL+1))
+  fi
+done
+if [ ! -e "$FIX/okf-substrate" ] && [ -d "$FIX/_archived/okf-substrate" ]; then
+  echo "  PASS: fixture pins the defect shape (slug absent live, present archived)"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL: fixture must carry okf-substrate ONLY under _archived/"
+  FAIL=$((FAIL+1))
+fi
 
 # Guardrails
 check "never create WP folders guardrail" "Never"

@@ -987,6 +987,9 @@ SCAFFOLD_DIRS = {'evals', 'workspace', 'results'}
 # the full tree (they predate current schema and would yield noise that blocks
 # commits touching plans/_archived/*). Pass an archived plan dir AS the root to
 # validate it explicitly: parts[:-1] won't contain the marker when it's the root.
+# ARCHIVE-DIRS: same set as goalforge-validate.sh / goalforge-stamp-tables.sh /
+#   goalforge-status.sh / goalforge-plan-index.py -- keep in sync (no shared
+#   constant: three of the four sites are quoted python heredocs with no importable module).
 ARCHIVE_DIRS = {'_archived', '_archive'}
 SKIP_DIRS = SCAFFOLD_DIRS | ARCHIVE_DIRS
 
