@@ -63,6 +63,11 @@ MUTATIONS=(
   'doc-one-ticket-per-session|One ticket per session'
   'doc-converged-not-no-fog|is not "no fog left"'
   'doc-graduate-scope-discriminator|decision about future work'
+  # ticket fan-out: one marker per surface. `# fan_out:` is unique to the chart
+  # step 2 frontmatter comment line (the Dispatch note writes `fan_out: N`
+  # inline, without the leading `# `), so the two mutants stay independent.
+  'doc-ticket-fan-out-schema|# fan_out:'
+  'doc-fan-out-dispatch-surface|references/ticket-fanout.md'
 )
 
 for m in "${MUTATIONS[@]}"; do

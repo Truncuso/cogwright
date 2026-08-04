@@ -279,6 +279,48 @@ run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-claim-half.md ticket-13-
   -e 's|^claimed_at: null$|claimed_at: 2026-07-31|')"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "claim-half fixture still fails once both claim fields are set — it fails incidentally (got $RC)"
 
+# --- ticket fan-out (`fan_out: N`) ------------------------------------------
+# Three fixtures for the two halves of the rule (legal type, legal value) plus
+# the positive. Same discipline as every other artifact case: invalid fixtures
+# exit EXACTLY 1, and each carries a mutate-one-field control proving it fails
+# for its INTENDED violation and nothing else. Contract: references/ticket-fanout.md §1.
+name=validate-ticket-fan-out-valid
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-valid-fan-out.md ticket-21-fan-out.md)"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on fan_out: 3 on a research ticket, got $RC"
+
+name=validate-ticket-fan-out-non-research
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-fan-out-non-research.md ticket-22-fan-out-non-research.md)"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on fan_out on a non-research ticket, got $RC"
+
+name=validate-ticket-fan-out-value
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-fan-out-value.md ticket-23-fan-out-value.md)"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on fan_out: 1 (one probe is not a fan-out), got $RC"
+
+# the non-integer half of the value rule, generated from the VALID fixture
+# rather than shipped as a fourth artifact — the inventory stays at three.
+name=validate-ticket-fan-out-non-integer
+run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-valid-fan-out.md ticket-24-fan-out-non-integer.md \
+  -e 's|^fan_out: 3$|fan_out: many|')"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a non-integer fan_out value, got $RC"
+
+name=control-ticket-fan-out-non-research-repaired
+run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-fan-out-non-research.md ticket-22-fan-out-non-research.md \
+  -e 's|^ticket_type: grilling$|ticket_type: research|')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "fan-out-non-research fixture still fails once ticket_type is research — it fails incidentally (got $RC)"
+
+name=control-ticket-fan-out-value-repaired
+run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-fan-out-value.md ticket-23-fan-out-value.md \
+  -e 's|^fan_out: 1$|fan_out: 2|')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "fan-out-value fixture still fails once fan_out is 2 — it fails incidentally (got $RC)"
+
+# ABSENCE is valid on EVERY type — fan_out is opt-in and never required. Proven
+# by stripping the field from the valid fixture AND by every pre-existing ticket
+# fixture above, none of which carries it.
+name=validate-ticket-fan-out-absent
+run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-valid-fan-out.md ticket-25-fan-out-absent.md \
+  -e '/^fan_out: 3$/d')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 with fan_out absent on a research ticket, got $RC"
+
 # the documented spec templates carrying their inline `#` comments must VALIDATE
 # (quote-aware trailing-comment strip → real values behind the comments).
 name=validate-map-template-comments
@@ -514,6 +556,37 @@ name=doc-ticket-resolution-notes
 if contains "$chart2" '## Resolution notes' \
    && contains "$chart2_lc" 'optional'; then pass "$name"
 else fail "$name" "chart step 2 does not name the OPTIONAL ## Resolution notes ticket body section"; fi
+
+# --- ticket fan-out prose, section-sliced -----------------------------------
+# Two INDEPENDENT surfaces carry the rule and each gets its own case: chart
+# step 2 owns the frontmatter FIELD (an author reading the template must see
+# where `fan_out` is legal), the work-flow Dispatch step owns the BEHAVIOUR (a
+# dispatcher must see the surface pick and the reference). A mention in the
+# other slice must NOT satisfy either case.
+name=doc-ticket-fan-out-schema
+missing=""
+contains "$chart2"    'fan_out:'                       || missing="$missing field"
+contains "$chart2_lc" 'only on ticket_type: research'  || missing="$missing research-only"
+contains "$chart2"    '>= 2'                           || missing="$missing min-value"
+contains "$chart2_lc" 'optional'                       || missing="$missing stated-as-optional"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "chart step 2 ticket frontmatter block missing the fan_out field rules:$missing"; fi
+
+# The dispatch-surface rule is CITED from dispatch-resolution.md via the
+# reference, never restated as a second authority in SKILL.md — so this case
+# asserts the surface DISCRIMINATOR (uniform effort → Agent, mixed → Workflow)
+# plus the pointer that carries the full contract.
+name=doc-fan-out-dispatch-surface
+missing=""
+contains "$dispatch_lc" 'fan_out'                      || missing="$missing field"
+contains "$dispatch_lc" 'ticket fan-out'               || missing="$missing variant-name"
+contains "$dispatch_lc" 'propose-only'                 || missing="$missing propose-only"
+contains "$dispatch_lc" 'agent tool'                   || missing="$missing agent-surface"
+contains "$dispatch_lc" 'workflow tool'                || missing="$missing workflow-surface"
+contains "$dispatch_lc" 'efforts mix'                  || missing="$missing surface-discriminator"
+contains "$dispatch_lc" 'references/ticket-fanout.md'  || missing="$missing contract-pointer"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "work-flow Dispatch slice missing the ticket fan-out surface rule and/or contract pointer:$missing"; fi
 
 # --- fog semantics, section-sliced ------------------------------------------
 # Three INDEPENDENT rules (fog precision, no pre-slicing, one ticket per
