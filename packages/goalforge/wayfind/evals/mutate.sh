@@ -68,6 +68,16 @@ MUTATIONS=(
   # inline, without the leading `# `), so the two mutants stay independent.
   'doc-ticket-fan-out-schema|# fan_out:'
   'doc-fan-out-dispatch-surface|references/ticket-fanout.md'
+  # learning goals: one marker per surface, each unique to the ONE line that
+  # carries its rule, so the five mutants stay independent. `| task | learning`
+  # hits only the chart step 2 enum (the dispatch row reads `| learning | HITL |`
+  # and the candidate JSON has no spaces around its pipes), and `**default
+  # none**` is bolded only in the Dispatch-step opt-in rule.
+  'doc-learning-map-section|## Learning goals'
+  'doc-learning-ticket-type-enum|| task | learning'
+  'doc-learning-blind-spot-candidate|knowledge-gap signal'
+  'doc-learning-dispatch-row|| learning | HITL |'
+  'doc-learning-opt-in|**default none**'
 )
 
 for m in "${MUTATIONS[@]}"; do

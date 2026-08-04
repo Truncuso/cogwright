@@ -321,6 +321,59 @@ run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-valid-fan-out.md ticket-25-fan-o
   -e '/^fan_out: 3$/d')"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 with fan_out absent on a research ticket, got $RC"
 
+# --- learning goals (opt-in `## Learning goals` + `ticket_type: learning`) ---
+# The new enum value relaxes nothing, so the ticket half is proven by a POSITIVE
+# (a learning ticket validates) plus a NEGATIVE that an existing rule still
+# fires on it (`mode` is task-only). The map half proves the section rule in
+# both directions plus ABSENCE. Contract: references/learning-goals.md §2-§3.
+name=validate-ticket-learning-valid
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-valid-learning.md ticket-31-learning.md)"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on ticket_type: learning, got $RC"
+
+name=validate-ticket-learning-mode
+run_rc "$VALIDATE_TICKET" "$(copy_as ticket-invalid-learning-mode.md ticket-32-learning-mode.md)"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on mode: HITL on a learning ticket (mode is task-only), got $RC"
+
+name=control-ticket-learning-mode-repaired
+run_rc "$VALIDATE_TICKET" "$(repaired_as ticket-invalid-learning-mode.md ticket-32-learning-mode.md \
+  -e '/^mode: HITL$/d')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "learning-mode fixture still fails once mode is dropped — it fails incidentally (got $RC)"
+
+name=validate-map-learning-goals-valid
+run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-valid-learning-goals.md"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on a well-formed ## Learning goals section, got $RC"
+
+name=validate-map-invalid-learning-goals
+run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-invalid-learning-goals.md"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a non-kebab-case ## Learning goals slug, got $RC"
+
+name=control-map-learning-goals-repaired
+run_rc "$VALIDATE_MAP" "$(repaired_as map-invalid-learning-goals.md map.md \
+  -e 's|^- PG_Isolation_Levels: |- pg-isolation-levels: |')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "learning-goals fixture still fails once the slug is kebab-case — it fails incidentally (got $RC)"
+
+# an empty objective is the OTHER half of the row rule, generated from the VALID
+# fixture rather than shipped as a third map artifact.
+name=validate-map-learning-goals-empty-objective
+run_rc "$VALIDATE_MAP" "$(repaired_as map-valid-learning-goals.md map.md \
+  -e 's|^- pg-isolation-levels: .*$|- pg-isolation-levels:|')"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a ## Learning goals row with an empty objective, got $RC"
+
+# a present-but-row-less section is invalid: an empty section should have been
+# left out entirely (same posture as the ## Notes present-but-tableless rule).
+name=validate-map-learning-goals-no-rows
+run_rc "$VALIDATE_MAP" "$(repaired_as map-valid-learning-goals.md map.md \
+  -e '/^- rate-limiter-semantics: /d' -e '/^- pg-isolation-levels: /d')"
+[ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a ## Learning goals section carrying no rows, got $RC"
+
+# ABSENCE is valid on EVERY map — learning is opt-in and no map before this
+# section existed carries one. Proven by stripping the section from the valid
+# fixture AND by every other map fixture above, none of which has one.
+name=validate-map-learning-goals-absent
+run_rc "$VALIDATE_MAP" "$(repaired_as map-valid-learning-goals.md map.md \
+  -e '/^## Learning goals$/d' -e '/^- rate-limiter-semantics: /d' -e '/^- pg-isolation-levels: /d')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 with the ## Learning goals section absent, got $RC"
+
 # the documented spec templates carrying their inline `#` comments must VALIDATE
 # (quote-aware trailing-comment strip → real values behind the comments).
 name=validate-map-template-comments
@@ -588,15 +641,69 @@ contains "$dispatch_lc" 'references/ticket-fanout.md'  || missing="$missing cont
 if [ -z "$missing" ]; then pass "$name"
 else fail "$name" "work-flow Dispatch slice missing the ticket fan-out surface rule and/or contract pointer:$missing"; fi
 
+# chart step 3 (blind-spot triage) and the whole work flow, lowercased. SHARED
+# by the learning-goals cases below and the fog-semantics cases further down.
+chart3="$(section '3. Dispatched blind-spot pass' '4. Close chart')"
+chart3_lc="$(lc "$chart3")"
+work_lc="$(lc "$work")"
+
+# --- learning goals prose, section-sliced ------------------------------------
+# Four INDEPENDENT surfaces carry the learning contract and each gets its own
+# case: chart step 1 owns the map SECTION, chart step 2 owns the ENUM value, the
+# blind-spot triage step owns the CANDIDATE extension, and the work-flow
+# Dispatch step owns the dispatch ROW plus the opt-in rule. A mention in another
+# slice must NOT satisfy any of them. Contract: references/learning-goals.md.
+name=doc-learning-map-section
+missing=""
+contains "$chart1"    '## Learning goals'                    || missing="$missing section-name"
+contains "$chart1"    '- <slug>: <objective> (why: <driver>)' || missing="$missing row-format"
+contains "$chart1_lc" 'kebab-case'                           || missing="$missing slug-case"
+contains "$chart1_lc" 'optional'                             || missing="$missing stated-as-optional"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "chart step 1 map body-section list missing the OPTIONAL ## Learning goals section:$missing"; fi
+
+name=doc-learning-ticket-type-enum
+if contains "$chart2" 'ticket_type: research | grilling | prototype | task | learning'; then pass "$name"
+else fail "$name" "chart step 2 ticket frontmatter block does not carry learning in the ticket_type enum"; fi
+
+# the blind-spot pass MAY return a learning candidate, on a knowledge-gap signal
+# only, and it stays propose-only + user-triaged like every other candidate.
+name=doc-learning-blind-spot-candidate
+missing=""
+contains "$chart3"    'task|learning'          || missing="$missing candidate-enum"
+contains "$chart3_lc" 'knowledge-gap signal'   || missing="$missing gap-signal-condition"
+contains "$chart3_lc" 'never auto-created'     || missing="$missing never-auto-created"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "chart step 3 slice missing the learning blind-spot candidate extension:$missing"; fi
+
+name=doc-learning-dispatch-row
+missing=""
+contains "$dispatch_lc" '| learning | hitl |'  || missing="$missing row"
+contains "$dispatch_lc" 'teach-back'           || missing="$missing machinery"
+contains "$dispatch_lc" 'main session'         || missing="$missing not-dispatched"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "work-flow Dispatch table missing the learning row (HITL teach-back in the main session):$missing"; fi
+
+# THE load-bearing rule: opt-in, default none, two user-gated entry paths, never
+# auto-created — plus the resolution semantics and the contract pointer.
+name=doc-learning-opt-in
+missing=""
+contains "$dispatch_lc" 'default none'                   || missing="$missing default-none"
+contains "$dispatch_lc" 'explicit user declaration'      || missing="$missing entry-path-1"
+contains "$dispatch_lc" 'blind-spot candidate'           || missing="$missing entry-path-2"
+contains "$dispatch_lc" 'never auto-created'             || missing="$missing no-auto-creation"
+contains "$dispatch_lc" 'learned enough to'              || missing="$missing resolution-semantics"
+contains "$dispatch_lc" 'references/learning-goals.md'   || missing="$missing contract-pointer"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "work-flow Dispatch slice missing the learning opt-in/default-none rule:$missing"; fi
+
 # --- fog semantics, section-sliced ------------------------------------------
 # Three INDEPENDENT rules (fog precision, no pre-slicing, one ticket per
 # session) get three INDEPENDENT cases, never one bundle — plus the two-homes
 # split and the rewritten Gotcha. Each is scoped to the flow slice that owns it;
 # the triage step owns the two out-of-scope homes, the work loop owns the
 # mid-loop moves, and a mention in the wrong flow must NOT satisfy the case.
-chart3="$(section '3. Dispatched blind-spot pass' '4. Close chart')"
-chart3_lc="$(lc "$chart3")"
-work_lc="$(lc "$work")"
+# (chart3 / chart3_lc / work_lc are sliced once, above the learning cases.)
 
 # The two out-of-scope homes are NOT interchangeable: the map body section is
 # inert to the frontier, the ticket status is dependency-satisfying.

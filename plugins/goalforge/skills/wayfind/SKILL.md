@@ -246,11 +246,12 @@ parallel message (Agent tool at uniform effort, Workflow tool when efforts mix),
 returns merged as typed DATA into `findings/ticket-NN.md`. Full contract, incl.
 the failed-probe guard: `references/ticket-fanout.md` (not planning/execute-wave).
 
-**Learning goals** — opt-in, **default none**: entered ONLY by explicit user
-declaration or a user-accepted blind-spot candidate, never auto-created. A
-`ticket_type: learning` ticket is binary and counts toward convergence like any
-other; resolution = "learned enough to `<decide/do X>`" pointing at
-`findings/ticket-NN.md`. Full contract: `references/learning-goals.md`.
+**Learning goals** — opt-in, **default none**: entered ONLY by an
+explicit user declaration or a user-accepted blind-spot candidate, and
+never auto-created. A `ticket_type: learning` ticket is binary and counts
+toward convergence like any other; resolution = "learned enough to
+`<decide/do X>`" pointing at `findings/ticket-NN.md`. Full contract:
+`references/learning-goals.md`.
 
 **Resolve** — write `findings/ticket-NN.md`, set the ticket `status: resolved`,
 set the `resolution` pointer, **and release the claim: `claimed_by` and
