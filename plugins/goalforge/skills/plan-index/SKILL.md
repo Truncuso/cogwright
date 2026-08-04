@@ -28,7 +28,9 @@ python3 ~/.claude/skills/goalforge/scripts/goalforge-plan-index.py \
   `SDD_PLANS_DIR` -> git-root `plans/` -> CWD `plans/` -> `~/.claude/plans/`.
 - **Output**: default writes `<PLANS_ROOT>/INDEX.md`; `-o -` streams to stdout
   (preview without touching disk); `-o <file>` writes elsewhere.
-- `--include-archived` folds `_archived/` features in as `status: archived` nodes.
+- `--include-archived` is **render-only**: it folds `_archived/` features in as
+  `status: archived` rows/tier slots. Archived features are **always** loaded for
+  edge RESOLUTION regardless of the flag (see "Archived features" below).
 
 ## What it derives
 
@@ -44,6 +46,22 @@ python3 ~/.claude/skills/goalforge/scripts/goalforge-plan-index.py \
   WARNING; the script exits **4**.
 - **Orphans** -- features with no edges in or out (often a sign their
   `relationships:` frontmatter is unfilled, not that they are truly independent).
+- **Dangling edges** -- edges whose target resolves to neither a live nor an
+  archived feature, listed with the missing endpoint (never dropped silently).
+
+## Archived features
+
+Archived features are always loaded as resolvable nodes, keyed on **directory
+existence** under `_archived/` (`overview.md` is optional -- legacy archived
+features predate it); non-directory entries are ignored. A live feature always
+wins over an archived homonym. Consequences:
+
+- An edge into the archive resolves and shows in the register as `<dep> (archived)`
+  -- an archived dependency is *completed*, not *missing*.
+- A feature whose only dependency is archived is **not** an orphan.
+- What remains unresolved is a real defect and surfaces under **Dangling edges**.
+
+Consumer contract: `../references/archive-contract.md`.
 
 ## Exit codes
 

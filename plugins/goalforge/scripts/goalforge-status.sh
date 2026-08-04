@@ -141,10 +141,14 @@ def as_list(v):
         return [str(x) for x in v]
     return [str(v)]
 
-# Each feature is a sub-directory of plans_dir
+# Each feature is a sub-directory of plans_dir. The archive dir is NOT a feature:
+# it holds archived features and would otherwise render as a phantom
+# `_archived / status: ?` node.
+# Same set as goalforge-validate.sh / goalforge-stamp-tables.sh / goalforge-plan-index.py
+ARCHIVE_DIRS = {'_archived', '_archive'}
 feature_dirs = sorted(
     d for d in plans_dir.iterdir()
-    if d.is_dir() and not d.name.startswith('.')
+    if d.is_dir() and not d.name.startswith('.') and d.name not in ARCHIVE_DIRS
 )
 
 features = []  # the model both renderers read from

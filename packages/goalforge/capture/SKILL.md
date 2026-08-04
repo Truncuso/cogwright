@@ -21,6 +21,7 @@ execute → verify` chain.
 
 Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
 Templates: `~/.claude/skills/goalforge/references/templates/`.
+Archive-consumer contract (the writer-probe clause below): `~/.claude/skills/goalforge/references/archive-contract.md`.
 
 ## Inputs
 
@@ -48,9 +49,28 @@ ambiguous (prefer shorter).
 
 ### Step 2 — Idempotency check
 
-Check whether `<PLANS_ROOT>/<feature>/` already exists:
+Probe the **archived** locations BEFORE treating a slug as absent. An archived
+feature or idea owns its slug exactly as a live one does; stamping a fresh
+`status: draft` over it creates a duplicate stub of work that is already done.
+Both probes are existence checks — no frontmatter is read:
 
-- **Folder absent**: create it.
+```bash
+test -d <PLANS_ROOT>/_archived/<feature>            # archived feature
+test -f <PLANS_ROOT>/ideas/_archived/<feature>.md   # archived idea, same slug
+```
+
+Then branch:
+
+- **Archived hit (either probe)**: **HALT** — write nothing, and present the two
+  options for the user to choose between:
+  - **Restore the archived slug.** There is **no automated restore**; the
+    procedure is manual — `git mv` the folder/file back out of `_archived/`, set
+    `status:` to a live value, then re-run capture (which then takes the
+    *folder present* branch below). `goalforge-archive --relocate` is the
+    inverse-*adjacent* op only: it moves a stranded archived feature **into**
+    `_archived/` (move-only) and does not restore.
+  - **Use a new slug.** Pick a distinct slug and re-run Step 1.
+- **Folder absent** (and no archived hit): create it.
 - **Folder present, `overview.md` absent**: create the file.
 - **Folder present, `overview.md` present**: update the body sections in place —
   do not overwrite `status:` or populated frontmatter; preserve existing content,
@@ -211,6 +231,11 @@ file must carry the template marker as its first body line:
 ## Gotchas
 
 - Idempotency on an existing overview preserves `status:` as-is — a prior `goalforge-spec` advance to `ready` is NOT reset to `draft` on re-capture. Check current status before presenting next-step guidance.
+- An archived slug is NOT a free slug. The Step-2 probe is a plain directory/file
+  existence check (`_archived/<feature>/`, `ideas/_archived/<feature>.md`) — never
+  gated on `overview.md` being present, because archived plans predate the current
+  layout and some carry no `overview.md`. On a hit, HALT and ask; do not
+  auto-restore and do not silently suffix the slug.
 - Slugification confirmation triggers on "ambiguous", read loosely: confirm for any compound noun phrase of 4+ words rather than guessing silently.
 - The route classifier is typed DATA — a `fast` verdict is a proposal gated by the Step 4c confidence rules, never an instruction to skip the borderline confirmation. The fast-path gates, not the classifier, are the safety net; an unmeasurable goal re-routes to `full`, never a license to relax the goal contract.
 - Footgun gotchas (wrong `stage_updated:` key, exactly-one-file recovery): `references/gotchas.md`.

@@ -61,6 +61,22 @@
         "SKILL.md output status is draft regardless of open questions",
         "SKILL.md never advances status beyond draft"
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "Start a plan for okf-substrate.",
+      "expected_output": "The slug is absent from the ACTIVE plans root but present at plans/_archived/okf-substrate/ (and plans/ideas/_archived/okf-substrate.md). Capture must NOT treat it as absent and stamp a fresh status: draft — it HALTS and presents restore-the-archived-feature vs pick-a-new-slug. Exactly one node exists for the slug afterwards, never two.",
+      "files": [
+        "evals/fixtures/plans-archived-collision/_archived/okf-substrate/overview.md",
+        "evals/fixtures/plans-archived-collision/ideas/_archived/okf-substrate.md"
+      ],
+      "expectations": [
+        "SKILL.md Step 2 probes <PLANS_ROOT>/_archived/<feature>/ before treating a slug as absent",
+        "SKILL.md Step 2 probes <PLANS_ROOT>/ideas/_archived/<slug>.md before treating a slug as absent",
+        "SKILL.md HALTs on an archived collision instead of creating the folder",
+        "SKILL.md presents restore vs new-slug rather than choosing silently",
+        "Fixture carries okf-substrate ONLY under _archived/ (absent from the active root)"
+      ]
     }
   ]
 }

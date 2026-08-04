@@ -114,6 +114,14 @@ if [ -f "$ARCHIVED" ]; then
   check FIXTURE "archived fixture has status: archived (relocate source)" "status: archived" "$ARCHIVED"
 fi
 
+# FIXTURE: live feature holding an inbound TYPED RELATION edge into the archive
+# target (design pin: such edges survive archiving and must never gate it)
+INBOUND="$SKILL_DIR/evals/fixtures/feature-inbound-edge/overview.md"
+file_check FIXTURE "fixture feature-inbound-edge/overview.md exists" "$INBOUND"
+if [ -f "$INBOUND" ]; then
+  check FIXTURE "inbound fixture holds a typed relation edge to the archive target" "depends_on: [[feature-completed]]" "$INBOUND"
+fi
+
 # BEHAVIORAL: --relocate gate logic on real fixtures (exit-code contract)
 SCRIPT="$HOME/.claude/skills/goalforge/scripts/goalforge-archive.sh"
 if [ -x "$SCRIPT" ] || [ -f "$SCRIPT" ]; then
@@ -166,6 +174,29 @@ if [ -f "$SCRIPT" ]; then
   if [ "$rc" -ne 6 ]; then echo "  PASS [BEHAVIORAL]: ref-gate passes clean feature under --strict-refs (rc=$rc != 6)"; PASS=$((PASS+1))
   else echo "  FAIL [BEHAVIORAL]: clean feature should not trip ref-gate (got 6)"; FAIL=$((FAIL+1)); fi
   rm -rf "$RT" "$RC2"
+fi
+
+# BEHAVIORAL (DESIGN PIN): inbound TYPED RELATION edges must NOT block archiving.
+# Only PATH refs gate — wikilink edges are graph edges that survive the move and
+# resolve terminal. This case exists to fail loudly if the ref-gate is ever
+# widened to refuse on relationships (over-tightening regression).
+# Validator stubbed via the GOALFORGE_VALIDATE seam so the case isolates the
+# reference-gate from validator behavior.
+if [ -f "$SCRIPT" ]; then
+  ET="$(mktemp -d)"; mkdir -p "$ET/plans"
+  cp -r "$SKILL_DIR/evals/fixtures/feature-completed"    "$ET/plans/feat-comp"
+  cp -r "$SKILL_DIR/evals/fixtures/feature-inbound-edge" "$ET/plans/feat-dep"
+  sed -i 's/^name: .*/name: feat-comp/' "$ET/plans/feat-comp/overview.md"
+  sed -i 's/^name: .*/name: feat-dep/'  "$ET/plans/feat-dep/overview.md"
+  sed -i 's/\[\[feature-completed\]\]/[[feat-comp]]/' "$ET/plans/feat-dep/overview.md"
+  rc=0; GOALFORGE_VALIDATE=/bin/true bash "$SCRIPT" feat-comp --strict-refs --plans-root "$ET/plans" >/dev/null 2>&1 || rc=$?
+  if [ "$rc" -eq 0 ] && [ -d "$ET/plans/_archived/feat-comp" ]; then
+    echo "  PASS [BEHAVIORAL]: inbound typed relation edge does NOT block archiving (design pin)"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: typed relation edge must not gate archiving (rc=$rc)"; FAIL=$((FAIL+1)); fi
+  if grep -qF '[[feat-comp]]' "$ET/plans/feat-dep/overview.md"; then
+    echo "  PASS [BEHAVIORAL]: inbound edge left intact by the archive (resolves terminal)"; PASS=$((PASS+1))
+  else echo "  FAIL [BEHAVIORAL]: archive must not rewrite inbound relation edges"; FAIL=$((FAIL+1)); fi
+  rm -rf "$ET"
 fi
 
 echo ""
