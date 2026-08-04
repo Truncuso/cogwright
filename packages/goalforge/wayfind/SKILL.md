@@ -14,7 +14,7 @@ description: >
 argument-hint: "<effort-slug> [chart]"
 metadata:
   skill-kind: preference
-  version: 0.2.0
+  version: 0.3.0
 hooks:
   Stop:
     - hooks:
