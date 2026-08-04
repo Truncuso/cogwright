@@ -108,6 +108,7 @@ claimed_by: null             # session id — claim stamp; status stays open whi
 claimed_at: null             # YYYY-MM-DD — set with claimed_by; basis for stale WARN
 resolution: null             # ./findings/ticket-NN.md — pointer, set on resolve
 # mode: HITL                 # OPTIONAL, only on ticket_type: task (AFK default); other types derive mode
+# fan_out: 3                 # OPTIONAL, only on ticket_type: research — integer >= 2 parallel probes
 ```
 
 Body: `## Question` — one decision, sized to one agent session; it states the
@@ -233,6 +234,12 @@ design question AFK into an `implement` dispatch.
 `mode: HITL` in ticket frontmatter overrides the AFK default **only on
 `ticket_type: task`** — the one non-derivable case. All other types derive mode
 from type.
+
+**Ticket fan-out** — a `research` ticket may carry `fan_out: N` (integer >= 2):
+its `## Question` decomposes into N propose-only probes dispatched in ONE batched
+parallel message (Agent tool at uniform effort, Workflow tool when efforts mix),
+returns merged as typed DATA into `findings/ticket-NN.md`. Full contract, incl.
+the failed-probe guard: `references/ticket-fanout.md` (not planning/execute-wave).
 
 **Resolve** — write `findings/ticket-NN.md`, set the ticket `status: resolved`,
 set the `resolution` pointer, **and release the claim: `claimed_by` and
