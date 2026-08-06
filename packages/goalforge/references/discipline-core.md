@@ -51,6 +51,6 @@ what you intended.
 - Repeating 3+ times: script it, don't reason per instance.
 - Touch only what the task requires.
 
-Exceed your depth after honest attempts? Don't bluff. Return:
+Out of your depth after two distinct failed approaches? Don't bluff. Return:
 
 `{"status": "needs_escalation", "reason": "<what's blocking you>", "attempted": ["<what you tried>", "..."]}`
