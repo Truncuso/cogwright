@@ -41,7 +41,7 @@
 # takes `flock` with no `-w`, so a concurrent holder of the fixture feature's
 # .sdd-transitions.lock would block this script indefinitely. `--throwaway`
 # cannot contend — it owns a fresh root.
-set -euo pipefail
+set -Eeuo pipefail  # -E: the ERR trap must reach callees inside functions — without it "exit 3 means refused, never crashed" is false
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
@@ -54,7 +54,7 @@ FIXTURE_WP="wp-01-smoke"
 FIXTURE_TASK="task-01-smoke"
 
 usage() {
-    sed -n '2,12p' "$SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,10p' "$SELF" | sed 's/^# \{0,1\}//'
 }
 
 # ── Argument parsing ────────────────────────────────────────────────────────
@@ -95,7 +95,10 @@ guard() {
     done
     shopt -u nullglob
     if [[ ${#hits[@]} -gt 0 ]]; then
-        refuse "SDD_PLANS_DIR already holds feature dirs (${hits[0]}) — bare mode is single-shot and never writes into a populated root; clear a previous smoke run with: rm -rf $SDD_PLANS_DIR/$FIXTURE_FEATURE"
+        if [[ "${hits[0]}" == "$SDD_PLANS_DIR/$FIXTURE_FEATURE/"* ]]; then
+            refuse "SDD_PLANS_DIR already holds a previous smoke run (${hits[0]}) — bare mode is single-shot; clear it with: rm -rf $SDD_PLANS_DIR/$FIXTURE_FEATURE"
+        fi
+        refuse "SDD_PLANS_DIR already holds feature dirs (${hits[0]}) — this is not a smoke root; bare mode never writes into a populated plans root"
     fi
 }
 
@@ -316,8 +319,8 @@ PINNED_EDGES=(
 )
 
 assert_end_state() {
-    grep -q '^status: verified' "$WP_OVERVIEW" \
-        || fail "WP overview does not read 'status: verified': $WP_OVERVIEW"
+    [[ "$(read_status "$WP_OVERVIEW")" == "verified" ]] \
+        || fail "WP overview frontmatter does not read 'status: verified': $WP_OVERVIEW"
 
     [[ -f "$LEDGER" ]] || fail "no transition ledger at $LEDGER"
 
@@ -325,6 +328,12 @@ assert_end_state() {
     for e in "${PINNED_EDGES[@]}"; do
         grep -qF "$e" "$LEDGER" || fail "ledger is missing the pinned edge row: $e"
     done
+
+    # The --mode flag is documentary at the transition layer (mode defaults to
+    # auto); the discriminating evidence for the pinned auto-advance is the
+    # signal-scoped reason ON the ready row, asserted together with its mode.
+    grep -F '"to": "ready"' "$LEDGER" | grep -F '"mode": "auto"' | grep -qF 'signal-scoped auto-advance' \
+        || fail "ready row does not carry mode=auto with the signal-scoped auto-advance reason"
 
     local rows
     rows="$(wc -l < "$LEDGER")"
@@ -334,7 +343,7 @@ assert_end_state() {
 
     bash "$VALIDATE" --strict "$ROOT" \
         || fail "goalforge-validate.sh --strict reported errors over $ROOT"
-    echo "goalforge-smoke: ok goalforge-validate.sh --strict is clean"
+    echo "goalforge-smoke: ok goalforge-validate.sh --strict reports zero errors (warnings expected)"
 }
 
 emit_fixture
