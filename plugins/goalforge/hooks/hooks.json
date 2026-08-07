@@ -6,21 +6,27 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-single-writer.sh",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-transition-guard.sh",
-            "timeout": 5
-          },
-          {
-            "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-open-questions-gate.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-single-writer.sh\"",
             "timeout": 5
           }
         ],
-        "description": "goalforge state-machine guards over plans/**: single-writer (blocks tool-surface mutation of status:/goal_approved_version:), transition-guard (blocks an illegal status edge), open-questions-gate (blocks '-> ready' while an open question is unresolved). Each fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
+        "description": "goalforge single-writer: blocks tool-surface mutation of status:/goal_approved_version: on plan files under a resolved PLANS_ROOT. The BLANKET field guard — it simulates Edit, MultiEdit and Write payloads alike, which is why the two Edit-only guards below can stay narrow. Fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-transition-guard.sh\"",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-open-questions-gate.sh\"",
+            "timeout": 5
+          }
+        ],
+        "description": "goalforge status-edge guards, matcher Edit ONLY because both read an Edit payload's old_string/new_string and can evaluate nothing else: transition-guard (blocks an illegal status edge), open-questions-gate (blocks '-> ready' while an open question is unresolved). A status change arriving via Write or MultiEdit is caught by the single-writer group above, which blocks the field outright. Each fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
       }
     ],
     "PostToolUse": [
@@ -29,11 +35,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-frontmatter-touch.sh",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-frontmatter-touch.sh\"",
             "timeout": 5
           }
         ],
-        "description": "goalforge frontmatter-touch: bumps updated:/stage_updated: to today on an edited plans/** .md. Fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
+        "description": "goalforge frontmatter-touch: bumps updated:/stage_updated: to today on an edited plans/** .md. Reads only the payload's file_path, so all three tools are in scope. Fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
       }
     ]
   }

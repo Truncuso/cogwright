@@ -256,6 +256,11 @@ for base, dirs, files in os.walk(dst):
         dirs[:] = []
         continue
     for name in files:
+        # A PRESERVE entry naming a top-level FILE is invisible to the `top`
+        # test above (rel_dir is "." there), so it is skipped explicitly —
+        # hand-authored content is never rewritten.
+        if rel_dir == "." and name in preserve:
+            continue
         path = os.path.join(base, name)
         rel = os.path.relpath(path, dst)
         parts = rel.split(os.sep)

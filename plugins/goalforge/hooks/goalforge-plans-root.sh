@@ -23,9 +23,13 @@
 # runs on every Edit/Write in the session. A relative path is returned verbatim
 # (callers reject those before comparing).
 goalforge_normpath() {
-    local p="${1:-}" out="" seg
+    local p="${1:-}" out="" seg noglob=0
     case "$p" in /*) ;; *) printf '%s' "$p"; return 0 ;; esac
-    set -f                       # a path segment must never glob-expand below
+    # A path segment must never glob-expand below — but this helper is SOURCED
+    # into the caller's shell, so it restores the caller's `set -f` state rather
+    # than blindly clearing it (a caller that runs noglob stays noglob).
+    case "$-" in *f*) noglob=1 ;; esac
+    set -f
     local IFS=/
     for seg in $p; do
         case "$seg" in
@@ -34,7 +38,7 @@ goalforge_normpath() {
             *)    out="$out/$seg" ;;
         esac
     done
-    set +f
+    [ "$noglob" -eq 1 ] || set +f
     printf '%s' "${out:-/}"
 }
 

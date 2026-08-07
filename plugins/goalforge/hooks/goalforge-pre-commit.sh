@@ -13,18 +13,26 @@
 # Env override (tests): GOALFORGE_VALIDATE_SCRIPT — path to goalforge-validate.sh.
 #
 # The DEFAULT validator address is script-relative, never an author install
-# path: ${CLAUDE_PLUGIN_ROOT} when the plugin route exports it, else the
-# hook's own parent dir. readlink -f resolves the dotfiles route, where the
+# path and never an environment variable: this runs as a GIT hook, in whatever
+# environment the invoking tool happens to carry, so a stale or poisoned
+# ${CLAUDE_PLUGIN_ROOT} would silently point the gate at a nonexistent
+# validator and disable it. readlink -f resolves the dotfiles route, where the
 # file installed as .git/hooks/pre-commit (or under ~/.claude/hooks/) is a
 # symlink into the package — so package, plugin and symlink routes all land on
 # their own scripts/goalforge-validate.sh with no rewrite and no PRESERVE
-# exception.
+# exception. GOALFORGE_VALIDATE_SCRIPT stays as the single, test-only override.
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")")" && pwd)"
+# Split deliberately: the generator's class-ii rewrite matches a literal
+# `$SCRIPT_DIR/..` immediately followed by `/scripts` and would re-introduce the
+# ${CLAUDE_PLUGIN_ROOT} leg in the generated copy. Naming the parent dir first
+# keeps that literal out of the file (comment included), so the package and
+# plugin trees stay byte-identical here.
+GF_HOME="$SCRIPT_DIR/.."
 
 _goalforge_pre_commit_main() {
     set -uo pipefail
 
-    local VALIDATE_SCRIPT="${GOALFORGE_VALIDATE_SCRIPT:-${CLAUDE_PLUGIN_ROOT:-$SCRIPT_DIR/..}/scripts/goalforge-validate.sh}"
+    local VALIDATE_SCRIPT="${GOALFORGE_VALIDATE_SCRIPT:-$GF_HOME/scripts/goalforge-validate.sh}"
 
     # ── Zero-breakage: validator absent or not executable ──────────────────
     if [[ ! -e "$VALIDATE_SCRIPT" ]]; then

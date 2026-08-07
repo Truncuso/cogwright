@@ -22,7 +22,9 @@
 # unreadable file) — a hook must never block because it itself failed. The ONLY
 # non-zero exit is exit 2 for a confirmed `→ready` edit with >=1 unresolved OQ.
 #
-# SCOPE: wired as a PreToolUse hook (hooks.json, matcher Edit|Write|MultiEdit).
+# SCOPE: wired as a PreToolUse hook (hooks.json, matcher `Edit` — it reads an
+# Edit payload's old_string/new_string and can evaluate nothing else; a status
+# change via Write/MultiEdit is blocked outright by goalforge-single-writer).
 # Fast path: exit 0, silently, unless the edited file resolves under a plans
 # root — resolution order owned by the sourced goalforge-plans-root.sh.
 #
@@ -124,6 +126,25 @@ print(fp)
 PY
 }
 
+# ── Cheap bash prefilter ────────────────────────────────────────────────────
+# Runs on the raw payload BEFORE any interpreter spawn, on every Edit in the
+# session. CONSERVATIVE by construction: it returns 1 only for a payload that
+# CANNOT be ours (no overview.md anywhere in the text, or a plainly-extractable
+# file_path outside every plans root). Anything it cannot judge — no file_path
+# key, a quoted path carrying escapes — returns 0 and falls through to the
+# python parser, which stays the authority.
+prefilter() {
+    local raw="$1" rest fp
+    case "$raw" in *overview.md*) ;; *) return 1 ;; esac
+    rest="${raw#*\"file_path\":}"
+    [[ "$rest" == "$raw" ]] && return 0          # no file_path key -> parser decides
+    rest="${rest#"${rest%%[![:space:]]*}"}"      # drop leading whitespace
+    case "$rest" in \"*) rest="${rest#\"}"; fp="${rest%%\"*}" ;; *) return 0 ;; esac
+    case "$fp" in *\\*) return 0 ;; esac         # escaped path -> parser decodes it
+    goalforge_under_plans_root "$fp" || return 1
+    return 0
+}
+
 # Returns 2 if file has >=1 unresolved OQ, else 0. Zero-breakage on a bad path.
 do_check() {
     local n
@@ -219,6 +240,32 @@ self_test() {
         && ok "same edit outside every plans root -> silent exit-0 fast path" \
         || no "outside every plans root should fast-path silently (rc=$neg_rc, out='$neg_out')"
 
+    # PLANS_ROOT legs 2 and 3 (spec §Interface Contract). SDD_PLANS_DIR is UNSET
+    # for all four and $HOME points at an empty sandbox, so each case can only
+    # pass through the leg it names: deleting the git-root leg or the
+    # ~/.claude/plans leg from goalforge-plans-root.sh turns one of these red.
+    local hs="$d/home"
+    mkdir -p "$hs/.claude/plans/f" "$hs/.claude/notplans"
+    git init -q "$d/leg2repo" 2>/dev/null
+    mkdir -p "$d/leg2repo/plans/f" "$d/leg2repo/notplans"
+    local lf
+    for lf in "$d/leg2repo/plans/f" "$d/leg2repo/notplans" "$hs/.claude/plans/f" "$hs/.claude/notplans"; do
+        printf -- "$oq" > "$lf/overview.md"
+    done
+    leg() { # <label> <overview path> <engage|silent>
+        local out rc
+        out="$(payload "$2" | env -u SDD_PLANS_DIR HOME="$hs" bash "$SELF" 2>&1)"; rc=$?
+        if [[ "$3" == engage ]]; then
+            { [[ -n "$out" ]] || [[ "$rc" -ne 0 ]]; } && ok "$1" || no "$1 (rc=$rc, out='$out')"
+        else
+            { [[ "$rc" -eq 0 ]] && [[ -z "$out" ]]; } && ok "$1" || no "$1 (rc=$rc, out='$out')"
+        fi
+    }
+    leg "leg 2: <git-root>/plans/** -> hook engaged"               "$d/leg2repo/plans/f/overview.md"   engage
+    leg "leg 2 negative: same git repo outside plans/ -> silent"   "$d/leg2repo/notplans/overview.md"  silent
+    leg "leg 3: \$HOME/.claude/plans/** -> hook engaged"           "$hs/.claude/plans/f/overview.md"   engage
+    leg "leg 3 negative: \$HOME/.claude outside plans/ -> silent"  "$hs/.claude/notplans/overview.md"  silent
+
     echo ""
     echo "Results: $p passed, $f failed"
     [[ "$f" -eq 0 ]]
@@ -246,7 +293,13 @@ if [[ -n "$CHECK" ]]; then
 fi
 
 # Hook path: derive the →ready overview path from the PreToolUse Edit event.
-FILE="$(parse_stdin)" || true
+# The payload is slurped ONCE here so the bash prefilter can reject the
+# overwhelming majority of Edits without spawning python at all; only a payload
+# that survives it reaches the parser.
+RAW="$(cat 2>/dev/null || true)"
+[[ -n "$RAW" ]] || exit 0
+prefilter "$RAW" || exit 0
+FILE="$(printf '%s' "$RAW" | parse_stdin)" || true
 [[ -z "${FILE:-}" ]] && exit 0   # not a →ready overview edit → never block
 # Fast path: a →ready edit outside every resolved plans root is not ours.
 goalforge_under_plans_root "$FILE" || exit 0

@@ -61,6 +61,16 @@ git -C "$TMP" add plans/broken/overview.md >/dev/null
 rc=$(run_hook)
 if [[ "$rc" -eq 1 ]]; then ok "block-own-error"; else no "block-own-error" "rc=$rc (expected 1)"; fi
 
+# ── BLOCK with a POISONED CLAUDE_PLUGIN_ROOT ──────────────────────────────────
+# The hook runs in whatever environment the invoking git tool carries, so its
+# default validator address must not be steerable by one: with the same broken
+# feature staged, a bogus CLAUDE_PLUGIN_ROOT and NO GOALFORGE_VALIDATE_SCRIPT,
+# the script-relative default must still resolve and still block. If the hook
+# ever reads that variable again this case turns green-to-red (skip notice on
+# stderr, rc 0).
+rc=$( ( cd "$TMP" && CLAUDE_PLUGIN_ROOT=/nonexistent bash "$HOOK" >/dev/null 2>&1 ); echo $? )
+if [[ "$rc" -eq 1 ]]; then ok "block-with-poisoned-CLAUDE_PLUGIN_ROOT"; else no "block-with-poisoned-CLAUDE_PLUGIN_ROOT" "rc=$rc (expected 1)"; fi
+
 echo ""
 echo "Results: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]

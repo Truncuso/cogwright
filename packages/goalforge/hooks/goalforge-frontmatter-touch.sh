@@ -82,6 +82,73 @@ self_test() {
     printf '' | bash "$SELF" >/dev/null 2>&1
     [ $? -eq 0 ] && ok "empty payload -> exit 0 (zero-breakage)" || no "empty payload should exit 0"
 
+    # Zero-breakage on the WRITE: an unwritable target must exit 0, silently,
+    # with the file left alone — the bump is best-effort, never a hard failure.
+    local ro_out ro_rc
+    printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$d/plans/f/readonly.md"
+    chmod a-w "$d/plans/f/readonly.md"
+    if [ "$(id -u)" = 0 ]; then
+        ok "unwritable target -> exit 0 silent (skipped: running as root, chmod is not enforced)"
+    else
+        ro_out="$(payload "$d/plans/f/readonly.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; ro_rc=$?
+        if [ "$ro_rc" = 0 ] && [ -z "$ro_out" ] && grep -q 'updated: 1999-01-01' "$d/plans/f/readonly.md"; then
+            ok "unwritable target -> exit 0 silent, file untouched"
+        else
+            no "unwritable target should exit 0 silently (rc=$ro_rc, out='$ro_out')"
+        fi
+    fi
+    chmod u+w "$d/plans/f/readonly.md"
+
+    # Zero-breakage on the INTERPRETER: python3 absent from PATH must exit 0.
+    # The sandbox PATH carries only the other commands the hook needs, so the
+    # run reaches the frontmatter step and dies there rather than short-circuiting
+    # somewhere harmless earlier.
+    local sb="$d/bin" c np_out np_rc
+    mkdir -p "$sb"
+    for c in bash readlink dirname basename date cat jq git grep sed; do
+        ln -sf "$(command -v "$c" 2>/dev/null)" "$sb/$c" 2>/dev/null || true
+    done
+    printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$d/plans/f/nopy.md"
+    np_out="$(payload "$d/plans/f/nopy.md" | PATH="$sb" SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; np_rc=$?
+    { [ "$np_rc" = 0 ] && grep -q 'updated: 1999-01-01' "$d/plans/f/nopy.md"; } \
+        && ok "python3 missing from PATH -> exit 0 (zero-breakage)" \
+        || no "python3 missing from PATH should exit 0 (rc=$np_rc, out='$np_out')"
+    # Positive control for the case above: the SAME sandbox PATH plus python3
+    # does bump the file — proving the run reaches the frontmatter step and is
+    # not short-circuiting on some earlier missing command.
+    ln -sf "$(command -v python3)" "$sb/python3" 2>/dev/null || true
+    payload "$d/plans/f/nopy.md" | PATH="$sb" SDD_PLANS_DIR="$d/plans" bash "$SELF" >/dev/null 2>&1
+    grep -q "updated: $TODAY" "$d/plans/f/nopy.md" \
+        && ok "sandbox PATH + python3 -> bumped (control: the interpreter step is reached)" \
+        || no "sandbox PATH + python3 should bump (control)"
+
+    # PLANS_ROOT legs 2 and 3 (spec §Interface Contract). SDD_PLANS_DIR is UNSET
+    # for all four and $HOME points at an empty sandbox, so each case can only
+    # pass through the leg it names: deleting the git-root leg or the
+    # ~/.claude/plans leg from goalforge-plans-root.sh turns one of these red.
+    local hs="$d/home" lf
+    mkdir -p "$hs/.claude/plans/f" "$hs/.claude/notplans"
+    git init -q "$d/leg2repo" 2>/dev/null
+    mkdir -p "$d/leg2repo/plans/f" "$d/leg2repo/notplans"
+    for lf in "$d/leg2repo/plans/f" "$d/leg2repo/notplans" "$hs/.claude/plans/f" "$hs/.claude/notplans"; do
+        printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$lf/overview.md"
+    done
+    leg() { # <label> <overview path> <engage|silent>
+        local out rc
+        out="$(payload "$2" | env -u SDD_PLANS_DIR HOME="$hs" bash "$SELF" 2>&1)"; rc=$?
+        if [ "$3" = engage ]; then
+            { [ "$rc" = 0 ] && [ -z "$out" ] && grep -q "updated: $TODAY" "$2"; } \
+                && ok "$1" || no "$1 (rc=$rc, out='$out')"
+        else
+            { [ "$rc" = 0 ] && [ -z "$out" ] && grep -q 'updated: 1999-01-01' "$2"; } \
+                && ok "$1" || no "$1 (rc=$rc, out='$out')"
+        fi
+    }
+    leg "leg 2: <git-root>/plans/** -> updated: bumped"             "$d/leg2repo/plans/f/overview.md"   engage
+    leg "leg 2 negative: same git repo outside plans/ -> untouched" "$d/leg2repo/notplans/overview.md"  silent
+    leg "leg 3: \$HOME/.claude/plans/** -> updated: bumped"         "$hs/.claude/plans/f/overview.md"   engage
+    leg "leg 3 negative: \$HOME/.claude outside plans/ -> untouched" "$hs/.claude/notplans/overview.md" silent
+
     rm -rf "$d"
     echo ""
     echo "Results: $p passed, $f failed"
@@ -121,15 +188,23 @@ goalforge_under_plans_root "$REAL_PATH" || exit 0
 
 # ── Bump frontmatter dates ─────────────────────────────────────────────────
 
-python3 - "$REAL_PATH" "$TODAY" <<'PYEOF'
+# ZERO-BREAKAGE on the terminating statement: this is the LAST command, so its
+# status is the hook's. `2>/dev/null` keeps a traceback out of the session
+# transcript and `|| exit 0` covers everything an in-python guard cannot — a
+# missing/broken python3 (127), a signal, an unforeseen exception.
+python3 - "$REAL_PATH" "$TODAY" 2>/dev/null <<'PYEOF' || exit 0
 import sys
 import re
 
 path = sys.argv[1]
 today = sys.argv[2]
 
-with open(path, 'r', encoding='utf-8') as fh:
-    content = fh.read()
+# A read this hook cannot perform is not the session's problem: bail silently.
+try:
+    with open(path, 'r', encoding='utf-8') as fh:
+        content = fh.read()
+except OSError:
+    sys.exit(0)
 
 # Locate frontmatter: must start at line 0 with ---
 lines = content.split('\n')
@@ -174,6 +249,12 @@ if not changed:
     sys.exit(0)
 
 new_content = '\n'.join(['---'] + new_fm + lines[end_idx:])
-with open(path, 'w', encoding='utf-8') as fh:
-    fh.write(new_content)
+# An unwritable target (read-only file, read-only mount) must never surface as
+# a failing PostToolUse hook — the bump is best-effort by design.
+try:
+    with open(path, 'w', encoding='utf-8') as fh:
+        fh.write(new_content)
+except OSError:
+    sys.exit(0)
 PYEOF
+exit 0

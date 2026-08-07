@@ -15,9 +15,10 @@
 # is the tool surface itself. Do not attempt to special-case a "trusted
 # caller" here — the payload does not carry that information.
 #
-# DIVISION OF LABOR: hooks/goalforge-transition-guard.sh is a separate, NOT-wired
-# ADVISORY guard over edge *legality* (is old-status -> new-status a valid SDD
-# transition). THIS hook owns hard field-mutation protection — it does not
+# DIVISION OF LABOR: hooks/goalforge-transition-guard.sh is a separate guard
+# (wired PreToolUse, matcher Edit only) over edge *legality* (is old-status ->
+# new-status a valid SDD transition). THIS hook owns hard field-mutation
+# protection across ALL THREE tools — it does not
 # care whether the transition is legal, only whether the write is coming
 # through a tool surface instead of the sanctioned Bash-path writers.
 #
@@ -203,12 +204,9 @@ decide() {
             local old new existing simulated old_fm new_fm field
             old="$(printf '%s' "$input" | command jq -r '.tool_input.old_string // empty' 2>/dev/null)" || return 0
             new="$(printf '%s' "$input" | command jq -r '.tool_input.new_string // empty' 2>/dev/null)" || return 0
-            # UNEVALUABLE PAYLOAD: a real Edit always carries old_string; an
-            # in-scope plan file whose payload lacks it cannot be simulated, so
-            # the guard cannot judge the write. Zero-breakage still allows it —
-            # but silently allowing an unjudgeable write to a PROTECTED file is
-            # exactly the case an operator needs to see, so say so on stderr.
-            [ -z "$old" ] && { printf '%s|%s' "unevaluable" "$file"; return 0; }
+            # A real Edit always carries old_string; a payload without one
+            # cannot be simulated and is not a write this guard can judge.
+            [ -z "$old" ] && return 0
             existing="$(cat "$file" 2>/dev/null)" || return 0
             case "$existing" in
                 *"$old"*) : ;;
@@ -229,8 +227,8 @@ decide() {
             local edits existing content old new replace_all entry old_fm new_fm field matched
             existing="$(cat "$file" 2>/dev/null)" || return 0
             edits="$(printf '%s' "$input" | command jq -c '.tool_input.edits // [] | .[]' 2>/dev/null)" || return 0
-            # Unevaluable payload — see the Edit branch.
-            [ -z "$edits" ] && { printf '%s|%s' "unevaluable" "$file"; return 0; }
+            # No edits array — nothing to simulate; see the Edit branch.
+            [ -z "$edits" ] && return 0
             content="$existing"
             matched=1
             while IFS= read -r entry; do
@@ -407,28 +405,57 @@ self_test() {
     [ -n "$out" ] && [[ "$out" == status\|* ]] && ok "Edit status on just-created file -> detected (no exemption)" \
         || no "Edit status on just-created file -> got '$out'"
 
-    # 10) PLANS_ROOT resolution pair (spec §Interface Contract). A plan file
-    #     under $SDD_PLANS_DIR engages the hook; the same file shape outside
-    #     every resolved root takes the silent exit-0 fast path. Driven through
-    #     a SUBPROCESS so the assertion covers the real entry point (stdin,
-    #     helper sourcing and exit code included), not just decide().
+    # 10) PLANS_ROOT resolution pair (spec §Interface Contract). A REAL status
+    #     mutation (old/new snippets that actually occur in the fixture) under
+    #     $SDD_PLANS_DIR blocks with exit 2; the same payload outside every
+    #     resolved root takes the silent exit-0 fast path. Driven through a
+    #     SUBPROCESS so the assertion covers the real entry point (stdin, helper
+    #     sourcing and exit code included), not just decide() — and asserting
+    #     exit 2 makes it a check of the SCOPING and the GUARD together, which a
+    #     payload the hook merely fails to evaluate could never be.
     mkdir -p "$d/sdd/plans/f" "$d/sdd/elsewhere"
     printf -- '---\nstatus: draft\n---\n' > "$d/sdd/plans/f/overview.md"
     printf -- '---\nstatus: draft\n---\n' > "$d/sdd/elsewhere/overview.md"
+    mutation() { # <overview path> — a status: draft -> verified Edit payload
+        command jq -n --arg fp "$1" \
+            '{tool_name:"Edit", tool_input:{file_path:$fp, old_string:"status: draft", new_string:"status: verified"}}'
+    }
     local pos_out neg_out pos_rc neg_rc
-    payload="$(command jq -n --arg fp "$d/sdd/plans/f/overview.md" \
-        '{tool_name:"Edit", tool_input:{file_path:$fp}}')"
-    pos_out="$(printf '%s' "$payload" | SDD_PLANS_DIR="$d/sdd/plans" bash "$SELF" 2>&1)"; pos_rc=$?
-    { [ -n "$pos_out" ] || [ "$pos_rc" != 0 ]; } \
-        && ok "under \$SDD_PLANS_DIR -> hook engaged" \
-        || no "under \$SDD_PLANS_DIR should engage (rc=$pos_rc, out='$pos_out')"
+    pos_out="$(mutation "$d/sdd/plans/f/overview.md" | SDD_PLANS_DIR="$d/sdd/plans" bash "$SELF" 2>&1)"; pos_rc=$?
+    { [ "$pos_rc" = 2 ] && [ -n "$pos_out" ]; } \
+        && ok "status mutation under \$SDD_PLANS_DIR -> exit 2 with a reason" \
+        || no "under \$SDD_PLANS_DIR should block (rc=$pos_rc, out='$pos_out')"
 
-    payload="$(command jq -n --arg fp "$d/sdd/elsewhere/overview.md" \
-        '{tool_name:"Edit", tool_input:{file_path:$fp}}')"
-    neg_out="$(printf '%s' "$payload" | SDD_PLANS_DIR="$d/sdd/plans" bash "$SELF" 2>&1)"; neg_rc=$?
+    neg_out="$(mutation "$d/sdd/elsewhere/overview.md" | SDD_PLANS_DIR="$d/sdd/plans" bash "$SELF" 2>&1)"; neg_rc=$?
     { [ "$neg_rc" = 0 ] && [ -z "$neg_out" ]; } \
-        && ok "outside every plans root -> silent exit-0 fast path" \
+        && ok "same mutation outside every plans root -> silent exit-0 fast path" \
         || no "outside every plans root should fast-path silently (rc=$neg_rc, out='$neg_out')"
+
+    # 11) PLANS_ROOT legs 2 and 3 (spec §Interface Contract). SDD_PLANS_DIR is
+    #     UNSET for all four and $HOME points at an empty sandbox, so each case
+    #     can only pass through the leg it names: deleting the git-root leg or
+    #     the ~/.claude/plans leg from goalforge-plans-root.sh turns one of
+    #     these red.
+    local hs="$d/home" lf
+    mkdir -p "$hs/.claude/plans/f" "$hs/.claude/notplans"
+    git init -q "$d/leg2repo" 2>/dev/null
+    mkdir -p "$d/leg2repo/plans/f" "$d/leg2repo/notplans"
+    for lf in "$d/leg2repo/plans/f" "$d/leg2repo/notplans" "$hs/.claude/plans/f" "$hs/.claude/notplans"; do
+        printf -- '---\nstatus: draft\n---\n' > "$lf/overview.md"
+    done
+    leg() { # <label> <overview path> <block|silent>
+        local out rc
+        out="$(mutation "$2" | env -u SDD_PLANS_DIR HOME="$hs" bash "$SELF" 2>&1)"; rc=$?
+        if [ "$3" = block ]; then
+            { [ "$rc" = 2 ] && [ -n "$out" ]; } && ok "$1" || no "$1 (rc=$rc, out='$out')"
+        else
+            { [ "$rc" = 0 ] && [ -z "$out" ]; } && ok "$1" || no "$1 (rc=$rc, out='$out')"
+        fi
+    }
+    leg "leg 2: <git-root>/plans/** -> exit 2"                     "$d/leg2repo/plans/f/overview.md"   block
+    leg "leg 2 negative: same git repo outside plans/ -> silent"   "$d/leg2repo/notplans/overview.md"  silent
+    leg "leg 3: \$HOME/.claude/plans/** -> exit 2"                 "$hs/.claude/plans/f/overview.md"   block
+    leg "leg 3 negative: \$HOME/.claude outside plans/ -> silent"  "$hs/.claude/notplans/overview.md"  silent
 
     echo ""
     echo "Results: $p passed, $f failed"
@@ -451,10 +478,6 @@ main() {
 
     field="${result%%|*}"
     file="${result#*|}"
-    if [ "$field" = "unevaluable" ]; then
-        echo "goalforge-single-writer: ${file} is a protected plan file but the Edit/MultiEdit payload carries no old_string/edits — the write cannot be simulated, so it is ALLOWED unjudged (zero-breakage)." >&2
-        exit 0
-    fi
     if [ "$field" = "brief-immutable" ]; then
         echo "goalforge-single-writer: ${file} is an immutable brief (write-once) — never Edit/Write an existing brief-task-*.md; a stale brief is re-authored via goalforge-execute's sanctioned Bash-path staleness flow." >&2
         exit 2

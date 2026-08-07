@@ -236,9 +236,14 @@ with a `goalforge-validate --strict` error. Install it into a project repo:
 
 ```bash
 cd /path/to/your/project
-GOALFORGE_VALIDATE_SCRIPT="$HOME/src/cogwright/packages/goalforge/scripts/goalforge-validate.sh" \
-  bash ~/src/cogwright/packages/goalforge/scripts/goalforge-install-hooks.sh .
+bash ~/src/cogwright/packages/goalforge/scripts/goalforge-install-hooks.sh .
 ```
+
+The hook finds `goalforge-validate.sh` script-relative to itself — no
+environment variable is involved, so nothing in the ambient environment of
+whatever tool invokes git can point it elsewhere or silently disable it.
+(`GOALFORGE_VALIDATE_SCRIPT` overrides that address, but it exists for the
+hook's own regression tests; do not set it in normal use.)
 
 It is chain-safe: an existing `pre-commit` hook is appended to inside
 `# >>> sdd-pre-commit >>>` markers, never overwritten, and it exits 0 on every
@@ -265,17 +270,29 @@ Those fields have a single sanctioned writer, `goalforge-transition.sh`.
 - Without `jq` on `PATH` the hook allows everything through silently. Install
   `jq`.
 
-**`goalforge-transition-guard` (PreToolUse, matcher `Edit|Write|MultiEdit`)** —
-blocks a `status:` edit whose old → new edge is not in
-`references/state-machine.md`.
+**`goalforge-transition-guard` (PreToolUse, matcher `Edit`)** — blocks a
+`status:` edit whose old → new edge is not in `references/state-machine.md`,
+naming the refused edge on stderr.
 
-**`goalforge-open-questions-gate` (PreToolUse, matcher `Edit|Write|MultiEdit`)**
-— blocks a work package's `→ ready` transition while its `## Open Questions`
-section still holds an unresolved bullet.
+**`goalforge-open-questions-gate` (PreToolUse, matcher `Edit`)** — blocks a work
+package's `→ ready` transition while its `## Open Questions` section still holds
+an unresolved bullet.
+
+Both gates match `Edit` **only**: they judge an edit by its `old_string` /
+`new_string` snippets, which a `Write` or `MultiEdit` payload does not carry in
+that form. That is not a hole — a status change arriving through either of those
+tools is blocked outright by `goalforge-single-writer`, whose field guard covers
+all three tools. The narrow matchers keep the two gates from advertising a
+coverage they cannot deliver.
 
 **`goalforge-frontmatter-touch` (PostToolUse, matcher `Edit|Write|MultiEdit`)** —
 bumps `updated:` (and `stage_updated:` if present) to today in an edited plans
-`.md`. Idempotent; never writes when the values are already current.
+`.md`. It reads only the payload's `file_path`, so all three tools are genuinely
+in scope. Idempotent; never writes when the values are already current.
+
+- The first edit of a plan file each day rewrites it underneath Claude Code, so
+  the session has to re-read that file once before its next edit lands. Later
+  edits the same day change nothing and cost nothing.
 
 Every one of them exits 0 on any internal error — a hook never breaks your
 session because it itself failed.

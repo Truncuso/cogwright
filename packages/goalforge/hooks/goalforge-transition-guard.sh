@@ -10,7 +10,9 @@
 # missing/garbled state-machine) — a hook must never block because it itself
 # failed. The ONLY non-zero exit is exit 2 for a confirmed illegal edge.
 #
-# SCOPE: wired as a PreToolUse hook (hooks.json, matcher Edit|Write|MultiEdit).
+# SCOPE: wired as a PreToolUse hook (hooks.json, matcher `Edit` — it reads an
+# Edit payload's old_string/new_string and can evaluate nothing else; a status
+# change via Write/MultiEdit is blocked outright by goalforge-single-writer).
 # Fast path: exit 0, silently, unless the edited file resolves under a plans
 # root — resolution order owned by the sourced goalforge-plans-root.sh.
 #
@@ -65,10 +67,36 @@ PY
 }
 
 # Returns 2 for a confirmed illegal edge, 0 otherwise (legal or any error).
+# An unresolvable table still passes open (zero-breakage) — but it does so
+# LOUDLY: a silently dead gate is indistinguishable from a working one, so the
+# one condition an operator cannot otherwise observe gets a stderr note.
 do_check() {
     local v
+    if [[ ! -r "$STATE_MACHINE" ]]; then
+        echo "goalforge-transition-guard: note — state-machine table unreadable at $STATE_MACHINE; edge legality NOT checked (passing open)." >&2
+        return 0
+    fi
     v="$(edge_verdict "$STATE_MACHINE" "$1" "$2")"
     [[ "$v" == "illegal" ]] && return 2 || return 0
+}
+
+# ── Cheap bash prefilter ────────────────────────────────────────────────────
+# Runs on the raw payload BEFORE any interpreter spawn, on every Edit in the
+# session. CONSERVATIVE by construction: it returns 1 only for a payload that
+# CANNOT be ours (no overview.md anywhere in the text, or a plainly-extractable
+# file_path outside every plans root). Anything it cannot judge — no file_path
+# key, a quoted path carrying escapes — returns 0 and falls through to the
+# python parser, which stays the authority.
+prefilter() {
+    local raw="$1" rest fp
+    case "$raw" in *overview.md*) ;; *) return 1 ;; esac
+    rest="${raw#*\"file_path\":}"
+    [[ "$rest" == "$raw" ]] && return 0          # no file_path key -> parser decides
+    rest="${rest#"${rest%%[![:space:]]*}"}"      # drop leading whitespace
+    case "$rest" in \"*) rest="${rest#\"}"; fp="${rest%%\"*}" ;; *) return 0 ;; esac
+    case "$fp" in *\\*) return 0 ;; esac         # escaped path -> parser decodes it
+    goalforge_under_plans_root "$fp" || return 1
+    return 0
 }
 
 # Parse a PreToolUse Edit event from stdin → prints "<from> <to> <file>" or
@@ -154,6 +182,38 @@ self_test() {
     { [[ "$neg_rc" -eq 0 ]] && [[ -z "$neg_out" ]]; } \
         && ok "same edge outside every plans root -> silent exit-0 fast path" \
         || no "outside every plans root should fast-path silently (rc=$neg_rc, out='$neg_out')"
+
+    # The blocking path must SAY why: exit 2 with an empty stderr leaves the
+    # operator with a refused edit and no reason. stderr only — stdout stays
+    # clean for the hook protocol.
+    local blk_err blk_rc
+    blk_err="$(payload "$d/plans/f/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1 >/dev/null)"; blk_rc=$?
+    { [[ "$blk_rc" -eq 2 ]] && [[ -n "$blk_err" ]]; } \
+        && ok "blocked edge -> exit 2 with a non-empty stderr reason" \
+        || no "blocked edge should print a reason (rc=$blk_rc, err='$blk_err')"
+
+    # PLANS_ROOT legs 2 and 3 (spec §Interface Contract). SDD_PLANS_DIR is UNSET
+    # for all four and $HOME points at an empty sandbox, so each case can only
+    # pass through the leg it names: deleting the git-root leg or the
+    # ~/.claude/plans leg from goalforge-plans-root.sh turns one of these red.
+    local hs="$d/home"
+    mkdir -p "$hs/.claude/plans/f" "$hs/.claude/notplans"
+    git init -q "$d/leg2repo" 2>/dev/null
+    mkdir -p "$d/leg2repo/plans/f" "$d/leg2repo/notplans"
+    leg() { # <label> <overview path> <engage|silent>
+        local out rc
+        out="$(payload "$2" | env -u SDD_PLANS_DIR HOME="$hs" bash "$SELF" 2>&1)"; rc=$?
+        if [[ "$3" == engage ]]; then
+            { [[ -n "$out" ]] || [[ "$rc" -ne 0 ]]; } && ok "$1" || no "$1 (rc=$rc, out='$out')"
+        else
+            { [[ "$rc" -eq 0 ]] && [[ -z "$out" ]]; } && ok "$1" || no "$1 (rc=$rc, out='$out')"
+        fi
+    }
+    leg "leg 2: <git-root>/plans/** -> hook engaged"               "$d/leg2repo/plans/f/overview.md"   engage
+    leg "leg 2 negative: same git repo outside plans/ -> silent"   "$d/leg2repo/notplans/overview.md"  silent
+    leg "leg 3: \$HOME/.claude/plans/** -> hook engaged"           "$hs/.claude/plans/f/overview.md"   engage
+    leg "leg 3 negative: \$HOME/.claude outside plans/ -> silent"  "$hs/.claude/notplans/overview.md"  silent
+
     rm -rf "$d"
 
     echo ""
@@ -186,14 +246,24 @@ if [[ -n "$FROM" && -n "$TO" ]]; then
 fi
 
 # Hook path: derive from/to (+ the edited file) from the PreToolUse event on
-# stdin. `read` splits on IFS, so FILE takes the remainder of the line — a path
-# containing spaces stays intact.
+# stdin. The payload is slurped ONCE here so the bash prefilter can reject the
+# overwhelming majority of Edits without spawning python at all; only a payload
+# that survives it reaches the parser. `read` splits on IFS, so FILE takes the
+# remainder of the line — a path containing spaces stays intact.
+RAW="$(cat 2>/dev/null || true)"
+[[ -n "$RAW" ]] || exit 0
+prefilter "$RAW" || exit 0
 FILE=""
-read -r FROM TO FILE < <(parse_stdin) || true
+read -r FROM TO FILE < <(printf '%s' "$RAW" | parse_stdin) || true
 if [[ -z "${FROM:-}" || -z "${TO:-}" ]]; then
     exit 0   # not a WP-status edit, or parse failed → never block
 fi
 # Fast path: a status edit outside every resolved plans root is not ours.
 goalforge_under_plans_root "${FILE:-}" || exit 0
 do_check "$FROM" "$TO"
-exit $?
+rc=$?
+if [[ "$rc" -eq 2 ]]; then
+    echo "goalforge-transition-guard: BLOCK — $FILE: '$FROM -> $TO' is not an edge in references/state-machine.md; use goalforge-transition.sh." >&2
+    exit 2
+fi
+exit 0
