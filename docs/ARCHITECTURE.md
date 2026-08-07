@@ -113,7 +113,7 @@ flowchart TB
     subgraph EXT["recommends — soft, degrade never block"]
         direction LR
         RA["research-analyst<br/><i>agent</i>"]
-        IL["interview-loop<br/><i>skill</i>"]
+        IL["interview engine<br/><i>plugin skill</i>"]
         ADR["adr-write<br/><i>skill</i>"]
     end
 
@@ -132,7 +132,7 @@ Declared degradations, verbatim from `plugins/goalforge/relations.yaml`:
 | Missing | Used by | Degrades to |
 |---|---|---|
 | `research-analyst` | wayfind | dispatch a general-purpose agent with an explicit research brief |
-| `interview-loop` | wayfind, goalforge-interview | one-question-at-a-time question loop in the main session |
+| `interview` (plugin) | wayfind, goalforge-interview | one-question-at-a-time question loop in the main session |
 | `adr-write` | wayfind | skip the ADR gate; log the skipped decisions in the graduation brief |
 
 The `/spec`, `/plan`, `/implement`, `/verify` commands are the human entry

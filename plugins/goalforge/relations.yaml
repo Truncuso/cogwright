@@ -7,7 +7,7 @@ recommends:
     kind: agent
     used-by: wayfind
     degrade: dispatch a general-purpose agent with an explicit research brief
-  - name: interview-loop
+  - name: interview
     kind: skill
     used-by: wayfind, goalforge-interview
     degrade: one-question-at-a-time AskUserQuestion loop in the main session

@@ -173,5 +173,5 @@ skill-defect issue events) at
 
 `/handoff-pickup goalforge-package-maintenance` → `/idea-review` (ranked list
 above) → AskUserQuestion on brief-tenancy → if plans/ substrate is to be
-decided, interview-loop on the three options.
+decided, the `interview` plugin skill on the three options.
 ```
