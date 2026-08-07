@@ -145,7 +145,7 @@ blocked_stop:  <blocked_stop>
 ## Open Questions
 <unresolved items>
 
-Approve this spec and advance status (draft → ready)? [yes/no/revise]
+Approve this spec and advance status (draft → ready)? [yes/no/revise/grill]
 ```
 
 Present the goal block first — it is the contract the rest of the spec serves.
@@ -154,8 +154,26 @@ it in Step 2b before re-presenting rather than asking the user to approve an
 under-specified goal.
 
 **Do not proceed until the user replies with an affirmative.** If the user
-requests revisions, iterate the design pass (Step 2) and re-present. If the
-user declines, exit without writing any files or changing any status.
+requests revisions, iterate the design pass (Step 2) and re-present.
+If the user declines, exit without writing any files or changing any status.
+
+`grill` is the fourth answer, additive: `yes`, `no`, and `revise` keep the
+semantics above unchanged. It runs an adversarial pass over the draft **before
+any file is written**. Frame the session from the drafted goal block, the
+Design, and the Open Questions exactly as rendered in the block above, then
+delegate the Q&A loop to the `interview` plugin skill with the literal
+`preset: spec-grill`. The adapter takes no artifact argument, so that framing is
+the only channel to the draft; question technique and stopping behavior stay
+with the engine. Fold the returned signals into a Step 2 revision and
+re-present this same gate — a grill never advances status and never stamps a
+file. An `ADR_CANDIDATE` is carried as an open question and routed to
+`adr-write` at harden, not written here.
+
+Under `SDD_AUTONOMY=unattended` the `grill` option is **not** offered: the gate
+PARKs per §Unattended mode above, unchanged, and no `AskUserQuestion` is
+introduced on that path. If the `interview` plugin skill is missing or
+unresolvable, present `[yes/no/revise]` instead — the option degrades, it never
+blocks the gate.
 
 This gate enforces the `draft → ready` human-gated transition for the feature
 (§2 Status state machine; goalforge-spec advances overview.md, not spec.md).
