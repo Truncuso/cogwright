@@ -98,6 +98,34 @@ mapping + entry shape: `~/.claude/skills/idea/references/provenance-mapping.md`.
 **non-promotion** capture leaves `sources: []`; the typed form is a superset of
 the legacy bare-path list (a bare string reads as `{locator: <string>}`).
 
+### Step 3b — Intake grill (vague Problem or Goal)
+
+The stamped intent is **vague** iff the **Goal** carries no measurable success
+predicate **or** the **Problem** names no observable symptom. Sharpen a vague
+intake here — ahead of Step 4c, so the route classifier reads the sharpened
+Goal. A non-vague intake skips this step untouched: no prompt, no new mandatory
+gate. The Step 3 spike-candidate flag takes precedence — a Goal that turns on a
+question talking will not settle routes to `prototype`, not to the grill — and
+at most **one** grill runs per capture; a second vague reading becomes an
+overview open-question line instead.
+
+**Frame, then delegate.** Restate the drafted Problem and Goal in the framing
+prose handed to the `interview` plugin skill with the literal
+`preset: capture-intake`. The adapter takes no artifact argument, so that
+framing is the only channel to the drafted text; question technique and stopping
+behavior stay with the engine.
+
+**Fold the returned signals** back into `overview.md`: `RESOLVED_TERM` into the
+Problem/Goal prose, `HANDOFF_SUGGESTION` into an open-question line, and
+`ADR_CANDIDATE` logged inline for `goalforge-harden` to pick up. `glossary-write`
+and `adr-write` are deliberately **not** invoked here — sink-absent degrade is to
+log inline, never write, which keeps capture's write-only-`overview.md` contract.
+
+Under `SDD_AUTONOMY=unattended` the grill does not fire: take the non-vague path
+and log one inline line recording the vague reading. No `AskUserQuestion` is
+introduced on any unattended path. If the `interview` plugin skill is missing or
+unresolvable, likewise proceed as non-vague — the hook never blocks capture.
+
 ### Step 4 — Bump timestamps
 
 Set `created:` and `updated:` in `overview.md` to today (`YYYY-MM-DD`). The `hooks/goalforge-frontmatter-touch.sh` hook can also bump these on
