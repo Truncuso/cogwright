@@ -127,13 +127,13 @@ left open. The map is not a reading list.
 
 ## 4. Teach-back machinery (HITL, main session)
 
-A learning ticket is worked as an **interview-plugin teach-back in the main
+A learning ticket is worked as an **`interview` plugin teach-back in the main
 session** — never dispatched, on the same footing as `grilling` and the
 graduate quiz-back gate. The dispatch row:
 
 | ticket_type | mode | Machinery | Model / effort |
 |---|---|---|---|
-| learning | HITL | `interview` plugin teach-back in the **main session**; optional dispatched material-gathering leg | main session (material legs: sonnet / low) |
+| learning | HITL | `interview` plugin teach-back in the **main session** (teachback style pending wp-08; until it ships, a plain question-per-turn recall check) — optional dispatched material-gathering leg | main session (material legs: sonnet / low) |
 
 The loop, in the main session:
 

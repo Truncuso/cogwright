@@ -120,7 +120,7 @@ flowchart TB
     WAY -.-> RA
     WAY -.-> IL
     WAY -.-> ADR
-    INT["interview<br/><i>goal-hardening grilling</i>"] -.-> IL
+    INT["goalforge-interview<br/><i>goal-hardening grilling</i>"] -.-> IL
     HAR --> INT
 
     classDef ext stroke-dasharray: 4 3;
@@ -132,7 +132,7 @@ Declared degradations, verbatim from `plugins/goalforge/relations.yaml`:
 | Missing | Used by | Degrades to |
 |---|---|---|
 | `research-analyst` | wayfind | dispatch a general-purpose agent with an explicit research brief |
-| `interview` (plugin) | wayfind, goalforge-interview | one-question-at-a-time question loop in the main session |
+| `interview` | wayfind, goalforge-interview | one-question-at-a-time question loop in the main session |
 | `adr-write` | wayfind | skip the ADR gate; log the skipped decisions in the graduation brief |
 
 The `/spec`, `/plan`, `/implement`, `/verify` commands are the human entry

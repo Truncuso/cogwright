@@ -320,13 +320,22 @@ grep -qF '`goalforge-interview`' "$SKILL_MD" \
 # I10: engine-drift guard -- cross-boundary dependency on the interview
 # plugin engine's consumed contract tokens. Version-globbed cache path (never
 # a pinned version). Hard-fails when this repo's marketplace lists the
-# interview plugin; WARN-skips only on installs without it.
+# interview plugin; WARN-skips only on installs without it. The marketplace
+# probe is repo-relative, so the hard-fail branch holds only when run.sh runs
+# in-tree (a relocated scratch copy degrades to the WARN branch).
 ENGINE_MD="$(ls "$HOME"/.claude/plugins/cache/cogwright/interview/*/engine.md 2>/dev/null | sort -V | tail -1 || true)"
 MARKETPLACE_JSON="$SKILL_DIR/../../.claude-plugin/marketplace.json"
 if [ -n "$ENGINE_MD" ] && [ -f "$ENGINE_MD" ]; then
   { grep -q "HANDOFF_SUGGESTION" "$ENGINE_MD" && grep -q "high-fidelity" "$ENGINE_MD"; } \
     && check "interview plugin engine.md still exposes consumed contract tokens" "pass" \
     || check "interview plugin engine.md still exposes consumed contract tokens" "fail"
+  # I10b: the preset goalforge's harden delegation pins must exist next to the
+  # engine, and its output_contract must declare every token goalforge's
+  # escape hatch consumes (interview/SKILL.md routes off high-fidelity).
+  PRESET_MD="$(dirname "$ENGINE_MD")/presets/harden-facets.md"
+  { [ -f "$PRESET_MD" ] && grep -q "high-fidelity" "$PRESET_MD"; } \
+    && check "harden-facets preset present and declares high-fidelity" "pass" \
+    || check "harden-facets preset present and declares high-fidelity" "fail"
 elif grep -q '"name": "interview"' "$MARKETPLACE_JSON" 2>/dev/null; then
   check "interview plugin engine.md resolvable (marketplace lists interview)" "fail"
 else

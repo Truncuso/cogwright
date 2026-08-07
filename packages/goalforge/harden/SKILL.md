@@ -218,7 +218,7 @@ before/after command protocol + Recommended Agents:
 ## Step 1 — Drive open questions to zero (`spec → hardened`)
 
 Delegate to `goalforge-interview` with the WP's `overview.md` and any linked
-task files as input context (it frames the session, then drives the global
+task files as input context (it frames the session, then drives the
 `interview` plugin engine, the sole resolver). The interview continues until every open
 question in scope is either:
 - resolved (answer recorded),

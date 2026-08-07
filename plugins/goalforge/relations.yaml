@@ -9,6 +9,7 @@ recommends:
     degrade: dispatch a general-purpose agent with an explicit research brief
   - name: interview
     kind: skill
+    source: interview@cogwright
     used-by: wayfind, goalforge-interview
     degrade: one-question-at-a-time AskUserQuestion loop in the main session
   - name: adr-write
