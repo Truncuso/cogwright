@@ -15,6 +15,15 @@ jobs:
         with:
           python-version: "3.x"
 
+      # Shared interpreter dependency for the whole job (owned by wp-08; later
+      # work packages must NOT add a second copy). goalforge-rollup.sh and
+      # goalforge-validate.sh hard-exit on `import yaml`, ci-lints.sh's
+      # privacy-marker section declares it a hard dependency, and every
+      # goalforge transition shells into rollup inside its flock section — so
+      # without this the smoke step's first transition exits 1 on a clean runner.
+      - name: Install Python dependencies
+        run: pip install pyyaml
+
       - name: Validate marketplace and plugin manifests
         run: |
           python3 - <<'EOF'
@@ -84,3 +93,6 @@ jobs:
               bash "$tree/hooks/$h.sh" --self-test
             done
           done
+
+      - name: goalforge state-machine smoke (throwaway plans root)
+        run: bash plugins/goalforge/scripts/goalforge-smoke.sh --throwaway
