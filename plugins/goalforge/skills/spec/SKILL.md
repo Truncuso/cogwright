@@ -27,7 +27,8 @@ Templates: `${CLAUDE_PLUGIN_ROOT}/references/templates/`.
 When `SDD_AUTONOMY=unattended` is set (the `autopilot` driver sets it), the
 `draft → ready` sign-off has no human to grant it. **Do not call `AskUserQuestion`
 to wait — PARK:** write the spec and the verbatim approval prompt to a handoff and
-stop (the run resumes when a human approves, or on the next `/autopilot`). The
+stop (the run resumes when a human approves, or on the next `/autopilot`); the
+parked prompt is the gate block with the `grill` token stripped. The
 status is **not** advanced autonomously — accepting a spec is a human commitment.
 Spec *content* quality checks (personas/architect/judge) are evidence-decidable and
 still run. See `~/.claude/skills/autopilot/references/autonomy-policy.md`. Unset
@@ -145,7 +146,7 @@ blocked_stop:  <blocked_stop>
 ## Open Questions
 <unresolved items>
 
-Approve this spec and advance status (draft → ready)? [yes/no/revise/grill]
+Approve this spec and advance status (draft → ready)? [yes/no/revise/grill]  (grill omitted when SDD_AUTONOMY=unattended or the interview skill is unresolvable)
 ```
 
 Present the goal block first — it is the contract the rest of the spec serves.
@@ -158,22 +159,26 @@ requests revisions, iterate the design pass (Step 2) and re-present.
 If the user declines, exit without writing any files or changing any status.
 
 `grill` is the fourth answer, additive: `yes`, `no`, and `revise` keep the
-semantics above unchanged. It runs an adversarial pass over the draft **before
-any file is written**. Frame the session from the drafted goal block, the
-Design, and the Open Questions exactly as rendered in the block above, then
+semantics above unchanged. It runs a pre-acceptance grill over the draft
+**before any file is written**. Frame the session from the drafted goal block,
+the Design, and the Open Questions exactly as rendered in the block above, then
 delegate the Q&A loop to the `interview` plugin skill with the literal
-`preset: spec-grill`. The adapter takes no artifact argument, so that framing is
-the only channel to the draft; question technique and stopping behavior stay
-with the engine. Fold the returned signals into a Step 2 revision and
-re-present this same gate — a grill never advances status and never stamps a
-file. An `ADR_CANDIDATE` is carried as an open question and routed to
+`preset: spec-grill`. The `interview` plugin skill takes only a `preset:`
+argument (no artifact argument), so that framing is the only channel to the
+draft; question technique and stopping behavior stay with the engine. Fold the
+returned signals into a Step 2 / Step 2b revision (goal-facet signals go to
+Step 2b) and re-present this same gate — a grill never advances status and never
+stamps a file. An `ADR_CANDIDATE` is carried as an open question and routed to
 `adr-write` at harden, not written here.
 
 Under `SDD_AUTONOMY=unattended` the `grill` option is **not** offered: the gate
 PARKs per §Unattended mode above, unchanged, and no `AskUserQuestion` is
-introduced on that path. If the `interview` plugin skill is missing or
-unresolvable, present `[yes/no/revise]` instead — the option degrades, it never
-blocks the gate.
+introduced on that path. Otherwise probe first — *resolvable* := the `interview`
+skill (plugin `interview@cogwright`) appears in the session skill listing —
+checked **before** rendering the gate; unresolvable renders `[yes/no/revise]`
+instead, the option degrades, it never blocks the gate. If resolution fails at
+invocation time after `grill` was chosen, report the unresolved skill in one line
+and re-present the gate as `[yes/no/revise]` — never stall, never advance.
 
 This gate enforces the `draft → ready` human-gated transition for the feature
 (§2 Status state machine; goalforge-spec advances overview.md, not spec.md).
