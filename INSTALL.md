@@ -447,7 +447,6 @@ grep -rn 'sdd-pre-commit' .git/hooks/ 2>/dev/null
 | `refusing to clobber: real dir has uncommitted tracked drift` | your skills dir has a real `goalforge/` directory that differs from the package | commit/revert/move it, then re-run |
 | `unexpected origin remote` | you cloned a fork | `GF_SKIP_REPO_PRECHECK=1` |
 | `link target does not resolve to a goalforge package` | wrong `GF_LINK_TARGET`, or clone incomplete | point at `<repo>/packages/goalforge` |
-| A skill references `~/.claude/skills/goalforge/...` and the file is missing | known path-leak bug, see below | read the same relative path under `${CLAUDE_PLUGIN_ROOT}` instead |
 | `/spec`, `/plan`, `/implement`, `/verify` are unknown commands | you are on the manual skills-dir route, where command files are inert | install via the plugin route, or invoke the `goalforge` front door |
 
 ---
@@ -464,14 +463,16 @@ Stated plainly so you are not debugging a documented gap:
    the stage procedure directly from `<skills-dir>/goalforge/<child>/SKILL.md`.
    The children are private: they have no Skill-tool name and calling one by
    name fails with "Unknown skill".
-2. **Some skill text points at `~/.claude/skills/goalforge/...`.** Those are
-   leftover maintainer-machine paths. The same file exists under
-   `${CLAUDE_PLUGIN_ROOT}/` — for a child skill's own assets, under
-   `${CLAUDE_PLUGIN_ROOT}/skills/<child>/`. Scripts referenced this way are all
-   present in `${CLAUDE_PLUGIN_ROOT}/scripts/`.
-3. **A few references reach into skills that are not part of this marketplace**
-   (`idea`, `autopilot`). Those sections degrade — treat them as optional.
-4. **Child skills are individually discoverable — suppression is soft.** In the
+2. **A few references reach into skills that are not part of this marketplace**
+   (`idea`, `autopilot`). The couplings are real — the harden and spec stages
+   name those skills — but **no `recommends:` row in
+   `${CLAUDE_PLUGIN_ROOT}/relations.yaml` declares them**, so unlike the
+   declared companions (`research-analyst`, `interview`, `adr-write`) they
+   carry no named fallback. Those passages degrade *undeclared*: the section
+   simply has nothing to route to. Nothing blocks — the rest of the chain is
+   unaffected — but do not expect a documented degradation path for them.
+   Declaring the two rows is tracked for the next release.
+3. **Child skills are individually discoverable — suppression is soft.** In the
    package they are private children of the `goalforge` front door; flattened
    into a plugin they become top-level skills. Every child description
    therefore carries the fixed prefix
@@ -482,13 +483,10 @@ Stated plainly so you are not debugging a documented gap:
    request may still trigger one directly. Drive the chain through `/spec`,
    `/plan`, `/implement`, `/verify` (or the `goalforge` skill) and treat a
    direct child trigger as a routing miss, not a supported entry point.
-5. **`evals/` is not shipped.** The plugin artifact excludes the eval harness, so
+4. **`evals/` is not shipped.** The plugin artifact excludes the eval harness, so
    there is no bundled acceptance test. Use the smoke test above, or clone the
    repo and run evals from `packages/goalforge/evals/`.
-6. **macOS is untested.** See the platform notes.
-7. **Version strings disagree** — `plugin.json` carries a commit SHA, the README
-   catalog says v0.1.0, and the skill frontmatter says 3.0.0. The commit SHA in
-   `plugin.json` is the reliable identifier of what you installed.
+5. **macOS is untested.** See the platform notes.
 
 Bug reports and PRs welcome: <https://github.com/Truncuso/cogwright/issues>.
 See [CONTRIBUTING.md](CONTRIBUTING.md) — note that `packages/` is the authored
