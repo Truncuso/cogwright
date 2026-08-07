@@ -1,0 +1,357 @@
+{
+  "schema": 1,
+  "refs": [
+    {
+      "from": "README.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "README.md",
+      "path": "references/specialist-map.yaml"
+    },
+    {
+      "from": "README.md",
+      "path": "references/state-machine.md"
+    },
+    {
+      "from": "SKILL.md",
+      "path": "references/alias-map.md"
+    },
+    {
+      "from": "SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "SKILL.md",
+      "path": "references/state-machine.md"
+    },
+    {
+      "from": "references/dispatch-template.md",
+      "path": "references/discipline-core.md"
+    },
+    {
+      "from": "references/dispatch-template.md",
+      "path": "references/tier-map.md"
+    },
+    {
+      "from": "references/dispatch-template.md",
+      "path": "scripts/goalforge-pick-agent.py"
+    },
+    {
+      "from": "references/dispatch-template.md",
+      "path": "skills/execute/references/dispatch-resolution.md"
+    },
+    {
+      "from": "references/fidelity.md",
+      "path": "scripts/goalforge-issue"
+    },
+    {
+      "from": "references/fidelity.md",
+      "path": "skills/prototype/references/spike-spec.md"
+    },
+    {
+      "from": "references/retrospective.md",
+      "path": "references/trace-events.md"
+    },
+    {
+      "from": "references/retrospective.md",
+      "path": "scripts/goalforge-trace-read"
+    },
+    {
+      "from": "references/schema.md",
+      "path": "references/templates/reharden-evidence.md"
+    },
+    {
+      "from": "references/schema.md",
+      "path": "references/trace-events.md"
+    },
+    {
+      "from": "references/state-machine.md",
+      "path": "hooks/goalforge-transition-guard.sh"
+    },
+    {
+      "from": "references/state-machine.md",
+      "path": "references/templates/reharden-evidence.md"
+    },
+    {
+      "from": "references/state-machine.md",
+      "path": "references/trace-events.md"
+    },
+    {
+      "from": "references/state-machine.md",
+      "path": "scripts/goalforge-transition.sh"
+    },
+    {
+      "from": "references/trace-events.md",
+      "path": "references/state-machine.md"
+    },
+    {
+      "from": "skills/archive/SKILL.md",
+      "path": "references/archive-contract.md"
+    },
+    {
+      "from": "skills/archive/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/archive/SKILL.md",
+      "path": "scripts/goalforge-archive.sh"
+    },
+    {
+      "from": "skills/brief/SKILL.md",
+      "path": "references/tier-map.md"
+    },
+    {
+      "from": "skills/brief/SKILL.md",
+      "path": "scripts/goalforge-goal-hash.sh"
+    },
+    {
+      "from": "skills/brief/SKILL.md",
+      "path": "scripts/goalforge-pick-agent.py"
+    },
+    {
+      "from": "skills/capture/SKILL.md",
+      "path": "hooks/goalforge-frontmatter-touch.sh"
+    },
+    {
+      "from": "skills/capture/SKILL.md",
+      "path": "hooks/goalforge-open-questions-gate.sh"
+    },
+    {
+      "from": "skills/capture/SKILL.md",
+      "path": "references/archive-contract.md"
+    },
+    {
+      "from": "skills/capture/SKILL.md",
+      "path": "references/fidelity.md"
+    },
+    {
+      "from": "skills/capture/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/capture/SKILL.md",
+      "path": "skills/capture/references/gotchas.md"
+    },
+    {
+      "from": "skills/decompose/SKILL.md",
+      "path": "references/fidelity.md"
+    },
+    {
+      "from": "skills/decompose/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/decompose/SKILL.md",
+      "path": "scripts/goalforge-pick-agent.py"
+    },
+    {
+      "from": "skills/decompose/SKILL.md",
+      "path": "skills/decompose/references/gotchas.md"
+    },
+    {
+      "from": "skills/decompose/SKILL.md",
+      "path": "skills/decompose/references/tier1-feature-audit.md"
+    },
+    {
+      "from": "skills/decompose/SKILL.md",
+      "path": "skills/prototype/references/spike-spec.md"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
+      "path": "references/fidelity.md"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
+      "path": "skills/execute/references/autonomy.md"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
+      "path": "skills/execute/references/dispatch-resolution.md"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
+      "path": "skills/execute/references/goal-directive.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "hooks/goalforge-open-questions-gate.sh"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "references/fidelity.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "references/mutation-testing.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "references/state-machine.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "references/templates/reharden-evidence.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "skills/harden/references/assumptions.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "skills/harden/references/migration-rewire.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "skills/harden/references/panel-protocol.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "skills/harden/references/pre-harden-review.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "skills/harden/references/review-topology.md"
+    },
+    {
+      "from": "skills/harden/references/assumptions.md",
+      "path": "scripts/goalforge-assumption-recheck.sh"
+    },
+    {
+      "from": "skills/harden/references/panel-protocol.md",
+      "path": "skills/harden/references/pre-harden-review.md"
+    },
+    {
+      "from": "skills/interview/SKILL.md",
+      "path": "references/fidelity.md"
+    },
+    {
+      "from": "skills/interview/SKILL.md",
+      "path": "skills/prototype/references/spike-spec.md"
+    },
+    {
+      "from": "skills/plan-index/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/prototype/SKILL.md",
+      "path": "skills/prototype/references/LOGIC.md"
+    },
+    {
+      "from": "skills/prototype/SKILL.md",
+      "path": "skills/prototype/references/PERF.md"
+    },
+    {
+      "from": "skills/prototype/SKILL.md",
+      "path": "skills/prototype/references/UI.md"
+    },
+    {
+      "from": "skills/recap/SKILL.md",
+      "path": "scripts/recap.sh"
+    },
+    {
+      "from": "skills/redecompose/SKILL.md",
+      "path": "scripts/goalforge-goal-changelog.sh"
+    },
+    {
+      "from": "skills/redecompose/SKILL.md",
+      "path": "scripts/goalforge-reconcile-diff.sh"
+    },
+    {
+      "from": "skills/redecompose/SKILL.md",
+      "path": "scripts/goalforge-transition.sh"
+    },
+    {
+      "from": "skills/run/SKILL.md",
+      "path": "commands/spec.md"
+    },
+    {
+      "from": "skills/run/SKILL.md",
+      "path": "hooks/goalforge-open-questions-gate.sh"
+    },
+    {
+      "from": "skills/run/SKILL.md",
+      "path": "references/dispatch-template.md"
+    },
+    {
+      "from": "skills/run/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/run/SKILL.md",
+      "path": "references/specialist-map.yaml"
+    },
+    {
+      "from": "skills/run/SKILL.md",
+      "path": "skills/run/scripts/goalforge-router.sh"
+    },
+    {
+      "from": "skills/spec/SKILL.md",
+      "path": "references/fidelity.md"
+    },
+    {
+      "from": "skills/spec/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "references/state-machine.md"
+    },
+    {
+      "from": "skills/watchdog/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/wayfind/SKILL.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "skills/wayfind/SKILL.md",
+      "path": "skills/wayfind/references/fog-precision.md"
+    },
+    {
+      "from": "skills/wayfind/SKILL.md",
+      "path": "skills/wayfind/references/graduation-brief.md"
+    },
+    {
+      "from": "skills/wayfind/SKILL.md",
+      "path": "skills/wayfind/references/learning-goals.md"
+    },
+    {
+      "from": "skills/wayfind/SKILL.md",
+      "path": "skills/wayfind/references/ticket-fanout.md"
+    },
+    {
+      "from": "skills/wayfind/references/graduation-brief.md",
+      "path": "skills/wayfind/references/learning-goals.md"
+    },
+    {
+      "from": "skills/wayfind/references/learning-goals.md",
+      "path": "skills/wayfind/references/graduation-brief.md"
+    },
+    {
+      "from": "skills/wayfind/references/learning-goals.md",
+      "path": "skills/wayfind/scripts/validate-map.sh"
+    },
+    {
+      "from": "skills/wayfind/references/ticket-fanout.md",
+      "path": "references/dispatch-template.md"
+    },
+    {
+      "from": "skills/wayfind/references/ticket-fanout.md",
+      "path": "skills/wayfind/scripts/validate-ticket.sh"
+    }
+  ]
+}

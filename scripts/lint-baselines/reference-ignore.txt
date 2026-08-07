@@ -1,0 +1,34 @@
+# reference-ignore.txt — deliberate exceptions to the reference manifest.
+#
+# Applied at GENERATION time (scripts/goalforge-generate.sh): a matching token
+# or resolved path is never written to
+# plugins/goalforge/references/reference-manifest.json, so ci-lints and the
+# doctor consume that manifest with no ignore-list of their own.
+#
+# One entry per line. An entry matches a raw token OR its resolved
+# plugin-root-relative path, either as a literal prefix or as an fnmatch glob.
+# Every entry names the class it belongs to — these are addresses OUTSIDE the
+# plugin tree, not dangling refs inside it.
+
+# class-vi cross-skill prose: paths into OTHER installed skills, deliberately
+# left verbatim by the generator (they address ~/.claude/skills, not the plugin).
+skills/adjudication/*
+skills/capture-learning/*
+
+# idea / autopilot optional integrations: documented as optional in INSTALL.md;
+# the refs degrade to prose when those skills are not installed.
+skills/idea/*
+skills/autopilot/*
+
+# skills/sdd historicals: the retired sdd-* naming, kept in historic examples.
+skills/sdd
+skills/sdd/*
+
+# external pointers into the author's global rule set, not the plugin tree.
+references/rules/*
+~/.claude/plans
+
+# repo-tooling pointer: maintainer prose in the parent SKILL.md names the
+# cogwright-repo-relative generator path (alongside packages/ and plugins/),
+# which by construction never ships inside the artifact it generates.
+scripts/goalforge-generate.sh

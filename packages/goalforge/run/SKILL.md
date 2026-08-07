@@ -109,7 +109,7 @@ lives in the wave-route brief instance, task-02). Safety is **declaration-time
 only** (`[risk-accepted]`): no runtime write guard and no worktrees for
 planning-wave spec authors. The owned-set / off-limits fields, the ownership
 rule, and the return-as-DATA contract are defined once in
-`skills/goalforge/references/dispatch-template.md` and are **not duplicated
+`${CLAUDE_SKILL_DIR}/../references/dispatch-template.md` and are **not duplicated
 here** — the wave-route brief references that contract by path.
 
 ### Worked example — a 2-feature wave
@@ -124,7 +124,7 @@ four stages:
    `owned: [plans/feature-b/**]`. The two owned-sets are pairwise-disjoint (no
    path appears in both), so the wave is well-formed. Each author writes only
    its own `spec.md`. The ownership/return-as-DATA contract each brief obeys is
-   the one in `skills/goalforge/references/dispatch-template.md` (referenced by
+   the one in `${CLAUDE_SKILL_DIR}/../references/dispatch-template.md` (referenced by
    path, no contract text copied).
 3. **cross-spec judge** — one cold judge reads both authored specs and checks
    for cross-feature overlap or contradiction (e.g. both features claiming the

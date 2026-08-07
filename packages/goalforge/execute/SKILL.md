@@ -607,7 +607,7 @@ whether this step runs. `goalforge-verify` is the **sole authority** for the
 | `verify-and-simplify` | **Opt-in only** for a flagged high-risk task (Step 7); the one review + simplify + second-opinion pass runs at the WP boundary in `goalforge-verify` |
 | `superpowers:dispatching-parallel-agents` | Wave batched dispatch (Step 3) |
 | `superpowers:using-git-worktrees` | Worktree create/merge per parallel task (Step 3) |
-| `goalforge-goal-eval` (`skills/goalforge/scripts/`) | Pure goal router + `resolve_effective_goal` (Steps 0b, 9b) |
+| `goalforge-goal-eval` (`${CLAUDE_SKILL_DIR}/../scripts/`) | Pure goal router + `resolve_effective_goal` (Steps 0b, 9b) |
 | `judge` | Acting on a `judge` directive from the goal eval (Step 9b) |
 
 ---

@@ -19,7 +19,7 @@
 #
 # Path-rewrite rule table (pinned, wp-17 harden panel — classes i..vii):
 #   i.   root-script sibling refs ($SCRIPT_DIR/../references, ../hooks)     -> no-op (depth preserved at plugin root)
-#   ii.  child->root /scripts climbs                                        -> ${CLAUDE_PLUGIN_ROOT}[:-<orig>]/scripts
+#   ii.  child->root `../<shared-dir>` climbs (scripts, references, ...)     -> ${CLAUDE_PLUGIN_ROOT}[:-<orig>]/<shared-dir>
 #   iii. ${CLAUDE_SKILL_DIR}/<sub> prose (in a child skill)                 -> ${CLAUDE_PLUGIN_ROOT}/skills/<child>/<sub>
 #   iv.  telemetry hook decls (skill-measure.sh / skill-trace.sh)           -> stripped from generated SKILL.md frontmatter
 #   v.   skills/sdd refs                                                    -> left verbatim (never rewritten to a dead plugin path; wp-21 retirement)
@@ -141,8 +141,12 @@ done
 
 # ── 3. Path-rewrite + telemetry-strip pass over the generated tree ──
 _preserve_csv="$(IFS=,; echo "${PRESERVE[*]}")"
-GF_PRESERVE="$_preserve_csv" python3 - "$DST" <<'PYEOF'
-import os, re, sys
+# PYTHONDONTWRITEBYTECODE: the manifest emitter imports scripts/goalforge_refs.py;
+# a __pycache__/ beside it would be untracked generator droppings in the repo.
+PYTHONDONTWRITEBYTECODE=1 \
+GF_PRESERVE="$_preserve_csv" GF_SCRIPTS_DIR="$SCRIPT_DIR" GF_REF_IGNORE="$ROOT/scripts/lint-baselines/reference-ignore.txt" \
+python3 - "$DST" <<'PYEOF'
+import json, os, re, sys
 
 dst = sys.argv[1]
 preserve = set(os.environ.get("GF_PRESERVE", "").split(","))
@@ -194,9 +198,10 @@ def rewrite_paths(text, child):
                         "${CLAUDE_PLUGIN_ROOT:-$SCRIPT_DIR/../..}/scripts")
     text = text.replace("$SCRIPT_DIR/../scripts",
                         "${CLAUDE_PLUGIN_ROOT:-$SCRIPT_DIR/..}/scripts")
-    # (ii) prose child->root /scripts climbs via CLAUDE_SKILL_DIR
-    text = text.replace("${CLAUDE_SKILL_DIR}/../scripts", "${CLAUDE_PLUGIN_ROOT}/scripts")
-    text = text.replace("$CLAUDE_SKILL_DIR/../scripts", "${CLAUDE_PLUGIN_ROOT}/scripts")
+    # (ii) prose child->root climbs via CLAUDE_SKILL_DIR — the `../` climb lands
+    # at the plugin root whatever shared dir it names (scripts/, references/, ...).
+    text = text.replace("${CLAUDE_SKILL_DIR}/../", "${CLAUDE_PLUGIN_ROOT}/")
+    text = text.replace("$CLAUDE_SKILL_DIR/../", "${CLAUDE_PLUGIN_ROOT}/")
     # (iii) ${CLAUDE_SKILL_DIR}/<sub> prose within a child skill
     if child:
         text = text.replace("${CLAUDE_SKILL_DIR}/",
@@ -247,6 +252,29 @@ for base, dirs, files in os.walk(dst):
         if new != text:
             with open(path, "w", encoding="utf-8", newline="") as fh:
                 fh.write(new)
+
+# ── Reference manifest (schema 1) ────────────────────────────────
+# One authority for "which path does a shipped .md name": ci-lints and the
+# wp-07 doctor read this file instead of re-deriving the token grammar, which
+# itself lives once in scripts/goalforge_refs.py (shared with the package-side
+# lint). Emitted AFTER the rewrite passes above, over the GENERATED tree minus
+# every PRESERVE entry, so --check re-runs byte-identical.
+sys.path.insert(0, os.environ["GF_SCRIPTS_DIR"])
+import goalforge_refs as gfrefs
+
+refs = gfrefs.collect_refs(
+    dst,
+    gfrefs.plugin_child_of,
+    ignore_pats=gfrefs.load_ignore_list(os.environ["GF_REF_IGNORE"]),
+    skip_top=preserve,
+)
+_manifest = os.path.join(dst, "references", "reference-manifest.json")
+os.makedirs(os.path.dirname(_manifest), exist_ok=True)
+with open(_manifest, "w", encoding="utf-8", newline="") as fh:
+    json.dump({"schema": 1,
+               "refs": [{"from": f, "path": p} for f, p in refs]},
+              fh, indent=2)
+    fh.write("\n")
 PYEOF
 
 # ── 4. Generate the plugin manifest (commit-SHA version; see version experiment above) ──
