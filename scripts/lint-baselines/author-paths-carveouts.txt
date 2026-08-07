@@ -7,12 +7,6 @@
 # Every entry names the work that retires it. An entry whose retiring work has
 # landed is dead and must be deleted in that same change.
 
-# --- PRESERVE'd hooks/ tree: rewritten at SOURCE when wp-04 takes hooks/ out
-# --- of PRESERVE; the generator cannot touch them until then.
-plugins/goalforge/hooks/goalforge-pre-commit.sh::$HOME/.claude/skills/goalforge/scripts/goalforge-validate.sh
-plugins/goalforge/hooks/goalforge-transition-guard.sh::~/.claude/hooks/ -> ~/.claude/skills/goalforge/references/
-plugins/goalforge/hooks/goalforge-transition-guard.sh::../skills/goalforge/references/state-machine.md
-
 # --- install.sh: the legacy skills root, referenced ONLY by
 # --- report_legacy_target(), which detects and reports a pre-rewrite install
 # --- and never migrates it. Retired when that reporting is dropped (i.e. when

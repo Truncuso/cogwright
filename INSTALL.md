@@ -107,7 +107,7 @@ installing `goalforge` you have:
 |---|---|
 | **Skills** | `goalforge` (front door) plus 18 skills: the 15 chain stages (`goalforge-capture`, `-spec`, `-decompose`, `-harden`, `-interview`, `-execute`, `-verify`, `-redecompose`, `-archive`, `-recap`, `-onboard`, `-watchdog`, `-plan-index`, `-arbiter`, `-run`), `goalforge-brief`, plus the co-tenants `wayfind` and `prototype` |
 | **Commands** | `/spec`, `/plan`, `/implement`, `/verify`, `/wayfind` |
-| **Hooks** | one `PreToolUse` guard — see [Hooks installed](#hooks-installed) |
+| **Hooks** | three `PreToolUse` guards + one `PostToolUse` touch — see [Hooks installed](#hooks-installed) |
 | **Scripts** | `${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-*.sh` (validation, status, transitions, frontier, rollup, archive) |
 | **References** | schemas, state machine, templates, tier map, specialist map |
 
@@ -248,19 +248,37 @@ error path so it can't break your commit flow.
 
 ## Hooks installed
 
-Installing the goalforge **plugin** activates one hook automatically:
+Installing the goalforge **plugin** activates four hooks automatically. All four
+share one **PLANS_ROOT resolution**: `$SDD_PLANS_DIR` if set, else the
+`plans/` directory of the edited file's git root, else `~/.claude/plans`. A file
+outside every resolved root takes a silent no-op fast path — the hooks are inert
+in repositories that do not use goalforge.
 
 **`goalforge-single-writer` (PreToolUse, matcher `Edit|Write|MultiEdit`)** —
 blocks direct tool-surface edits to the `status:` and `goal_approved_version:`
-frontmatter fields in `<git-root>/plans/**` and `~/.claude/plans/**` (files named
-`overview.md`, `spec.md`, `task-*.md`). Those fields have a single sanctioned
-writer, `goalforge-transition.sh`.
+frontmatter fields of `overview.md`, `spec.md`, `task-*.md` under a plans root
+(and any edit to an already-authored `brief-task-*.md`, which is write-once).
+Those fields have a single sanctioned writer, `goalforge-transition.sh`.
 
 - Creating a new plan file with an initial `status:` is **allowed** — the guard
   only protects existing values.
-- Files outside a `plans/` root are never touched.
 - Without `jq` on `PATH` the hook allows everything through silently. Install
   `jq`.
+
+**`goalforge-transition-guard` (PreToolUse, matcher `Edit|Write|MultiEdit`)** —
+blocks a `status:` edit whose old → new edge is not in
+`references/state-machine.md`.
+
+**`goalforge-open-questions-gate` (PreToolUse, matcher `Edit|Write|MultiEdit`)**
+— blocks a work package's `→ ready` transition while its `## Open Questions`
+section still holds an unresolved bullet.
+
+**`goalforge-frontmatter-touch` (PostToolUse, matcher `Edit|Write|MultiEdit`)** —
+bumps `updated:` (and `stage_updated:` if present) to today in an edited plans
+`.md`. Idempotent; never writes when the values are already current.
+
+Every one of them exits 0 on any internal error — a hook never breaks your
+session because it itself failed.
 
 To change a status, use the chain (`/verify`, the stage skills) or call
 `goalforge-transition.sh` directly — do not hand-edit.
@@ -338,7 +356,7 @@ Code).
 /plugin marketplace remove cogwright
 ```
 
-This removes the skills, the slash commands, and the PreToolUse hook. Your
+This removes the skills, the slash commands, and the four event hooks. Your
 `plans/` directories are **not** touched — they are your content.
 
 ### Manual route

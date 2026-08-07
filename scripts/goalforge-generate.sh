@@ -40,15 +40,15 @@
 #             rewrite; a generated `${CLAUDE_PLUGIN_ROOT}` would be wrong for
 #             prose that is genuinely relative)
 #           - `$HOME/dotfiles` (a machine layout, not a goalforge path)
-#         Both are carved out in scripts/lint-baselines/author-paths-carveouts.txt
-#         for the PRESERVE'd hooks/ tree until wp-04 takes hooks/ out of PRESERVE
-#         and fixes them at source.
+#         Neither shape occurs in the tree today; a new one must be fixed at
+#         source, not carved out.
 #
-# Non-package plugin-packaging files (hooks/, .vendored-allowlist.txt) are
-# hand-authored and NOT derived from the package; they are PRESERVED, never
-# regenerated and never deleted by this script. commands/ and relations.yaml
-# left that set (wp-03): both are authored under packages/goalforge/ and ship
-# through the ordinary copy pass, so the tree diff covers them.
+# .vendored-allowlist.txt is the last hand-authored, non-package plugin file:
+# it is PRESERVED, never regenerated and never deleted by this script.
+# commands/ and relations.yaml left that set in wp-03, hooks/ (scripts +
+# hooks.json) in wp-04 — all are authored under packages/goalforge/ and ship
+# through the ordinary copy pass, so the `diff -rq` tree gate covers them. That
+# gate subsumes the byte-pair hooks cmp check wp-04 deleted.
 #
 # Usage:
 #   goalforge-generate.sh            regenerate the artifact in place
@@ -87,7 +87,7 @@ PLUGIN_DESC="Goal-and-verification-driven development chain for Claude Code — 
 GF_PLUGIN_VERSION="${GF_PLUGIN_VERSION-33b31eab96c9}"
 
 # Hand-authored, non-package plugin files preserved across regeneration.
-PRESERVE=(hooks .vendored-allowlist.txt)
+PRESERVE=(.vendored-allowlist.txt)
 
 [ -d "$SRC" ] || { echo "FATAL: source not found: $SRC" >&2; exit 1; }
 
@@ -344,18 +344,5 @@ if [ "$CHECK" = 1 ]; then
         printf '%s\n' "$diff_out" >&2
         exit 2
     fi
-    # hooks/ is on the PRESERVE list (hooks.json is plugin-specific), so the
-    # tree diff above cannot see it — but the goalforge-*.sh guardrail hooks
-    # MUST stay byte-identical to their packages/ source. Explicit pair check:
-    hooks_drift=0
-    for h in "$SRC/hooks/"goalforge-*.sh; do
-        [ -f "$h" ] || continue
-        base="$(basename "$h")"
-        if ! cmp -s "$h" "$REAL_DST/hooks/$base"; then
-            echo "DRIFT: plugins/goalforge/hooks/$base differs from packages/goalforge/hooks/$base" >&2
-            hooks_drift=1
-        fi
-    done
-    [ "$hooks_drift" = 0 ] || exit 2
     exit 0
 fi

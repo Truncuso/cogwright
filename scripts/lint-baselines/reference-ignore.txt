@@ -39,13 +39,12 @@ SKILL.md::scripts/goalforge-generate.sh
 #   - the retired `skills/sdd` naming in historic examples
 #   - `~/.claude/plans` (outside REF_PREFIXES)
 #
-# ── Known hole: refs inside PRESERVE'd source ───────────────────────────────
-# The generator PRESERVEs hooks/ (hand-authored, not derived from the package),
-# and the manifest emitter skips it, so a path ref inside a PRESERVE'd .md is
-# checked by NOTHING: it is absent from the manifest and has no package-tree
-# counterpart to lint. commands/ left the hole in wp-03-packaging-homes (it is
-# authored under packages/ and generated now); hooks/ is retired by
-# wp-04-hooks-event-wiring; until then the hole is tracked, not covered.
+# ── Retired hole: refs inside PRESERVE'd source ─────────────────────────────
+# A path ref inside a PRESERVE'd .md used to be checked by NOTHING (absent from
+# the manifest, no package-tree counterpart to lint). commands/ left PRESERVE
+# in wp-03-packaging-homes and hooks/ in wp-04-hooks-event-wiring, so the only
+# entry left is .vendored-allowlist.txt — not a .md, thus no refs to miss. The
+# hole is closed; re-adding a PRESERVE entry that holds .md files reopens it.
 #
 # ── Known hole: refs inside a fenced block ──────────────────────────────────
 # The pinned grammar reads single-backtick and link spans only, so a path that
