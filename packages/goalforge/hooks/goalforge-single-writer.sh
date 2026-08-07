@@ -21,8 +21,10 @@
 # care whether the transition is legal, only whether the write is coming
 # through a tool surface instead of the sanctioned Bash-path writers.
 #
-# SCOPE: <git-root>/plans/** or ~/.claude/plans/** (dual-root — do not
-# hardcode $HOME/.claude/plans as the only root; that was the precedent bug
+# SCOPE: any resolved PLANS_ROOT — $SDD_PLANS_DIR, else <git-root>/plans/**,
+# else ~/.claude/plans/** (resolution owned by the sourced
+# goalforge-plans-root.sh; never re-implemented here, and never hardcoded to
+# $HOME/.claude/plans alone — that was the precedent bug
 # in goalforge-frontmatter-touch.sh), basename overview.md, spec.md,
 # task-*.md, or brief-task-*.md (briefs are write-once — see BRIEF
 # IMMUTABILITY in decide()).
@@ -76,33 +78,31 @@
 #   goalforge-single-writer.sh --self-test
 set -uo pipefail
 
+# Hook dir via readlink -f so the dotfiles-symlink route (a symlink in
+# ~/.claude/hooks/ pointing into the package) still finds the sibling helper.
+HOOK_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")")" && pwd)"
+SELF="$HOOK_DIR/$(basename "${BASH_SOURCE[0]}")"
+# shellcheck source=./goalforge-plans-root.sh
+. "$HOOK_DIR/goalforge-plans-root.sh" 2>/dev/null || {
+    echo "goalforge-single-writer: goalforge-plans-root.sh not found beside the hook — skipping (zero-breakage)" >&2
+    exit 0
+}
+
 FIELDS="status goal_approved_version"
 
 # ── path scoping ─────────────────────────────────────────────────────────────
 
-# True (0) iff $1 is $2 or a path under $2.
-path_in_root() {
-    case "$1" in
-        "$2"|"$2"/*) return 0 ;;
-        *) return 1 ;;
-    esac
-}
-
 # True (0) iff $1's basename is a protected plan/WP file AND $1 resolves under
-# either plans root (git-root plans/ first, else ~/.claude/plans/).
+# a plans root (goalforge-plans-root.sh owns the resolution order).
 is_scoped() {
-    local fp="$1" bn gitroot
+    local fp="$1" bn
     [ -n "$fp" ] || return 1
     bn="$(basename -- "$fp")"
     case "$bn" in
         overview.md|spec.md|task-*.md|brief-task-*.md) : ;;
         *) return 1 ;;
     esac
-    gitroot="$(git -C "$(dirname -- "$fp")" rev-parse --show-toplevel 2>/dev/null)" || gitroot=""
-    if [ -n "$gitroot" ] && path_in_root "$fp" "$gitroot/plans"; then
-        return 0
-    fi
-    path_in_root "$fp" "$HOME/.claude/plans"
+    goalforge_under_plans_root "$fp"
 }
 
 # ── frontmatter field extraction ────────────────────────────────────────────
@@ -203,6 +203,12 @@ decide() {
             local old new existing simulated old_fm new_fm field
             old="$(printf '%s' "$input" | command jq -r '.tool_input.old_string // empty' 2>/dev/null)" || return 0
             new="$(printf '%s' "$input" | command jq -r '.tool_input.new_string // empty' 2>/dev/null)" || return 0
+            # UNEVALUABLE PAYLOAD: a real Edit always carries old_string; an
+            # in-scope plan file whose payload lacks it cannot be simulated, so
+            # the guard cannot judge the write. Zero-breakage still allows it —
+            # but silently allowing an unjudgeable write to a PROTECTED file is
+            # exactly the case an operator needs to see, so say so on stderr.
+            [ -z "$old" ] && { printf '%s|%s' "unevaluable" "$file"; return 0; }
             existing="$(cat "$file" 2>/dev/null)" || return 0
             case "$existing" in
                 *"$old"*) : ;;
@@ -223,7 +229,8 @@ decide() {
             local edits existing content old new replace_all entry old_fm new_fm field matched
             existing="$(cat "$file" 2>/dev/null)" || return 0
             edits="$(printf '%s' "$input" | command jq -c '.tool_input.edits // [] | .[]' 2>/dev/null)" || return 0
-            [ -z "$edits" ] && return 0
+            # Unevaluable payload — see the Edit branch.
+            [ -z "$edits" ] && { printf '%s|%s' "unevaluable" "$file"; return 0; }
             content="$existing"
             matched=1
             while IFS= read -r entry; do
@@ -400,6 +407,29 @@ self_test() {
     [ -n "$out" ] && [[ "$out" == status\|* ]] && ok "Edit status on just-created file -> detected (no exemption)" \
         || no "Edit status on just-created file -> got '$out'"
 
+    # 10) PLANS_ROOT resolution pair (spec §Interface Contract). A plan file
+    #     under $SDD_PLANS_DIR engages the hook; the same file shape outside
+    #     every resolved root takes the silent exit-0 fast path. Driven through
+    #     a SUBPROCESS so the assertion covers the real entry point (stdin,
+    #     helper sourcing and exit code included), not just decide().
+    mkdir -p "$d/sdd/plans/f" "$d/sdd/elsewhere"
+    printf -- '---\nstatus: draft\n---\n' > "$d/sdd/plans/f/overview.md"
+    printf -- '---\nstatus: draft\n---\n' > "$d/sdd/elsewhere/overview.md"
+    local pos_out neg_out pos_rc neg_rc
+    payload="$(command jq -n --arg fp "$d/sdd/plans/f/overview.md" \
+        '{tool_name:"Edit", tool_input:{file_path:$fp}}')"
+    pos_out="$(printf '%s' "$payload" | SDD_PLANS_DIR="$d/sdd/plans" bash "$SELF" 2>&1)"; pos_rc=$?
+    { [ -n "$pos_out" ] || [ "$pos_rc" != 0 ]; } \
+        && ok "under \$SDD_PLANS_DIR -> hook engaged" \
+        || no "under \$SDD_PLANS_DIR should engage (rc=$pos_rc, out='$pos_out')"
+
+    payload="$(command jq -n --arg fp "$d/sdd/elsewhere/overview.md" \
+        '{tool_name:"Edit", tool_input:{file_path:$fp}}')"
+    neg_out="$(printf '%s' "$payload" | SDD_PLANS_DIR="$d/sdd/plans" bash "$SELF" 2>&1)"; neg_rc=$?
+    { [ "$neg_rc" = 0 ] && [ -z "$neg_out" ]; } \
+        && ok "outside every plans root -> silent exit-0 fast path" \
+        || no "outside every plans root should fast-path silently (rc=$neg_rc, out='$neg_out')"
+
     echo ""
     echo "Results: $p passed, $f failed"
     [ "$f" -eq 0 ]
@@ -421,6 +451,10 @@ main() {
 
     field="${result%%|*}"
     file="${result#*|}"
+    if [ "$field" = "unevaluable" ]; then
+        echo "goalforge-single-writer: ${file} is a protected plan file but the Edit/MultiEdit payload carries no old_string/edits — the write cannot be simulated, so it is ALLOWED unjudged (zero-breakage)." >&2
+        exit 0
+    fi
     if [ "$field" = "brief-immutable" ]; then
         echo "goalforge-single-writer: ${file} is an immutable brief (write-once) — never Edit/Write an existing brief-task-*.md; a stale brief is re-authored via goalforge-execute's sanctioned Bash-path staleness flow." >&2
         exit 2

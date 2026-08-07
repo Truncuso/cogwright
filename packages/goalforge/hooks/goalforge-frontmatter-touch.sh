@@ -2,21 +2,96 @@
 # goalforge-frontmatter-touch.sh — PostToolUse hook for Write|Edit.
 #
 # Reads the edited file path from the hook payload (stdin JSON).
-# If the path is under ~/.claude/plans/**/ and ends in .md, bumps
+# If the path is under a resolved PLANS_ROOT and ends in .md, bumps
 # `updated:` (and `stage_updated:` if present) in the frontmatter
 # to today's date (YYYY-MM-DD). Idempotent: no write if already today.
 # Only touches the frontmatter block (between the first two --- lines).
 # No-op silently for non-plans paths or non-.md files.
 #
+# PLANS_ROOT resolution ($SDD_PLANS_DIR → <git-root>/plans → ~/.claude/plans)
+# is owned by the sourced goalforge-plans-root.sh — never re-implemented here.
+#
 # Discipline:
 #   - Never breaks the session: every failure path exits 0.
-#   - Never mutates files outside ~/.claude/plans/.
+#   - Never mutates files outside a resolved PLANS_ROOT.
 #   - No write when values are already current.
+#
+# Usage:
+#   <PostToolUse JSON on stdin> | goalforge-frontmatter-touch.sh
+#   goalforge-frontmatter-touch.sh --self-test
 
 set -uo pipefail
 
-PLANS_ROOT="${HOME}/.claude/plans"
+# readlink -f so the dotfiles install route (a symlink in ~/.claude/hooks/
+# pointing into the package) still finds the sibling helper.
+HOOK_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")")" && pwd)"
+SELF="$HOOK_DIR/$(basename "${BASH_SOURCE[0]}")"
+# shellcheck source=./goalforge-plans-root.sh
+. "$HOOK_DIR/goalforge-plans-root.sh" 2>/dev/null || {
+    echo "goalforge-frontmatter-touch: goalforge-plans-root.sh not found beside the hook — skipping (zero-breakage)" >&2
+    exit 0
+}
+
 TODAY=$(date +%F)
+
+# ── Self-test ──────────────────────────────────────────────────────────────
+# Runs BEFORE stdin is slurped below: this hook otherwise blocks in `cat`, so a
+# --self-test invocation from a terminal or a CI step would hang.
+self_test() {
+    local p=0 f=0 d pos_out neg_out pos_rc neg_rc
+    ok() { echo "  PASS: $1"; p=$((p+1)); }
+    no() { echo "  FAIL: $1"; f=$((f+1)); }
+
+    echo "=== goalforge-frontmatter-touch.sh --self-test ==="
+    d="$(mktemp -d)"
+    mkdir -p "$d/plans/f" "$d/elsewhere"
+
+    # PLANS_ROOT resolution pair (spec §Interface Contract): the SAME stale
+    # frontmatter is bumped under $SDD_PLANS_DIR and left untouched outside
+    # every resolved root. Driven through a SUBPROCESS so the real stdin entry
+    # point is covered.
+    printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$d/plans/f/overview.md"
+    printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$d/elsewhere/overview.md"
+    payload() { # <file path>
+        python3 -c 'import json,sys; print(json.dumps({"tool_name":"Edit","tool_input":{"file_path":sys.argv[1]}}))' "$1"
+    }
+
+    pos_out="$(payload "$d/plans/f/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; pos_rc=$?
+    if grep -q "updated: $TODAY" "$d/plans/f/overview.md"; then
+        ok "under \$SDD_PLANS_DIR -> updated: bumped to $TODAY"
+    else
+        no "under \$SDD_PLANS_DIR should bump updated: (rc=$pos_rc, out='$pos_out')"
+    fi
+
+    neg_out="$(payload "$d/elsewhere/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; neg_rc=$?
+    if [ "$neg_rc" = 0 ] && [ -z "$neg_out" ] && grep -q 'updated: 1999-01-01' "$d/elsewhere/overview.md"; then
+        ok "outside every plans root -> silent exit-0 fast path, file untouched"
+    else
+        no "outside every plans root should fast-path silently (rc=$neg_rc, out='$neg_out')"
+    fi
+
+    # Idempotence: a second run over an already-current file changes nothing.
+    local before after
+    before="$(cat "$d/plans/f/overview.md")"
+    payload "$d/plans/f/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" >/dev/null 2>&1
+    after="$(cat "$d/plans/f/overview.md")"
+    [ "$before" = "$after" ] && ok "already-current file -> no write (idempotent)" \
+        || no "already-current file was rewritten"
+
+    # Zero-breakage: empty stdin exits 0.
+    printf '' | bash "$SELF" >/dev/null 2>&1
+    [ $? -eq 0 ] && ok "empty payload -> exit 0 (zero-breakage)" || no "empty payload should exit 0"
+
+    rm -rf "$d"
+    echo ""
+    echo "Results: $p passed, $f failed"
+    [ "$f" -eq 0 ]
+}
+
+if [ "${1:-}" = "--self-test" ]; then
+    self_test
+    exit $?
+fi
 
 # ── Parse payload ──────────────────────────────────────────────────────────
 
@@ -29,7 +104,7 @@ FILE_PATH=$(printf '%s' "$HOOK_INPUT" | jq -r '
 
 [ -n "$FILE_PATH" ] || exit 0
 
-# ── Guard: must be under PLANS_ROOT and end in .md ─────────────────────────
+# ── Guard: must be under a resolved PLANS_ROOT and end in .md ──────────────
 
 # Resolve to absolute path
 case "$FILE_PATH" in
@@ -38,28 +113,9 @@ case "$FILE_PATH" in
   *) exit 0 ;;
 esac
 
-# Canonicalise (strip ../ etc) without requiring the file to already exist
-REAL_PATH=$(python3 -c "import os,sys; print(os.path.normpath(sys.argv[1]))" "$FILE_PATH" 2>/dev/null) || exit 0
-REAL_PLANS=$(python3 -c "import os,sys; print(os.path.normpath(sys.argv[1]))" "$PLANS_ROOT" 2>/dev/null) || exit 0
-
-# Dual plans root (schema.md §PLANS_ROOT): <git-root>/plans/** OR ~/.claude/plans/**
-GIT_PLANS=""
-GIT_TOP=$(cd "$(dirname "$REAL_PATH")" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || GIT_TOP=""
-[ -n "$GIT_TOP" ] && GIT_PLANS="${GIT_TOP}/plans"
-
-case "$REAL_PATH" in
-  "${REAL_PLANS}/"*.md) ;;  # under global plans root, .md — proceed
-  *)
-    if [ -n "$GIT_PLANS" ]; then
-      case "$REAL_PATH" in
-        "${GIT_PLANS}/"*.md) ;;  # under repo-local plans root — proceed
-        *) exit 0 ;;
-      esac
-    else
-      exit 0
-    fi
-    ;;
-esac
+REAL_PATH="$(goalforge_normpath "$FILE_PATH")"
+case "$REAL_PATH" in *.md) ;; *) exit 0 ;; esac
+goalforge_under_plans_root "$REAL_PATH" || exit 0
 
 [ -f "$REAL_PATH" ] || exit 0
 

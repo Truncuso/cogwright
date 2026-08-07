@@ -10,8 +10,9 @@
 # missing/garbled state-machine) — a hook must never block because it itself
 # failed. The ONLY non-zero exit is exit 2 for a confirmed illegal edge.
 #
-# NOT wired into hooks.json — wiring a blocking PreToolUse hook is a deliberate,
-# separate step (see the WP report's HOOK WIRING note).
+# SCOPE: wired as a PreToolUse hook (hooks.json, matcher Edit|Write|MultiEdit).
+# Fast path: exit 0, silently, unless the edited file resolves under a plans
+# root — resolution order owned by the sourced goalforge-plans-root.sh.
 #
 # Usage:
 #   <PreToolUse JSON on stdin> | goalforge-transition-guard.sh
@@ -19,13 +20,18 @@
 #   goalforge-transition-guard.sh --self-test
 set -uo pipefail
 
-HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# readlink -f resolves the dotfiles install route, where the file at
+# ~/.claude/hooks/ is a SYMLINK into the package: HOOK_DIR then names the real
+# hooks/ dir, so the single sibling-relative state-machine address below holds
+# for all three routes (package, plugin, dotfiles symlink) — no second climb.
+HOOK_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")")" && pwd)"
 SELF="$HOOK_DIR/$(basename "${BASH_SOURCE[0]}")"
-# Resolve state-machine.md for every layout this hook ships in:
-#   package/plugin: <root>/hooks/ -> <root>/references/state-machine.md
-#   dotfiles:       ~/.claude/hooks/ -> ~/.claude/skills/goalforge/references/
 STATE_MACHINE="$HOOK_DIR/../references/state-machine.md"
-[ -f "$STATE_MACHINE" ] || STATE_MACHINE="$HOOK_DIR/../skills/goalforge/references/state-machine.md"
+# shellcheck source=./goalforge-plans-root.sh
+. "$HOOK_DIR/goalforge-plans-root.sh" 2>/dev/null || {
+    echo "goalforge-transition-guard: goalforge-plans-root.sh not found beside the hook — skipping (zero-breakage)" >&2
+    exit 0
+}
 
 # ── Edge verdict: prints "legal" | "illegal" | "error" ──────────────────────
 # "error" (table missing/unreadable/parse failure) is treated as pass — the
@@ -65,7 +71,8 @@ do_check() {
     [[ "$v" == "illegal" ]] && return 2 || return 0
 }
 
-# Parse a PreToolUse Edit event from stdin → prints "<from> <to>" or nothing.
+# Parse a PreToolUse Edit event from stdin → prints "<from> <to> <file>" or
+# nothing.
 # Nothing means "not applicable" (not a WP overview status edit / parse failed)
 # → the caller treats that as exit 0.
 # stdin is slurped into a variable and handed to python via the environment so
@@ -94,7 +101,7 @@ mo = re.search(r"^\s*status:\s*['\"]?" + enum, old, re.MULTILINE)
 mn = re.search(r"^\s*status:\s*['\"]?" + enum, new, re.MULTILINE)
 if not (mo and mn) or mo.group(1) == mn.group(1):
     sys.exit(0)
-print(mo.group(1), mn.group(1))
+print(mo.group(1), mn.group(1), fp)
 PY
 }
 
@@ -126,6 +133,29 @@ self_test() {
     STATE_MACHINE="$save"
     [[ "$rc" -eq 0 ]] && ok "internal error -> exit 0 (zero-breakage)" || no "internal error should exit 0 (got $rc)"
 
+    # PLANS_ROOT resolution pair (spec §Interface Contract): the SAME illegal
+    # edge engages under $SDD_PLANS_DIR and fast-paths silently outside every
+    # resolved root. Driven through a SUBPROCESS so the assertion covers the
+    # real stdin entry point, not just do_check().
+    local d payload pos_out neg_out pos_rc neg_rc
+    d="$(mktemp -d)"
+    mkdir -p "$d/plans/f" "$d/elsewhere"
+    # `spec -> archived` is enum-valid (so the payload parser yields an edge)
+    # but carries no row in the edges table, i.e. a confirmed illegal edge.
+    payload() { # <overview path>
+        python3 -c 'import json,sys; print(json.dumps({"tool_name":"Edit","tool_input":{"file_path":sys.argv[1],"old_string":"status: spec\n","new_string":"status: archived\n"}}))' "$1"
+    }
+    pos_out="$(payload "$d/plans/f/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; pos_rc=$?
+    { [[ -n "$pos_out" ]] || [[ "$pos_rc" -ne 0 ]]; } \
+        && ok "illegal edge under \$SDD_PLANS_DIR -> hook engaged" \
+        || no "under \$SDD_PLANS_DIR should engage (rc=$pos_rc, out='$pos_out')"
+
+    neg_out="$(payload "$d/elsewhere/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; neg_rc=$?
+    { [[ "$neg_rc" -eq 0 ]] && [[ -z "$neg_out" ]]; } \
+        && ok "same edge outside every plans root -> silent exit-0 fast path" \
+        || no "outside every plans root should fast-path silently (rc=$neg_rc, out='$neg_out')"
+    rm -rf "$d"
+
     echo ""
     echo "Results: $p passed, $f failed"
     [[ "$f" -eq 0 ]]
@@ -155,10 +185,15 @@ if [[ -n "$FROM" && -n "$TO" ]]; then
     exit $?
 fi
 
-# Hook path: derive from/to from the PreToolUse Edit event on stdin.
-read -r FROM TO < <(parse_stdin) || true
+# Hook path: derive from/to (+ the edited file) from the PreToolUse event on
+# stdin. `read` splits on IFS, so FILE takes the remainder of the line — a path
+# containing spaces stays intact.
+FILE=""
+read -r FROM TO FILE < <(parse_stdin) || true
 if [[ -z "${FROM:-}" || -z "${TO:-}" ]]; then
     exit 0   # not a WP-status edit, or parse failed → never block
 fi
+# Fast path: a status edit outside every resolved plans root is not ours.
+goalforge_under_plans_root "${FILE:-}" || exit 0
 do_check "$FROM" "$TO"
 exit $?

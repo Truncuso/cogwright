@@ -22,14 +22,25 @@
 # unreadable file) — a hook must never block because it itself failed. The ONLY
 # non-zero exit is exit 2 for a confirmed `→ready` edit with >=1 unresolved OQ.
 #
-# NOT wired into hooks.json — wiring a blocking PreToolUse hook is a deliberate,
-# separate step (mirror the goalforge-transition-guard.sh stance).
+# SCOPE: wired as a PreToolUse hook (hooks.json, matcher Edit|Write|MultiEdit).
+# Fast path: exit 0, silently, unless the edited file resolves under a plans
+# root — resolution order owned by the sourced goalforge-plans-root.sh.
 #
 # Usage:
 #   <PreToolUse Edit JSON on stdin> | goalforge-open-questions-gate.sh
 #   goalforge-open-questions-gate.sh --check <overview.md>     # prints unresolved count
 #   goalforge-open-questions-gate.sh --self-test
 set -uo pipefail
+
+# readlink -f so the dotfiles install route (a symlink in ~/.claude/hooks/
+# pointing into the package) still finds the sibling helper.
+HOOK_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")")" && pwd)"
+SELF="$HOOK_DIR/$(basename "${BASH_SOURCE[0]}")"
+# shellcheck source=./goalforge-plans-root.sh
+. "$HOOK_DIR/goalforge-plans-root.sh" 2>/dev/null || {
+    echo "goalforge-open-questions-gate: goalforge-plans-root.sh not found beside the hook — skipping (zero-breakage)" >&2
+    exit 0
+}
 
 # ── Unresolved-OQ count: prints an integer (0 on ANY error) ─────────────────
 unresolved_count() {
@@ -186,6 +197,28 @@ self_test() {
     out="$(printf '%s' '{"tool_name":"Edit","tool_input":{"file_path":"x/overview.md","old_string":"status: draft","new_string":"status: spec"}}' | parse_stdin)"
     [[ -z "$out" ]] && ok "parse_stdin ->spec prints nothing" || no "parse_stdin ->spec got '$out'"
 
+    # PLANS_ROOT resolution pair (spec §Interface Contract): the SAME →ready
+    # edit on an overview carrying an unresolved OQ engages under
+    # $SDD_PLANS_DIR and fast-paths silently outside every resolved root.
+    # Driven through a SUBPROCESS so the real stdin entry point is covered.
+    local pos_out neg_out pos_rc neg_rc oq
+    oq='## Open Questions\n\n- OQ1: unresolved?\n'
+    mkdir -p "$d/plans/f" "$d/elsewhere"
+    printf -- "$oq" > "$d/plans/f/overview.md"
+    printf -- "$oq" > "$d/elsewhere/overview.md"
+    payload() { # <overview path>
+        python3 -c 'import json,sys; print(json.dumps({"tool_name":"Edit","tool_input":{"file_path":sys.argv[1],"old_string":"status: hardened","new_string":"status: ready"}}))' "$1"
+    }
+    pos_out="$(payload "$d/plans/f/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; pos_rc=$?
+    { [[ -n "$pos_out" ]] || [[ "$pos_rc" -ne 0 ]]; } \
+        && ok "->ready with an open question under \$SDD_PLANS_DIR -> hook engaged" \
+        || no "under \$SDD_PLANS_DIR should engage (rc=$pos_rc, out='$pos_out')"
+
+    neg_out="$(payload "$d/elsewhere/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; neg_rc=$?
+    { [[ "$neg_rc" -eq 0 ]] && [[ -z "$neg_out" ]]; } \
+        && ok "same edit outside every plans root -> silent exit-0 fast path" \
+        || no "outside every plans root should fast-path silently (rc=$neg_rc, out='$neg_out')"
+
     echo ""
     echo "Results: $p passed, $f failed"
     [[ "$f" -eq 0 ]]
@@ -215,6 +248,8 @@ fi
 # Hook path: derive the →ready overview path from the PreToolUse Edit event.
 FILE="$(parse_stdin)" || true
 [[ -z "${FILE:-}" ]] && exit 0   # not a →ready overview edit → never block
+# Fast path: a →ready edit outside every resolved plans root is not ours.
+goalforge_under_plans_root "$FILE" || exit 0
 
 do_check "$FILE"
 rc=$?
