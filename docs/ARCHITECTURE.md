@@ -17,6 +17,7 @@ flowchart TB
         PC["&lt;child&gt;/ dirs with SKILL.md<br/>capture, spec, harden, wayfind, prototype, …"]
         PR[references/, scripts/]
         PW["workflow-authoring/<br/><i>dir without SKILL.md</i>"]
+        PM["commands/, relations.yaml"]
         PE["evals/, __pycache__/"]
     end
 
@@ -27,18 +28,19 @@ flowchart TB
         GC["skills/&lt;child&gt;/"]
         GR[references/, scripts/]
         GW[workflow-authoring/]
+        GM["commands/, relations.yaml"]
     end
 
     subgraph HAND["plugins/goalforge/ — hand-authored, PRESERVED"]
         HH["hooks/"]
-        HCM["commands/"]
-        HRL["relations.yaml, .vendored-allowlist.txt"]
+        HRL[".vendored-allowlist.txt"]
     end
 
     PS --> GEN --> GS
     PC --> GEN --> GC
     PR --> GEN --> GR
     PW --> GEN --> GW
+    PM --> GEN --> GM
     PE -. excluded .-> GEN
     HAND -. untouched by the generator .- GEN
 

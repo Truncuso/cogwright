@@ -8,7 +8,3 @@
 # ref that is fixable inside wp-02's boundaries is fixed at source; a path that
 # deliberately addresses something outside the plugin tree belongs on
 # reference-ignore.txt instead.
-
-# retired-by: wp-03-packaging-homes — packages/goalforge/commands/*.md move into
-# the generated tree there; today only commands/wayfind.md is PRESERVE'd in.
-skills/run/SKILL.md::commands/spec.md

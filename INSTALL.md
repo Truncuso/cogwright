@@ -106,7 +106,7 @@ installing `goalforge` you have:
 | Surface | What you get |
 |---|---|
 | **Skills** | `goalforge` (front door) plus 18 skills: the 15 chain stages (`goalforge-capture`, `-spec`, `-decompose`, `-harden`, `-interview`, `-execute`, `-verify`, `-redecompose`, `-archive`, `-recap`, `-onboard`, `-watchdog`, `-plan-index`, `-arbiter`, `-run`), `goalforge-brief`, plus the co-tenants `wayfind` and `prototype` |
-| **Commands** | `/wayfind` |
+| **Commands** | `/spec`, `/plan`, `/implement`, `/verify`, `/wayfind` |
 | **Hooks** | one `PreToolUse` guard — see [Hooks installed](#hooks-installed) |
 | **Scripts** | `${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-*.sh` (validation, status, transitions, frontier, rollup, archive) |
 | **References** | schemas, state machine, templates, tier map, specialist map |
@@ -178,6 +178,13 @@ ln -s ~/src/cogwright/packages/goalforge/wayfind   "$SKILLS/wayfind"
 
 `interview/` is intentionally not linked at the top level — it is a private
 child invoked by `goalforge-harden`.
+
+**The slash commands are plugin-route only.** `/spec`, `/plan`, `/implement`,
+`/verify`, and `/wayfind` are shipped as plugin command files; Claude Code
+loads command files from installed plugins, not from a symlinked skills
+directory, so on this manual route they are inert. Drive the chain by invoking
+the skills by name instead (`goalforge-capture`, `goalforge-spec`, ...), or ask
+the `goalforge-run` orchestrator to drive it.
 
 ### 3. Or use the bundled installer
 
@@ -328,7 +335,7 @@ Code).
 /plugin marketplace remove cogwright
 ```
 
-This removes the skills, the `/wayfind` command, and the PreToolUse hook. Your
+This removes the skills, the slash commands, and the PreToolUse hook. Your
 `plans/` directories are **not** touched — they are your content.
 
 ### Manual route
@@ -375,7 +382,7 @@ grep -rn 'sdd-pre-commit' .git/hooks/ 2>/dev/null
 | `unexpected origin remote` | you cloned a fork | `GF_SKIP_REPO_PRECHECK=1` |
 | `link target does not resolve to a goalforge package` | wrong `GF_LINK_TARGET`, or clone incomplete | point at `<repo>/packages/goalforge` |
 | A skill references `~/.claude/skills/goalforge/...` and the file is missing | known path-leak bug, see below | read the same relative path under `${CLAUDE_PLUGIN_ROOT}` instead |
-| `/spec`, `/plan`, `/implement`, `/verify` are unknown commands | not shipped yet, see below | invoke the skills by name |
+| `/spec`, `/plan`, `/implement`, `/verify` are unknown commands | you are on the manual skills-dir route, where command files are inert | install via the plugin route, or invoke the skills by name |
 
 ---
 
@@ -383,9 +390,10 @@ grep -rn 'sdd-pre-commit' .git/hooks/ 2>/dev/null
 
 Stated plainly so you are not debugging a documented gap:
 
-1. **Only `/wayfind` ships as a command.** The `/spec`, `/plan`, `/implement`,
-   and `/verify` entry points described in the README and ARCHITECTURE docs are
-   not yet part of the plugin. Until they are, drive the chain by invoking the
+1. **The entry commands are plugin-route only.** `/spec`, `/plan`,
+   `/implement`, `/verify`, and `/wayfind` ship with the plugin, but Claude
+   Code loads command files from installed plugins only — on the manual
+   skills-dir route they are inert. There, drive the chain by invoking the
    skills directly by name — `goalforge-capture`, `goalforge-spec`,
    `goalforge-decompose`, `goalforge-harden`, `goalforge-execute`,
    `goalforge-verify` — or ask the `goalforge-run` orchestrator to drive it.

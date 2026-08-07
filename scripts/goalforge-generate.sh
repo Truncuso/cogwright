@@ -44,10 +44,11 @@
 #         for the PRESERVE'd hooks/ tree until wp-04 takes hooks/ out of PRESERVE
 #         and fixes them at source.
 #
-# Non-package plugin-packaging files (hooks/, commands/, relations.yaml,
-# .vendored-allowlist.txt)
-# are hand-authored and NOT derived from the package; they are PRESERVED, never
-# regenerated and never deleted by this script.
+# Non-package plugin-packaging files (hooks/, .vendored-allowlist.txt) are
+# hand-authored and NOT derived from the package; they are PRESERVED, never
+# regenerated and never deleted by this script. commands/ and relations.yaml
+# left that set (wp-03): both are authored under packages/goalforge/ and ship
+# through the ordinary copy pass, so the tree diff covers them.
 #
 # Usage:
 #   goalforge-generate.sh            regenerate the artifact in place
@@ -86,7 +87,7 @@ PLUGIN_DESC="Goal-and-verification-driven development chain for Claude Code — 
 GF_PLUGIN_VERSION="${GF_PLUGIN_VERSION-33b31eab96c9}"
 
 # Hand-authored, non-package plugin files preserved across regeneration.
-PRESERVE=(hooks commands relations.yaml .vendored-allowlist.txt)
+PRESERVE=(hooks .vendored-allowlist.txt)
 
 [ -d "$SRC" ] || { echo "FATAL: source not found: $SRC" >&2; exit 1; }
 

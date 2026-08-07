@@ -40,9 +40,9 @@ SKILL.md::scripts/goalforge-generate.sh
 #   - `~/.claude/plans` (outside REF_PREFIXES)
 #
 # ── Known hole: refs inside PRESERVE'd source ───────────────────────────────
-# The generator PRESERVEs commands/ and hooks/ (hand-authored, not derived from
-# the package), and the manifest emitter skips them, so a path ref inside a
-# PRESERVE'd .md is checked by NOTHING: it is absent from the manifest and has
-# no package-tree counterpart to lint. Retired by wp-03-packaging-homes
-# (commands/) and wp-04-hooks-event-wiring (hooks/), which move those trees into
-# generation; until then the hole is tracked, not covered.
+# The generator PRESERVEs hooks/ (hand-authored, not derived from the package),
+# and the manifest emitter skips it, so a path ref inside a PRESERVE'd .md is
+# checked by NOTHING: it is absent from the manifest and has no package-tree
+# counterpart to lint. commands/ left the hole in wp-03-packaging-homes (it is
+# authored under packages/ and generated now); hooks/ is retired by
+# wp-04-hooks-event-wiring; until then the hole is tracked, not covered.

@@ -67,10 +67,10 @@ scripts/goalforge-generate.sh --check    # exit 2 if the tree drifted from the p
 ```
 
 `--check` is wired into pre-commit, so a package edit that was never regenerated
-cannot land. **The exception:** `hooks/`, `commands/`, `relations.yaml`, and
-`.vendored-allowlist.txt` inside `plugins/<name>/` are plugin-packaging concerns
-with no package counterpart — they are hand-authored there and the generator
-preserves them, never regenerating or deleting them.
+cannot land. **The exception:** `hooks/` and `.vendored-allowlist.txt` inside
+`plugins/<name>/` are plugin-packaging concerns with no package counterpart —
+they are hand-authored there and the generator preserves them, never
+regenerating or deleting them.
 
 Full package→plugin pipeline, relations map, and the daily workflow:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).

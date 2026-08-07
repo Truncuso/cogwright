@@ -26,6 +26,74 @@
       "path": "references/state-machine.md"
     },
     {
+      "from": "commands/implement.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "commands/implement.md",
+      "path": "skills/execute/SKILL.md"
+    },
+    {
+      "from": "commands/implement.md",
+      "path": "skills/run/SKILL.md"
+    },
+    {
+      "from": "commands/plan.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "commands/plan.md",
+      "path": "skills/decompose/SKILL.md"
+    },
+    {
+      "from": "commands/plan.md",
+      "path": "skills/harden/SKILL.md"
+    },
+    {
+      "from": "commands/plan.md",
+      "path": "skills/redecompose/SKILL.md"
+    },
+    {
+      "from": "commands/plan.md",
+      "path": "skills/run/SKILL.md"
+    },
+    {
+      "from": "commands/spec.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "commands/spec.md",
+      "path": "skills/capture/SKILL.md"
+    },
+    {
+      "from": "commands/spec.md",
+      "path": "skills/run/SKILL.md"
+    },
+    {
+      "from": "commands/spec.md",
+      "path": "skills/spec/SKILL.md"
+    },
+    {
+      "from": "commands/verify.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "commands/verify.md",
+      "path": "skills/run/SKILL.md"
+    },
+    {
+      "from": "commands/verify.md",
+      "path": "skills/verify/SKILL.md"
+    },
+    {
+      "from": "commands/wayfind.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "commands/wayfind.md",
+      "path": "skills/wayfind/SKILL.md"
+    },
+    {
       "from": "references/dispatch-template.md",
       "path": "references/discipline-core.md"
     },
