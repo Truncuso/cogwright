@@ -1,44 +1,56 @@
 # SDD → goalforge alias map
 
-Old dotfiles `sdd-*` names → new **goalforge** plugin locations. Resolve
-`$COGWRIGHT_ROOT` to your cogwright checkout (default `~/10_projects/cogwright`);
-the plugin root is `$COGWRIGHT_ROOT/plugins/goalforge/`.
+A **historical name map**, kept so an old `sdd-*` reference found in a plan, a
+handoff, or an archived document can still be resolved. The `sdd-*` names are
+retired: nothing in this package answers to them any more. Nothing here is a
+plan or a pending action — every rename below has already happened.
 
-Conventions (interview 2026-07-09, OQ1 hybrid): **skills** are referenced by
-bare name (`goalforge-<name>` — the plugin auto-registers them); **script
-invocations** pin the concrete `$COGWRIGHT_ROOT/plugins/goalforge/scripts/...`
-path. Directory names inside the plugin drop the redundant prefix (the plugin
-namespace already carries `goalforge`).
+Locations are given relative to the plugin root (`${CLAUDE_PLUGIN_ROOT}`).
+Conventions: **skills** are referenced by bare name (`goalforge-<name>` — the
+plugin registers them); **script invocations** name the concrete path under the
+plugin's `scripts/` directory. Directory names inside the plugin drop the
+redundant prefix, since the plugin namespace already carries `goalforge`.
 
 ## Child skills
 
-| Old skill | New bare name | New path |
+`sdd-run` became `goalforge-run` rather than a bare `run` to avoid colliding
+with the unrelated `run` skill.
+
+| Old skill | New bare name | Location |
 |-----------|---------------|----------|
-| `sdd-capture` | `goalforge-capture` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/capture/` |
-| `sdd-spec` | `goalforge-spec` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/spec/` |
-| `sdd-decompose` | `goalforge-decompose` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/decompose/` |
-| `sdd-harden` | `goalforge-harden` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/harden/` |
-| `sdd-execute` | `goalforge-execute` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/execute/` |
-| `sdd-verify` | `goalforge-verify` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/verify/` |
-| `sdd-redecompose` | `goalforge-redecompose` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/redecompose/` |
-| `sdd-archive` | `goalforge-archive` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/archive/` |
-| `sdd-recap` | `goalforge-recap` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/recap/` |
-| `sdd-onboard` | `goalforge-onboard` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/onboard/` |
-| `sdd-watchdog` | `goalforge-watchdog` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/watchdog/` |
-| `sdd-plan-index` | `goalforge-plan-index` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/plan-index/` |
-| `sdd-arbiter` | `goalforge-arbiter` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/arbiter/` |
-| `sdd-run` (runner) | `goalforge-run` | `$COGWRIGHT_ROOT/plugins/goalforge/skills/run/` |
+| `sdd-capture` | `goalforge-capture` | `skills/capture/` |
+| `sdd-spec` | `goalforge-spec` | `skills/spec/` |
+| `sdd-decompose` | `goalforge-decompose` | `skills/decompose/` |
+| `sdd-harden` | `goalforge-harden` | `skills/harden/` |
+| `sdd-execute` | `goalforge-execute` | `skills/execute/` |
+| `sdd-verify` | `goalforge-verify` | `skills/verify/` |
+| `sdd-redecompose` | `goalforge-redecompose` | `skills/redecompose/` |
+| `sdd-archive` | `goalforge-archive` | `skills/archive/` |
+| `sdd-recap` | `goalforge-recap` | `skills/recap/` |
+| `sdd-onboard` | `goalforge-onboard` | `skills/onboard/` |
+| `sdd-watchdog` | `goalforge-watchdog` | `skills/watchdog/` |
+| `sdd-plan-index` | `goalforge-plan-index` | `skills/plan-index/` |
+| `sdd-arbiter` | `goalforge-arbiter` | `skills/arbiter/` |
+| `sdd-run` (runner) | `goalforge-run` | `skills/run/` |
 
-> Directory-vs-registered-name and the exact plugin skill registration are
-> finalized by the member-move task (task-02); this table records the target
-> convention. `sdd-run` is renamed `goalforge-run` (not bare `run`) to avoid
-> colliding with the existing `run` skill.
+### Children with no legacy name
 
-## Scripts (.sh — exec-forward shims live at `../scripts/`)
+These four were added after the rename and never had an `sdd-*` predecessor —
+listed so a search for their history does not go looking for one.
 
-Every `sdd-<x>.sh` → `goalforge-<x>.sh` under
-`$COGWRIGHT_ROOT/plugins/goalforge/scripts/`, with one rename:
-`sdd-goal-route.sh` → **`goalforge-route.sh`**.
+| Old skill | New bare name | Location |
+|-----------|---------------|----------|
+| *(none)* | `goalforge-brief` | `skills/brief/` |
+| *(none)* | `goalforge-interview` | `skills/interview/` |
+| *(none)* | `goalforge-prototype` | `skills/prototype/` |
+| *(none)* | `goalforge-wayfind` | `skills/wayfind/` |
+
+## Scripts (.sh — plain renames)
+
+Every `sdd-<x>.sh` became `goalforge-<x>.sh` under the plugin's `scripts/`
+directory, with one exception to the mechanical rule: `sdd-goal-route.sh`
+became **`goalforge-route.sh`**. No forwarding shim was kept under the old
+name — the old names simply do not exist.
 
 | Old script | New script |
 |------------|------------|
@@ -68,13 +80,12 @@ Every `sdd-<x>.sh` → `goalforge-<x>.sh` under
 | `sdd-validate.sh` | `goalforge-validate.sh` |
 | `sdd-wp-complexity.sh` | `goalforge-wp-complexity.sh` |
 
-## Scripts (.py — copied, NOT shimmed)
+## Scripts (.py — plain renames)
 
-Copied into the plugin as `goalforge-*.py`, but the dotfiles originals are left
-in place **unshimmed**: they are imported/loaded by path (e.g.
-`sdd-goal-eval.py` via `importlib.util.spec_from_file_location`), so a shell
-exec-forward would not preserve the import contract. Callers must be repointed
-at the plugin copy directly (task-04 rewire).
+Same rule, same directory. These are imported or loaded by path (for example
+`goalforge-goal-eval.py` via `importlib.util.spec_from_file_location`), so a
+shell forwarder could not have preserved the import contract even if one had
+been wanted; callers name the plugin copy directly.
 
 | Old script | New script |
 |------------|------------|

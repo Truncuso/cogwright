@@ -90,6 +90,11 @@ flowchart TB
         WD[watchdog]
         PIX[plan-index]
         ARB[arbiter]
+        INT["interview<br/><i>goal-hardening grilling</i>"]
+    end
+
+    subgraph AST["chain-support assets (not stages)"]
+        direction LR
         BRF[brief]
     end
 
@@ -101,6 +106,7 @@ flowchart TB
 
     GF --> CHAIN
     GF --> SUP
+    GF --> AST
     GF --- TEN
 
     RUN -->|drives| CHAIN
@@ -122,7 +128,7 @@ flowchart TB
     WAY -.-> RA
     WAY -.-> IL
     WAY -.-> ADR
-    INT["goalforge-interview<br/><i>goal-hardening grilling</i>"] -.-> IL
+    INT -.-> IL
     HAR --> INT
 
     classDef ext stroke-dasharray: 4 3;
@@ -134,7 +140,7 @@ Declared degradations, verbatim from `packages/goalforge/relations.yaml`:
 | Missing | Used by | Degrades to |
 |---|---|---|
 | `research-analyst` | wayfind | dispatch a general-purpose agent with an explicit research brief |
-| `interview` | wayfind, goalforge-interview | one-question-at-a-time question loop in the main session |
+| `interview` | wayfind, goalforge-interview | one-question-at-a-time AskUserQuestion loop in the main session |
 | `adr-write` | wayfind | skip the ADR gate; log the skipped decisions in the graduation brief |
 
 The `/spec`, `/plan`, `/implement`, `/verify` commands are the human entry

@@ -7,7 +7,7 @@ description: "Router and index for the goalforge (Spec-Driven Development) plann
 
 **Chain:** `capture → spec → decompose → harden → execute → verify`
 
-Orchestrated by `goalforge-run` (sibling `chain.yaml`). Flat on-disk layout:
+Orchestrated by `goalforge-run` (`run/chain.yaml`). Flat on-disk layout:
 `plans/<feature>/<wp-id>/files`. Status lives in frontmatter — no lifecycle folders.
 `goalforge` is the canonical and ONLY name of this chain; the legacy `sdd-*`
 aliases were retired 2026-07-21.

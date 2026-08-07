@@ -16,6 +16,21 @@ building the goalforge chain and its wayfind child.
 | [`goal-object-anatomy-wp.md`](./goal-object-anatomy-wp.md) | A hardened, verified work package (WP) — the goal-object anatomy: `outcome`, `verification.check`, `constraints`, `boundaries`, an append-only decision log, and a versioned goal changelog that survives redecomposition | `/plan` output, ready for `/implement` |
 | [`session-handoff.md`](./session-handoff.md) | A session handoff closing out a completed feature and carrying forward a short residue agenda — state snapshot, DO/DON'T constraints, gotchas, and durable learnings | Emitted at a session boundary, consumed via `/handoff-pickup` |
 
+## Reading notes
+
+- **`goal-object-anatomy-wp.md` is a frozen pre-migration artifact.** It was
+  produced before the `sdd-*` → `goalforge-*` rename, so the skill and script
+  names inside it are historical. They map one-to-one onto the current names —
+  see `packages/goalforge/references/alias-map.md`. The file is preserved
+  verbatim rather than rewritten, because a scrubbed-but-otherwise-real
+  artifact is the point.
+- **Two commands named in these artifacts are maintainer-dotfiles-only** —
+  `/handoff-pickup` (the table row above) and `/idea-review` (named in
+  `session-handoff.md`'s "Suggested skills next session"). Neither is part of
+  the shipped plugin surface; both live in the maintainer's private dotfiles.
+  The commands that **do** ship with the goalforge plugin are `/spec`,
+  `/plan`, `/implement`, `/verify`, and `/wayfind`.
+
 ## Why these two
 
 - The WP shows what a **verifiable goal** looks like in practice — not "make

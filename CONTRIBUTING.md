@@ -7,9 +7,15 @@ honestly-labelled changes over big ambitious ones.
 
 - **Surgical changes.** Touch only what your change requires; match existing
   style; don't reformat or "improve" adjacent code.
+- **`packages/` is authored, `plugins/` is generated.** Edit the package tree,
+  then run `scripts/goalforge-generate.sh` to regenerate the plugin artifact;
+  never hand-edit anything under `plugins/`. `scripts/goalforge-generate.sh
+  --check` fails CI when the two disagree. See the Repository-layout table in
+  the README.
 - **Every skill ships evals.** A new or changed skill includes deterministic
-  eval cases (`skills/<name>/evals/`) that pass locally. CI validates plugin
-  structure on every push.
+  eval cases (`packages/<pkg>/<skill>/evals/`) that pass locally. Evals live in
+  the authored tree only — the generator excludes them from the plugin
+  artifact. CI validates plugin structure on every push.
 - **Honest status.** Don't label anything further along than it is — README
   catalog statuses are *shipped / in development / planned* and must stay true.
 - **One name per thing.** Before adding a system/skill, check the catalog and
@@ -22,14 +28,23 @@ honestly-labelled changes over big ambitious ones.
 
 ## Plugin shape
 
+This is **generated output** — the shape `scripts/goalforge-generate.sh` emits
+from the authored package tree. Do not edit it by hand.
+
 ```
 plugins/<name>/
   .claude-plugin/plugin.json     # name, version, description
   relations.yaml                 # optional: declared relations (requires/recommends/vendors/…)
-  skills/<skill>/SKILL.md        # + scripts/, references/, evals/ per skill
+  skills/<skill>/SKILL.md        # + scripts/, references/ per skill
   commands/  hooks/              # optional
   .vendored-allowlist.txt        # if anything is vendored
 ```
+
+## Prerequisites
+
+- `claude` — Claude Code CLI on your `PATH`; check with `claude --version`.
+  The eval harnesses and the structure validation are run against it.
+- `bash`, `git`, `python3` (with PyYAML), `jq` — as in [INSTALL.md](INSTALL.md).
 
 ## Workflow
 

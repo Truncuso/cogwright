@@ -99,13 +99,13 @@ Full package→plugin pipeline, relations map, and the daily workflow:
 
 ### Inside goalforge
 
-The chain is fifteen stage skills, but two of them are worth naming separately —
-they are the parts that handle the work *before* a spec is writable, and the
-work a spec cannot answer on paper:
+The chain is fifteen stage skills, but two skills that are **not** stages are
+worth naming separately — they are the parts that handle the work *before* a
+spec is writable, and the work a spec cannot answer on paper:
 
 | Sub-capability | Status | What it is |
 |---|---|---|
-| **wayfind** (v0.2.0) | shipped | Pre-spec on-ramp for a foggy, multi-session effort: builds a decision map (`map.md` pointer-index + one-decision-per-ticket files), drives a frontier-computed work loop across sessions, and graduates in place into `goalforge-capture` once the fog clears. Skipped entirely when a feature is already clear. |
+| **wayfind** (v0.3.0) | shipped | Pre-spec on-ramp for a foggy, multi-session effort: builds a decision map (`map.md` pointer-index + one-decision-per-ticket files), drives a frontier-computed work loop across sessions, and graduates in place into `goalforge-capture` once the fog clears. Skipped entirely when a feature is already clear. |
 | **prototype** (v0.3.0) | shipped | Declared spike register: one design question, explicit success criteria, throwaway code in a logic / UI / perf branch. The findings doc is the survivor; the code is deleted or absorbed through review at production rigor — never merged in spike form. |
 
 `brief` is the third non-stage skill: it authors the task briefs that
