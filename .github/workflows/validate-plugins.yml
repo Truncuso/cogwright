@@ -96,3 +96,11 @@ jobs:
 
       - name: goalforge state-machine smoke (throwaway plans root)
         run: bash plugins/goalforge/scripts/goalforge-smoke.sh --throwaway
+
+      # Plugin tree only: packages/goalforge carries no
+      # references/reference-manifest.json (it is emitted plugin-side), so a
+      # both-trees loop would exercise a different route there. The suite is
+      # hermetic — its python3 shim supplies the yaml stub — so it needs no
+      # ambient PyYAML and no ordering against the shared setup step above.
+      - name: goalforge doctor self-test
+        run: bash plugins/goalforge/scripts/goalforge-doctor.sh --self-test

@@ -74,15 +74,11 @@ supported.
 
 ### Verify prerequisites in one shot
 
-```bash
-for c in git bash python3 jq flock timeout realpath tar; do
-  command -v "$c" >/dev/null && echo "ok   $c" || echo "MISS $c"
-done
-python3 -c "import yaml" 2>/dev/null && echo "ok   PyYAML" || echo "MISS PyYAML"
-bash -c '((BASH_VERSINFO[0]>=4))' && echo "ok   bash>=4" || echo "MISS bash>=4"
-```
-
-Every line should read `ok`.
+Once goalforge is installed, `goalforge-doctor.sh` checks every prerequisite
+above — the seven binaries, PyYAML, and the bash major version — plus the
+things only a real install can be asked about (layout, reference manifest,
+plans-root resolution, git hook). Run it as the first step after installing,
+via either route below; see [Verify the install](#verify-the-install).
 
 ---
 
@@ -315,17 +311,42 @@ explain goalforge
 The `goalforge` front-door skill should load and list the chain stages. Also try
 `/wayfind` — it should be recognised as a command.
 
-### 2. Scripts run
+### 2. The doctor is green
 
 ```bash
 GF="$HOME/.claude/plugins/marketplaces/cogwright/plugins/goalforge"   # plugin route
 # GF="$HOME/src/cogwright/packages/goalforge"                          # manual route
 
-bash "$GF/scripts/goalforge-validate.sh" --help
+bash "$GF/scripts/goalforge-doctor.sh"
 ```
 
-Expected: usage output. If you see
-`ERROR: PyYAML not available` → `pip3 install pyyaml`.
+The doctor checks the prerequisites (`git python3 jq flock timeout realpath
+tar` plus PyYAML), the bash major version, the layout of the tree it lives in,
+the reference manifest, PLANS_ROOT resolution, and the git pre-commit
+validator. It exits **0** when everything is green or only warnings fired, and
+**1** on a hard failure — a missing prerequisite, a dangling or (on the plugin
+route) missing reference manifest, or a tree that does not look like a
+goalforge install. Every failure line starts with a stable token
+(`MISSING DEP:`, `DANGLING REF:`, `MANIFEST MISSING`, `BAD ROOT:`), so it is
+clear which check fired.
+
+Warnings never fail the default run. `MISSING DEP: PyYAML` → `pip3 install
+pyyaml`; `WARN: bash<4` is the stock macOS bash (see
+[Platform notes](#platform-notes)).
+
+On the **plugin route** you can require a fully clean bill of health:
+
+```bash
+bash "$GF/scripts/goalforge-doctor.sh" --strict
+```
+
+`--strict` promotes warnings to failures. It is **plugin-route scoped**: a
+manual install never carries a reference manifest (it is emitted plugin-side
+only), so that one warning is exempt from promotion and `--strict` on the
+manual route stays green rather than being permanently red.
+
+To check the doctor itself rather than your install, `--self-test` runs an
+offline suite that proves each of its failure checks actually fires.
 
 ### 3. End-to-end smoke test on a throwaway repo
 
