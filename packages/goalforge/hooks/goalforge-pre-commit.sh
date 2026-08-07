@@ -11,11 +11,20 @@
 # recording is enforced at goalforge-verify time, not here.
 #
 # Env override (tests): GOALFORGE_VALIDATE_SCRIPT — path to goalforge-validate.sh.
+#
+# The DEFAULT validator address is script-relative, never an author install
+# path: ${CLAUDE_PLUGIN_ROOT} when the plugin route exports it, else the
+# hook's own parent dir. readlink -f resolves the dotfiles route, where the
+# file installed as .git/hooks/pre-commit (or under ~/.claude/hooks/) is a
+# symlink into the package — so package, plugin and symlink routes all land on
+# their own scripts/goalforge-validate.sh with no rewrite and no PRESERVE
+# exception.
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || printf '%s' "${BASH_SOURCE[0]}")")" && pwd)"
 
 _goalforge_pre_commit_main() {
     set -uo pipefail
 
-    local VALIDATE_SCRIPT="${GOALFORGE_VALIDATE_SCRIPT:-$HOME/.claude/skills/goalforge/scripts/goalforge-validate.sh}"
+    local VALIDATE_SCRIPT="${GOALFORGE_VALIDATE_SCRIPT:-${CLAUDE_PLUGIN_ROOT:-$SCRIPT_DIR/..}/scripts/goalforge-validate.sh}"
 
     # ── Zero-breakage: validator absent or not executable ──────────────────
     if [[ ! -e "$VALIDATE_SCRIPT" ]]; then
