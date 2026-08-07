@@ -13,8 +13,8 @@ folder per work package, each containing `overview.md`, `todo.md`, and one or
 more `task-NN-*.md` files. Fills `depends_on` and `parallel` from the spec's WP
 table.
 
-Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
-Templates: `~/.claude/skills/goalforge/references/templates/`.
+Schema reference: `${CLAUDE_PLUGIN_ROOT}/references/schema.md`.
+Templates: `${CLAUDE_PLUGIN_ROOT}/references/templates/`.
 
 ## When NOT to decompose — JIT rule (soft, forward-only; 2026-07-16)
 
@@ -99,7 +99,7 @@ batch, CI green after each), then contract the old form away in a final WP.
 
 **Prototype WPs.** A WP whose goal is answering ONE design question that only a
 built thing can settle — how it looks, behaves, performs, or scales (criterion:
-`~/.claude/skills/goalforge/references/fidelity.md`) —
+`${CLAUDE_PLUGIN_ROOT}/references/fidelity.md`) —
 rather than shipping production code is a **declared spike**: set
 `register: prototype` in its frontmatter (schema.md §WP frontmatter), give the
 goal block a `judge` or `human` strategy over the findings doc, name the
@@ -113,7 +113,7 @@ an open question and routes to `prototype` via `goalforge-harden` Step 1.
 
 For a declared spike WP, stamp sections 1/2/4/5 (Design Question, Trigger
 Evidence, Branch, Expected Findings Shape) of
-`~/.claude/skills/goalforge/prototype/references/spike-spec.md` into its
+`${CLAUDE_PLUGIN_ROOT}/skills/prototype/references/spike-spec.md` into its
 overview body; Success Criteria is not stamped — it is represented by the
 WP's `goal.verification`.
 
@@ -286,7 +286,7 @@ every `todo.md` to today. Set `updated:` in the feature `overview.md` to today.
 Generate the feature-level `todo.md` rollup:
 
 ```bash
-bash ~/.claude/skills/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
 ```
 
 It reads each WP `overview.md` status + `todo.md` open items and writes
@@ -298,7 +298,7 @@ produces byte-identical output).
 Before reporting, parse-check every file just written:
 
 ```bash
-bash ~/.claude/skills/goalforge/scripts/goalforge-validate.sh --feature <feature> --show <PLANS_ROOT>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-validate.sh --feature <feature> --show <PLANS_ROOT>
 ```
 
 Fix any `invalid YAML frontmatter` ERROR immediately — its most common causes are
@@ -318,7 +318,7 @@ defects are a cheap per-WP delta in `goalforge-harden` (Step 0a).
 1. **Compute the feature audit hash** (deterministic, gates re-runs):
 
    ```bash
-   bash ~/.claude/skills/goalforge/scripts/goalforge-feature-hash.sh <PLANS_ROOT>/<feature>
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-feature-hash.sh <PLANS_ROOT>/<feature>
    ```
 
    The hash covers the feature's *structure + goals* (sorted WP slugs, each
@@ -410,12 +410,12 @@ records the hash before the auto-advance — else wp-01's `→ready` gate refuse
 ## Plans root
 
 Resolve `<PLANS_ROOT>` at runtime per the priority rules in
-`~/.claude/skills/goalforge/references/schema.md` §PLANS_ROOT resolution:
+`${CLAUDE_PLUGIN_ROOT}/references/schema.md` §PLANS_ROOT resolution:
 env `SDD_PLANS_DIR` → project git-root `plans/` → global `~/.claude/plans/`.
 
 ## Template reference
 
-Templates at `~/.claude/skills/goalforge/references/templates/`. Stamped files carry
+Templates at `${CLAUDE_PLUGIN_ROOT}/references/templates/`. Stamped files carry
 the appropriate marker:
 
 ```

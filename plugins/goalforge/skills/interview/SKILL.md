@@ -23,7 +23,7 @@ goal-hardening framing the engine needs:
   question in the WP's scope is resolved, recorded as an explicit assumption,
   or risk-accepted (harden Step 1's own exit criteria).
 - **Fidelity vocabulary** — a question can outgrow discussion fidelity mid-loop;
-  see `~/.claude/skills/goalforge/references/fidelity.md` for the ladder and the trigger criterion this
+  see `${CLAUDE_PLUGIN_ROOT}/references/fidelity.md` for the ladder and the trigger criterion this
   specialization applies.
 
 ## Procedure (frame -> delegate -> escape hatch -> return)
@@ -35,13 +35,13 @@ goal-hardening framing the engine needs:
    question technique, confidence signaling, and stopping behavior belong to
    the engine; this specialization does not reimplement or shadow it.
 3. **Escape hatch** — when a question meets the spike-candidate trigger
-   (`~/.claude/skills/goalforge/references/fidelity.md` §Trigger), ask once: *"this is above discussion fidelity — spike it?"*
+   (`${CLAUDE_PLUGIN_ROOT}/references/fidelity.md` §Trigger), ask once: *"this is above discussion fidelity — spike it?"*
    Surface this by consuming the engine's existing `HANDOFF_SUGGESTION: high-fidelity`
-   token (no parallel signal invented) and route per `~/.claude/skills/goalforge/references/fidelity.md`
+   token (no parallel signal invented) and route per `${CLAUDE_PLUGIN_ROOT}/references/fidelity.md`
    §Per-stage routing — `harden` row — to the `prototype` skill. On routing to
    `prototype`, the spike question is written up as a standalone one-pager at
    `plans/<feature>/spikes/<slug>.md` following the template
-   `~/.claude/skills/goalforge/prototype/references/spike-spec.md`; the grill
+   `${CLAUDE_PLUGIN_ROOT}/skills/prototype/references/spike-spec.md`; the grill
    checks the one-pager section-by-section. The engine's
    `high-fidelity` token is the signal, the Trigger is the filter — a token whose
    question fails the kind test (Trigger condition 1) goes back to harden Step 1's

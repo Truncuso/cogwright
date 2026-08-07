@@ -41,7 +41,7 @@ the task checkpoint block, it never mutates the brief in place).
 ## Dispatch tier
 
 The brief is written by a **strong** tier, resolved via
-`~/.claude/skills/goalforge/references/tier-map.md` (the human-readable
+`${CLAUDE_PLUGIN_ROOT}/references/tier-map.md` (the human-readable
 projection of `ROLE_TIER` in `scripts/goalforge-pick-agent.py` — the single
 authoritative source). The resolved tier is stamped into the brief frontmatter
 as `brief_tier`. The point of the stage is tier inversion: pay for a strong tier

@@ -17,14 +17,14 @@ between a replacing feature and the one it replaced.
 `goalforge-verify` advances a feature to `completed` (last-WP rule) and then *offers*
 archival; this skill performs it on request.
 
-Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
+Schema reference: `${CLAUDE_PLUGIN_ROOT}/references/schema.md`.
 Archive-consumer contract (what an archived slug guarantees to edge consumers):
-`~/.claude/skills/goalforge/references/archive-contract.md`.
+`${CLAUDE_PLUGIN_ROOT}/references/archive-contract.md`.
 
 ## Plans root
 
 `<feature>` (and `--supersedes <old>`) name folders inside `<PLANS_ROOT>/`.
-Resolve `<PLANS_ROOT>` per `~/.claude/skills/goalforge/references/schema.md`
+Resolve `<PLANS_ROOT>` per `${CLAUDE_PLUGIN_ROOT}/references/schema.md`
 §PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
 global `~/.claude/plans/`.
 
@@ -48,7 +48,7 @@ fail-closes on `status: completed`, and a stranded feature is already `archived`
 so it REFUSES. `--relocate` is the dedicated handler:
 
 ```bash
-bash ~/.claude/skills/goalforge/scripts/goalforge-archive.sh <feature> --relocate \
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-archive.sh <feature> --relocate \
      [--plans-root <PLANS_ROOT>]
 ```
 
@@ -107,14 +107,14 @@ from scratch.
 ## Steps 2–4 — Mechanical core (delegated to `goalforge-archive.sh`)
 
 The frontmatter edit, physical move, and validator gate are performed
-**deterministically by a script** — `~/.claude/skills/goalforge/scripts/goalforge-archive.sh`
+**deterministically by a script** — `${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-archive.sh`
 — so the same logic is drivable unattended (the `goalforge-archive-batch.sh` loop). The
 script is the single source of truth for these mechanics; this skill is the
 human front door (the Step-1 gate presentation, the refusal templates below, and
 the Step-6 report).
 
 ```bash
-bash ~/.claude/skills/goalforge/scripts/goalforge-archive.sh <feature> \
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-archive.sh <feature> \
      [--supersedes <old>] [--plans-root <PLANS_ROOT>]
 ```
 
@@ -157,7 +157,7 @@ and had to be reverted.
   archiving and resolve terminal). Scope of that claim: **verified for
   `goalforge-validate.sh`**, which re-adds archived slugs to its name index. Every
   other consumer is *required to conform* to
-  `~/.claude/skills/goalforge/references/archive-contract.md` — conformance is not
+  `${CLAUDE_PLUGIN_ROOT}/references/archive-contract.md` — conformance is not
   verified here, so a consumer bug shows up as a dangling edge, not as a reason to
   refuse the archive.
 - **Behavior:** WARN by default (prints the offending refs + the relocate-then-move
@@ -173,9 +173,9 @@ edits (including the physical move), confirm the feature path(s) carry no
 uncommitted artifacts — using the **new** `_archived/` paths (the originals no
 longer exist):
 ```bash
-bash ~/.claude/skills/goalforge/scripts/goalforge-ensure-committed.sh <PLANS_ROOT>/_archived/<feature>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-ensure-committed.sh <PLANS_ROOT>/_archived/<feature>
 # and, under --supersedes:
-bash ~/.claude/skills/goalforge/scripts/goalforge-ensure-committed.sh <PLANS_ROOT>/_archived/<old>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-ensure-committed.sh <PLANS_ROOT>/_archived/<old>
 ```
 On non-zero, report the dirty paths and HALT (do not declare done). The check is
 path-scoped (unrelated dirt elsewhere never false-blocks) and branch-agnostic:
@@ -248,7 +248,7 @@ Check the <old> slug spelling, or confirm the feature exists.
   (literal, `grep -F`) from outside the feature + outside `_archived/`. A
   `[[<slug>]]` relationship edge is NOT a path ref and is correctly ignored — the
   archived target stays resolvable per
-  `~/.claude/skills/goalforge/references/archive-contract.md` (validator-verified;
+  `${CLAUDE_PLUGIN_ROOT}/references/archive-contract.md` (validator-verified;
   other consumers conform to the contract rather than being guaranteed by this
   skill). Only refs that point INTO the feature's files (a cross-cited
   `findings.md`, a frontmatter `locator:`) dangle after the move. WARN by default keeps the

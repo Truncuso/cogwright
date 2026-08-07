@@ -20,7 +20,7 @@ cross-feature dependencies", orthogonal to a WP's goal/verify/commit cycle.
 ## Mechanical core
 
 ```bash
-python3 ~/.claude/skills/goalforge/scripts/goalforge-plan-index.py \
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-plan-index.py \
     [--plans-root <root>] [--include-archived] [-o <file|->]
 ```
 
@@ -72,7 +72,7 @@ Consumer contract: `../references/archive-contract.md`.
 
 ## Source of truth
 
-The `relationships:` frontmatter (schema: `~/.claude/skills/goalforge/references/schema.md`)
+The `relationships:` frontmatter (schema: `${CLAUDE_PLUGIN_ROOT}/references/schema.md`)
 is canonical. If the generated index is wrong, fix the **frontmatter**, then
 regenerate -- never patch INDEX.md by hand. An unexpected orphan means a feature's
 edges are missing from its overview.

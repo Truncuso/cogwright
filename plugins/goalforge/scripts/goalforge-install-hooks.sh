@@ -25,7 +25,7 @@ _SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 if [[ -f "$_SCRIPT_DIR/../hooks/goalforge-pre-commit.sh" ]]; then
     SDD_HOOK_PATH="$(cd "$_SCRIPT_DIR/../hooks" && pwd)/goalforge-pre-commit.sh"
 else
-    SDD_HOOK_PATH="$HOME/.claude/skills/goalforge/hooks/goalforge-pre-commit.sh"
+    SDD_HOOK_PATH="${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-pre-commit.sh"
 fi
 
 # ── Resolve target repo ────────────────────────────────────────────────────────

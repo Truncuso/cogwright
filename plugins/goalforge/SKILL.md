@@ -53,10 +53,10 @@ the entry commands and the orchestrator, or referenced here.
 
 | You want… | At |
 |-----------|-----|
-| Frontmatter schemas, status machine | `~/.claude/skills/goalforge/references/schema.md`, `references/state-machine.md` |
-| File templates | `~/.claude/skills/goalforge/references/templates/` |
-| Old `sdd-*` → `goalforge-*` name map | `~/.claude/skills/goalforge/references/alias-map.md` |
-| Validation / goal / routing scripts | `~/.claude/skills/goalforge/scripts/goalforge-*.sh` |
+| Frontmatter schemas, status machine | `${CLAUDE_PLUGIN_ROOT}/references/schema.md`, `references/state-machine.md` |
+| File templates | `${CLAUDE_PLUGIN_ROOT}/references/templates/` |
+| Old `sdd-*` → `goalforge-*` name map | `${CLAUDE_PLUGIN_ROOT}/references/alias-map.md` |
+| Validation / goal / routing scripts | `${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-*.sh` |
 
 ## Entry points
 

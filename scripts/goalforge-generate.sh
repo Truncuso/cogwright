@@ -25,6 +25,11 @@
 #   v.   skills/sdd refs                                                    -> left verbatim (never rewritten to a dead plugin path; wp-21 retirement)
 #   vi.  cross-skill prose (autopilot / idea / capture-learning)            -> left verbatim
 #   vii. ${CLAUDE_PLUGIN_ROOT:-<local-fallback>} dual-mode form             -> used for the class-ii executable climbs
+#   viii. author install paths (~ | $HOME | ${HOME})/.claude/skills/goalforge
+#         -> child-aware: /<child>/... (dir with SKILL.md) becomes
+#            ${CLAUDE_PLUGIN_ROOT}/skills/<child>/..., everything else
+#            (references/, scripts/, workflow-authoring/, hooks/) becomes
+#            ${CLAUDE_PLUGIN_ROOT}/... at the plugin root
 #
 # Non-package plugin-packaging files (hooks/, commands/, relations.yaml,
 # .vendored-allowlist.txt)
@@ -105,10 +110,18 @@ done
 # ── 3. Path-rewrite + telemetry-strip pass over the generated tree ──
 _preserve_csv="$(IFS=,; echo "${PRESERVE[*]}")"
 GF_PRESERVE="$_preserve_csv" python3 - "$DST" <<'PYEOF'
-import os, sys
+import os, re, sys
 
 dst = sys.argv[1]
 preserve = set(os.environ.get("GF_PRESERVE", "").split(","))
+
+# Child set, enumerated at generation time with the copy-loop predicate
+# (a package dir is a child skill iff it holds a SKILL.md); never hardcoded.
+_skills_dir = os.path.join(dst, "skills")
+children = {
+    d for d in (os.listdir(_skills_dir) if os.path.isdir(_skills_dir) else [])
+    if os.path.isfile(os.path.join(_skills_dir, d, "SKILL.md"))
+}
 
 def strip_telemetry(text):
     """Remove the top-level `hooks:` frontmatter block (100% skill-measure/
@@ -155,6 +168,22 @@ def rewrite_paths(text, child):
                             "${CLAUDE_PLUGIN_ROOT}/skills/%s/" % child)
     return text
 
+# (viii) author install paths — all three absolute forms in one regex pass.
+# The optional first path segment decides where the reference lands: a child
+# skill goes under skills/<child>/, anything else at the plugin root.
+_AUTHOR_RE = re.compile(
+    r"(?:~|\$HOME|\$\{HOME\})/\.claude/skills/goalforge(?:/([A-Za-z0-9_.-]+))?")
+
+def rewrite_author_paths(text, children):
+    def _sub(m):
+        seg = m.group(1)
+        if seg is None:
+            return "${CLAUDE_PLUGIN_ROOT}"
+        if seg in children:
+            return "${CLAUDE_PLUGIN_ROOT}/skills/" + seg
+        return "${CLAUDE_PLUGIN_ROOT}/" + seg
+    return _AUTHOR_RE.sub(_sub, text)
+
 for base, dirs, files in os.walk(dst):
     rel_dir = os.path.relpath(base, dst)
     top = rel_dir.split(os.sep)[0] if rel_dir != "." else ""
@@ -175,6 +204,7 @@ for base, dirs, files in os.walk(dst):
         if name == "SKILL.md":
             new = strip_telemetry(new)
         new = rewrite_paths(new, child)
+        new = rewrite_author_paths(new, children)
         if new != text:
             with open(path, "w", encoding="utf-8", newline="") as fh:
                 fh.write(new)

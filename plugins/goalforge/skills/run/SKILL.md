@@ -10,11 +10,11 @@ metadata:
 
 ## Location
 
-`goalforge-run` lives at `~/.claude/skills/goalforge/run/` — the PRIVATE `run/`
+`goalforge-run` lives at `${CLAUDE_PLUGIN_ROOT}/skills/run/` — the PRIVATE `run/`
 orchestrator child of the local goalforge v2 package (source of truth per
 wp-13-local-rename). Its child skills (`goalforge-capture`, `goalforge-spec`,
 `goalforge-decompose`, `goalforge-harden`, `goalforge-execute`,
-`goalforge-verify`) are nested siblings under `~/.claude/skills/goalforge/`,
+`goalforge-verify`) are nested siblings under `${CLAUDE_PLUGIN_ROOT}/`,
 alongside the `sdd` local redirect hub. The orchestrator is invoked by name
 (`goalforge-run` / `skill-router goalforge-run`), so its directory location does
 not affect how the slash commands or the router resolve it.
@@ -243,7 +243,7 @@ non-human-gated edge; same signal-scoped conditions as policy guard).
 
 ## Status machine (reference)
 
-Full schema: `~/.claude/skills/goalforge/references/schema.md`.
+Full schema: `${CLAUDE_PLUGIN_ROOT}/references/schema.md`.
 
 WP stage vocabulary used as preconditions in `chain.yaml`:
 
@@ -258,10 +258,10 @@ legal `spec → ready` edge via the deterministic gates instead of harden.
 
 ## Shared references
 
-- Schema + frontmatter: `~/.claude/skills/goalforge/references/schema.md`
-- Templates: `~/.claude/skills/goalforge/references/templates/`
-- Specialist routing: `~/.claude/skills/goalforge/references/specialist-map.yaml`
-- PLANS_ROOT resolution: `~/.claude/skills/goalforge/references/schema.md`
+- Schema + frontmatter: `${CLAUDE_PLUGIN_ROOT}/references/schema.md`
+- Templates: `${CLAUDE_PLUGIN_ROOT}/references/templates/`
+- Specialist routing: `${CLAUDE_PLUGIN_ROOT}/references/specialist-map.yaml`
+- PLANS_ROOT resolution: `${CLAUDE_PLUGIN_ROOT}/references/schema.md`
   §PLANS_ROOT resolution (env `SDD_PLANS_DIR` → project git-root `plans/` →
   global `~/.claude/plans/`)
 

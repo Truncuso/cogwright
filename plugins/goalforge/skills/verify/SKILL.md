@@ -14,7 +14,7 @@ requirements are met. Delegates to `superpowers:verification-before-completion`.
 ## Plans root
 
 The `<wp-path>` argument points to a WP folder inside `<PLANS_ROOT>/<feature>/`.
-Resolve `<PLANS_ROOT>` per `~/.claude/skills/goalforge/references/schema.md`
+Resolve `<PLANS_ROOT>` per `${CLAUDE_PLUGIN_ROOT}/references/schema.md`
 §PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
 global `~/.claude/plans/`.
 
@@ -102,7 +102,7 @@ false-blocks on the not-yet-written `commit:` fields.
 **Step B — Validator gate (fail-closed).** Now run the validator with both flags:
 
 ```bash
-bash ~/.claude/skills/goalforge/scripts/goalforge-validate.sh --strict --require-commit <PLANS_ROOT>/<feature>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-validate.sh --strict --require-commit <PLANS_ROOT>/<feature>
 ```
 
 `--strict` enforces zero-drift and fresh rollup; `--require-commit` additionally
@@ -135,7 +135,7 @@ a missing `findings.md`, or no fix at this boundary is a no-op (exit 0), never a
 verify failure — hence the trailing `|| true`.
 
 ```bash
-bash ~/.claude/skills/goalforge/scripts/goalforge-learning-route.sh \
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-learning-route.sh \
   --wp <wp> \
   --fix "<one-line fix>" --cause "<root cause>" --contrast "<passing-vs-failing>" \
   [--strategic "<candidate insight>"] || true
@@ -151,7 +151,7 @@ stdout; routing (tactical → `findings.md`, strategic → propose-only) and the
    appends the provenance ledger row, and refreshes the status cells + feature
    `todo.md`. Do not hand-edit `status:` or a status-table cell:
    ```bash
-   bash ~/.claude/skills/goalforge/scripts/goalforge-transition.sh <wp> verified \
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp> verified \
      --reason "verification passed; all tasks verified + findings present" \
      --actor goalforge-verify
    ```
@@ -184,7 +184,7 @@ stdout; routing (tactical → `findings.md`, strategic → propose-only) and the
 
 4. **Refresh the feature rollup:**
    ```bash
-   bash ~/.claude/skills/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
    ```
    This regenerates `<feature>/todo.md` to reflect the current WP and task
    statuses (including the new `verified` WP and any feature completion).
@@ -198,8 +198,8 @@ stdout; routing (tactical → `findings.md`, strategic → propose-only) and the
    idempotent call; then regenerate the feature rollup:
    ```bash
    RECAP=<PLANS_ROOT>/<feature>/recap.md
-   bash ~/.claude/skills/goalforge/scripts/recap.sh record-wp "$RECAP" <wp-slug> <green|yellow> <wp-commit-sha> "<one-line summary>"
-   bash ~/.claude/skills/goalforge/scripts/recap.sh rollup "$RECAP"
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/recap.sh record-wp "$RECAP" <wp-slug> <green|yellow> <wp-commit-sha> "<one-line summary>"
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/recap.sh rollup "$RECAP"
    ```
 
 5. **Commit finalization edits, then ensure clean.** Stage and commit ONLY the
@@ -215,7 +215,7 @@ stdout; routing (tactical → `findings.md`, strategic → propose-only) and the
    — in the dotfiles repo that is `master` (no feature branch, no push). Then
    confirm no uncommitted artifacts remain under the feature path:
    ```bash
-   bash ~/.claude/skills/goalforge/scripts/goalforge-ensure-committed.sh <PLANS_ROOT>/<feature>
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-ensure-committed.sh <PLANS_ROOT>/<feature>
    ```
    On non-zero exit, report the dirty paths and **HALT** — do not declare the WP
    done. The check is path-scoped (unrelated dirt elsewhere never false-blocks)

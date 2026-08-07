@@ -11,7 +11,7 @@ metadata:
 ## Plans root
 
 `<wp-path>` points to a WP folder in `<PLANS_ROOT>/<feature>/`. Resolve
-`<PLANS_ROOT>` per `~/.claude/skills/goalforge/references/schema.md` §PLANS_ROOT
+`<PLANS_ROOT>` per `${CLAUDE_PLUGIN_ROOT}/references/schema.md` §PLANS_ROOT
 resolution (env `SDD_PLANS_DIR` → project git-root `plans/` → global
 `~/.claude/plans/`).
 
@@ -76,7 +76,7 @@ it only decides whether to invoke `goalforge-verify` (Step 10), the sole authori
 
 0. **Prototype-register WP?** If frontmatter carries `register: prototype`
    (schema.md §WP frontmatter), the WP is a declared spike — fidelity rung 3,
-   `~/.claude/skills/goalforge/references/fidelity.md` — whose task loop
+   `${CLAUDE_PLUGIN_ROOT}/references/fidelity.md` — whose task loop
    collapses to its single task (goalforge-decompose stamps prototype WPs with
    exactly one task for this reason): after the status advance below, run the
    `prototype` skill (one design question + success criteria from the goal
@@ -100,7 +100,7 @@ it only decides whether to invoke `goalforge-verify` (Step 10), the sole authori
    `--from ready` as an optimistic-lock re-check; never hand-edit `status:` or a
    status cell:
    ```bash
-   bash ~/.claude/skills/goalforge/scripts/goalforge-transition.sh <wp> executing \
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp> executing \
      --from ready --reason "goalforge-execute entry" --actor goalforge-execute
    ```
 
@@ -130,7 +130,7 @@ Carry `effective_goal` and an empty `reason_feedback` into the outer loop.
 `## Assumptions` checks (set at harden) before building on them:
 
 ```bash
-bash ~/.claude/skills/goalforge/scripts/goalforge-assumption-recheck.sh <wp>/overview.md
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-assumption-recheck.sh <wp>/overview.md
 ```
 
 On a mismatch it writes a keyed, idempotent row to `<wp>/findings.md`
@@ -206,7 +206,7 @@ low-complexity task skips briefing entirely and proceeds to Step 3/4/5 unchanged
 For a gated task at `status: pending`:
 
 1. Invoke the PRIVATE brief child skill `goalforge-brief` (wp-06 task-01,
-   `~/.claude/skills/goalforge/brief/`) once to author `<wp>/brief-task-NN.md` —
+   `${CLAUDE_PLUGIN_ROOT}/skills/brief/`) once to author `<wp>/brief-task-NN.md` —
    a delta-only artifact (References/Context/Skeleton + a pointer to `task-NN.md`;
    frontmatter is exactly `{task, created, brief_tier}`). The brief is
    **immutable** after authoring.
@@ -227,7 +227,7 @@ against current repo state (the brief may have been authored against a since-cha
 file or goal):
 
 ```bash
-bash ~/.claude/skills/goalforge/execute/brief-staleness.sh <wp-dir> <task-slug>
+bash ${CLAUDE_PLUGIN_ROOT}/skills/execute/brief-staleness.sh <wp-dir> <task-slug>
 ```
 
 The script compares each `## References` anchor — a file anchor's recorded git blob
@@ -304,7 +304,7 @@ EnterWorktree/ExitWorktree.
 ### Step 4 — Dispatch resolution (pick-agent)
 
 Call `pick_agent(task_frontmatter, touched_files, specialist_map, discover=…,
-ollama_health=…)` from `~/.claude/skills/goalforge/scripts/goalforge-pick-agent.py` →
+ollama_health=…)` from `${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-pick-agent.py` →
 `{specialist, model, route, discovered_by}` (optionally `proposed_map_entry`).
 
 **Injected callables:** `discover` (a `general-purpose` Sonnet subagent that names
@@ -474,7 +474,7 @@ recorded.
 5. After the task reaches `implemented` and `commit_sha` is stashed, refresh the
    feature rollup (per-task cadence):
    ```bash
-   bash ~/.claude/skills/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
    ```
    Step 10 refreshes the rollup again at the WP boundary; both are intentional.
 
@@ -488,9 +488,9 @@ control or status-advance authority:
 
 ```bash
 RECAP=<PLANS_ROOT>/<feature>/recap.md
-bash ~/.claude/skills/goalforge/scripts/recap.sh init "$RECAP" <feature>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/recap.sh init "$RECAP" <feature>
 # OPTIONAL live progress (result = ok|… ; no commit column):
-bash ~/.claude/skills/goalforge/scripts/recap.sh append-task "$RECAP" <wp-slug> <task-slug> ok
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/recap.sh append-task "$RECAP" <wp-slug> <task-slug> ok
 ```
 
 On a Step 6 loop-back (re-dispatch after a failed eval) **and** on a Step 9.5
@@ -498,7 +498,7 @@ reason→task re-open, record the loop-back before the retry (the iteration trac
 accumulated into the WP's single record at finalize):
 
 ```bash
-bash ~/.claude/skills/goalforge/scripts/recap.sh append-loopback "$RECAP" <wp-slug> <iter> "<reason>" <task-slug>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/recap.sh append-loopback "$RECAP" <wp-slug> <iter> "<reason>" <task-slug>
 ```
 
 ### Step 9 — Resume (re-entry)
@@ -581,7 +581,7 @@ Reached only when **every task is `implemented` AND `verdict.met` is `True`**:
   cumulative-diff semantic gate.
 - After `goalforge-verify` returns, refresh the feature rollup:
   ```bash
-  bash ~/.claude/skills/goalforge/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
+  bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-rollup.sh <PLANS_ROOT>/<feature>
   ```
 - The WP `recap.md` finalize + `recap.sh rollup` are delegated to `goalforge-recap`
   **inside `goalforge-verify`** — record-only, no status-advance effect.

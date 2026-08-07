@@ -41,7 +41,7 @@ repository.
 Hook installation is fully delegated to the existing installer:
 
 ```
-$HOME/.claude/skills/goalforge/scripts/goalforge-install-hooks.sh <repo-dir>
+${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-install-hooks.sh <repo-dir>
 ```
 
 `goalforge-onboard` does not reimplement hook logic.

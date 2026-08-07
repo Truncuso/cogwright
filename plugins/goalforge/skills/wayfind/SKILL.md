@@ -47,7 +47,7 @@ The same `<effort-slug>` becomes the feature slug — **graduation is in-place**
 `map.md` is a **pointer-index**: decision bodies live in tickets/findings, never
 in the map.
 
-Resolve `<PLANS_ROOT>` per `~/.claude/skills/goalforge/references/schema.md`
+Resolve `<PLANS_ROOT>` per `${CLAUDE_PLUGIN_ROOT}/references/schema.md`
 §PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
 global `~/.claude/plans/`. Wayfind cites that rule, never its own convention.
 

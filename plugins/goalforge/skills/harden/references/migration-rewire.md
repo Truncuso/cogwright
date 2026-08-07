@@ -13,7 +13,7 @@ WP skips this step.
 1. **Before the move — capture references.** For each path the WP relocates, run the
    scan and record what references it:
    ```bash
-   bash ~/.claude/skills/goalforge/scripts/goalforge-rewire-impact.sh <old-path>
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-rewire-impact.sh <old-path>
    # → file:line:content for every reference; trailer "Found N reference(s)…"
    ```
    Consume the listing as typed DATA — it is the rewire worklist (every reference must
@@ -23,7 +23,7 @@ WP skips this step.
 2. **After the move — dangling-reference gate.** Once the file is moved and the
    references repointed, run the post-move check against the OLD path:
    ```bash
-   bash ~/.claude/skills/goalforge/scripts/goalforge-rewire-impact.sh --post-move <old-path>
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-rewire-impact.sh --post-move <old-path>
    # exit 0 = clean; exit 1 = dangling references remain (listed on stderr);
    # exit 2 = internal/search error (distinct from a failed gate)
    ```

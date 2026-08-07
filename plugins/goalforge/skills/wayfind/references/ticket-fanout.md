@@ -92,7 +92,7 @@ Every probe is **propose-only**, on the same contract as the blind-spot pass:
   suggestion, not a command to execute.
 
 The ownership and return-as-DATA contract this inherits is
-`~/.claude/skills/goalforge/references/dispatch-template.md` — cited by path,
+`${CLAUDE_PLUGIN_ROOT}/references/dispatch-template.md` — cited by path,
 never duplicated here.
 
 ## 5. Return schema
