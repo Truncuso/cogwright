@@ -13,9 +13,12 @@ honestly-labelled changes over big ambitious ones.
   --check` fails CI when the two disagree. See the Repository-layout table in
   the README.
 - **Every skill ships evals.** A new or changed skill includes deterministic
-  eval cases (`packages/<pkg>/<skill>/evals/`) that pass locally. Evals live in
-  the authored tree only — the generator excludes them from the plugin
-  artifact. CI validates plugin structure on every push.
+  eval cases that pass locally. Two shapes, both authored: per-skill cases under
+  `packages/<pkg>/<skill>/evals/` (e.g. `packages/goalforge/execute/evals/`),
+  and package-level cases spanning several skills under `packages/<pkg>/evals/`
+  (e.g. `packages/goalforge/evals/`). Evals live in the authored tree only — the
+  generator excludes them from the plugin artifact. CI validates plugin
+  structure on every push.
 - **Honest status.** Don't label anything further along than it is — README
   catalog statuses are *shipped / in development / planned* and must stay true.
 - **One name per thing.** Before adding a system/skill, check the catalog and
@@ -43,7 +46,9 @@ plugins/<name>/
 ## Prerequisites
 
 - `claude` — Claude Code CLI on your `PATH`; check with `claude --version`.
-  The eval harnesses and the structure validation are run against it.
+  Required for the structure validation (`claude plugin validate --strict`),
+  which CI skips with a warning when the CLI is absent. The eval harnesses are
+  plain bash and do not invoke it.
 - `bash`, `git`, `python3` (with PyYAML), `jq` — as in [INSTALL.md](INSTALL.md).
 
 ## Workflow

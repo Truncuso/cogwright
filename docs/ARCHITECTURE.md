@@ -90,7 +90,7 @@ flowchart TB
         WD[watchdog]
         PIX[plan-index]
         ARB[arbiter]
-        INT["interview<br/><i>goal-hardening grilling</i>"]
+        INT["goalforge-interview<br/><i>goal-hardening grilling</i>"]
     end
 
     subgraph AST["chain-support assets (not stages)"]

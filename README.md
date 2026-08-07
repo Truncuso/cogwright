@@ -99,9 +99,10 @@ Full package→plugin pipeline, relations map, and the daily workflow:
 
 ### Inside goalforge
 
-The chain is fifteen stage skills, but two skills that are **not** stages are
-worth naming separately — they are the parts that handle the work *before* a
-spec is writable, and the work a spec cannot answer on paper:
+The chain is fifteen stage skills, alongside three skills that are **not**
+stages (`wayfind`, `prototype`, `brief`) — two of them worth naming here,
+because they handle the work *before* a spec is writable, and the work a spec
+cannot answer on paper:
 
 | Sub-capability | Status | What it is |
 |---|---|---|

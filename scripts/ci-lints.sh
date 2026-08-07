@@ -104,8 +104,10 @@ carved_out() {
 # Section: author-paths
 # ---------------------------------------------------------------------------
 
-# Author-machine install paths in every real form, plus the dotfiles prefix.
-AUTHOR_PATH_RE='(~|\$HOME|\$\{HOME\})/\.claude/skills/goalforge|\.\./skills/goalforge|\$HOME/dotfiles'
+# Author-machine install paths in every real form, plus the dotfiles prefix and
+# $COGWRIGHT_ROOT — the maintainer's checkout anchor, which resolves to nothing
+# on an installed plugin and so must never be an anchor in shipped text.
+AUTHOR_PATH_RE='(~|\$HOME|\$\{HOME\})/\.claude/skills/goalforge|\.\./skills/goalforge|\$HOME/dotfiles|\$\{?COGWRIGHT_ROOT\}?'
 # The upstream slug hardcoded into shipped plugin text (installer copy is fine).
 UPSTREAM_SLUG_RE='Truncuso/cogwright'
 
@@ -360,21 +362,38 @@ lint_package_refs() {
 }
 
 # ---------------------------------------------------------------------------
-# version — three-way agreement on the single version authority.
+# version — every README catalog row agrees with the SKILL.md it quotes.
 #
-# packages/goalforge/SKILL.md `metadata.version` is the only hand-bumped value;
-# plugins/goalforge/.claude-plugin/plugin.json `version` is generated from it and
-# the README catalog quotes it. This section asserts all three agree.
+# PACKAGE ROW. packages/goalforge/SKILL.md `metadata.version` is the only
+# hand-bumped value; plugins/goalforge/.claude-plugin/plugin.json `version` is
+# generated from it and the README `**goalforge**` row quotes it. That row is a
+# three-way check.
+#
+# SUB-CAPABILITY ROWS. Every README row of the shape `| **<name>** (vX.Y.Z) |`
+# is checked two-way against `packages/goalforge/<name>/SKILL.md`
+# `metadata.version`, for each `<name>` that has such a file. Same authority
+# rule, applied per child: a child version bump that forgets the README, or a
+# README quote for a version the child never had, fails here.
 #
 # Semantics are pinned FAIL-CLOSED, because an equality-only comparison passes
-# when all three sides are empty:
-#   - the SKILL.md value MUST match ^[0-9]+\.[0-9]+\.[0-9]+$
-#   - an absent or empty value on ANY of the three sides is a FAIL
+# when both sides are empty:
+#   - every SKILL.md value MUST match ^[0-9]+\.[0-9]+\.[0-9]+$
+#   - an absent or empty value on ANY side of ANY row is a FAIL
 #   - a missing plugin.json `version` key is a FAIL (distinct from an empty one)
 #
-# The scan unit is the three sides, so SCANNED is always 3 — "stopped matching"
-# cannot silently pass here, it surfaces as an absent-value FAIL instead.
+# The scan unit is the CATALOG ROW: SCANNED is 1 (the goalforge row, whatever
+# its three sides do) plus the number of sub-capability rows checked. A row that
+# stops matching therefore shows up as a falling SCANNED, and the floor below
+# turns that into a FAIL rather than a silent PASS — bump it deliberately in the
+# change that adds or removes a shipped sub-capability, alongside the skill
+# count quoted in the goalforge catalog row.
 # ---------------------------------------------------------------------------
+VERSION_SUBCAP_MIN_ROWS=2
+
+# skill_md_version <SKILL.md> — print the frontmatter `metadata.version` scalar.
+skill_md_version() {
+  awk '/^---$/{f++;next} f==1 && /^  version:/{gsub(/[" ]/,"",$2);print $2;exit}' "$1"
+}
 
 lint_version() {
   VIOLATIONS=0
@@ -384,8 +403,9 @@ lint_version() {
   local skill_md="${GF_SKILL_MD:-packages/goalforge/SKILL.md}"
   local plugin_json="${GF_PLUGIN_JSON:-plugins/goalforge/.claude-plugin/plugin.json}"
   local readme="${GF_README:-README.md}"
+  local pkg_dir="${GF_PACKAGE_DIR:-packages/goalforge}"
 
-  SCANNED=3
+  SCANNED=1
 
   # ── SKILL.md metadata.version — the authority ──
   local sv=""
@@ -393,7 +413,7 @@ lint_version() {
     printf '  %s: not a file\n' "$skill_md" >&2
     VIOLATIONS=$(( VIOLATIONS + 1 ))
   else
-    sv="$(awk '/^---$/{f++;next} f==1 && /^  version:/{gsub(/[" ]/,"",$2);print $2;exit}' "$skill_md")"
+    sv="$(skill_md_version "$skill_md")"
     if ! printf '%s' "$sv" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
       printf '  %s: metadata.version is absent, empty, or not semver: %s\n' \
         "$skill_md" "'$sv'" >&2
@@ -444,6 +464,46 @@ lint_version() {
       "$readme" "$rv" "$skill_md" "$sv" >&2
     VIOLATIONS=$(( VIOLATIONS + 1 ))
   fi
+
+  # ── Sub-capability catalog rows — one two-way check per row ──
+  local rows=0 name quoted child_md cv
+  if [ -f "$readme" ]; then
+    while IFS='|' read -r name quoted; do
+      [ -n "$name" ] || continue
+      child_md="$pkg_dir/$name/SKILL.md"
+      # A row naming something this package does not ship as a child skill is
+      # out of scope here (it is the package catalog's own business), so it is
+      # not counted as a checked row either.
+      [ -f "$child_md" ] || continue
+      rows=$(( rows + 1 ))
+
+      cv="$(skill_md_version "$child_md")"
+      if ! printf '%s' "$cv" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+        printf '  %s: metadata.version is absent, empty, or not semver: %s\n' \
+          "$child_md" "'$cv'" >&2
+        VIOLATIONS=$(( VIOLATIONS + 1 ))
+        continue
+      fi
+      if [ -z "$quoted" ]; then
+        printf '  %s: %s catalog row carries an empty version quote\n' \
+          "$readme" "$name" >&2
+        VIOLATIONS=$(( VIOLATIONS + 1 ))
+        continue
+      fi
+      if [ "$quoted" != "$cv" ]; then
+        printf '  %s: %s catalog quotes v%s != %s metadata.version %s\n' \
+          "$readme" "$name" "$quoted" "$child_md" "$cv" >&2
+        VIOLATIONS=$(( VIOLATIONS + 1 ))
+      fi
+    done < <(sed -n 's/^| \*\*\([A-Za-z0-9_-]*\)\*\* (v\([^)]*\)).*/\1|\2/p' "$readme")
+  fi
+
+  if [ "$rows" -lt "$VERSION_SUBCAP_MIN_ROWS" ]; then
+    printf '  %s: %d sub-capability catalog rows matched, below the floor of %d — rows stopped matching, or one was dropped; rebaseline deliberately\n' \
+      "$readme" "$rows" "$VERSION_SUBCAP_MIN_ROWS" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  fi
+  SCANNED=$(( SCANNED + rows ))
 
   [ "$VIOLATIONS" -eq 0 ]
 }
@@ -624,11 +684,23 @@ load_retired_vocab_carveouts() {
   RV_ENTRIES=()
   RV_USED=()
   [ -f "$RETIRED_VOCAB_CARVEOUT_FILE" ] || return 0
-  local line
+  local line raw_pat
   while IFS= read -r line || [ -n "$line" ]; do
-    line="${line%$'\r'}"
-    line="${line%"${line##*[![:space:]]}"}"
-    case "$line" in ''|'#'*) continue ;; esac
+    line="${line%$'\r'}"                        # CRLF-authored file
+    case "$line" in '#'*) continue ;; esac
+    # MALFORMED guard, checked BEFORE the trim below. The wholesale (whole-file)
+    # shape is the DOCUMENTED, explicit `path::` — nothing after the separator.
+    # `path::<spaces>` is a different thing: an author who meant a substring and
+    # typed whitespace. The trailing-whitespace trim would silently widen it to
+    # wholesale, so refuse the file instead of guessing.
+    if [ "${line#*::}" != "$line" ]; then
+      raw_pat="${line#*::}"
+      if [ -n "$raw_pat" ] && [ -z "${raw_pat%"${raw_pat##*[![:space:]]}"}" ]; then
+        die 2 "malformed carve-out in $RETIRED_VOCAB_CARVEOUT_FILE (whitespace-only substring after '::'; use a bare 'path::' for the wholesale shape): $line"
+      fi
+    fi
+    line="${line%"${line##*[![:space:]]}"}"     # trailing whitespace
+    case "$line" in '') continue ;; esac
     RV_ENTRIES+=("$line")
     RV_USED+=(0)
   done < "$RETIRED_VOCAB_CARVEOUT_FILE"
@@ -639,7 +711,7 @@ load_retired_vocab_carveouts() {
 # shape: it covers the whole file (used only for the two alias-map copies).
 rv_carved_out() {
   local file="$1" content="$2" i entry cpath cpat
-  for i in "${!RV_ENTRIES[@]}"; do
+  for i in ${RV_ENTRIES+"${!RV_ENTRIES[@]}"}; do
     entry="${RV_ENTRIES[$i]}"
     cpath="${entry%%::*}"
     cpat="${entry#*::}"
@@ -681,7 +753,7 @@ lint_retired_vocab() {
   # Dead-entry leg, same contract as the sibling baselines: an entry that
   # suppresses nothing names an occurrence that no longer exists, so delete it.
   local i
-  for i in "${!RV_ENTRIES[@]}"; do
+  for i in ${RV_ENTRIES+"${!RV_ENTRIES[@]}"}; do
     [ "${RV_USED[$i]}" -eq 1 ] && continue
     printf '  dead entry in %s (suppresses nothing, delete it): %s\n' \
       "$RETIRED_VOCAB_CARVEOUT_FILE" "${RV_ENTRIES[$i]}" >&2
@@ -699,7 +771,7 @@ lint_retired_vocab() {
 # packages/goalforge/execute/evals/run.sh), so the CALL SITE is the unit, not the
 # `grep -qF` token inside it. Reproduce the frozen number with exactly:
 #
-#     git ls-files | grep '/evals/' | xargs grep -ho '^check ' | wc -l
+#     git ls-files | grep '/evals/' | xargs grep -hoI '^check ' | wc -l
 #
 # CAP-ONLY, deliberately. Deletion is unguarded at the assertion level because
 # prose-eval rework is a spec §Non-Goal owned by feature 2; what this section
@@ -736,7 +808,7 @@ lint_prose_eval_ratchet() {
   fi
 
   local count
-  count=$(grep -ho '^check ' -- "${files[@]}" 2>/dev/null | wc -l)
+  count=$(grep -hoI '^check ' -- "${files[@]}" 2>/dev/null | wc -l)
   count="${count//[[:space:]]/}"
 
   if [ "$count" -gt "$PROSE_EVAL_CAP" ]; then

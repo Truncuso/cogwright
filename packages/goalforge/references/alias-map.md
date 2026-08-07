@@ -3,7 +3,8 @@
 A **historical name map**, kept so an old `sdd-*` reference found in a plan, a
 handoff, or an archived document can still be resolved. The `sdd-*` names are
 retired: nothing in this package answers to them any more. Nothing here is a
-plan or a pending action — every rename below has already happened.
+plan or a pending action — every rename recorded here has already happened; the
+no-legacy-name table records children that were never renamed.
 
 Locations are given relative to the plugin root (`${CLAUDE_PLUGIN_ROOT}`).
 Conventions: **skills** are referenced by bare name (`goalforge-<name>` — the
@@ -36,14 +37,16 @@ with the unrelated `run` skill.
 ### Children with no legacy name
 
 These four were added after the rename and never had an `sdd-*` predecessor —
-listed so a search for their history does not go looking for one.
+listed so a search for their history does not go looking for one. `prototype`
+and `wayfind` are non-chain co-tenants (SKILL.md §co-tenancy) and so register
+under bare names, without the `goalforge-` prefix the chain children carry.
 
 | Old skill | New bare name | Location |
 |-----------|---------------|----------|
 | *(none)* | `goalforge-brief` | `skills/brief/` |
 | *(none)* | `goalforge-interview` | `skills/interview/` |
-| *(none)* | `goalforge-prototype` | `skills/prototype/` |
-| *(none)* | `goalforge-wayfind` | `skills/wayfind/` |
+| *(none)* | `prototype` | `skills/prototype/` |
+| *(none)* | `wayfind` | `skills/wayfind/` |
 
 ## Scripts (.sh — plain renames)
 

@@ -464,14 +464,16 @@ Stated plainly so you are not debugging a documented gap:
    The children are private: they have no Skill-tool name and calling one by
    name fails with "Unknown skill".
 2. **A few references reach into skills that are not part of this marketplace**
-   (`idea`, `autopilot`). The couplings are real — the harden and spec stages
-   name those skills — but **no `recommends:` row in
+   (`idea`, `autopilot`). The couplings are real — several stages (capture,
+   spec, harden, execute, run, wayfind) name those skills — but **no
+   `recommends:` row in
    `${CLAUDE_PLUGIN_ROOT}/relations.yaml` declares them**, so unlike the
    declared companions (`research-analyst`, `interview`, `adr-write`) they
    carry no named fallback. Those passages degrade *undeclared*: the section
    simply has nothing to route to. Nothing blocks — the rest of the chain is
    unaffected — but do not expect a documented degradation path for them.
-   Declaring the two rows is tracked for the next release.
+   Declaring the two rows is an open item — file or follow it on the issue
+   tracker linked at the end of this file.
 3. **Child skills are individually discoverable — suppression is soft.** In the
    package they are private children of the `goalforge` front door; flattened
    into a plugin they become top-level skills. Every child description

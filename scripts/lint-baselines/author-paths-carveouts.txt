@@ -12,3 +12,18 @@
 # --- and never migrates it. Retired when that reporting is dropped (i.e. when
 # --- no legacy installs are plausibly left in the wild).
 scripts/install.sh::GF_LEGACY_SKILLS_DIR="${GF_LEGACY_SKILLS_DIR:-$HOME/dotfiles/claude/skills}"
+
+# --- goalforge-preharden-lint.sh: SELF-REFERENTIAL. This script's own job is to
+# --- find `$COGWRIGHT_ROOT` in planning docs, so its doc comment, its detector
+# --- regex, and its --self-test dirty fixture must all name the token verbatim.
+# --- Removing them would remove the detector. retired-by: permanent — these
+# --- three lines are carved out for as long as the P1 check exists.
+# --- Listed for both trees: only the generated copy is in the author-paths scan
+# --- set today (plugins/ + scripts/install.sh); the authored twin is carried so
+# --- widening that scan set does not reopen a settled question.
+packages/goalforge/scripts/goalforge-preharden-lint.sh::plugin-anchored paths in planning docs ($COGWRIGHT_ROOT,
+packages/goalforge/scripts/goalforge-preharden-lint.sh::grep -oE '\$COGWRIGHT_ROOT|\$CLAUDE_PLUGIN_ROOT|plugins/cogwright'
+packages/goalforge/scripts/goalforge-preharden-lint.sh::path $COGWRIGHT_ROOT/scripts
+plugins/goalforge/scripts/goalforge-preharden-lint.sh::plugin-anchored paths in planning docs ($COGWRIGHT_ROOT,
+plugins/goalforge/scripts/goalforge-preharden-lint.sh::grep -oE '\$COGWRIGHT_ROOT|\$CLAUDE_PLUGIN_ROOT|plugins/cogwright'
+plugins/goalforge/scripts/goalforge-preharden-lint.sh::path $COGWRIGHT_ROOT/scripts
