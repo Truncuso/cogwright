@@ -1,0 +1,24 @@
+# Carve-outs for `ci-lints.sh --only author-paths`.
+#
+# Format: <repo-relative-path>::<literal substring of the offending line>
+# One entry suppresses ONE known occurrence. Exact path + literal match only —
+# never a regex that weakens the lint for a whole tree.
+#
+# Every entry names the work that retires it. An entry whose retiring work has
+# landed is dead and must be deleted in that same change.
+
+# --- PRESERVE'd hooks/ tree: rewritten at SOURCE when wp-04 takes hooks/ out
+# --- of PRESERVE; the generator cannot touch them until then.
+plugins/goalforge/hooks/goalforge-pre-commit.sh::$HOME/.claude/skills/goalforge/scripts/goalforge-validate.sh
+plugins/goalforge/hooks/goalforge-transition-guard.sh::~/.claude/hooks/ -> ~/.claude/skills/goalforge/references/
+plugins/goalforge/hooks/goalforge-transition-guard.sh::../skills/goalforge/references/state-machine.md
+
+# --- install.sh: the single expected-remote default assignment. The upstream
+# --- slug is legitimate as a default there (task-03 makes it env-overridable).
+scripts/install.sh::github.com/Truncuso/cogwright
+
+# --- install.sh: the dotfiles default target and its header comment. These are
+# --- the defect task-03 fixes; the lint ships ahead of the fix, so these two
+# --- occurrences are carved out until then. RETIRED BY task-03-install-sh-fixes.
+scripts/install.sh::$HOME/dotfiles/claude/skills/goalforge  ->  <repo>/packages/goalforge
+scripts/install.sh::GF_TARGET_DIR="${GF_TARGET_DIR:-$HOME/dotfiles/claude/skills/goalforge}"
