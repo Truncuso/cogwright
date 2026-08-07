@@ -17,8 +17,8 @@ plugins/goalforge/hooks/goalforge-transition-guard.sh::../skills/goalforge/refer
 # --- slug is legitimate as a default there (task-03 makes it env-overridable).
 scripts/install.sh::github.com/Truncuso/cogwright
 
-# --- install.sh: the dotfiles default target and its header comment. These are
-# --- the defect task-03 fixes; the lint ships ahead of the fix, so these two
-# --- occurrences are carved out until then. RETIRED BY task-03-install-sh-fixes.
-scripts/install.sh::$HOME/dotfiles/claude/skills/goalforge  ->  <repo>/packages/goalforge
-scripts/install.sh::GF_TARGET_DIR="${GF_TARGET_DIR:-$HOME/dotfiles/claude/skills/goalforge}"
+# --- install.sh: the legacy skills root, referenced ONLY by
+# --- report_legacy_target(), which detects and reports a pre-rewrite install
+# --- and never migrates it. Retired when that reporting is dropped (i.e. when
+# --- no legacy installs are plausibly left in the wild).
+scripts/install.sh::GF_LEGACY_SKILLS_DIR="${GF_LEGACY_SKILLS_DIR:-$HOME/dotfiles/claude/skills}"

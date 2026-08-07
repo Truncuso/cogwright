@@ -2,8 +2,10 @@
 # install.sh — deterministic goalforge installer (contributor | consumer).
 #
 # Contributor mode installs a PER-MACHINE, UNTRACKED symlink
-#     $HOME/dotfiles/claude/skills/goalforge  ->  <repo>/packages/goalforge
-# so every future goalforge edit lands in the cogwright working tree. The swap
+#     <skills>/goalforge  ->  <repo>/packages/goalforge
+# where <skills> is ${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills — the standard
+# Claude Code skills home — so every future goalforge edit lands in the
+# cogwright working tree. Override the whole path with GF_TARGET_DIR. The swap
 # is a strict ordered transaction with pre- and post-verification, and it is
 # idempotent: re-running on an already-correct install is a no-op (exit 0).
 #
@@ -12,6 +14,13 @@
 #     <skills>/prototype  ->  <repo>/packages/goalforge/prototype
 #     <skills>/wayfind    ->  <repo>/packages/goalforge/wayfind
 # interview/ stays PRIVATE — it is deliberately NOT linked at the top level.
+#
+# An install left behind by an older dotfiles-rooted layout is DETECTED and
+# reported on stderr, never migrated: sibling prototype/wayfind links there are
+# yours to remove by hand.
+#
+# The origin remote is checked against GF_EXPECTED_REMOTE (default: the
+# upstream slug). A mismatch — a fork — is a WARNING, not a failure.
 #
 # Consumer mode prints the marketplace install commands and runs
 # `claude plugin validate` when the CLI is available (the interactive `/plugin`
@@ -35,10 +44,15 @@ GF_REPO="${GF_REPO:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 
 # The managed skill directory (per-machine, untracked) and its link target.
 # Overridable by --self-test to a sandbox so the real $HOME is never touched.
-GF_TARGET_DIR="${GF_TARGET_DIR:-$HOME/dotfiles/claude/skills/goalforge}"
+GF_TARGET_DIR="${GF_TARGET_DIR:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/goalforge}"
 GF_LINK_TARGET="${GF_LINK_TARGET:-$GF_REPO/packages/goalforge}"
 
-EXPECTED_REMOTE_SUBSTR="github.com/Truncuso/cogwright"
+# Legacy (pre-rewrite) skills root. Kept ONLY so an install left there can be
+# reported; nothing is ever moved, removed, or relinked out of it.
+GF_LEGACY_SKILLS_DIR="${GF_LEGACY_SKILLS_DIR:-$HOME/dotfiles/claude/skills}"
+
+# Expected origin remote; a mismatch (fork) warns and continues.
+GF_EXPECTED_REMOTE="${GF_EXPECTED_REMOTE:-github.com/Truncuso/cogwright}"
 
 # Gitignore transient set: these are excluded from drift detection so that
 # gitignored __pycache__/evals-workspace transients classify CLEAN (never a
@@ -73,9 +87,10 @@ precheck_remote() {
     err "no 'origin' remote in $GF_REPO"
     return 1
   fi
-  if [[ "$remote" != *"$EXPECTED_REMOTE_SUBSTR"* ]]; then
-    err "unexpected origin remote: $remote (expected *$EXPECTED_REMOTE_SUBSTR*)"
-    return 1
+  if [[ "$remote" != *"$GF_EXPECTED_REMOTE"* ]]; then
+    info "WARNING: unexpected origin remote: $remote (expected *$GF_EXPECTED_REMOTE*)"
+    info "WARNING: continuing anyway — set GF_EXPECTED_REMOTE to silence this on a fork"
+    return 0
   fi
   info "remote OK: $remote"
   return 0
@@ -303,9 +318,23 @@ install_link() {
 # ---------------------------------------------------------------------------
 # Contributor mode — goalforge + sibling package skills
 # ---------------------------------------------------------------------------
+report_legacy_target() {
+  # Detect-and-report only: an install under the legacy skills root is left
+  # exactly as it is. No silent migration — the prototype/wayfind siblings
+  # there are derived from that root, so moving them is a human decision.
+  local legacy="$GF_LEGACY_SKILLS_DIR/goalforge"
+  [[ "$legacy" == "$GF_TARGET_DIR" ]] && return 0
+  [[ -e "$legacy" || -L "$legacy" ]] || return 0
+  info "NOTE: a legacy goalforge install still exists at $legacy"
+  info "NOTE: it is NOT migrated — remove it and its prototype/wayfind siblings by hand"
+  return 0
+}
+
 run_contributor() {
   local skills_dir
   skills_dir="$(dirname "$GF_TARGET_DIR")"
+
+  report_legacy_target
 
   # goalforge — fatal-first (preserves the original single-link semantics:
   # a broken goalforge install aborts before any sibling work).
@@ -544,7 +573,42 @@ self_test() {
     rm -rf "$(dirname "$retained_path")" 2>/dev/null || true
   }
 
-  printf '=== goalforge installer self-test (8 cases) ===\n'
+  # --- Case 9: default GF_TARGET_DIR (re-exec: the default binds at SOURCE
+  # --- time, so it can only be exercised by a fresh process under a sandbox
+  # --- HOME — the real $HOME is never read or written by this case) ---
+  case_default_target_dir() {
+    local d="$1"
+    local pkg="$d/pkg" home="$d/home"
+    make_pkg "$pkg"; mkdir -p "$home"
+    env -i HOME="$home" PATH="$PATH" CLAUDE_CONFIG_DIR= \
+        GF_SKIP_REPO_PRECHECK=1 GF_LINK_TARGET="$pkg" \
+        bash "$SCRIPT_DIR/install.sh" --mode contributor >/dev/null 2>&1 || return 1
+    assert "default target lands under the sandbox skills home" \
+      test -L "$home/.claude/skills/goalforge" || return 1
+    assert "default target resolves to the package" \
+      test "$(readlink -f "$home/.claude/skills/goalforge")" = "$(readlink -f "$pkg")" || return 1
+    assert "no legacy dotfiles path created" test ! -e "$home/dotfiles" || return 1
+  }
+
+  # --- Case 10: fork origin remote → precheck WARNS and the install proceeds
+  # --- (GF_SKIP_REPO_PRECHECK deliberately unset via env -i) ---
+  case_fork_remote_warns() {
+    local d="$1"
+    local pkg="$d/pkg" home="$d/home" repo="$d/repo"
+    make_pkg "$pkg"; mkdir -p "$home" "$repo"
+    git -C "$repo" init -q >/dev/null 2>&1 || return 1
+    git -C "$repo" remote add origin https://example.invalid/fork.git >/dev/null 2>&1 || return 1
+    local out
+    out="$(env -i HOME="$home" PATH="$PATH" CLAUDE_CONFIG_DIR= \
+             GF_REPO="$repo" GF_LINK_TARGET="$pkg" \
+             bash "$SCRIPT_DIR/install.sh" --mode contributor 2>&1)" || return 1
+    assert "fork remote reported as a warning" \
+      grep -q "WARNING: unexpected origin remote" <<<"$out" || return 1
+    assert "install proceeded past the fork remote" \
+      test -L "$home/.claude/skills/goalforge" || return 1
+  }
+
+  printf '=== goalforge installer self-test (10 cases) ===\n'
   run_case fresh
   run_case installed_correct
   run_case installed_wrong_target
@@ -553,6 +617,8 @@ self_test() {
   run_case dirty_real
   run_case missing_checkout
   run_case sibling_legacy_dir
+  run_case default_target_dir
+  run_case fork_remote_warns
   printf '=== self-test: %d passed, %d failed ===\n' "$pass" "$fail"
   [[ "$fail" -eq 0 ]]
 }
