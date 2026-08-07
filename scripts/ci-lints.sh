@@ -26,7 +26,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Registry of runnable sections, in run order.
-SECTIONS=(author-paths)
+SECTIONS=(author-paths manifest)
 
 # Opt-out list for the per-section zero-scan gate: sections named here may
 # legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
@@ -139,6 +139,87 @@ lint_author_paths() {
 
   scan_pattern_set "$AUTHOR_PATH_RE" ${wide+"${wide[@]}"}
   scan_pattern_set "$UPSTREAM_SLUG_RE" ${plugin_only+"${plugin_only[@]}"}
+
+  [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# Section: manifest
+#
+# The generator-emitted reference manifest is the single authority for "which
+# path does a shipped .md name" — this section never re-derives the token
+# grammar, it only checks that every ref the manifest carries exists in the
+# plugin tree. The wp-07 doctor reads the same file at install time.
+# ---------------------------------------------------------------------------
+MANIFEST_FILE="plugins/goalforge/references/reference-manifest.json"
+MANIFEST_ROOT="plugins/goalforge"
+# Sorted `<from>::<path>` set of KNOWN-dangling refs whose fix is owned by a
+# named later WP. Removal-only: a dead entry fails just as loudly as a new
+# dangling ref, so the ratchet can never be swapped for a fresh violation.
+MANIFEST_BASELINE="scripts/lint-baselines/reference-manifest.baseline"
+# Floor from the wp-02 goal block: a manifest that suddenly carries a handful of
+# refs proves nothing about the tree, so an under-populated manifest is a
+# failure in its own right. No ALLOW_EMPTY opt-in for this section.
+MANIFEST_FLOOR=100
+
+lint_manifest() {
+  VIOLATIONS=0
+
+  if [ ! -s "$MANIFEST_FILE" ]; then
+    printf '  %s: missing or empty — run scripts/goalforge-generate.sh\n' \
+      "$MANIFEST_FILE" >&2
+    SCANNED=0
+    return 1
+  fi
+
+  # `<from>::<path>` per ref, in manifest (sorted) order.
+  local -a refs=()
+  local line
+  while IFS= read -r line; do refs+=("$line"); done < <(
+    python3 -c 'import json,sys
+m=json.load(open(sys.argv[1]))
+assert m["schema"]==1, "unsupported manifest schema: %r" % (m.get("schema"),)
+for r in m["refs"]:
+    print("%s::%s" % (r["from"], r["path"]))' "$MANIFEST_FILE"
+  ) || { printf '  %s: unreadable\n' "$MANIFEST_FILE" >&2; SCANNED=0; return 1; }
+
+  SCANNED=${#refs[@]}
+
+  if [ "$SCANNED" -lt "$MANIFEST_FLOOR" ]; then
+    printf '  %s: %d refs, below the floor of %d — the extractor stopped matching\n' \
+      "$MANIFEST_FILE" "$SCANNED" "$MANIFEST_FLOOR" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  fi
+
+  local -a baseline=()
+  if [ -f "$MANIFEST_BASELINE" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      line="${line%$'\r'}"
+      case "$line" in ''|'#'*) continue ;; esac
+      baseline+=("$line")
+    done < "$MANIFEST_BASELINE"
+  fi
+
+  local -a dangling=()
+  local ref
+  for ref in ${refs+"${refs[@]}"}; do
+    [ -e "$MANIFEST_ROOT/${ref#*::}" ] || dangling+=("$ref")
+  done
+
+  # Unbaselined dangling ref — a shipped .md names a path that is not there.
+  for ref in ${dangling+"${dangling[@]}"}; do
+    in_list "$ref" ${baseline+"${baseline[@]}"} && continue
+    printf '  dangling ref: %s -> %s\n' "${ref%%::*}" "${ref#*::}" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  done
+
+  # Dead baseline entry — the ref resolves now, so the entry must be deleted in
+  # the change that fixed it (removal-only ratchet).
+  for ref in ${baseline+"${baseline[@]}"}; do
+    in_list "$ref" ${dangling+"${dangling[@]}"} && continue
+    printf '  dead baseline entry (ref resolves now, delete it): %s\n' "$ref" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  done
 
   [ "$VIOLATIONS" -eq 0 ]
 }

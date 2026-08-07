@@ -1,0 +1,14 @@
+# reference-manifest.baseline — known-dangling manifest refs, sorted `<from>::<path>`.
+#
+# REMOVAL-ONLY ratchet: ci-lints.sh (section `manifest`) fails on an unbaselined
+# dangling ref AND on an entry whose ref resolves again, so an entry can never be
+# swapped for a fresh violation. Every entry names the work that retires it.
+#
+# Only a ref whose fix is owned by a NAMED later work package belongs here. A
+# ref that is fixable inside wp-02's boundaries is fixed at source; a path that
+# deliberately addresses something outside the plugin tree belongs on
+# reference-ignore.txt instead.
+
+# retired-by: wp-03-packaging-homes — packages/goalforge/commands/*.md move into
+# the generated tree there; today only commands/wayfind.md is PRESERVE'd in.
+skills/run/SKILL.md::commands/spec.md
