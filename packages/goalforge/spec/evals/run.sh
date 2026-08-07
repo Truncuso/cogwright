@@ -36,7 +36,16 @@ check "overview.md status advances to ready" "status: ready"
 
 # Human gate
 check "human-gated transition documented" "human-gated"
-check "draft → ready feature gate documented" "draft → ready"
+check "draft → ready feature gate documented" "(the feature gate) is one of two human-gated transitions"
+# Negative: the retired claim must not reappear (ground truth: state-machine.md
+# human-gates draft→ready, never draft→spec)
+if grep -qF 'draft → spec` is one of two human-gated' "$SKILL_MD"; then
+  echo "  FAIL: retired human-gate claim (draft → spec) present"
+  FAIL=$((FAIL+1))
+else
+  echo "  PASS: retired human-gate claim absent"
+  PASS=$((PASS+1))
+fi
 check "skill must present draft before writing" "present the draft spec"
 
 # Template marker

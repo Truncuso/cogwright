@@ -42,9 +42,23 @@ esac
 REAL_PATH=$(python3 -c "import os,sys; print(os.path.normpath(sys.argv[1]))" "$FILE_PATH" 2>/dev/null) || exit 0
 REAL_PLANS=$(python3 -c "import os,sys; print(os.path.normpath(sys.argv[1]))" "$PLANS_ROOT" 2>/dev/null) || exit 0
 
+# Dual plans root (schema.md §PLANS_ROOT): <git-root>/plans/** OR ~/.claude/plans/**
+GIT_PLANS=""
+GIT_TOP=$(cd "$(dirname "$REAL_PATH")" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null) || GIT_TOP=""
+[ -n "$GIT_TOP" ] && GIT_PLANS="${GIT_TOP}/plans"
+
 case "$REAL_PATH" in
-  "${REAL_PLANS}/"*.md) ;;  # under plans root, .md — proceed
-  *) exit 0 ;;
+  "${REAL_PLANS}/"*.md) ;;  # under global plans root, .md — proceed
+  *)
+    if [ -n "$GIT_PLANS" ]; then
+      case "$REAL_PATH" in
+        "${GIT_PLANS}/"*.md) ;;  # under repo-local plans root — proceed
+        *) exit 0 ;;
+      esac
+    else
+      exit 0
+    fi
+    ;;
 esac
 
 [ -f "$REAL_PATH" ] || exit 0

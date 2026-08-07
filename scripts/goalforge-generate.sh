@@ -206,10 +206,24 @@ if [ "$CHECK" = 1 ]; then
     _excl=()
     for k in "${PRESERVE[@]}"; do _excl+=( --exclude="$k" ); done
     if diff_out="$(diff -rq "${_excl[@]}" "$REAL_DST" "$DST" 2>&1)"; then
-        exit 0
+        :
     else
         echo "DRIFT: plugins/goalforge/ differs from a fresh generation" >&2
         printf '%s\n' "$diff_out" >&2
         exit 2
     fi
+    # hooks/ is on the PRESERVE list (hooks.json is plugin-specific), so the
+    # tree diff above cannot see it — but the goalforge-*.sh guardrail hooks
+    # MUST stay byte-identical to their packages/ source. Explicit pair check:
+    hooks_drift=0
+    for h in "$SRC/hooks/"goalforge-*.sh; do
+        [ -f "$h" ] || continue
+        base="$(basename "$h")"
+        if ! cmp -s "$h" "$REAL_DST/hooks/$base"; then
+            echo "DRIFT: plugins/goalforge/hooks/$base differs from packages/goalforge/hooks/$base" >&2
+            hooks_drift=1
+        fi
+    done
+    [ "$hooks_drift" = 0 ] || exit 2
+    exit 0
 fi

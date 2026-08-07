@@ -378,10 +378,10 @@ presenting (or auto-deciding) the gate:
    invalid or incomplete.** This is the contract `goalforge-execute` relies on: a
    `ready` WP has a goal block its runtime can consume without runtime surprises.
 
-2. **Open-questions gate (hard backstop).** Run the guard in check mode against
+2. **Open-questions gate (deterministic, run explicitly - not event-wired).** Run the guard in check mode against
    this WP's `overview.md` and consume its output as typed DATA:
    ```bash
-   bash ~/.claude/skills/goalforge/hooks/goalforge-open-questions-gate.sh --check <wp>/overview.md
+   bash hooks/goalforge-open-questions-gate.sh --check <wp>/overview.md
    ```
    It prints the count of **unresolved** open questions (a `## Open Questions`
    bullet not marked resolved — `[resolved]` | `[assumption]` | `[deferred]` |
@@ -506,7 +506,7 @@ global `~/.claude/plans/`.
 - `goalforge-interview` (Step 1) — frames the session and delegates to
   the `interview` plugin engine, which drives open questions to zero, one at a time.
 - `goalforge-harden-surface.sh` (Step 1) — propose-only route record; writes nothing.
-- `hooks/goalforge-open-questions-gate.sh --check` (Step 2) — hard backstop; non-zero
+- `hooks/goalforge-open-questions-gate.sh --check` (Step 2) — deterministic gate (run explicitly); non-zero
   blocks the `hardened → ready` gate. Zero-breakage (prints `0` on internal error).
 
 ## Blocker protocol

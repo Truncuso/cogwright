@@ -36,7 +36,7 @@ routing home; absent ⇒ `standard`) and skips the steps marked
 - **`standard`** — the six-step chain, unchanged.
 - **`fast`** — capture → `goalforge-decompose --add-wp` (ONE WP, complete
   self-contained goal block, no `spec.md`) → deterministic gates
-  (`goalforge-validate` + `goalforge-open-questions-gate.sh --check` +
+  (`goalforge-validate` + `hooks/goalforge-open-questions-gate.sh --check` +
   `goalforge-wp-complexity.sh` verdict `simple`, severity ≤ MEDIUM, non-migration)
   → `goalforge-transition.sh <wp> ready --mode auto` → execute → verify.
 - **Escalation:** ANY fast-gate trip leaves the WP at `spec` and re-enters the

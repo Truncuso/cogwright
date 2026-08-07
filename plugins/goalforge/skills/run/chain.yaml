@@ -16,7 +16,7 @@ ctx:
 # runs on every route.
 #   full: goalforge-capture → goalforge-spec → goalforge-decompose → goalforge-harden → goalforge-execute → goalforge-verify
 #   fast: goalforge-capture → goalforge-decompose (add-wp, single WP, no spec.md)
-#         → deterministic gates (goalforge-validate + goalforge-open-questions-gate --check
+#         → deterministic gates (goalforge-validate + hooks/goalforge-open-questions-gate.sh --check
 #           + goalforge-wp-complexity: simple AND severity ≤ MEDIUM AND non-migration)
 #         → goalforge-transition <wp> ready --mode auto → goalforge-execute → goalforge-verify
 #   fast escalation: ANY gate trip leaves the WP at `spec` and routes it through

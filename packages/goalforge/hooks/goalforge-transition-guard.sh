@@ -21,7 +21,11 @@ set -uo pipefail
 
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$HOOK_DIR/$(basename "${BASH_SOURCE[0]}")"
-STATE_MACHINE="$HOOK_DIR/../skills/goalforge/references/state-machine.md"
+# Resolve state-machine.md for every layout this hook ships in:
+#   package/plugin: <root>/hooks/ -> <root>/references/state-machine.md
+#   dotfiles:       ~/.claude/hooks/ -> ~/.claude/skills/goalforge/references/
+STATE_MACHINE="$HOOK_DIR/../references/state-machine.md"
+[ -f "$STATE_MACHINE" ] || STATE_MACHINE="$HOOK_DIR/../skills/goalforge/references/state-machine.md"
 
 # ── Edge verdict: prints "legal" | "illegal" | "error" ──────────────────────
 # "error" (table missing/unreadable/parse failure) is treated as pass — the

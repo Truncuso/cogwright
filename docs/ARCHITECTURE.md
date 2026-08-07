@@ -158,7 +158,7 @@ paid when the fog is real.
 **Convergence graduates in place.** The effort slug becomes the feature slug, so
 graduation writes `overview.md` next to the existing `wayfind/` directory rather
 than moving anything. From there the normal chain runs: `/spec` (human-gated at
-draft → spec), `/plan` to decompose into work packages and harden them to ready
+draft → ready), `/plan` to decompose into work packages and harden them to ready
 (human-gated at hardened → ready), then `/implement` and `/verify` automated
 against each work package's declared verification strategy — deterministic,
 numeric, judge, or human. A clear one-session feature skips wayfind entirely and

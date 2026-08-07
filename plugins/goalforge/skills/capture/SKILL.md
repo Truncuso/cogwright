@@ -170,7 +170,7 @@ ceremony is skipped. After Step 5:
    — **re-route to `full`** (flip `route:` with a note) and hand off to `goalforge-spec`.
 2. **Gate deterministically** (all three, typed DATA):
    - `goalforge-validate.sh` — WP goal-block integrity (fatal on malformed);
-   - `goalforge-open-questions-gate.sh --check <wp>/overview.md` — must print `0`;
+   - `hooks/goalforge-open-questions-gate.sh --check <wp>/overview.md` — must print `0`;
    - `goalforge-wp-complexity.sh <wp>` — verdict `simple`, AND `severity ≤ MEDIUM`, AND
      `task_type ≠ migration` (the signal-scoped rule, state-machine.md §Policy).
 3. **Record the goal hash** — BEFORE the `--mode auto` advance below. The fast WP

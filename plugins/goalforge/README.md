@@ -48,7 +48,7 @@ aliases were retired 2026-07-21.
 
 `draft → spec → hardened → ready → executing → verified`
 
-`draft → spec` and `hardened → ready` are human-gated. `archived` is
+`draft → ready` (feature gate) and `hardened → ready` (WP gate) are human-gated. `archived` is
 terminal, reached only via explicit user action. Details:
 `references/state-machine.md`.
 

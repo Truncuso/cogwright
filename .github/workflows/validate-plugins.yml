@@ -63,3 +63,13 @@ jobs:
 
       - name: goalforge artifact drift gate
         run: bash scripts/goalforge-generate.sh --check
+
+      - name: goalforge hook self-tests (both trees)
+        run: |
+          set -e
+          for tree in packages/goalforge plugins/goalforge; do
+            for h in goalforge-transition-guard goalforge-open-questions-gate goalforge-single-writer; do
+              echo "== $tree/hooks/$h.sh --self-test"
+              bash "$tree/hooks/$h.sh" --self-test
+            done
+          done
