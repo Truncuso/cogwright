@@ -1,0 +1,90 @@
+# retired-vocab carve-outs — pre-declared exemptions for the `sdd-` ratchet.
+#
+# Section: ci-lints.sh --only retired-vocab. Scope: tracked
+# packages/goalforge/**/*.md + plugins/goalforge/**/*.md. Pattern: the
+# case-sensitive literal `sdd-`.
+#
+# PURPOSE. The section is a ZERO-NEW ratchet, not a cleanup gate: every
+# occurrence living on the tree when it was registered is carved out here with
+# the work item that retires it, so its only signal is that a NEW retired
+# `sdd-*` chain name cannot enter goalforge prose unreviewed.
+#
+# FORMAT, two shapes:
+#   <repo-relative-path>::<literal line substring>   one known occurrence class
+#   <repo-relative-path>::                           WHOLESALE — the whole file
+# The wholesale (empty-substring) shape is used exactly twice, for the two
+# copies of the alias map, whose entire purpose is the historic name mapping.
+#
+# REMOVAL-ONLY, same contract as the sibling baselines: an unbaselined
+# occurrence is a violation, AND an entry that suppresses nothing is a
+# violation. The file can only shrink on its own; every widening edit is a
+# reviewable diff.
+#
+# NOT here, deliberately: `SDD_PLANS_DIR` carries an underscore, so the
+# case-sensitive `sdd-` pattern never matches it — it is a spec §Non-Goal
+# (deliberate retention), and an entry for it would be a dead entry.
+# `_archived/**` is likewise absent: list_files() is `git ls-files`, and the
+# only tree carrying `_archived/` is the gitignored plans/, so such an entry
+# could never fire.
+
+# ── alias map, both trees — WHOLESALE ────────────────────────────────────────
+# retired-by: permanent — the historic name map is this file's purpose;
+# packages/goalforge/evals/run.sh F1/F2 assert these names resolve here.
+packages/goalforge/references/alias-map.md::
+plugins/goalforge/references/alias-map.md::
+
+# ── the retirement notices themselves ────────────────────────────────────────
+# retired-by: permanent — the deprecation notice is the point.
+packages/goalforge/README.md::the legacy `sdd-*`
+plugins/goalforge/README.md::the legacy `sdd-*`
+packages/goalforge/SKILL.md::Old `sdd-*` → `goalforge-*` name map
+plugins/goalforge/SKILL.md::Old `sdd-*` → `goalforge-*` name map
+packages/goalforge/SKILL.md::The `sdd-*` skill/script aliases were RETIRED
+plugins/goalforge/SKILL.md::The `sdd-*` skill/script aliases were RETIRED
+
+# ── installed-hook idempotency marker ────────────────────────────────────────
+# retired-by: permanent — installed-hook idempotency marker; INSTALL.md:245
+# documents the block as the never-overwritten contract, and renaming it breaks
+# idempotent re-detection of an already-installed hook.
+packages/goalforge/execute/SKILL.md::`sdd-pre-commit` hook blocks a transition-only commit
+plugins/goalforge/skills/execute/SKILL.md::`sdd-pre-commit` hook blocks a transition-only commit
+packages/goalforge/onboard/SKILL.md::the idempotency marker (`# >>> sdd-pre-commit >>>`)
+plugins/goalforge/skills/onboard/SKILL.md::the idempotency marker (`# >>> sdd-pre-commit >>>`)
+packages/goalforge/onboard/SKILL.md::(`# >>> sdd-pre-commit >>>`) prevents double-installation
+plugins/goalforge/skills/onboard/SKILL.md::(`# >>> sdd-pre-commit >>>`) prevents double-installation
+
+# ── persisted-data identifiers ───────────────────────────────────────────────
+# retired-by: permanent — persisted-data identifier; renaming the ledger file
+# breaks every existing plans/ feature directory already carrying one.
+packages/goalforge/redecompose/SKILL.md::appends a JSON row to `.sdd-transitions.jsonl`
+plugins/goalforge/skills/redecompose/SKILL.md::appends a JSON row to `.sdd-transitions.jsonl`
+packages/goalforge/redecompose/SKILL.md::`<feature-dir>/.sdd-transitions.jsonl`
+plugins/goalforge/skills/redecompose/SKILL.md::`<feature-dir>/.sdd-transitions.jsonl`
+packages/goalforge/references/schema.md::Transition ledger — `<feature>/.sdd-transitions.jsonl`
+plugins/goalforge/references/schema.md::Transition ledger — `<feature>/.sdd-transitions.jsonl`
+packages/goalforge/references/trace-events.md::`.sdd-transitions.lock`
+plugins/goalforge/references/trace-events.md::`.sdd-transitions.lock`
+packages/goalforge/references/trace-events.md::writes it into `.sdd-transitions.jsonl`
+plugins/goalforge/references/trace-events.md::writes it into `.sdd-transitions.jsonl`
+packages/goalforge/references/trace-events.md::because the legacy `.sdd-transitions.jsonl`
+plugins/goalforge/references/trace-events.md::because the legacy `.sdd-transitions.jsonl`
+packages/goalforge/references/trace-events.md::Legacy `.sdd-transitions.jsonl` derivation cross-check
+plugins/goalforge/references/trace-events.md::Legacy `.sdd-transitions.jsonl` derivation cross-check
+
+# ── non-chain slugs (idea names / an external repo-setup surface) ────────────
+# retired-by: feature-2 rename decision
+packages/goalforge/references/schema.md::sdd-lifecycle-redesign
+plugins/goalforge/references/schema.md::sdd-lifecycle-redesign
+packages/goalforge/watchdog/SKILL.md::the **separate** `sdd-verification-integrity-gaps` idea
+plugins/goalforge/skills/watchdog/SKILL.md::the **separate** `sdd-verification-integrity-gaps` idea
+packages/goalforge/watchdog/SKILL.md::(+ future `sdd-verification-integrity-gaps`)
+plugins/goalforge/skills/watchdog/SKILL.md::(+ future `sdd-verification-integrity-gaps`)
+packages/goalforge/onboard/SKILL.md::`setup-sdd-repo` surface
+plugins/goalforge/skills/onboard/SKILL.md::`setup-sdd-repo` surface
+
+# ── DEBT: one genuine live use of retired chain vocabulary ───────────────────
+# retired-by: feature-2 rename decision
+# references/schema.md is outside wp-09's boundaries, so this is recorded as
+# debt with a named owner rather than hidden by widening the pattern.
+packages/goalforge/references/schema.md::`sdd-harden` falls back to a whole-feature
+plugins/goalforge/references/schema.md::`sdd-harden` falls back to a whole-feature

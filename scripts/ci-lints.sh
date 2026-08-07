@@ -27,7 +27,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Registry of runnable sections, in run order.
-SECTIONS=(author-paths manifest package-refs version privacy-marker)
+SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet)
 
 # Opt-out list for the per-section zero-scan gate: sections named here may
 # legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
@@ -587,6 +587,163 @@ PY
 
   SCANNED="${n:-0}"
   VIOLATIONS="$rc"
+
+  [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# retired-vocab — no NEW retired `sdd-*` chain vocabulary enters goalforge prose.
+#
+# ZERO-NEW RATCHET, not a cleanup gate. A repo-wide `sdd-*` ban is unsatisfiable
+# and always will be: `.sdd-transitions.jsonl` is the persisted transition
+# ledger's filename (renaming it orphans every plans/ feature directory that
+# already carries one) and `# >>> sdd-pre-commit >>>` is the installed-hook
+# idempotency marker INSTALL.md pins as never-overwritten. Both are permanent by
+# decision. So every occurrence living on the tree at registration is carved out
+# in RETIRED_VOCAB_CARVEOUT_FILE with the work item that retires it, and the only
+# thing this section can catch is a NEW one.
+#
+# Pattern is the case-sensitive literal `sdd-`, deliberately not `sdd[-_]` and
+# not case-insensitive: `SDD_PLANS_DIR` is a deliberate retention (spec
+# §Non-Goal), and the underscore keeps it out of the match set without needing a
+# carve-out entry that would then be a dead entry.
+#
+# Scan unit is the .md file, so SCANNED is the file count. No ALLOW_EMPTY opt-in.
+# ---------------------------------------------------------------------------
+RETIRED_VOCAB_CARVEOUT_FILE="scripts/lint-baselines/retired-vocab-carveouts.txt"
+RETIRED_VOCAB_TOKEN='sdd-'
+# Tracked-file pathspecs defining the prose in scope: authored tree + its
+# generated mirror.
+RETIRED_VOCAB_PATHS=('packages/goalforge/*.md' 'plugins/goalforge/*.md')
+
+# Parallel arrays: entry text, and whether it suppressed anything this run.
+RV_ENTRIES=()
+RV_USED=()
+
+load_retired_vocab_carveouts() {
+  RV_ENTRIES=()
+  RV_USED=()
+  [ -f "$RETIRED_VOCAB_CARVEOUT_FILE" ] || return 0
+  local line
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"
+    line="${line%"${line##*[![:space:]]}"}"
+    case "$line" in ''|'#'*) continue ;; esac
+    RV_ENTRIES+=("$line")
+    RV_USED+=(0)
+  done < "$RETIRED_VOCAB_CARVEOUT_FILE"
+}
+
+# rv_carved_out <file> <line-content> — true if an entry covers this occurrence,
+# marking that entry live. An entry with an EMPTY substring is the wholesale
+# shape: it covers the whole file (used only for the two alias-map copies).
+rv_carved_out() {
+  local file="$1" content="$2" i entry cpath cpat
+  for i in "${!RV_ENTRIES[@]}"; do
+    entry="${RV_ENTRIES[$i]}"
+    cpath="${entry%%::*}"
+    cpat="${entry#*::}"
+    [ "$file" = "$cpath" ] || continue
+    if [ -z "$cpat" ]; then
+      RV_USED[$i]=1
+      return 0
+    fi
+    case "$content" in
+      *"$cpat"*) RV_USED[$i]=1; return 0 ;;
+    esac
+  done
+  return 1
+}
+
+lint_retired_vocab() {
+  VIOLATIONS=0
+  load_retired_vocab_carveouts
+
+  local -a files=()
+  local f
+  while IFS= read -r -d '' f; do files+=("$f"); done \
+    < <(list_files "${RETIRED_VOCAB_PATHS[@]}")
+
+  SCANNED=${#files[@]}
+  # Zero scanned files is the dispatcher's fail-closed case; return here so the
+  # grep below is never handed an empty argument list (which would read stdin).
+  [ "$SCANNED" -gt 0 ] || return 1
+
+  local rest lineno content
+  while IFS= read -r -d '' f && IFS= read -r rest; do
+    lineno="${rest%%:*}"; content="${rest#*:}"
+    rv_carved_out "$f" "$content" && continue
+    printf '  %s:%s: retired vocabulary `%s`: %s\n' \
+      "$f" "$lineno" "$RETIRED_VOCAB_TOKEN" "$content" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  done < <(grep -IHnZ -F -e "$RETIRED_VOCAB_TOKEN" -- "${files[@]}" 2>/dev/null)
+
+  # Dead-entry leg, same contract as the sibling baselines: an entry that
+  # suppresses nothing names an occurrence that no longer exists, so delete it.
+  local i
+  for i in "${!RV_ENTRIES[@]}"; do
+    [ "${RV_USED[$i]}" -eq 1 ] && continue
+    printf '  dead entry in %s (suppresses nothing, delete it): %s\n' \
+      "$RETIRED_VOCAB_CARVEOUT_FILE" "${RV_ENTRIES[$i]}" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  done
+
+  [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# prose-eval-ratchet — the prose-eval assertion count may fall, never rise.
+#
+# COUNTING RULE, PINNED. An assertion is a line starting `check ` at column 0 in
+# a tracked file under any `*/evals/` path. `check` is the harness wrapper (see
+# packages/goalforge/execute/evals/run.sh), so the CALL SITE is the unit, not the
+# `grep -qF` token inside it. Reproduce the frozen number with exactly:
+#
+#     git ls-files | grep '/evals/' | xargs grep -ho '^check ' | wc -l
+#
+# CAP-ONLY, deliberately. Deletion is unguarded at the assertion level because
+# prose-eval rework is a spec §Non-Goal owned by feature 2; what this section
+# freezes is that the corpus does not GROW while that rework is pending.
+#
+# FLOOR. SCANNED is the number of eval files, with an explicit floor: the
+# dispatcher's zero-scan gate only catches a literal 0, and this is a corpus
+# feature 2 may delete wholesale, so a scan that suddenly finds a handful of
+# files must fail rather than pass. Same rationale as MANIFEST_FLOOR and
+# PACKAGE_REFS_FLOOR.
+#
+# Both constants are frozen against the tree measured at wp-09 task-02
+# execution: 337 assertions across 181 files.
+# ---------------------------------------------------------------------------
+PROSE_EVAL_CAP=337
+PROSE_EVAL_FILE_FLOOR=150
+
+lint_prose_eval_ratchet() {
+  VIOLATIONS=0
+
+  local -a files=()
+  local f
+  while IFS= read -r -d '' f; do
+    case "$f" in */evals/*) files+=("$f") ;; esac
+  done < <(list_files .)
+
+  SCANNED=${#files[@]}
+  [ "$SCANNED" -gt 0 ] || return 1
+
+  if [ "$SCANNED" -lt "$PROSE_EVAL_FILE_FLOOR" ]; then
+    printf '  %d eval files, below the floor of %d — the corpus shrank; rebaseline deliberately\n' \
+      "$SCANNED" "$PROSE_EVAL_FILE_FLOOR" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  fi
+
+  local count
+  count=$(grep -ho '^check ' -- "${files[@]}" 2>/dev/null | wc -l)
+  count="${count//[[:space:]]/}"
+
+  if [ "$count" -gt "$PROSE_EVAL_CAP" ]; then
+    printf '  %d prose-eval assertions, above the frozen cap of %d — the ratchet is cap-only\n' \
+      "$count" "$PROSE_EVAL_CAP" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  fi
 
   [ "$VIOLATIONS" -eq 0 ]
 }
