@@ -42,6 +42,11 @@
 #           - `$HOME/dotfiles` (a machine layout, not a goalforge path)
 #         Neither shape occurs in the tree today; a new one must be fixed at
 #         source, not carved out.
+#   ix.  privacy marker: every CHILD SKILL.md `description:` gains the fixed
+#         prefix "goalforge-internal — use entry commands; do not auto-trigger"
+#         (60 chars), injected YAML-aware per scalar form (quoted -> inside the
+#         quotes; block -> first content line; plain -> re-emitted quoted).
+#         Parent SKILL.md untouched; packages/ sources untouched.
 #
 # .vendored-allowlist.txt is the last hand-authored, non-package plugin file:
 # it is PRESERVED, never regenerated and never deleted by this script.
@@ -204,6 +209,66 @@ def strip_telemetry(text):
             continue
     return "\n".join(out)
 
+# (ix) privacy marker — fixed routing prefix on every CHILD skill description.
+# Children are flattened to plugin top-level skills and would otherwise
+# auto-trigger; the marker routes a reader back to the parent front door. It is
+# a PREFIX only: the original trigger wording stays intact, and the parent
+# plugins/goalforge/SKILL.md description is never touched.
+MARKER = "goalforge-internal — use entry commands; do not auto-trigger"
+
+_BLOCK_HEADS = (">", "|", ">-", "|-", ">+", "|+")
+
+
+def inject_marker(text, rel):
+    """Prepend MARKER + one space to the `description` VALUE of a child
+    SKILL.md frontmatter, YAML-aware per scalar form:
+
+      quoted scalar ("…" / '…')  -> inserted INSIDE the quotes
+      block scalar  (> / |)      -> prepended to the first content line
+      plain scalar  (unquoted)   -> re-emitted double-quoted, marker prepended
+
+    Everything else in the file is byte-preserved (a full YAML round-trip would
+    reflow unrelated frontmatter and break --check determinism). Fail-closed:
+    a child whose description cannot be located is a generation error, not a
+    silently unmarked skill."""
+
+    def fatal(why):
+        sys.exit("FATAL: %s — %s; cannot inject the privacy marker" % (rel, why))
+
+    lines = text.split("\n")
+    if not lines or lines[0].strip() != "---":
+        fatal("no frontmatter")
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None:
+        fatal("unterminated frontmatter")
+    i = next((k for k in range(1, end) if lines[k].startswith("description:")), None)
+    if i is None:
+        fatal("no top-level `description:` key")
+
+    value = lines[i][len("description:"):].strip()
+
+    if value in _BLOCK_HEADS:
+        j = next((k for k in range(i + 1, end) if lines[k].strip()), None)
+        if j is None:
+            fatal("empty block-scalar description")
+        indent = len(lines[j]) - len(lines[j].lstrip())
+        lines[j] = lines[j][:indent] + MARKER + " " + lines[j][indent:]
+    elif len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        # MARKER carries no quote or backslash, so it needs no escaping in
+        # either quoting style.
+        lines[i] = "description: " + value[0] + MARKER + " " + value[1:]
+    elif value:
+        if i + 1 < end and lines[i + 1][:1] in (" ", "\t") and lines[i + 1].strip():
+            fatal("multi-line plain-scalar description is unsupported — "
+                  "quote it at source")
+        escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+        lines[i] = 'description: "' + MARKER + " " + escaped + '"'
+    else:
+        fatal("empty description")
+
+    return "\n".join(lines)
+
+
 def rewrite_paths(text, child):
     # (ii) executable child->root /scripts climbs — dual-mode fallback (vii)
     text = text.replace("$SCRIPT_DIR/../../scripts",
@@ -276,6 +341,8 @@ for base, dirs, files in os.walk(dst):
         new = text
         if name == "SKILL.md":
             new = strip_telemetry(new)
+            if child:
+                new = inject_marker(new, rel)
         new = rewrite_paths(new, child)
         new = rewrite_author_paths(new, children)
         if new != text:

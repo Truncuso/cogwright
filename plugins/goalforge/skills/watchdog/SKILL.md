@@ -1,6 +1,6 @@
 ---
 name: goalforge-watchdog
-description: "Semantic spec-vs-diff gap audit for an SDD work package. Invoked by goalforge-verify AFTER acceptance criteria pass: reconstructs the WP goal/contract, reads the changed files plus their neighbors, and reports gaps — claimed-vs-implemented mismatches, missing tests/docs at changed seams, and deviations from the spec constraints/boundaries. Light summary by default (into findings.md; material gaps recorded as recap.md loop-backs via goalforge-recap); deep verify-gap.md report on opt-in. Advisory only — never blocks or rewrites goalforge-verify's status-advance authority. Trigger: goalforge-verify delegates a gap audit for a WP, or a user asks to audit a WP diff against its spec."
+description: "goalforge-internal — use entry commands; do not auto-trigger Semantic spec-vs-diff gap audit for an SDD work package. Invoked by goalforge-verify AFTER acceptance criteria pass: reconstructs the WP goal/contract, reads the changed files plus their neighbors, and reports gaps — claimed-vs-implemented mismatches, missing tests/docs at changed seams, and deviations from the spec constraints/boundaries. Light summary by default (into findings.md; material gaps recorded as recap.md loop-backs via goalforge-recap); deep verify-gap.md report on opt-in. Advisory only — never blocks or rewrites goalforge-verify's status-advance authority. Trigger: goalforge-verify delegates a gap audit for a WP, or a user asks to audit a WP diff against its spec."
 metadata:
   skill-kind: preference
   version: 1.1.0

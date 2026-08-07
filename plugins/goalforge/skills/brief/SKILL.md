@@ -1,6 +1,6 @@
 ---
 name: goalforge-brief
-description: "PRIVATE child of goalforge. Authors a delta-only brief-<task-slug>.md (full task slug, e.g. brief-task-02-wire-stages.md) for a complexity-gated (medium/high) task, ONCE, at the task's pending→briefed transition. A strong tier (resolved via tier-map.md) writes pointers + doc context + skeleton signatures + a pointer to task-NN.md — never frozen implementation code — so a cheap tier can then execute the task. Invoked only by goalforge-execute's pre-dispatch flow; not a user-facing front door."
+description: "goalforge-internal — use entry commands; do not auto-trigger Authors a delta-only brief-<task-slug>.md (full task slug, e.g. brief-task-02-wire-stages.md) for a complexity-gated (medium/high) task, ONCE, at the task's pending→briefed transition. A strong tier (resolved via tier-map.md) writes pointers + doc context + skeleton signatures + a pointer to task-NN.md — never frozen implementation code — so a cheap tier can then execute the task. Invoked only by goalforge-execute's pre-dispatch flow; not a user-facing front door."
 metadata:
   skill-kind: preference
   version: 1.0.0

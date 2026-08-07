@@ -1,7 +1,7 @@
 ---
 name: wayfind
 description: >
-  Chart a foggy, multi-session effort into a decision map BEFORE goalforge-capture
+  goalforge-internal — use entry commands; do not auto-trigger Chart a foggy, multi-session effort into a decision map BEFORE goalforge-capture
   — when the work is too big to spec yet, spans multiple sessions, and needs a
   decision map before anyone can write a real spec. Triggers: "chart this foggy
   effort", "multi-session decision map", "too big to spec yet", "map the unknowns

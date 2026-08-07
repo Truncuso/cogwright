@@ -1,7 +1,7 @@
 ---
 name: goalforge-onboard
 description: >
-  Bootstraps the Spec-Driven Development chain in a repository: creates the
+  goalforge-internal — use entry commands; do not auto-trigger Bootstraps the Spec-Driven Development chain in a repository: creates the
   plans/ root, installs the goalforge-validate pre-commit hook (via
   goalforge-install-hooks.sh), and stamps a minimal ## SDD pointer into the repo
   CLAUDE.md. Use when setting up SDD in a new or existing repo, when the user
