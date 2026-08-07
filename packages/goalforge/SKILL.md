@@ -41,7 +41,7 @@ the entry commands and the orchestrator, or referenced here.
 | `goalforge-spec` | design pass → `spec.md`, draft → ready | `spec/` |
 | `goalforge-decompose` | spec → work packages + tasks; `--add-wp` mode | `decompose/` |
 | `goalforge-harden` | WP spec → hardened → ready (review + interview) | `harden/` |
-| `goalforge-interview` | fidelity-aware goal-hardening grilling (wraps global interview-loop) | `interview/` |
+| `goalforge-interview` | fidelity-aware goal-hardening grilling (wraps the interview plugin engine) | `interview/` |
 | `goalforge-execute` | run ready-WP tasks → implemented | `execute/` |
 | `goalforge-verify` | executing → verified (single semantic gate) | `verify/` |
 | `goalforge-redecompose` | reconcile a re-decomposition on a learning event | `redecompose/` |

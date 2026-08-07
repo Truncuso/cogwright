@@ -127,13 +127,13 @@ left open. The map is not a reading list.
 
 ## 4. Teach-back machinery (HITL, main session)
 
-A learning ticket is worked as an **interview-loop teach-back in the main
+A learning ticket is worked as an **interview-plugin teach-back in the main
 session** — never dispatched, on the same footing as `grilling` and the
 graduate quiz-back gate. The dispatch row:
 
 | ticket_type | mode | Machinery | Model / effort |
 |---|---|---|---|
-| learning | HITL | `interview-loop` teach-back in the **main session**; optional dispatched material-gathering leg | main session (material legs: sonnet / low) |
+| learning | HITL | `interview` plugin teach-back in the **main session**; optional dispatched material-gathering leg | main session (material legs: sonnet / low) |
 
 The loop, in the main session:
 
@@ -145,7 +145,7 @@ The loop, in the main session:
    instructions. `sonnet / low` for a pure gathering sweep; the return is
    material for the human, not an answer that resolves the ticket.
 3. **Teach-back** — the user explains the concept back, in their own words, one
-   question at a time (`interview-loop`; degrade path is a plain
+   question at a time (the `interview` plugin skill; degrade path is a plain
    `AskUserQuestion` loop). The model probes the seams, not the surface: edge
    cases, the boundary where the model's own summary would be wrong, and the
    specific sub-question the driver decision turns on.

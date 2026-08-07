@@ -1,6 +1,6 @@
 ---
 name: goalforge-interview
-description: "PRIVATE child of goalforge. Fidelity-aware goal-hardening specialization: frames a WP's open questions for a grilling session, delegates the Q&A loop to the global interview-loop engine, and implements the discussion-fidelity escape hatch. Invoked only by goalforge-harden Step 1; not a user-facing front door."
+description: "PRIVATE child of goalforge. Fidelity-aware goal-hardening specialization: frames a WP's open questions for a grilling session, delegates the Q&A loop to the interview plugin engine (preset: harden-facets), and implements the discussion-fidelity escape hatch. Invoked only by goalforge-harden Step 1; not a user-facing front door."
 metadata:
   skill-kind: preference
   version: 1.0.0
@@ -13,9 +13,9 @@ metadata:
 PRIVATE child of the `goalforge` package (frontmatter `description`); sole
 call site is detailed in §Consumed by.
 
-## What this adds over bare interview-loop
+## What this adds over the bare `interview` plugin engine
 
-The global `interview-loop` engine is a domain-agnostic Q&A loop; it knows
+The `interview` plugin engine is a domain-agnostic Q&A loop; it knows
 nothing about WPs, goal facets, or fidelity. This specialization supplies the
 goal-hardening framing the engine needs:
 
@@ -31,7 +31,7 @@ goal-hardening framing the engine needs:
 1. **Frame** the session from the target WP's goal block (`overview.md`) and
    its recorded open questions — this is the context handed to the engine, not
    a restatement of its mechanics.
-2. **Delegate** the Q&A loop to the global `interview-loop` skill by name. All
+2. **Delegate** the Q&A loop to the `interview` plugin skill with the literal `preset: harden-facets`. All
    question technique, confidence signaling, and stopping behavior belong to
    the engine; this specialization does not reimplement or shadow it.
 3. **Escape hatch** — when a question meets the spike-candidate trigger
@@ -58,6 +58,6 @@ consumer of this specialization (it keeps its own wp-04 spike hook).
 
 ## Gotchas
 
-- The engine (`interview-loop`) stays global and unmodified — do not fork its
+- The engine (the `interview` plugin) stays external and unmodified — do not fork its
   question loop or stopping logic into this file.
 - Package-private: no top-level installer symlink for this child skill.

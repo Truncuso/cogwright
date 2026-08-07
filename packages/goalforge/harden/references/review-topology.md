@@ -10,7 +10,7 @@ same defect is never paid for twice:
 - **Tier-1 feature audit** (decompose) owns cross-WP contracts, shared-file
   ownership, WP ordering, and claims-vs-source **at feature scope**.
 - **Tier-2 delta** (this step) owns **WP-local** defects + consuming Tier-1.
-- **goalforge-interview** (Step 1) frames the session; the **interview-loop** engine it drives remains the **sole resolver** of open questions.
+- **goalforge-interview** (Step 1) frames the session; the **`interview` plugin engine** it drives remains the **sole resolver** of open questions.
 - **goalforge-arbiter** (Step 1) owns **architectural-approach bets only**.
 - **panel** (complex path) owns **this WP's design dissent only**.
 

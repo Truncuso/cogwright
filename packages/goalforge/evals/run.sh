@@ -296,8 +296,8 @@ HARDEN_MD="$SKILL_DIR/harden/SKILL.md"
 
 # I6: fork-guard -- must not reimplement the engine's stopping logic
 { [ -f "$INTERVIEW_MD" ] && ! grep -q "predictive-confidence stopping" "$INTERVIEW_MD"; } \
-  && check "interview/SKILL.md does not fork interview-loop's stopping logic" "pass" \
-  || check "interview/SKILL.md does not fork interview-loop's stopping logic" "fail"
+  && check "interview/SKILL.md does not fork the interview plugin engine's stopping logic" "pass" \
+  || check "interview/SKILL.md does not fork the interview plugin engine's stopping logic" "fail"
 
 # I7: harden/SKILL.md references goalforge-interview at least twice (call
 # site + delegation description; a single stray mention isn't real wiring)
@@ -317,16 +317,20 @@ grep -qF '`goalforge-interview`' "$SKILL_MD" \
   && check "fidelity.md escape-hatch row wired, no planned-wp-06 marker" "pass" \
   || check "fidelity.md escape-hatch row wired, no planned-wp-06 marker" "fail"
 
-# I10: engine-drift guard -- cross-boundary dependency on the global engine's
-# consumed contract tokens. Skip with a WARN (not a FAIL) if the engine path
-# is absent on this machine.
-ENGINE_MD="$HOME/.claude/skills/interview-loop/SKILL.md"
-if [ -f "$ENGINE_MD" ]; then
+# I10: engine-drift guard -- cross-boundary dependency on the interview
+# plugin engine's consumed contract tokens. Version-globbed cache path (never
+# a pinned version). Hard-fails when this repo's marketplace lists the
+# interview plugin; WARN-skips only on installs without it.
+ENGINE_MD="$(ls "$HOME"/.claude/plugins/cache/cogwright/interview/*/engine.md 2>/dev/null | sort -V | tail -1 || true)"
+MARKETPLACE_JSON="$SKILL_DIR/../../.claude-plugin/marketplace.json"
+if [ -n "$ENGINE_MD" ] && [ -f "$ENGINE_MD" ]; then
   { grep -q "HANDOFF_SUGGESTION" "$ENGINE_MD" && grep -q "high-fidelity" "$ENGINE_MD"; } \
-    && check "engine interview-loop/SKILL.md still exposes consumed contract tokens" "pass" \
-    || check "engine interview-loop/SKILL.md still exposes consumed contract tokens" "fail"
+    && check "interview plugin engine.md still exposes consumed contract tokens" "pass" \
+    || check "interview plugin engine.md still exposes consumed contract tokens" "fail"
+elif grep -q '"name": "interview"' "$MARKETPLACE_JSON" 2>/dev/null; then
+  check "interview plugin engine.md resolvable (marketplace lists interview)" "fail"
 else
-  echo "  WARN: $ENGINE_MD absent -- skipping engine-drift guard (foreign machine)"
+  echo "  WARN: interview plugin engine.md absent -- skipping engine-drift guard (plugin not installed)"
 fi
 
 

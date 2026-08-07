@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # evals/run.sh — goalforge-harden static-contract checks
 #
-# All checks are STATIC-CONTRACT — the skill delegates to goalforge-interview (which drives the global interview-loop engine)
+# All checks are STATIC-CONTRACT — the skill delegates to goalforge-interview (which drives the interview plugin engine)
 # — a conversational agent — so behavioral output requires a model.
 set -euo pipefail
 
@@ -51,7 +51,7 @@ check "precondition status is spec" "$SK spec"
 
 # Delegated skill
 check "delegates to goalforge-interview" "goalforge-interview"
-check "engine still named interview-loop" "interview-loop"
+check 'engine repointed to the interview plugin' 'the `interview` plugin engine'
 
 # State transitions
 check "spec → hardened transition documented" "spec → hardened"

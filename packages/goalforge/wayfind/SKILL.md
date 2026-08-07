@@ -28,7 +28,7 @@ hooks:
 
 A situational **pre-spec on-ramp** positioned BEFORE `goalforge-capture`. It runs
 entirely on existing machinery — `plans/` folders, OKF-ish frontmatter,
-`depends_on` edges, the dispatch matrix, and the `interview-loop` / `prototype` /
+`depends_on` edges, the dispatch matrix, and the `interview` plugin / `prototype` /
 `research-analyst` skills. No new tracker, no parallel conventions, **no new
 handoff mode**. Three phases, one command (`/wayfind`).
 
@@ -232,10 +232,10 @@ first: a row there replaces the **full row below** for that `ticket_type`.
 | ticket_type | mode | Machinery | Model / effort |
 |---|---|---|---|
 | research | AFK | dispatched `research-analyst` → web+docs sweep → `findings/` summary, consumed as DATA | opus / medium (pure scan legs → sonnet / low) |
-| grilling | HITL | `interview-loop` engine directly in the **main session** (`goalforge-interview` is harden-only) — **(default type)** | not dispatched |
+| grilling | HITL | `interview` plugin engine directly in the **main session** (`goalforge-interview` is harden-only) — **(default type)** | not dispatched |
 | prototype | HITL | `prototype` skill in a worktree (owns its own branches + dispatch) | opus / medium (delegated) |
 | task | AFK default | agent-driven `implement` dispatch (or human checklist) | mechanical → haiku / low; standard → opus / low |
-| learning | HITL | `interview-loop` teach-back in the **main session**; optional dispatched material-gathering leg | main session (material legs: sonnet / low) |
+| learning | HITL | `interview` plugin teach-back in the **main session**; optional dispatched material-gathering leg | main session (material legs: sonnet / low) |
 
 **`grilling` is the default type.** Discriminator: `task` = the output is
 executed work; `grilling` = the output is a **decision**, even when the decision
@@ -374,7 +374,7 @@ of any of them.
 | Target | Kind | Availability | Degrade path |
 |---|---|---|---|
 | `research-analyst` | agent | dotfiles `agents/research-analyst.md`; NOT shipped with the plugin | dispatch a general-purpose agent with an explicit research brief |
-| `interview-loop` | skill | dotfiles; NOT shipped with the plugin | one-question-at-a-time `AskUserQuestion` loop in the main session |
+| `interview` | plugin skill | cogwright marketplace (source: elicitforge); NOT shipped with this plugin | one-question-at-a-time `AskUserQuestion` loop in the main session |
 | `adr-write` | skill (private child of the `knowledge-write` router) | dotfiles; NOT shipped with the plugin | skip the ADR gate; log the skipped decisions in the graduation brief |
 | `prototype` | skill | in-package co-tenant | always available |
 | `goalforge-capture` | skill | in-package chain stage | always available |

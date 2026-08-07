@@ -20,7 +20,7 @@ aliases were retired 2026-07-21.
 | `goalforge-spec` | Write `spec.md`; define measurable goal + verification criteria (draft → ready) |
 | `goalforge-decompose` | Break the spec into WP `overview.md` files with task stubs; `--add-wp` mode |
 | `goalforge-harden` | Grill each WP via `goalforge-interview`; resolve open questions; advance to `ready` |
-| `goalforge-interview` | Fidelity-aware goal-hardening grilling (wraps the global `interview-loop` engine) |
+| `goalforge-interview` | Fidelity-aware goal-hardening grilling (wraps the `interview` plugin engine) |
 | `goalforge-execute` | Run the execute sub-cycle per task (pick-agent → dispatch → checkpoint → verify) |
 | `goalforge-verify` | Single semantic gate; executing → `verified` |
 | `goalforge-redecompose` | Reconcile a re-decomposition on a learning event |
@@ -56,7 +56,7 @@ terminal, reached only via explicit user action. Details:
 
 | Skill | Relationship |
 |---|---|
-| `interview-loop` | Engine driven by `goalforge-interview`, the Step-1 delegate of `goalforge-harden` |
+| `interview` (plugin) | Engine driven by `goalforge-interview`, the Step-1 delegate of `goalforge-harden` |
 | `implement` | Reused inside `goalforge-execute` sub-cycle |
 | `verify-and-simplify` | Reused inside `goalforge-execute` sub-cycle |
 | `wayfind` | Optional pre-capture on-ramp; graduates a converged decision map into `goalforge-capture` |

@@ -378,7 +378,7 @@ run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-valid-notes-learning-override.md"
 
 name=validate-map-notes-bogus-ticket-type
 run_rc "$VALIDATE_MAP" "$(derived_as map-valid-notes-learning-override.md map.md \
-  -e 's@^| learning | interview-loop | main | n/a |$@| coaching | interview-loop | main | n/a |@')"
+  -e 's@^| learning | interview | main | n/a |$@| coaching | interview | main | n/a |@')"
 [ "$RC" -eq 1 ] && pass "$name" || fail "$name" "expected exit 1 on a ## Notes override row with a ticket_type outside the enum, got $RC"
 
 name=validate-map-learning-goals-valid

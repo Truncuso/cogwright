@@ -12,7 +12,7 @@ references: []
 
 The `## Notes` override table may target ANY ticket_type carried by the SKILL.md
 dispatch table — `learning` included. This map exercises that widening: the
-learning row is rerouted to an interview-loop run in the main session, so the
+learning row is rerouted to an interview-plugin run in the main session, so the
 `ticket_type` enum in `validate-map.sh` must accept `learning` alongside the
 four original types.
 
@@ -25,4 +25,4 @@ four original types.
 | ticket_type | machinery | model | effort |
 |---|---|---|---|
 | research | topic-research | sonnet | low |
-| learning | interview-loop | main | n/a |
+| learning | interview | main | n/a |

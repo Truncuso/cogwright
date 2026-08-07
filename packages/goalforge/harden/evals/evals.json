@@ -4,14 +4,14 @@
     {
       "id": 1,
       "prompt": "Harden wp-01-api-scaffold: drive open questions to zero then await human approval",
-      "expected_output": "Delegates to goalforge-interview (which drives the global interview-loop engine); appends findings to findings.md; advances spec → hardened automatically. Then HUMAN-GATED: presents findings summary and awaits explicit approval before advancing hardened → ready.",
+      "expected_output": "Delegates to goalforge-interview (which drives the interview plugin engine); appends findings to findings.md; advances spec → hardened automatically. Then HUMAN-GATED: presents findings summary and awaits explicit approval before advancing hardened → ready.",
       "files": ["evals/fixtures/wp-overview.md"],
       "expectations": [
         "SKILL.md declares name: goalforge-harden",
         "SKILL.md precondition is status: spec",
-        "SKILL.md delegates to the goalforge-interview skill (which drives the global interview-loop engine)",
+        "SKILL.md delegates to the goalforge-interview skill (which drives the interview plugin engine)",
         "SKILL.md creates or updates findings.md",
-        "SKILL.md spec → hardened is automated (after goalforge-interview, which drives the global interview-loop engine, completes)",
+        "SKILL.md spec → hardened is automated (after goalforge-interview, which drives the interview plugin engine, completes)",
         "SKILL.md hardened → ready is human-gated",
         "SKILL.md never auto-advances hardened → ready without user confirmation",
         "Fixture wp-overview.md has status: spec"
@@ -20,7 +20,7 @@
     {
       "id": 2,
       "prompt": "Grill wp-02-delivery-adapters and resolve all open questions before we start coding",
-      "expected_output": "Recognizes this as a harden request; delegates to goalforge-interview (which drives the global interview-loop engine); drives goal facets and open questions to zero; appends resolutions to findings.md; advances spec → hardened; presents human gate before advancing to ready.",
+      "expected_output": "Recognizes this as a harden request; delegates to goalforge-interview (which drives the interview plugin engine); drives goal facets and open questions to zero; appends resolutions to findings.md; advances spec → hardened; presents human gate before advancing to ready.",
       "files": [],
       "expectations": [
         "SKILL.md triggers on user asking to harden, grill, or resolve open questions for a WP",
@@ -41,10 +41,10 @@
     {
       "id": 4,
       "prompt": "Harden wp-03-notifications: the WP has an empty goal.outcome field",
-      "expected_output": "Treats empty goal.outcome as an open question and feeds it to goalforge-interview (which drives the global interview-loop engine). Records the surfaced outcome in findings.md and writes it back into overview.md goal block. Does NOT advance to hardened while outcome remains empty.",
+      "expected_output": "Treats empty goal.outcome as an open question and feeds it to goalforge-interview (which drives the interview plugin engine). Records the surfaced outcome in findings.md and writes it back into overview.md goal block. Does NOT advance to hardened while outcome remains empty.",
       "files": [],
       "expectations": [
-        "SKILL.md grills empty/vague outcome via goalforge-interview (which drives the global interview-loop engine)",
+        "SKILL.md grills empty/vague outcome via goalforge-interview (which drives the interview plugin engine)",
         "SKILL.md writes sharpened goal-facet values back to overview.md",
         "SKILL.md never advances status while any required goal facet is incomplete"
       ]

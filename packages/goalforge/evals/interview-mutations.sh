@@ -7,7 +7,7 @@
 # Exit 0 only if: baseline is green AND all 6 mutations turn run.sh red.
 #
 # Not covered here: a paraphrase-fork mutation (rewording interview/SKILL.md's
-# delegation language so it drifts from interview-loop's actual contract while
+# delegation language so it drifts from the interview plugin engine's actual contract while
 # keeping every grepped token intact) — that is a semantic check no grep guard
 # can catch; left as a human/reviewer concern, not a mutation case.
 
@@ -24,7 +24,7 @@ FAIL=0
 # fresh_copy <label> — makes an isolated scratch copy of the package and
 # echoes its path. run.sh computes SKILL_DIR relative to itself, so the
 # scratch copy is fully self-contained; the engine-drift guard reads
-# $HOME/.claude/skills/interview-loop/SKILL.md, which lives outside the
+# $HOME/.claude/plugins/cache/cogwright/interview/*/engine.md, which lives outside the
 # package and is unaffected by any of these mutations.
 fresh_copy() {
   local label="$1"
