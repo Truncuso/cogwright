@@ -10,9 +10,10 @@ argument-hint: "<effort-slug> [chart]"
      scripts/goalforge-generate.sh — edit here, never there.
      MIRROR-SYNC OBLIGATION: the maintainer's dotfiles copy is a downstream
      mirror loaded by a direct, non-plugin /wayfind. Any contract change here
-     must be propagated there in the same lap; only the skill-path form differs
-     (the plugin route uses ${CLAUDE_PLUGIN_ROOT}). evals/e2e.sh gates THIS
-     file. -->
+     must be propagated there in the same lap. The mirror is NOT byte-identical:
+     besides the skill-path form (the plugin route uses ${CLAUDE_PLUGIN_ROOT}),
+     it carries an extra Discovery step and a wider argument-hint. evals/e2e.sh
+     gates THIS file. -->
 
 Thin dispatch surface into the `wayfind` skill — no logic lives here; the
 skill owns chart/work/graduate.
@@ -25,7 +26,7 @@ skill owns chart/work/graduate.
    tickets), regardless of whether a map already exists.
 3. **Auto-phase** (no second argument). Resolve `<PLANS_ROOT>` per
    `${CLAUDE_PLUGIN_ROOT}/references/schema.md` §PLANS_ROOT resolution:
-   env `SDD_PLANS_DIR` → project git-root plans dir → the global plans dir.
+   env `SDD_PLANS_DIR` → project git-root `plans/` → global `~/.claude/plans/`.
    - `<PLANS_ROOT>/<effort-slug>/wayfind/map.md` absent → invoke the `wayfind`
      skill in **chart** mode.
    - `<PLANS_ROOT>/<effort-slug>/wayfind/map.md` present → **work** mode (next

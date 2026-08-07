@@ -129,7 +129,7 @@ flowchart TB
     class RA,IL,ADR ext;
 ```
 
-Declared degradations, verbatim from `plugins/goalforge/relations.yaml`:
+Declared degradations, verbatim from `packages/goalforge/relations.yaml`:
 
 | Missing | Used by | Degrades to |
 |---|---|---|
@@ -138,8 +138,10 @@ Declared degradations, verbatim from `plugins/goalforge/relations.yaml`:
 | `adr-write` | wayfind | skip the ADR gate; log the skipped decisions in the graduation brief |
 
 The `/spec`, `/plan`, `/implement`, `/verify` commands are the human entry
-points; each drives the chain through the `run` orchestrator rather than
-invoking stage skills directly. `/wayfind` is the one entry point that sits
+points; each is a thin dispatch surface that reads the stage child's `SKILL.md`
+directly and runs the procedure in-session (the children are private and have no
+Skill-tool name). The `run` orchestrator is the named alternative when the whole
+chain should be driven end-to-end. `/wayfind` is the one entry point that sits
 before the chain begins.
 
 ## How this is used daily

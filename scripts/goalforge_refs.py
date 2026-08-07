@@ -66,8 +66,10 @@ def resolve_ref(root, child_rel, tok, skills_prefix="skills/"):
     (`skills/<child>` plugin-side, `<child>` package-side), or None for a file
     at the tree root. `skills_prefix` is where child skills live in this tree —
     `skills/` in the plugin, flat (``) in the package — so a `skills/<child>/x`
-    token lands on the same file in both. A token that climbs out of the tree
-    resolves to `<ESCAPE_MARKER>:<tok>` — a violation both consumers must see,
+    token lands on the same file in both. A `${CLAUDE_PLUGIN_ROOT}/skills/<seg>`
+    token re-anchors only when `<seg>` is really a child skill (`<seg>/SKILL.md`
+    exists under `root`); otherwise it stays raw. A token that climbs out of
+    the tree resolves to `<ESCAPE_MARKER>:<tok>` — a violation both consumers must see,
     never a silent drop. Returns None only for a degenerate token naming the
     tree root itself.
     """
@@ -80,9 +82,16 @@ def resolve_ref(root, child_rel, tok, skills_prefix="skills/"):
         # bare `skills/<child>/x` token, so it re-anchors through
         # `skills_prefix` too — flat package-side, `skills/` plugin-side.
         # Without this an authored command file (packages/goalforge/commands/,
-        # shipped verbatim) would read as dangling package-side only.
-        cands = [skills_prefix + rest[len("skills/"):]
-                 if rest.startswith("skills/") else rest]
+        # shipped verbatim) would read as dangling package-side only. The strip
+        # is gated on the first segment really being a child skill, so a
+        # non-child `skills/<x>/…` address stays raw instead of colliding with a
+        # same-named top-level dir.
+        stripped = rest[len("skills/"):] if rest.startswith("skills/") else ""
+        seg = stripped.split("/", 1)[0]
+        if seg and os.path.isfile(os.path.join(root, seg, "SKILL.md")):
+            cands = [skills_prefix + stripped]
+        else:
+            cands = [rest]
     elif tok.startswith("skills/"):
         cands = [skills_prefix + tok[len("skills/"):]]
     else:

@@ -182,9 +182,12 @@ child invoked by `goalforge-harden`.
 **The slash commands are plugin-route only.** `/spec`, `/plan`, `/implement`,
 `/verify`, and `/wayfind` are shipped as plugin command files; Claude Code
 loads command files from installed plugins, not from a symlinked skills
-directory, so on this manual route they are inert. Drive the chain by invoking
-the skills by name instead (`goalforge-capture`, `goalforge-spec`, ...), or ask
-the `goalforge-run` orchestrator to drive it.
+directory, so on this manual route they are inert. Drive the chain through the
+front door instead: invoke the `goalforge` skill (the symlinked parent, which
+routes to its children), or read a child's procedure directly from
+`<skills-dir>/goalforge/<child>/SKILL.md`. The children are private — they have
+no Skill-tool name of their own and calling one by name fails with "Unknown
+skill".
 
 ### 3. Or use the bundled installer
 
@@ -382,7 +385,7 @@ grep -rn 'sdd-pre-commit' .git/hooks/ 2>/dev/null
 | `unexpected origin remote` | you cloned a fork | `GF_SKIP_REPO_PRECHECK=1` |
 | `link target does not resolve to a goalforge package` | wrong `GF_LINK_TARGET`, or clone incomplete | point at `<repo>/packages/goalforge` |
 | A skill references `~/.claude/skills/goalforge/...` and the file is missing | known path-leak bug, see below | read the same relative path under `${CLAUDE_PLUGIN_ROOT}` instead |
-| `/spec`, `/plan`, `/implement`, `/verify` are unknown commands | you are on the manual skills-dir route, where command files are inert | install via the plugin route, or invoke the skills by name |
+| `/spec`, `/plan`, `/implement`, `/verify` are unknown commands | you are on the manual skills-dir route, where command files are inert | install via the plugin route, or invoke the `goalforge` front door |
 
 ---
 
@@ -393,10 +396,11 @@ Stated plainly so you are not debugging a documented gap:
 1. **The entry commands are plugin-route only.** `/spec`, `/plan`,
    `/implement`, `/verify`, and `/wayfind` ship with the plugin, but Claude
    Code loads command files from installed plugins only — on the manual
-   skills-dir route they are inert. There, drive the chain by invoking the
-   skills directly by name — `goalforge-capture`, `goalforge-spec`,
-   `goalforge-decompose`, `goalforge-harden`, `goalforge-execute`,
-   `goalforge-verify` — or ask the `goalforge-run` orchestrator to drive it.
+   skills-dir route they are inert. There, drive the chain through the front
+   door — invoke the `goalforge` skill, which routes to its children — or read
+   the stage procedure directly from `<skills-dir>/goalforge/<child>/SKILL.md`.
+   The children are private: they have no Skill-tool name and calling one by
+   name fails with "Unknown skill".
 2. **Some skill text points at `~/.claude/skills/goalforge/...`.** Those are
    leftover maintainer-machine paths. The same file exists under
    `${CLAUDE_PLUGIN_ROOT}/` — for a child skill's own assets, under

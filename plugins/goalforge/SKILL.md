@@ -12,7 +12,8 @@ description: >
   "spec-driven development overview", "what does goalforge-harden do", "what's
   the difference between goalforge-spec and goalforge-decompose", "where are the
   goalforge templates". Do NOT use to RUN the chain — use /spec /plan /implement
-  /verify directly (they drive the chain via the goalforge/run orchestrator).
+  /verify directly (they dispatch the stage children directly; the goalforge/run
+  orchestrator is the end-to-end alternative).
 metadata:
   version: 3.0.0
 ---
@@ -60,8 +61,10 @@ the entry commands and the orchestrator, or referenced here.
 
 ## Entry points
 
-`/spec`, `/plan`, `/implement`, `/verify` are the human entry points; they drive
-the chain via the `goalforge-run` orchestrator (`run/`).
+`/spec`, `/plan`, `/implement`, `/verify` are the human entry points; each is a
+thin dispatch surface that reads the stage child's `SKILL.md` directly and runs
+the procedure in-session. The `goalforge-run` orchestrator (`run/`) is the named
+alternative for driving the whole chain end-to-end.
 
 Note: `prototype/` and `wayfind/` are non-chain tenants co-located in this
 package (not chain stages), reachable via the installer's top-level symlinks

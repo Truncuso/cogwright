@@ -46,3 +46,10 @@ SKILL.md::scripts/goalforge-generate.sh
 # counterpart to lint. commands/ left the hole in wp-03-packaging-homes (it is
 # authored under packages/ and generated now); hooks/ is retired by
 # wp-04-hooks-event-wiring; until then the hole is tracked, not covered.
+#
+# ── Known hole: refs inside a fenced block ──────────────────────────────────
+# The pinned grammar reads single-backtick and link spans only, so a path that
+# appears solely inside a ``` fence is invisible to it — e.g. the frontier
+# invocation in commands/wayfind.md. Such a ref is checked by NOTHING in either
+# tree. Tracked, not covered: widening the grammar to fenced blocks would pull
+# in every illustrative command line in the corpus.
