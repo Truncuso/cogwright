@@ -1,0 +1,18 @@
+# Declared relations for the goalforge system.
+# `recommends` is soft: a missing companion degrades, never blocks — installing
+# goalforge alone always works. See README.md "How systems relate".
+
+recommends:
+  - name: research-analyst
+    kind: agent
+    used-by: wayfind
+    degrade: dispatch a general-purpose agent with an explicit research brief
+  - name: interview
+    kind: skill
+    source: interview@cogwright
+    used-by: wayfind, goalforge-interview
+    degrade: one-question-at-a-time AskUserQuestion loop in the main session
+  - name: adr-write
+    kind: skill
+    used-by: wayfind
+    degrade: skip the ADR gate; log the skipped decisions in the graduation brief
