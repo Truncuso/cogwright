@@ -34,14 +34,15 @@ SCRIPTS_DIR="$SKILL_DIR/scripts"
 FRONTIER="$SCRIPTS_DIR/wayfind-frontier.sh"
 CONVERGED_FIXTURE="${CONVERGED_FIXTURE:-$EVALS_DIR/fixtures/converged}"
 # The AUTHORITATIVE command file is the in-repo, hand-authored
-# plugins/goalforge/commands/wayfind.md (generator PRESERVE list) — NOT the
-# dotfiles mirror. The repo's own gate must not depend on a file in another
-# repo, so there is no $HOME in this default. evals/ is package-only (the
-# generator does not ship it into plugins/), so SKILL_DIR is always
-# <repo>/packages/goalforge/wayfind and the climb is unconditional.
+# packages/goalforge/commands/wayfind.md — the authored source, NOT the
+# generated plugin copy and NOT the dotfiles mirror. The repo's own gate must
+# not depend on a file in another repo, so there is no $HOME in this default.
+# evals/ is package-only (the generator does not ship it into plugins/), so
+# SKILL_DIR is always <repo>/packages/goalforge/wayfind and the climb is
+# unconditional.
 # WAYFIND_CMD_MD overrides it — a caller-facing testability override; before
 # negative-control-command-plans-root below there was no consumer at all.
-CMD_MD="${WAYFIND_CMD_MD:-$SKILL_DIR/../../../plugins/goalforge/commands/wayfind.md}"
+CMD_MD="${WAYFIND_CMD_MD:-$SKILL_DIR/../commands/wayfind.md}"
 BRIEF_MD="${WAYFIND_BRIEF_MD:-$SKILL_DIR/references/graduation-brief.md}"
 
 # --- case-runner scaffolding ------------------------------------------------

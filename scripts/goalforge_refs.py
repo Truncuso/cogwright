@@ -75,7 +75,14 @@ def resolve_ref(root, child_rel, tok, skills_prefix="skills/"):
         rest = tok.split("/", 1)[1] if "/" in tok else ""
         cands = ["%s/%s" % (child_rel, rest) if child_rel else rest]
     elif tok.startswith("${CLAUDE_PLUGIN_ROOT}"):
-        cands = [tok[len("${CLAUDE_PLUGIN_ROOT}"):].lstrip("/")]
+        rest = tok[len("${CLAUDE_PLUGIN_ROOT}"):].lstrip("/")
+        # `${CLAUDE_PLUGIN_ROOT}/skills/<child>/x` names the same file as the
+        # bare `skills/<child>/x` token, so it re-anchors through
+        # `skills_prefix` too — flat package-side, `skills/` plugin-side.
+        # Without this an authored command file (packages/goalforge/commands/,
+        # shipped verbatim) would read as dangling package-side only.
+        cands = [skills_prefix + rest[len("skills/"):]
+                 if rest.startswith("skills/") else rest]
     elif tok.startswith("skills/"):
         cands = [skills_prefix + tok[len("skills/"):]]
     else:
