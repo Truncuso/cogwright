@@ -72,6 +72,14 @@ cannot land. **The exception:** `hooks/` and `.vendored-allowlist.txt` inside
 they are hand-authored there and the generator preserves them, never
 regenerating or deleting them.
 
+Flattening costs privacy: a package's private children become top-level plugin
+skills. The generator compensates by prefixing every child description with the
+fixed marker `goalforge-internal — use entry commands; do not auto-trigger`
+(the parent front door is untouched, and a `privacy-marker` lint section
+asserts both). This is **soft** suppression — a description steers selection,
+it does not gate it, so a child may still trigger on a strongly matching
+request. Entry stays through the commands and the front door.
+
 Full package→plugin pipeline, relations map, and the daily workflow:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 

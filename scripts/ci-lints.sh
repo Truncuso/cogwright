@@ -27,7 +27,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Registry of runnable sections, in run order.
-SECTIONS=(author-paths manifest package-refs version)
+SECTIONS=(author-paths manifest package-refs version privacy-marker)
 
 # Opt-out list for the per-section zero-scan gate: sections named here may
 # legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
@@ -444,6 +444,113 @@ lint_version() {
       "$readme" "$rv" "$skill_md" "$sv" >&2
     VIOLATIONS=$(( VIOLATIONS + 1 ))
   fi
+
+  [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# privacy-marker — the child skills route back to the parent front door.
+#
+# The generator (rewrite class ix) prefixes every generated CHILD skill
+# description with a fixed marker; the parent description is untouched. This
+# section proves that on the SHIPPED artifact, over PARSED frontmatter rather
+# than grep, because the assertion is about the description VALUE a plugin
+# loader sees — a raw text match would pass on a marker that landed outside the
+# scalar, or inside a comment.
+#
+# python3 + PyYAML is a declared HARD dependency here (as it is for the wp-07
+# doctor dep check): an unparseable frontmatter must FAIL, and only a real YAML
+# parse can tell that apart from a marker that is merely absent.
+#
+# Scan unit is the child SKILL.md, so SCANNED is the child count. The expected
+# count is PINNED: a child silently dropped by the generator, or added at
+# source without review, is exactly what this section exists to catch. Bump it
+# deliberately in the change that adds or removes a child.
+# ---------------------------------------------------------------------------
+
+PRIVACY_MARKER='goalforge-internal — use entry commands; do not auto-trigger'
+# The distinctive TAIL, asserted on the parent. The marker's head words recur
+# in ordinary prose; this phrase does not.
+PRIVACY_MARKER_TAIL='do not auto-trigger'
+PRIVACY_MAX_DESC=1024
+PRIVACY_EXPECTED_CHILDREN=18
+
+lint_privacy_marker() {
+  VIOLATIONS=0
+
+  if ! python3 -c 'import yaml' 2>/dev/null; then
+    die 2 "privacy-marker requires python3 + PyYAML (declared hard dependency)"
+  fi
+
+  local n rc=0
+  n="$(python3 - "$PRIVACY_MARKER" "$PRIVACY_MARKER_TAIL" \
+        "$PRIVACY_MAX_DESC" "$PRIVACY_EXPECTED_CHILDREN" <<'PY'
+import glob, sys, yaml
+
+marker, tail, max_desc, expected = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+parent = "plugins/goalforge/SKILL.md"
+children = sorted(glob.glob("plugins/goalforge/skills/*/SKILL.md"))
+bad = 0
+
+
+def description(path):
+    """Parsed top-level `description`, or None with the reason printed."""
+    try:
+        raw = open(path, encoding="utf-8").read()
+    except OSError as exc:
+        print("  %s: unreadable (%s)" % (path, exc), file=sys.stderr)
+        return None
+    parts = raw.split("---", 2)
+    if len(parts) < 3 or parts[0].strip():
+        print("  %s: no leading YAML frontmatter block" % path, file=sys.stderr)
+        return None
+    try:
+        fm = yaml.safe_load(parts[1])
+    except yaml.YAMLError as exc:
+        print("  %s: frontmatter does not parse as YAML (%s)"
+              % (path, str(exc).replace("\n", " ")), file=sys.stderr)
+        return None
+    if not isinstance(fm, dict) or not isinstance(fm.get("description"), str):
+        print("  %s: no string `description` in frontmatter" % path, file=sys.stderr)
+        return None
+    return fm["description"]
+
+
+print(len(children))  # SCANNED, on stdout; violations go to stderr
+
+if len(children) != expected:
+    print("  plugins/goalforge/skills/: %d child SKILL.md, expected %d"
+          % (len(children), expected), file=sys.stderr)
+    bad += 1
+
+for path in children:
+    desc = description(path)
+    if desc is None:
+        bad += 1
+        continue
+    if not desc.startswith(marker):
+        print("  %s: description does not start with the privacy marker" % path,
+              file=sys.stderr)
+        bad += 1
+    if len(desc) > max_desc:
+        print("  %s: description is %d chars, over the %d cap"
+              % (path, len(desc), max_desc), file=sys.stderr)
+        bad += 1
+
+parent_desc = description(parent)
+if parent_desc is None:
+    bad += 1
+elif tail in parent_desc:
+    print("  %s: parent description carries the child marker (%r)"
+          % (parent, tail), file=sys.stderr)
+    bad += 1
+
+sys.exit(1 if bad else 0)
+PY
+  )" || rc=$?
+
+  SCANNED="${n:-0}"
+  VIOLATIONS="$rc"
 
   [ "$VIOLATIONS" -eq 0 ]
 }

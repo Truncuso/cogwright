@@ -443,9 +443,17 @@ Stated plainly so you are not debugging a documented gap:
    present in `${CLAUDE_PLUGIN_ROOT}/scripts/`.
 3. **A few references reach into skills that are not part of this marketplace**
    (`idea`, `autopilot`). Those sections degrade — treat them as optional.
-4. **Child skills are individually discoverable.** In the package they are
-   private children of the `goalforge` front door; flattened into a plugin they
-   become top-level skills and may trigger on their own.
+4. **Child skills are individually discoverable — suppression is soft.** In the
+   package they are private children of the `goalforge` front door; flattened
+   into a plugin they become top-level skills. Every child description
+   therefore carries the fixed prefix
+   `goalforge-internal — use entry commands; do not auto-trigger`, which routes
+   the model back to the entry commands and the `goalforge` front door.
+   Residual risk: a description is a *hint*, not an enforcement point — nothing
+   in Claude Code blocks a child from being selected, so a strongly matching
+   request may still trigger one directly. Drive the chain through `/spec`,
+   `/plan`, `/implement`, `/verify` (or the `goalforge` skill) and treat a
+   direct child trigger as a routing miss, not a supported entry point.
 5. **`evals/` is not shipped.** The plugin artifact excludes the eval harness, so
    there is no bundled acceptance test. Use the smoke test above, or clone the
    repo and run evals from `packages/goalforge/evals/`.
