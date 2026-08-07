@@ -75,16 +75,22 @@ if [ "$MODE" = "--check" ]; then
 fi
 
 PLUGIN_DESC="Goal-and-verification-driven development chain for Claude Code — goal-object work packages with a harden/execute/verify lifecycle."
-# GF_PLUGIN_VERSION: stamp this "version" field into plugin.json.
-# Version experiment (wp-17 task-02, 2026-07-21): a version-LESS manifest passes
-# `claude plugin validate` (exit 0, warning only) but FAILS `--strict` (exit 1 —
-# the missing-version warning is promoted to an error). Per the pinned decision
-# rule (keep version-less only if BOTH pass), the manifest stamps the cogwright
-# commit SHA as the version. This is a STATIC literal, not a runtime
-# `git rev-parse HEAD` (that would drift after each commit and break the drift
-# gate); bump it deliberately when the package changes materially. Use `-` (not
-# `:-`) so `GF_PLUGIN_VERSION=` reproduces the version-less experiment.
-GF_PLUGIN_VERSION="${GF_PLUGIN_VERSION-33b31eab96c9}"
+# Version authority: packages/goalforge/SKILL.md `metadata.version` is the ONLY
+# hand-bumped version in the flow (SKILL.md -> plugin.json -> README catalog).
+# There is deliberately no env override — an overridable version reintroduces the
+# drift this single authority exists to remove. A version-less manifest fails
+# `claude plugin validate --strict`, so an unreadable or non-semver value is a
+# hard abort rather than a silently omitted field.
+PLUGIN_VERSION="$(awk '/^---$/{f++;next} f==1 && /^  version:/{gsub(/[" ]/,"",$2);print $2;exit}' "$SRC/SKILL.md")"
+case "$PLUGIN_VERSION" in
+    [0-9]*.[0-9]*.[0-9]*) ;;
+    *) echo "FATAL: packages/goalforge/SKILL.md metadata.version is absent or not semver: '$PLUGIN_VERSION'" >&2; exit 1 ;;
+esac
+
+# Author attribution is DERIVED from the marketplace owner — one authority, never
+# hand-written into the generated manifest. `--strict` warns on a missing author.
+PLUGIN_AUTHOR_JSON="$(python3 -c 'import json,sys; print(json.dumps({"name": json.load(open(sys.argv[1]))["owner"]["name"]}))' "$ROOT/.claude-plugin/marketplace.json")" \
+    || { echo "FATAL: cannot derive author from .claude-plugin/marketplace.json owner.name" >&2; exit 1; }
 
 # Hand-authored, non-package plugin files preserved across regeneration.
 PRESERVE=(.vendored-allowlist.txt)
@@ -317,22 +323,15 @@ with open(_manifest, "w", encoding="utf-8", newline="") as fh:
     fh.write("\n")
 PYEOF
 
-# ── 4. Generate the plugin manifest (commit-SHA version; see version experiment above) ──
+# ── 4. Generate the plugin manifest (version + author derived; see above) ──
 mkdir -p "$DST/.claude-plugin"
-if [ -n "$GF_PLUGIN_VERSION" ]; then
-    printf '%s\n' \
-        '{' \
-        '  "name": "goalforge",' \
-        "  \"version\": \"$GF_PLUGIN_VERSION\"," \
-        "  \"description\": \"$PLUGIN_DESC\"" \
-        '}' > "$DST/.claude-plugin/plugin.json"
-else
-    printf '%s\n' \
-        '{' \
-        '  "name": "goalforge",' \
-        "  \"description\": \"$PLUGIN_DESC\"" \
-        '}' > "$DST/.claude-plugin/plugin.json"
-fi
+printf '%s\n' \
+    '{' \
+    '  "name": "goalforge",' \
+    "  \"version\": \"$PLUGIN_VERSION\"," \
+    "  \"author\": $PLUGIN_AUTHOR_JSON," \
+    "  \"description\": \"$PLUGIN_DESC\"" \
+    '}' > "$DST/.claude-plugin/plugin.json"
 
 # ── 5. --check: drift gate (side-effect-free, git-independent) ──
 # Compare the freshly-generated staging tree against the committed-or-not real
