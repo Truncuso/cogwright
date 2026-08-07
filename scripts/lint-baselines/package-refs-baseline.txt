@@ -1,0 +1,10 @@
+# package-refs-baseline.txt — known-dangling package-side refs, sorted `<from>::<path>`.
+#
+# REMOVAL-ONLY ratchet, same contract as reference-manifest.baseline: ci-lints.sh
+# (section `package-refs`) fails on an unbaselined dangling ref AND on an entry
+# whose ref resolves again. Paths are relative to GF_PACKAGE_ROOT
+# (default packages/goalforge). Every entry names the work that retires it.
+
+# retired-by: wp-03-packaging-homes — commands/ becomes a package directory
+# there; today the command files live only in the plugin tree.
+run/SKILL.md::commands/spec.md

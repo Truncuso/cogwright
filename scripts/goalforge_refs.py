@@ -49,12 +49,15 @@ def ref_tokens(text, prefixes=REF_PREFIXES):
         yield tok
 
 
-def resolve_ref(root, child_rel, tok):
+def resolve_ref(root, child_rel, tok, skills_prefix="skills/"):
     """Root-relative target of `tok` named from a file owned by `child_rel`.
 
     `child_rel` is the root-relative directory of the source file's child skill
     (`skills/<child>` plugin-side, `<child>` package-side), or None for a file
-    at the tree root. Returns None when the token resolves outside the tree.
+    at the tree root. `skills_prefix` is where child skills live in this tree —
+    `skills/` in the plugin, flat (``) in the package — so a `skills/<child>/x`
+    token lands on the same file in both. Returns None when the token resolves
+    outside the tree.
     """
     if tok.startswith(SKILL_DIR_PREFIXES):
         rest = tok.split("/", 1)[1] if "/" in tok else ""
@@ -62,7 +65,7 @@ def resolve_ref(root, child_rel, tok):
     elif tok.startswith("${CLAUDE_PLUGIN_ROOT}"):
         cands = [tok[len("${CLAUDE_PLUGIN_ROOT}"):].lstrip("/")]
     elif tok.startswith("skills/"):
-        cands = [tok]
+        cands = [skills_prefix + tok[len("skills/"):]]
     else:
         cands = ["%s/%s" % (child_rel, tok)] if child_rel else []
         cands.append(tok)
@@ -104,7 +107,7 @@ def ignored(pats, *cands):
 
 
 def collect_refs(root, child_of, prefixes=REF_PREFIXES, ignore_pats=(),
-                 skip_top=()):
+                 skip_top=(), skills_prefix="skills/"):
     """Sorted, de-duplicated (from, path) refs over every `.md` under `root`.
 
     `child_of` maps a root-relative file path to its child-skill dir or None;
@@ -128,7 +131,7 @@ def collect_refs(root, child_of, prefixes=REF_PREFIXES, ignore_pats=(),
             for tok in ref_tokens(text, prefixes):
                 if ignored(ignore_pats, tok):
                     continue
-                target = resolve_ref(root, child_of(rel), tok)
+                target = resolve_ref(root, child_of(rel), tok, skills_prefix)
                 if target is None or ignored(ignore_pats, target):
                     continue
                 refs.add((rel, target))
@@ -172,10 +175,13 @@ def main(argv):
     if args.package:
         prefixes = REF_PREFIXES + SKILL_DIR_PREFIXES
         child_of = package_child_of(root)
+        skills_prefix = ""
     else:
         prefixes = REF_PREFIXES
         child_of = plugin_child_of
-    for frm, path in collect_refs(root, child_of, prefixes, pats):
+        skills_prefix = "skills/"
+    for frm, path in collect_refs(root, child_of, prefixes, pats,
+                                  skills_prefix=skills_prefix):
         exists = os.path.exists(os.path.join(root, *path.split("/")))
         sys.stdout.write("%d\t%s::%s\n" % (1 if exists else 0, frm, path))
     return 0

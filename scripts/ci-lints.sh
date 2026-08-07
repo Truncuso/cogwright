@@ -26,7 +26,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Registry of runnable sections, in run order.
-SECTIONS=(author-paths manifest)
+SECTIONS=(author-paths manifest package-refs)
 
 # Opt-out list for the per-section zero-scan gate: sections named here may
 # legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
@@ -162,8 +162,40 @@ MANIFEST_BASELINE="scripts/lint-baselines/reference-manifest.baseline"
 # failure in its own right. No ALLOW_EMPTY opt-in for this section.
 MANIFEST_FLOOR=100
 
+# Dangling `<from>::<path>` refs found by the section currently running.
+DANGLING=()
+
+# check_ratchet <baseline-file> — compare DANGLING against a removal-only
+# baseline. An unbaselined dangling ref is a violation, and so is an entry whose
+# ref resolves again: the pair makes the baseline a ratchet that can only
+# shrink, never a slot to swap a fresh violation into.
+check_ratchet() {
+  local bf="$1" line ref
+  local -a baseline=()
+  if [ -f "$bf" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      line="${line%$'\r'}"
+      case "$line" in ''|'#'*) continue ;; esac
+      baseline+=("$line")
+    done < "$bf"
+  fi
+
+  for ref in ${DANGLING+"${DANGLING[@]}"}; do
+    in_list "$ref" ${baseline+"${baseline[@]}"} && continue
+    printf '  dangling ref: %s -> %s\n' "${ref%%::*}" "${ref#*::}" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  done
+
+  for ref in ${baseline+"${baseline[@]}"}; do
+    in_list "$ref" ${DANGLING+"${DANGLING[@]}"} && continue
+    printf '  dead entry in %s (ref resolves now, delete it): %s\n' "$bf" "$ref" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  done
+}
+
 lint_manifest() {
   VIOLATIONS=0
+  DANGLING=()
 
   if [ ! -s "$MANIFEST_FILE" ]; then
     printf '  %s: missing or empty — run scripts/goalforge-generate.sh\n' \
@@ -191,35 +223,56 @@ for r in m["refs"]:
     VIOLATIONS=$(( VIOLATIONS + 1 ))
   fi
 
-  local -a baseline=()
-  if [ -f "$MANIFEST_BASELINE" ]; then
-    while IFS= read -r line || [ -n "$line" ]; do
-      line="${line%$'\r'}"
-      case "$line" in ''|'#'*) continue ;; esac
-      baseline+=("$line")
-    done < "$MANIFEST_BASELINE"
-  fi
-
-  local -a dangling=()
   local ref
   for ref in ${refs+"${refs[@]}"}; do
-    [ -e "$MANIFEST_ROOT/${ref#*::}" ] || dangling+=("$ref")
+    [ -e "$MANIFEST_ROOT/${ref#*::}" ] || DANGLING+=("$ref")
   done
 
-  # Unbaselined dangling ref — a shipped .md names a path that is not there.
-  for ref in ${dangling+"${dangling[@]}"}; do
-    in_list "$ref" ${baseline+"${baseline[@]}"} && continue
-    printf '  dangling ref: %s -> %s\n' "${ref%%::*}" "${ref#*::}" >&2
-    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  check_ratchet "$MANIFEST_BASELINE"
+
+  [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# Section: package-refs
+#
+# CI-only counterpart to `manifest`: the same token grammar
+# (scripts/goalforge_refs.py — one definition, two anchors) over the AUTHORED
+# package tree, which has no plugin-root name and therefore never ships a
+# manifest of its own. Catches a dangling ref at the source file, before the
+# generator carries it into the artifact.
+# ---------------------------------------------------------------------------
+REF_IGNORE_FILE="scripts/lint-baselines/reference-ignore.txt"
+PACKAGE_REFS_BASELINE="scripts/lint-baselines/package-refs-baseline.txt"
+
+lint_package_refs() {
+  VIOLATIONS=0
+  DANGLING=()
+
+  # GF_PACKAGE_ROOT: scan root, so a negative-case check can point the section
+  # at a scratch copy instead of mutating the real tree.
+  local root="${GF_PACKAGE_ROOT:-packages/goalforge}"
+  if [ ! -d "$root" ]; then
+    printf '  %s: not a directory\n' "$root" >&2
+    SCANNED=0
+    return 1
+  fi
+
+  local -a scan=()
+  local line
+  while IFS= read -r line; do scan+=("$line"); done < <(
+    PYTHONDONTWRITEBYTECODE=1 python3 scripts/goalforge_refs.py scan \
+      --root "$root" --ignore "$REF_IGNORE_FILE" --package
+  )
+
+  SCANNED=${#scan[@]}
+
+  # `<0|1>\t<from>::<path>`, 1 = the path exists in the scanned tree.
+  for line in ${scan+"${scan[@]}"}; do
+    case "$line" in 0*) DANGLING+=("${line#*$'\t'}") ;; esac
   done
 
-  # Dead baseline entry — the ref resolves now, so the entry must be deleted in
-  # the change that fixed it (removal-only ratchet).
-  for ref in ${baseline+"${baseline[@]}"}; do
-    in_list "$ref" ${dangling+"${dangling[@]}"} && continue
-    printf '  dead baseline entry (ref resolves now, delete it): %s\n' "$ref" >&2
-    VIOLATIONS=$(( VIOLATIONS + 1 ))
-  done
+  check_ratchet "$PACKAGE_REFS_BASELINE"
 
   [ "$VIOLATIONS" -eq 0 ]
 }
