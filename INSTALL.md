@@ -72,7 +72,7 @@ pip3 install pyyaml
 **Windows** — use WSL2 and follow the Linux instructions. Native Windows is not
 supported.
 
-### Verify prerequisites in one shot
+### Verify prerequisites (after install)
 
 Once goalforge is installed, `goalforge-doctor.sh` checks every prerequisite
 above — the seven binaries, PyYAML, and the bash major version — plus the
@@ -323,7 +323,7 @@ bash "$GF/scripts/goalforge-doctor.sh"
 The doctor checks the prerequisites (`git python3 jq flock timeout realpath
 tar` plus PyYAML), the bash major version, the layout of the tree it lives in,
 the reference manifest, PLANS_ROOT resolution, and the git pre-commit
-validator. It exits **0** when everything is green or only warnings fired, and
+validator of the project repo you run it from. It exits **0** when everything is green or only warnings fired, and
 **1** on a hard failure — a missing prerequisite, a dangling or (on the plugin
 route) missing reference manifest, or a tree that does not look like a
 goalforge install. Every failure line starts with a stable token
@@ -340,10 +340,17 @@ On the **plugin route** you can require a fully clean bill of health:
 bash "$GF/scripts/goalforge-doctor.sh" --strict
 ```
 
-`--strict` promotes warnings to failures. It is **plugin-route scoped**: a
-manual install never carries a reference manifest (it is emitted plugin-side
-only), so that one warning is exempt from promotion and `--strict` on the
-manual route stays green rather than being permanently red.
+`--strict` promotes warnings to failures, with two exemptions — warnings no
+healthy install can act on:
+
+- **the absent reference manifest on the manual route** (it is emitted
+  plugin-side only, so no manual install ever carries one);
+- **the git pre-commit hook of the project repo you ran the doctor from** (the
+  plugin route installs *by* git clone, so promoting this would be red
+  everywhere).
+
+Each exemption means that warning alone never turns `--strict` red; other
+warnings still do — `WARN: bash<4`, for instance, is promoted.
 
 To check the doctor itself rather than your install, `--self-test` runs an
 offline suite that proves each of its failure checks actually fires.

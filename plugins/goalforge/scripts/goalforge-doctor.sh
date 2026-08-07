@@ -28,8 +28,13 @@
 #                       permanently red on a healthy manual install).
 #   5. PLANS_ROOT       resolved through the ONE authority,
 #                       hooks/goalforge-plans-root.sh — reported, never a failure.
-#   6. git pre-commit   WARNING when absent INSIDE a git work tree; SKIPPED when
-#                       the resolved root is not in one.
+#   6. git pre-commit   inspected in the USER PROJECT repo ($PWD — the same locus
+#                       as the PLANS_ROOT arm), not in the install tree. WARNING
+#                       when the hook is absent or carries no goalforge block,
+#                       SKIPPED when $PWD is not a work tree. The warning is
+#                       EXEMPT from --strict promotion: a marketplace plugin
+#                       install IS a git clone, so promoting it would make
+#                       --strict permanently red on a healthy install.
 #
 # Stable stderr tokens, one per arm, so a caller (and the self-test) can assert
 # WHICH arm fired rather than only that the exit code was non-zero:
@@ -39,7 +44,9 @@
 # Exit codes:
 #   0  green, or warnings only
 #   1  at least one hard failure (or, under --strict, a promotable warning)
-#   2  usage error
+#   2  usage error (reserved for it — nothing else exits 2)
+#   3  --self-test harness setup failure (the suite could not be built; NOT a
+#      case failure, which surfaces as exit 1 with a FAIL line)
 #
 # Test-only environment seams (every one defaults self-relative, so consumer
 # behaviour is unchanged when they are unset):
@@ -92,10 +99,15 @@ usage() {
         '                PLANS_ROOT resolution and the git pre-commit hook.' \
         '                Exit 0 on green or warnings-only, 1 on a hard failure.' \
         '  --strict      promote warnings to failures. Intended for the plugin' \
-        '                route; on the manual route the absent-manifest warning' \
-        '                is exempt, because no manual install ever carries one.' \
+        '                route. Two warnings are EXEMPT from promotion because no' \
+        '                healthy install can act on them: the absent manifest on' \
+        '                the manual route (it is emitted plugin-side only) and the' \
+        '                git pre-commit hook of the surrounding project repo.' \
         '  --self-test   run the hermetic offline suite proving each arm fires.' \
-        '  --help        print this text and exit 0, before any check runs.'
+        '  --help        print this text and exit 0, before any check runs.' \
+        '' \
+        'exit: 0 green/warnings-only, 1 hard failure (or a promoted warning),' \
+        '      2 usage error, 3 --self-test harness setup failure.'
 }
 
 # ---------------------------------------------------------------------------
@@ -176,7 +188,10 @@ detect_route() {
     fi
 }
 
-# read_manifest <manifest> <root> — print one diagnostic line per problem.
+# read_manifest <manifest> <root> — print one diagnostic line per problem on
+# STDOUT. Interpreter noise (a broken python3, a warning banner) lands on
+# stderr and is deliberately NOT merged by the caller: merged, it would be
+# read as a ref path and fabricate DANGLING REF lines.
 # Exit 0 clean, 3 unreadable/malformed, 4 bad schema, 5 dangling refs found.
 read_manifest() {
     GF_DOC_MF="$1" GF_DOC_RT="$2" python3 - <<'PYEOF'
@@ -209,7 +224,10 @@ for entry in refs:
     elif not os.path.exists(target):
         bad.append(path)
 for path in bad:
-    print(path)
+    # One ref per LINE is the caller's contract, so a path carrying a newline
+    # (or a carriage return) is escaped rather than allowed to split into two
+    # fabricated DANGLING REF entries.
+    print(path.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r"))
 sys.exit(5 if bad else 0)
 PYEOF
 }
@@ -219,17 +237,26 @@ check_manifest() {
         skip "manifest (missing python3)"
         return
     fi
-    if [ ! -f "$MANIFEST" ] || [ ! -r "$MANIFEST" ]; then
-        if [ "$ROUTE" = plugin ]; then
-            fail "MANIFEST MISSING: $MANIFEST"
-        else
+    # ABSENT is the only shape that degrades to a warning, and only on the
+    # manual route. Anything else — a present-but-unreadable file, a directory,
+    # or a route that did not resolve to `manual` — is a hard failure: a
+    # manifest that exists and cannot be read is a broken install, not a
+    # deliberately manifest-free one.
+    if [ ! -e "$MANIFEST" ]; then
+        if [ "$ROUTE" = manual ]; then
             warnx "manifest absent (manual route): $MANIFEST"
+        else
+            fail "MANIFEST MISSING: $MANIFEST"
         fi
         return
     fi
+    if [ ! -f "$MANIFEST" ] || [ ! -r "$MANIFEST" ]; then
+        fail "MANIFEST MISSING: $MANIFEST (exists but is not a readable file)"
+        return
+    fi
 
-    local out rc line
-    out="$(read_manifest "$MANIFEST" "$ROOT" 2>&1)"; rc=$?
+    local out rc line why
+    out="$(read_manifest "$MANIFEST" "$ROOT" 2>/dev/null)"; rc=$?
     case "$rc" in
         0)  ok "manifest $MANIFEST" ;;
         5)  while IFS= read -r line; do
@@ -237,7 +264,13 @@ check_manifest() {
                 fail "DANGLING REF: $line"
             done <<<"$out"
             ;;
-        *)  fail "MANIFEST MISSING: $MANIFEST ($out)" ;;
+            # Diagnostic branch. The reader's own message is on stdout; stderr
+            # is re-read HERE, in the one branch that wants it, so interpreter
+            # noise can never reach the ref loop above. The branches are
+            # mutually exclusive, so the second pass loses nothing.
+        *)  why="$out"
+            [ -n "$why" ] || why="$(read_manifest "$MANIFEST" "$ROOT" 2>&1 >/dev/null)"
+            fail "MANIFEST MISSING: $MANIFEST (${why:-no diagnostic})" ;;
     esac
 }
 
@@ -285,38 +318,57 @@ check_plans_root() {
 }
 
 # ---------------------------------------------------------------------------
-# Arm 6 — git pre-commit validator. Meaningful only inside a work tree.
+# Arm 6 — git pre-commit validator, inspected in the USER PROJECT repo the
+# doctor was invoked from ($PWD — the same locus as the PLANS_ROOT arm), never
+# in the install tree: the hook guards the consumer's commits, and $ROOT under
+# the plugin route is a marketplace clone whose own hooks are irrelevant.
+#
+# Every warning here is warnx (exempt from --strict): the plugin route installs
+# BY git clone, so a promotable warning would make --strict permanently red on
+# a healthy install.
 # ---------------------------------------------------------------------------
 check_git_hook() {
     if ! have git; then
         skip "git-hook (missing git)"
         return
     fi
-    if ! git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-        skip "git-hook (root not a git work tree)"
+    if ! git -C "$PWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        skip "git-hook (cwd $PWD is not a git work tree)"
         return
     fi
-    local gitdir hook line
-    gitdir="$(git -C "$ROOT" rev-parse --absolute-git-dir 2>/dev/null)" || gitdir=""
-    if [ -z "$gitdir" ]; then
-        skip "git-hook (root not a git work tree)"
+    local repo hooks hook line
+    repo="$(git -C "$PWD" rev-parse --show-toplevel 2>/dev/null)" || repo=""
+    if [ -z "$repo" ]; then
+        skip "git-hook (cwd $PWD is not a git work tree)"
         return
     fi
-    hook="$gitdir/hooks/pre-commit"
+    # --git-path honours core.hooksPath and linked worktrees, and returns a
+    # path relative to git's own cwd — so it is asked FROM the repo root and a
+    # relative answer is prefixed with it (mirrors goalforge-install-hooks.sh).
+    hooks="$(git -C "$repo" rev-parse --git-path hooks 2>/dev/null)" || hooks=""
+    if [ -z "$hooks" ]; then
+        warnx "git-hook (repo $repo: cannot resolve the hooks directory)"
+        return
+    fi
+    case "$hooks" in
+        /*) ;;
+        *)  hooks="$repo/$hooks" ;;
+    esac
+    hook="$hooks/pre-commit"
     if [ ! -f "$hook" ]; then
-        warn "git-hook (no pre-commit hook at $hook)"
+        warnx "git-hook (repo $repo: no pre-commit hook at $hook)"
         return
     fi
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in
-            *'>>> sdd-pre-commit >>>'*) ok "git-hook $hook"; return ;;
+            *'>>> sdd-pre-commit >>>'*) ok "git-hook $hook (repo $repo)"; return ;;
         esac
     done < "$hook"
-    warn "git-hook (pre-commit hook at $hook carries no goalforge block)"
+    warnx "git-hook (repo $repo: pre-commit hook at $hook carries no goalforge block)"
 }
 
 # ---------------------------------------------------------------------------
-# Self-test — 11 hermetic offline cases proving each arm actually fires.
+# Self-test — 12 hermetic offline cases proving each arm actually fires.
 #
 # Every case runs the doctor against a SYNTHETIC root with PATH narrowed to a
 # shim dir, so the suite never consults the host's PATH, its site-packages, or a
@@ -327,26 +379,47 @@ check_git_hook() {
 # Every negative case is the positive control's fixture with exactly ONE thing
 # broken, so a failure is attributable to the injection rather than to the
 # sandbox.
+#
+# WRITE SAFETY: every fixture file is written to a path this harness itself
+# created with mkdir/`git init`/a fresh `>` on a non-existent name. Nothing is
+# ever written THROUGH a tree produced by `cp -r`, because a `>` redirect
+# follows symlinks: a copied symlink would truncate its target outside the
+# sandbox (this exact shape truncated a host interpreter during review). The
+# one file copied in is the plans-root helper, which is only read afterwards;
+# `dirname` is symlinked, never written to.
+#
+# A setup failure (a missing build tool, an unusable interpreter, no sandbox)
+# returns 3, never 2 — 2 is reserved for a usage error, and the two must stay
+# distinguishable in CI.
 # ---------------------------------------------------------------------------
 self_test() {
-    local real_python3 real_bash real_dirname sandbox
-    real_python3="$(command -v python3)" || real_python3=""
+    local real_python3 real_bash real_dirname real_git sandbox
+    # sys.executable, not `command -v python3`: on a pyenv/conda install the
+    # name on PATH is a wrapper shim, and `exec`ing it under a narrowed PATH
+    # re-resolves to the fixture stub and recurses. Captured BEFORE narrowing.
+    real_python3="$(python3 -c 'import sys; print(sys.executable)' 2>/dev/null)" || real_python3=""
     real_dirname="$(command -v dirname)" || real_dirname=""
+    real_git="$(command -v git)" || real_git=""
     real_bash="${BASH:-}"
     [ -n "$real_bash" ] || real_bash="$(command -v bash)"
-    if [ -z "$real_python3" ] || [ -z "$real_dirname" ] || [ -z "$real_bash" ]; then
-        printf 'self-test: need python3, dirname and bash on PATH to build the fixtures\n' >&2
-        return 2
+    if [ -z "$real_dirname" ] || [ -z "$real_bash" ] || [ -z "$real_git" ]; then
+        printf 'self-test: need python3, dirname, git and bash on PATH to build the fixtures\n' >&2
+        return 3
+    fi
+    if [ -z "$real_python3" ] || [ ! -f "$real_python3" ] || [ ! -x "$real_python3" ]; then
+        printf 'self-test: python3 reports an unusable interpreter path: %s\n' \
+            "${real_python3:-<empty>}" >&2
+        return 3
     fi
 
-    sandbox="$(mktemp -d)" || return 2
+    sandbox="$(mktemp -d)" || return 3
     # shellcheck disable=SC2064  # $sandbox must expand now, not at trap time
     trap "rm -rf '$sandbox'" EXIT
 
     local helper_src="$SCRIPT_DIR/../hooks/goalforge-plans-root.sh"
     if [ ! -f "$helper_src" ]; then
         printf 'self-test: resolution helper not found at %s\n' "$helper_src" >&2
-        return 2
+        return 3
     fi
 
     # --- fixture builders -------------------------------------------------
@@ -383,7 +456,7 @@ self_test() {
         } > "$f"
     }
 
-    # make_shim <dir> [--without <cmd>]... [--no-pyyaml]
+    # make_shim <dir> [--without <cmd>]... [--no-pyyaml] [--real-git]
     #
     # Stubs the SEVEN probed deps only. `bash`, `sh` and `env` are NEVER stubbed
     # (they run the suite, the stubs, and the doctor's shebang), and `dirname` is
@@ -393,11 +466,12 @@ self_test() {
     make_shim() {
         local d="$1"; shift
         local -a without=()
-        local no_pyyaml=0 arg c
+        local no_pyyaml=0 real_git_shim=0 arg c
         while [ "$#" -gt 0 ]; do
             case "$1" in
                 --without)   without+=("$2"); shift 2 ;;
                 --no-pyyaml) no_pyyaml=1; shift ;;
+                --real-git)  real_git_shim=1; shift ;;
                 *)           shift ;;
             esac
         done
@@ -414,14 +488,23 @@ self_test() {
                     # decided by the fixture stub alone. The interpreter path is
                     # ABSOLUTE and captured before PATH narrowing: a bare
                     # `exec python3` would re-resolve to this stub and recurse.
+                    # Every interpolation is QUOTED in the emitted stub: a
+                    # sandbox or interpreter path containing a space would
+                    # otherwise split into two words and exec the wrong file.
                     if [ "$no_pyyaml" -eq 1 ]; then
-                        printf '#!/bin/sh\nexec %s -S -E "$@"\n' "$real_python3" > "$d/python3"
+                        printf '#!/bin/sh\nexec "%s" -S -E "$@"\n' "$real_python3" > "$d/python3"
                     else
-                        printf '#!/bin/sh\nPYTHONPATH=%s exec %s -S "$@"\n' \
+                        printf '#!/bin/sh\nPYTHONPATH="%s" exec "%s" -S "$@"\n' \
                             "$sandbox/pylib" "$real_python3" > "$d/python3"
                     fi
                     ;;
                 git)
+                    # The real binary, for the one case that needs truthful
+                    # work-tree answers about a genuine sandbox repository.
+                    if [ "$real_git_shim" -eq 1 ]; then
+                        ln -sf "$real_git" "$d/git"
+                        continue
+                    fi
                     # --show-toplevel answers only when the case asks for it, so
                     # the PLANS_ROOT leg-2 case needs no real repository; every
                     # other fixture is reported as NOT a work tree, which makes
@@ -451,7 +534,7 @@ self_test() {
     # --- case runner ------------------------------------------------------
     local n=0 pass=0 fail=0
 
-    # run_case <name> <want_exit> <must_have> <must_not_have;…> <cmd>...
+    # run_case <name> <want_exit> <must_have;…> <must_not_have;…> <cmd>...
     run_case() {
         local name="$1" want="$2" have="$3" absent="$4"
         shift 4
@@ -460,10 +543,14 @@ self_test() {
         out="$("$@" 2>&1)"; rc=$?
         [ "$rc" -eq "$want" ] || why="exit $rc, want $want"
         if [ -n "$have" ]; then
-            case "$out" in
-                *"$have"*) ;;
-                *) why="${why:+$why; }missing token '$have'" ;;
-            esac
+            local IFS=';'
+            for tok in $have; do
+                [ -n "$tok" ] || continue
+                case "$out" in
+                    *"$tok"*) ;;
+                    *) why="${why:+$why; }missing token '$tok'" ;;
+                esac
+            done
         fi
         if [ -n "$absent" ]; then
             local IFS=';'
@@ -476,11 +563,11 @@ self_test() {
         fi
         if [ -n "$why" ]; then
             fail=$(( fail + 1 ))
-            printf 'case %d/11: %s FAIL (%s)\n' "$n" "$name" "$why"
+            printf 'case %d/12: %s FAIL (%s)\n' "$n" "$name" "$why"
             while IFS= read -r line; do printf '    | %s\n' "$line"; done <<<"$out"
         else
             pass=$(( pass + 1 ))
-            printf 'case %d/11: %s PASS\n' "$n" "$name"
+            printf 'case %d/12: %s PASS\n' "$n" "$name"
         fi
     }
 
@@ -493,21 +580,44 @@ self_test() {
     local r_nomani="$sandbox/root-plugin-nomanifest"
     local r_bad="$sandbox/root-bad"
     local leg2="$sandbox/leg2-repo"
-    make_root "$r_plugin" plugin      || return 2
-    make_root "$r_manual" manual --no-manifest || return 2
-    make_root "$r_nomani" plugin --no-manifest || return 2
-    mkdir -p "$r_bad" "$leg2"         || return 2
+    local worktree="$sandbox/hookless-repo"
+    local fake_home="$sandbox/home"
+    make_root "$r_plugin" plugin      || return 3
+    make_root "$r_manual" manual --no-manifest || return 3
+    make_root "$r_nomani" plugin --no-manifest || return 3
+    mkdir -p "$r_bad" "$leg2" "$fake_home" || return 3
     write_manifest "$sandbox/dangling-manifest.json" \
         'references/schema.md' 'references/does-not-exist.md'
+
+    # Case 12's fixture: a REAL work tree (the git-hook arm is asked truthful
+    # questions there) whose freshly-initialised hooks dir carries a pre-commit
+    # that has no goalforge block — the in-work-tree warning branch, and only
+    # that branch, is what the case exercises.
+    mkdir -p "$worktree" || return 3
+    # Physical path: `git rev-parse --show-toplevel` resolves symlinks, and the
+    # case asserts the repo named in the warning line.
+    worktree="$(cd "$worktree" && pwd -P)" || return 3
+    "$real_git" -C "$worktree" init -q >/dev/null 2>&1 || return 3
+    local worktree_hooks
+    worktree_hooks="$("$real_git" -C "$worktree" rev-parse --git-path hooks 2>/dev/null)" || return 3
+    case "$worktree_hooks" in
+        /*) ;;
+        *)  worktree_hooks="$worktree/$worktree_hooks" ;;
+    esac
+    mkdir -p "$worktree_hooks" || return 3
+    printf '#!/bin/sh\nexit 0\n' > "$worktree_hooks/pre-commit" || return 3
+    chmod +x "$worktree_hooks/pre-commit"
 
     local shim_full="$sandbox/shim-full"
     local shim_nojq="$sandbox/shim-nojq"
     local shim_noflock="$sandbox/shim-noflock"
     local shim_noyaml="$sandbox/shim-noyaml"
-    make_shim "$shim_full"                        || return 2
-    make_shim "$shim_nojq"    --without jq        || return 2
-    make_shim "$shim_noflock" --without flock     || return 2
-    make_shim "$shim_noyaml"  --no-pyyaml         || return 2
+    local shim_realgit="$sandbox/shim-realgit"
+    make_shim "$shim_full"                        || return 3
+    make_shim "$shim_nojq"    --without jq        || return 3
+    make_shim "$shim_noflock" --without flock     || return 3
+    make_shim "$shim_noyaml"  --no-pyyaml         || return 3
+    make_shim "$shim_realgit" --real-git          || return 3
 
     # A clean environment for every child run: no seam and no plans-root
     # override may leak in from the shell that invoked --self-test.
@@ -518,11 +628,27 @@ self_test() {
 
     # Case 8 runs the doctor twice: bare, then --strict. The exemption means
     # BOTH must exit 0, so a promoted manifest warning surfaces as exit 3.
+    # HOME is pinned into the sandbox so the PLANS_ROOT leg-3 candidate is the
+    # fixture's, never the invoking user's real ~/.claude/plans.
     case_manual_manifest() {
         local rc1 rc2
-        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_manual" \
+        "${base[@]}" PATH="$shim_full" HOME="$fake_home" GF_DOCTOR_ROOT="$r_manual" \
             "$real_bash" "$SELF"; rc1=$?
-        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_manual" \
+        "${base[@]}" PATH="$shim_full" HOME="$fake_home" GF_DOCTOR_ROOT="$r_manual" \
+            "$real_bash" "$SELF" --strict; rc2=$?
+        [ "$rc2" -eq 0 ] || return 3
+        return "$rc1"
+    }
+
+    # Case 12 mirrors case 8's bare+strict pairing, for the OTHER exempt
+    # warning: cwd is the real hookless work tree, so the git-hook arm takes
+    # its in-work-tree branch and both runs must still exit 0.
+    case_git_hook_in_work_tree() {
+        local rc1 rc2
+        cd "$worktree" || return 3
+        "${base[@]}" PATH="$shim_realgit" HOME="$fake_home" GF_DOCTOR_ROOT="$r_plugin" \
+            "$real_bash" "$SELF"; rc1=$?
+        "${base[@]}" PATH="$shim_realgit" HOME="$fake_home" GF_DOCTOR_ROOT="$r_plugin" \
             "$real_bash" "$SELF" --strict; rc2=$?
         [ "$rc2" -eq 0 ] || return 3
         return "$rc1"
@@ -536,9 +662,9 @@ self_test() {
             GF_DOCTOR_ROOT="$r_plugin" "$real_bash" "$SELF"
     }
 
-    printf '=== goalforge doctor self-test (11 cases) ===\n'
+    printf '=== goalforge doctor self-test (12 cases) ===\n'
 
-    run_case positive-control 0 'ok   route plugin' "$hard" \
+    run_case positive-control 0 'ok   route plugin' "$hard;WARN:" \
         "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_plugin" \
         "$real_bash" "$SELF"
 
@@ -573,13 +699,17 @@ self_test() {
     run_case plans-root-leg2 0 "PLANS_ROOT: $leg2/plans (leg 2" "$hard" \
         case_plans_root_leg2
 
-    run_case bad-root 1 "BAD ROOT: $r_bad" 'PLANS_ROOT:' \
+    # Both tokens: the hard failure AND the short-circuit that must follow it.
+    run_case bad-root 1 "BAD ROOT: $r_bad;SKIPPED: route+manifest (bad root)" 'PLANS_ROOT:' \
         "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_bad" \
         "$real_bash" "$SELF"
 
     run_case pyyaml-missing 1 'MISSING DEP: PyYAML' '' \
         "${base[@]}" PATH="$shim_noyaml" GF_DOCTOR_ROOT="$r_plugin" \
         "$real_bash" "$SELF"
+
+    run_case git-hook-in-work-tree 0 "WARN: git-hook;repo $worktree" "$hard" \
+        case_git_hook_in_work_tree
 
     printf '=== self-test: %d passed, %d failed ===\n' "$pass" "$fail"
     [ "$fail" -eq 0 ]
@@ -592,7 +722,10 @@ run_checks() {
     ROOT="${GF_DOCTOR_ROOT:-$SCRIPT_DIR/..}"
     ROOT="$(cd "$ROOT" 2>/dev/null && pwd)" || ROOT="${GF_DOCTOR_ROOT:-$SCRIPT_DIR/..}"
     MANIFEST="${GF_DOCTOR_MANIFEST:-$ROOT/references/reference-manifest.json}"
-    ROUTE=manual
+    # Fail-closed: only detect_route may set `manual`, the one value that
+    # softens the absent-manifest arm to a warning. An unresolved route takes
+    # the hard branch.
+    ROUTE=unknown
 
     check_deps
     check_bash_version
