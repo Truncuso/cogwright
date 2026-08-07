@@ -27,7 +27,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Registry of runnable sections, in run order.
-SECTIONS=(author-paths manifest package-refs)
+SECTIONS=(author-paths manifest package-refs version)
 
 # Opt-out list for the per-section zero-scan gate: sections named here may
 # legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
@@ -355,6 +355,95 @@ lint_package_refs() {
 
   check_ratchet "$PACKAGE_REFS_BASELINE"
   check_dead_ignores "$root" --package --skip-top evals
+
+  [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# version — three-way agreement on the single version authority.
+#
+# packages/goalforge/SKILL.md `metadata.version` is the only hand-bumped value;
+# plugins/goalforge/.claude-plugin/plugin.json `version` is generated from it and
+# the README catalog quotes it. This section asserts all three agree.
+#
+# Semantics are pinned FAIL-CLOSED, because an equality-only comparison passes
+# when all three sides are empty:
+#   - the SKILL.md value MUST match ^[0-9]+\.[0-9]+\.[0-9]+$
+#   - an absent or empty value on ANY of the three sides is a FAIL
+#   - a missing plugin.json `version` key is a FAIL (distinct from an empty one)
+#
+# The scan unit is the three sides, so SCANNED is always 3 — "stopped matching"
+# cannot silently pass here, it surfaces as an absent-value FAIL instead.
+# ---------------------------------------------------------------------------
+
+lint_version() {
+  VIOLATIONS=0
+
+  # GF_SKILL_MD / GF_PLUGIN_JSON / GF_README: per-side overrides, so a negative
+  # case can point one side at a scratch copy instead of mutating the real tree.
+  local skill_md="${GF_SKILL_MD:-packages/goalforge/SKILL.md}"
+  local plugin_json="${GF_PLUGIN_JSON:-plugins/goalforge/.claude-plugin/plugin.json}"
+  local readme="${GF_README:-README.md}"
+
+  SCANNED=3
+
+  # ── SKILL.md metadata.version — the authority ──
+  local sv=""
+  if [ ! -f "$skill_md" ]; then
+    printf '  %s: not a file\n' "$skill_md" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  else
+    sv="$(awk '/^---$/{f++;next} f==1 && /^  version:/{gsub(/[" ]/,"",$2);print $2;exit}' "$skill_md")"
+    if ! printf '%s' "$sv" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+      printf '  %s: metadata.version is absent, empty, or not semver: %s\n' \
+        "$skill_md" "'$sv'" >&2
+      VIOLATIONS=$(( VIOLATIONS + 1 ))
+      sv=""
+    fi
+  fi
+
+  # ── plugin.json version — generated ──
+  local pv="" rc=0
+  pv="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); sys.exit(3) if "version" not in d else print(d["version"] if isinstance(d["version"], str) else "")' \
+        "$plugin_json" 2>/dev/null)"
+  rc=$?
+  if [ "$rc" -eq 3 ]; then
+    printf '  %s: no "version" key\n' "$plugin_json" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+    pv=""
+  elif [ "$rc" -ne 0 ]; then
+    printf '  %s: unreadable or not JSON\n' "$plugin_json" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+    pv=""
+  elif [ -z "$pv" ]; then
+    printf '  %s: "version" is empty\n' "$plugin_json" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  fi
+
+  # ── README catalog quote — the goalforge row's (vX.Y.Z) ──
+  local rv=""
+  if [ ! -f "$readme" ]; then
+    printf '  %s: not a file\n' "$readme" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  else
+    rv="$(sed -n 's/^| \*\*goalforge\*\* |[^|]*(v\([^)]*\)).*/\1/p' "$readme" | head -n1)"
+    if [ -z "$rv" ]; then
+      printf '  %s: no goalforge catalog row carrying a (vX.Y.Z) quote\n' "$readme" >&2
+      VIOLATIONS=$(( VIOLATIONS + 1 ))
+    fi
+  fi
+
+  # ── Agreement — only meaningful once every side produced a value ──
+  if [ -n "$sv" ] && [ -n "$pv" ] && [ "$pv" != "$sv" ]; then
+    printf '  %s: version %s != %s metadata.version %s\n' \
+      "$plugin_json" "$pv" "$skill_md" "$sv" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  fi
+  if [ -n "$sv" ] && [ -n "$rv" ] && [ "$rv" != "$sv" ]; then
+    printf '  %s: goalforge catalog quotes v%s != %s metadata.version %s\n' \
+      "$readme" "$rv" "$skill_md" "$sv" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  fi
 
   [ "$VIOLATIONS" -eq 0 ]
 }

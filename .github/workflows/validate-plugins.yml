@@ -67,6 +67,14 @@ jobs:
       - name: repo lints
         run: bash scripts/ci-lints.sh
 
+      - name: claude plugin validate --strict
+        run: |
+          if command -v claude >/dev/null 2>&1; then
+            claude plugin validate --strict plugins/goalforge
+          else
+            echo "claude CLI not found — skipping 'claude plugin validate --strict'"
+          fi
+
       - name: goalforge hook self-tests (both trees)
         run: |
           set -e
