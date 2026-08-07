@@ -25,9 +25,10 @@ hooks:
 # goalforge — Spec-Driven Development chain (LOCAL authority)
 
 The **goalforge** package carries the authoritative SDD (Spec-Driven
-Development) planning chain in this repo. The LOCAL dotfiles tree is the source
-of truth; the cogwright `goalforge` plugin is a downstream **export**, synced as
-the last step (user decision 2026-07-16, `plans/suite-extraction/overview.md`).
+Development) planning chain. `packages/goalforge/` is the authored source of
+truth; `plugins/goalforge/` is its generated artifact (`scripts/goalforge-generate.sh`,
+drift-gated). The maintainer's dotfiles reach this package via a per-machine
+symlink (installer contributor mode).
 
 This is a **v2 package**: a PUBLIC parent (this file) owning PRIVATE nested
 children. Children do not trigger by discovery — they are invoked by name from
@@ -75,11 +76,7 @@ Note: `brief/` is a chain-support asset — not a chain stage (no status edge)
 and not a co-tenant (no top-level symlink): the `brief` skill authors task
 briefs that `goalforge-execute` consumes.
 
-## Alias layer (copy-first migration)
+## Legacy naming
 
-The legacy `sdd-*` skills and `sdd-*.sh` scripts remain in place as
-LOCAL-pointing aliases (redirect stubs / exec-forward shims to this package),
-with one script rename: `goalforge-route.sh` → `goalforge-route.sh`. Deletion of
-the `sdd-*` sources is deferred behind a separate human sign-off gate, and the
-alias layer outlives external consumers still pinned to `sdd-*` names (tangram
-ADR-0008 `sdd-status --json`; ProSIP `goalforge-validate.sh --strict`).
+The `sdd-*` skill/script aliases were RETIRED 2026-07-21. Historic
+name map: `references/alias-map.md`.

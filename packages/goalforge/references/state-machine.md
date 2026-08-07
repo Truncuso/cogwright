@@ -2,7 +2,7 @@
 
 Single source of truth for which WP `status:` transitions are legal, which
 require a `--reason`, and which are human-gated. Consumed by
-`skills/goalforge/scripts/goalforge-transition.sh` (the write mechanism) and
+`scripts/goalforge-transition.sh` (the write mechanism) and
 `hooks/goalforge-transition-guard.sh` (the advisory guard). Machine-parseable: the
 `## Edges` table uses `|` as the stable delimiter; a row exists **iff** the edge
 is legal.

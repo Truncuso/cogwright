@@ -23,7 +23,7 @@ skill owns chart/work/graduate.
    `wayfind` skill in chart mode for `<effort-slug>` (re-chart / add
    tickets), regardless of whether a map already exists.
 3. **Auto-phase** (no second argument). Resolve `<PLANS_ROOT>` per
-   `~/.claude/skills/goalforge/references/schema.md` §PLANS_ROOT resolution:
+   `${CLAUDE_PLUGIN_ROOT}/references/schema.md` §PLANS_ROOT resolution:
    env `SDD_PLANS_DIR` → project git-root `plans/` → global `~/.claude/plans/`.
    - `<PLANS_ROOT>/<effort-slug>/wayfind/map.md` absent → invoke the `wayfind`
      skill in **chart** mode.

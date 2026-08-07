@@ -38,6 +38,13 @@ jobs:
               source = entry.get("source")
               assert source, f"plugin entry missing 'source': {entry}"
 
+              if not isinstance(source, str):
+                  # git-subdir (or other object) source: validate shape, skip local file checks
+                  assert isinstance(source, dict), f"plugin 'source' must be str or object: {entry}"
+                  for key in ("source", "url", "path"):
+                      assert source.get(key), f"object source missing '{key}': {entry}"
+                  continue
+
               plugin_json_path = os.path.join(source, ".claude-plugin", "plugin.json")
               assert os.path.isfile(plugin_json_path), f"missing {plugin_json_path}"
 

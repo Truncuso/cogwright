@@ -93,9 +93,9 @@ the legacy bare-path list (a bare string reads as `{locator: <string>}`).
 
 ### Step 4 — Bump timestamps
 
-Set `created:` and `updated:` in `overview.md` to today (`YYYY-MM-DD`). The
-`goalforge-frontmatter-touch.sh` hook also bumps these on every Write/Edit; the skill
-sets them explicitly for correctness.
+Set `created:` and `updated:` in `overview.md` to today (`YYYY-MM-DD`). The `hooks/goalforge-frontmatter-touch.sh` hook can also bump these on
+Write/Edit where a machine has it registered; the skill sets them explicitly so
+correctness never depends on that hook being wired.
 
 ### Step 4b — Scan live ideas for overlap (propose-only)
 

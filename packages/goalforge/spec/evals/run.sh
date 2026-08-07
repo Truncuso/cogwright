@@ -36,7 +36,7 @@ check "overview.md status advances to ready" "status: ready"
 
 # Human gate
 check "human-gated transition documented" "human-gated"
-check "draft → spec transition documented" "draft → spec"
+check "draft → ready feature gate documented" "draft → ready"
 check "skill must present draft before writing" "present the draft spec"
 
 # Template marker

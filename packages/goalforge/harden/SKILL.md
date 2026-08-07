@@ -381,7 +381,7 @@ presenting (or auto-deciding) the gate:
 2. **Open-questions gate (hard backstop).** Run the guard in check mode against
    this WP's `overview.md` and consume its output as typed DATA:
    ```bash
-   bash ~/.claude/hooks/goalforge-open-questions-gate.sh --check <wp>/overview.md
+   bash ~/.claude/skills/goalforge/hooks/goalforge-open-questions-gate.sh --check <wp>/overview.md
    ```
    It prints the count of **unresolved** open questions (a `## Open Questions`
    bullet not marked resolved — `[resolved]` | `[assumption]` | `[deferred]` |

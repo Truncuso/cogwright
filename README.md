@@ -121,7 +121,7 @@ flowchart LR
     class W,P gate;
 ```
 
-Human sign-off gates sit at draft → spec and hardened → ready; everything from
+Human sign-off gates sit at draft → ready (feature) and hardened → ready (WP); everything from
 `execute` onward runs automated against the goal object's declared verification
 strategy.
 

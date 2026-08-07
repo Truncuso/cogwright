@@ -225,7 +225,7 @@ change the human gate or any status transition):
 
 ## Human-gate rationale
 
-`draft → spec` is one of two human-gated transitions in the SDD state machine
+`draft → ready` (the feature gate) is one of two human-gated transitions in the SDD state machine
 (§2 of spec.md). Automatic advancement would bypass design review and allow
 under-specified work to reach execution. The gate is a presentation + explicit
 approval, not just a confirmation dialog — the user must see the full draft
