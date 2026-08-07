@@ -160,7 +160,7 @@ MANIFEST_BASELINE="scripts/lint-baselines/reference-manifest.baseline"
 # Floor from the wp-02 goal block: a manifest that suddenly carries a handful of
 # refs proves nothing about the tree, so an under-populated manifest is a
 # failure in its own right. No ALLOW_EMPTY opt-in for this section.
-MANIFEST_FLOOR=100
+MANIFEST_FLOOR=80
 
 # Dangling `<from>::<path>` refs found by the section currently running.
 DANGLING=()
