@@ -316,11 +316,273 @@ check_git_hook() {
 }
 
 # ---------------------------------------------------------------------------
-# Self-test — authored by task-02.
+# Self-test — 11 hermetic offline cases proving each arm actually fires.
+#
+# Every case runs the doctor against a SYNTHETIC root with PATH narrowed to a
+# shim dir, so the suite never consults the host's PATH, its site-packages, or a
+# real plans/ directory, and nothing under plugins/ or packages/ is ever
+# written. Each case asserts the arm's stable token AND the exit code: an exit 1
+# from a `set -u` abort is otherwise indistinguishable from the arm firing.
+#
+# Every negative case is the positive control's fixture with exactly ONE thing
+# broken, so a failure is attributable to the injection rather than to the
+# sandbox.
 # ---------------------------------------------------------------------------
 self_test() {
-    printf 'goalforge-doctor: --self-test suite is not authored yet\n' >&2
-    return 2
+    local real_python3 real_bash real_dirname sandbox
+    real_python3="$(command -v python3)" || real_python3=""
+    real_dirname="$(command -v dirname)" || real_dirname=""
+    real_bash="${BASH:-}"
+    [ -n "$real_bash" ] || real_bash="$(command -v bash)"
+    if [ -z "$real_python3" ] || [ -z "$real_dirname" ] || [ -z "$real_bash" ]; then
+        printf 'self-test: need python3, dirname and bash on PATH to build the fixtures\n' >&2
+        return 2
+    fi
+
+    sandbox="$(mktemp -d)" || return 2
+    # shellcheck disable=SC2064  # $sandbox must expand now, not at trap time
+    trap "rm -rf '$sandbox'" EXIT
+
+    local helper_src="$SCRIPT_DIR/../hooks/goalforge-plans-root.sh"
+    if [ ! -f "$helper_src" ]; then
+        printf 'self-test: resolution helper not found at %s\n' "$helper_src" >&2
+        return 2
+    fi
+
+    # --- fixture builders -------------------------------------------------
+    # make_root <dir> <plugin|manual> [--no-manifest]
+    make_root() {
+        local d="$1" flavour="$2" manifest="${3:-}"
+        mkdir -p "$d/scripts" "$d/hooks" "$d/references" || return 1
+        printf -- '---\nname: fixture\n---\n' > "$d/SKILL.md"
+        printf '# fixture\n' > "$d/references/schema.md"
+        printf '#!/bin/sh\nexit 0\n' > "$d/scripts/fixture.sh"
+        cp "$helper_src" "$d/hooks/goalforge-plans-root.sh" || return 1
+        [ "$flavour" = plugin ] && {
+            mkdir -p "$d/.claude-plugin"
+            printf '{ "name": "goalforge" }\n' > "$d/.claude-plugin/plugin.json"
+        }
+        [ "$manifest" = --no-manifest ] || write_manifest \
+            "$d/references/reference-manifest.json" \
+            'references/schema.md' 'scripts/fixture.sh'
+        return 0
+    }
+
+    # write_manifest <file> <path>... — schema-1 manifest naming the given refs.
+    write_manifest() {
+        local f="$1" p
+        shift
+        {
+            printf '{\n  "schema": 1,\n  "refs": [\n'
+            local sep=""
+            for p in "$@"; do
+                printf '%s    { "from": "SKILL.md", "path": "%s" }' "$sep" "$p"
+                sep=$',\n'
+            done
+            printf '\n  ]\n}\n'
+        } > "$f"
+    }
+
+    # make_shim <dir> [--without <cmd>]... [--no-pyyaml]
+    #
+    # Stubs the SEVEN probed deps only. `bash`, `sh` and `env` are NEVER stubbed
+    # (they run the suite, the stubs, and the doctor's shebang), and `dirname` is
+    # SYMLINKED to the real binary rather than stubbed — the sourced plans-root
+    # helper needs a working one. Stubbing any of them would break the harness
+    # instead of the arm under test.
+    make_shim() {
+        local d="$1"; shift
+        local -a without=()
+        local no_pyyaml=0 arg c
+        while [ "$#" -gt 0 ]; do
+            case "$1" in
+                --without)   without+=("$2"); shift 2 ;;
+                --no-pyyaml) no_pyyaml=1; shift ;;
+                *)           shift ;;
+            esac
+        done
+        mkdir -p "$d" || return 1
+        for c in "${DEPS[@]}"; do
+            local skipthis=0
+            for arg in ${without+"${without[@]}"}; do
+                [ "$arg" = "$c" ] && skipthis=1
+            done
+            [ "$skipthis" -eq 1 ] && continue
+            case "$c" in
+                python3)
+                    # -S keeps the host's site-packages out, so the PyYAML arm is
+                    # decided by the fixture stub alone. The interpreter path is
+                    # ABSOLUTE and captured before PATH narrowing: a bare
+                    # `exec python3` would re-resolve to this stub and recurse.
+                    if [ "$no_pyyaml" -eq 1 ]; then
+                        printf '#!/bin/sh\nexec %s -S -E "$@"\n' "$real_python3" > "$d/python3"
+                    else
+                        printf '#!/bin/sh\nPYTHONPATH=%s exec %s -S "$@"\n' \
+                            "$sandbox/pylib" "$real_python3" > "$d/python3"
+                    fi
+                    ;;
+                git)
+                    # --show-toplevel answers only when the case asks for it, so
+                    # the PLANS_ROOT leg-2 case needs no real repository; every
+                    # other fixture is reported as NOT a work tree, which makes
+                    # the git-hook arm SKIPPED (neither warning nor failure).
+                    printf '%s\n' \
+                        '#!/bin/sh' \
+                        'for a in "$@"; do' \
+                        '  case "$a" in' \
+                        '    --show-toplevel)' \
+                        '      [ -n "${GF_TEST_TOPLEVEL:-}" ] || exit 1' \
+                        '      echo "$GF_TEST_TOPLEVEL"; exit 0 ;;' \
+                        '    --is-inside-work-tree|--absolute-git-dir) exit 1 ;;' \
+                        '  esac' \
+                        'done' \
+                        'exit 1' > "$d/git"
+                    ;;
+                *)
+                    printf '#!/bin/sh\nexit 0\n' > "$d/$c"
+                    ;;
+            esac
+            chmod +x "$d/$c"
+        done
+        ln -sf "$real_dirname" "$d/dirname"
+        return 0
+    }
+
+    # --- case runner ------------------------------------------------------
+    local n=0 pass=0 fail=0
+
+    # run_case <name> <want_exit> <must_have> <must_not_have;…> <cmd>...
+    run_case() {
+        local name="$1" want="$2" have="$3" absent="$4"
+        shift 4
+        n=$(( n + 1 ))
+        local out rc why="" tok line
+        out="$("$@" 2>&1)"; rc=$?
+        [ "$rc" -eq "$want" ] || why="exit $rc, want $want"
+        if [ -n "$have" ]; then
+            case "$out" in
+                *"$have"*) ;;
+                *) why="${why:+$why; }missing token '$have'" ;;
+            esac
+        fi
+        if [ -n "$absent" ]; then
+            local IFS=';'
+            for tok in $absent; do
+                [ -n "$tok" ] || continue
+                case "$out" in
+                    *"$tok"*) why="${why:+$why; }unexpected token '$tok'" ;;
+                esac
+            done
+        fi
+        if [ -n "$why" ]; then
+            fail=$(( fail + 1 ))
+            printf 'case %d/11: %s FAIL (%s)\n' "$n" "$name" "$why"
+            while IFS= read -r line; do printf '    | %s\n' "$line"; done <<<"$out"
+        else
+            pass=$(( pass + 1 ))
+            printf 'case %d/11: %s PASS\n' "$n" "$name"
+        fi
+    }
+
+    # --- fixtures ---------------------------------------------------------
+    mkdir -p "$sandbox/pylib"
+    : > "$sandbox/pylib/yaml.py"
+
+    local r_plugin="$sandbox/root-plugin"
+    local r_manual="$sandbox/root-manual"
+    local r_nomani="$sandbox/root-plugin-nomanifest"
+    local r_bad="$sandbox/root-bad"
+    local leg2="$sandbox/leg2-repo"
+    make_root "$r_plugin" plugin      || return 2
+    make_root "$r_manual" manual --no-manifest || return 2
+    make_root "$r_nomani" plugin --no-manifest || return 2
+    mkdir -p "$r_bad" "$leg2"         || return 2
+    write_manifest "$sandbox/dangling-manifest.json" \
+        'references/schema.md' 'references/does-not-exist.md'
+
+    local shim_full="$sandbox/shim-full"
+    local shim_nojq="$sandbox/shim-nojq"
+    local shim_noflock="$sandbox/shim-noflock"
+    local shim_noyaml="$sandbox/shim-noyaml"
+    make_shim "$shim_full"                        || return 2
+    make_shim "$shim_nojq"    --without jq        || return 2
+    make_shim "$shim_noflock" --without flock     || return 2
+    make_shim "$shim_noyaml"  --no-pyyaml         || return 2
+
+    # A clean environment for every child run: no seam and no plans-root
+    # override may leak in from the shell that invoked --self-test.
+    local -a base=(env -u SDD_PLANS_DIR -u GF_DOCTOR_MANIFEST
+                   -u GF_DOCTOR_BASH_VERSINFO -u GF_TEST_TOPLEVEL
+                   -u CLAUDE_PLUGIN_ROOT -u PYTHONPATH)
+    local hard='MISSING DEP:;DANGLING REF:;MANIFEST MISSING;BAD ROOT:'
+
+    # Case 8 runs the doctor twice: bare, then --strict. The exemption means
+    # BOTH must exit 0, so a promoted manifest warning surfaces as exit 3.
+    case_manual_manifest() {
+        local rc1 rc2
+        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_manual" \
+            "$real_bash" "$SELF"; rc1=$?
+        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_manual" \
+            "$real_bash" "$SELF" --strict; rc2=$?
+        [ "$rc2" -eq 0 ] || return 3
+        return "$rc1"
+    }
+
+    # Case 9 needs the cwd inside the fixture repo: the helper anchors the
+    # git-root leg on the file argument's directory.
+    case_plans_root_leg2() {
+        cd "$leg2" || return 2
+        "${base[@]}" PATH="$shim_full" GF_TEST_TOPLEVEL="$leg2" \
+            GF_DOCTOR_ROOT="$r_plugin" "$real_bash" "$SELF"
+    }
+
+    printf '=== goalforge doctor self-test (11 cases) ===\n'
+
+    run_case positive-control 0 'ok   route plugin' "$hard" \
+        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_plugin" \
+        "$real_bash" "$SELF"
+
+    run_case missing-jq 1 'MISSING DEP: jq' '' \
+        "${base[@]}" PATH="$shim_nojq" GF_DOCTOR_ROOT="$r_plugin" \
+        "$real_bash" "$SELF"
+
+    run_case missing-flock 1 'MISSING DEP: flock' '' \
+        "${base[@]}" PATH="$shim_noflock" GF_DOCTOR_ROOT="$r_plugin" \
+        "$real_bash" "$SELF"
+
+    run_case bash-3.2-bare 0 'WARN: bash<4' "$hard" \
+        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_plugin" \
+        GF_DOCTOR_BASH_VERSINFO=3 "$real_bash" "$SELF"
+
+    run_case bash-3.2-strict 1 'WARN: bash<4' "$hard" \
+        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_plugin" \
+        GF_DOCTOR_BASH_VERSINFO=3 "$real_bash" "$SELF" --strict
+
+    run_case dangling-ref 1 'DANGLING REF: references/does-not-exist.md' '' \
+        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_plugin" \
+        GF_DOCTOR_MANIFEST="$sandbox/dangling-manifest.json" \
+        "$real_bash" "$SELF"
+
+    run_case plugin-route-manifest-missing 1 'MANIFEST MISSING' '' \
+        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_nomani" \
+        "$real_bash" "$SELF"
+
+    run_case manual-route-manifest-absent 0 'WARN: manifest' "$hard" \
+        case_manual_manifest
+
+    run_case plans-root-leg2 0 "PLANS_ROOT: $leg2/plans (leg 2" "$hard" \
+        case_plans_root_leg2
+
+    run_case bad-root 1 "BAD ROOT: $r_bad" 'PLANS_ROOT:' \
+        "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_bad" \
+        "$real_bash" "$SELF"
+
+    run_case pyyaml-missing 1 'MISSING DEP: PyYAML' '' \
+        "${base[@]}" PATH="$shim_noyaml" GF_DOCTOR_ROOT="$r_plugin" \
+        "$real_bash" "$SELF"
+
+    printf '=== self-test: %d passed, %d failed ===\n' "$pass" "$fail"
+    [ "$fail" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------
