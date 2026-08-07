@@ -19,13 +19,17 @@ set -euo pipefail
 
 MARKER_OPEN="# >>> sdd-pre-commit >>>"
 MARKER_CLOSE="# <<< sdd-pre-commit <<<"
-# Resolve the pre-commit hook package-relative (local authority), falling back
-# to the installed dotfiles goalforge path.
+# Resolve the pre-commit hook script-relative. hooks/ is a sibling of scripts/
+# in BOTH install routes — packages/goalforge/ (contributor symlink) and the
+# generated flat plugins/goalforge/ — so this needs no author path and no
+# ${CLAUDE_PLUGIN_ROOT} (which is unset outside a plugin run and would abort
+# under `set -u`). The canonicalizing branch is preferred so the path baked
+# into the generated git hook carries no `..` climb.
 _SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-if [[ -f "$_SCRIPT_DIR/../hooks/goalforge-pre-commit.sh" ]]; then
+if [[ -d "$_SCRIPT_DIR/../hooks" ]]; then
     SDD_HOOK_PATH="$(cd "$_SCRIPT_DIR/../hooks" && pwd)/goalforge-pre-commit.sh"
 else
-    SDD_HOOK_PATH="$HOME/.claude/skills/goalforge/hooks/goalforge-pre-commit.sh"
+    SDD_HOOK_PATH="$_SCRIPT_DIR/../hooks/goalforge-pre-commit.sh"
 fi
 
 # ── Resolve target repo ────────────────────────────────────────────────────────

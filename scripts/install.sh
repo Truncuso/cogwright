@@ -84,8 +84,9 @@ precheck_remote() {
   local remote
   remote="$(git -C "$GF_REPO" remote get-url origin 2>/dev/null || true)"
   if [[ -z "$remote" ]]; then
-    err "no 'origin' remote in $GF_REPO"
-    return 1
+    info "WARNING: no 'origin' remote in $GF_REPO — cannot verify the upstream"
+    info "WARNING: continuing anyway — set GF_SKIP_REPO_PRECHECK=1 to skip this check"
+    return 0
   fi
   if [[ "$remote" != *"$GF_EXPECTED_REMOTE"* ]]; then
     info "WARNING: unexpected origin remote: $remote (expected *$GF_EXPECTED_REMOTE*)"
@@ -409,6 +410,9 @@ self_test() {
     local casedir="$sandbox/$name"
     mkdir -p "$casedir"
     export GF_SKIP_REPO_PRECHECK=1
+    # Hermetic: report_legacy_target must stat the sandbox, never the real $HOME.
+    # (Re-exec cases run under `env -i` and pass this explicitly themselves.)
+    export GF_LEGACY_SKILLS_DIR="$casedir/home/dotfiles/claude/skills"
     if "case_$name" "$casedir"; then
       printf 'CASE %s: pass\n' "$name"
       pass=$((pass+1))
@@ -579,15 +583,28 @@ self_test() {
   case_default_target_dir() {
     local d="$1"
     local pkg="$d/pkg" home="$d/home"
+    local legacy_root="$home/dotfiles/claude/skills"
     make_pkg "$pkg"; mkdir -p "$home"
-    env -i HOME="$home" PATH="$PATH" CLAUDE_CONFIG_DIR= \
+    # Pre-existing legacy install under the SANDBOX legacy root: this is what
+    # report_legacy_target must detect, report, and leave strictly alone.
+    mkdir -p "$legacy_root/goalforge"
+    printf 'legacy marker\n' > "$legacy_root/goalforge/SKILL.md"
+    local out
+    out="$(env -i HOME="$home" PATH="$PATH" CLAUDE_CONFIG_DIR= \
         GF_SKIP_REPO_PRECHECK=1 GF_LINK_TARGET="$pkg" \
-        bash "$SCRIPT_DIR/install.sh" --mode contributor >/dev/null 2>&1 || return 1
+        GF_LEGACY_SKILLS_DIR="$legacy_root" \
+        bash "$SCRIPT_DIR/install.sh" --mode contributor 2>&1)" || return 1
     assert "default target lands under the sandbox skills home" \
       test -L "$home/.claude/skills/goalforge" || return 1
     assert "default target resolves to the package" \
       test "$(readlink -f "$home/.claude/skills/goalforge")" = "$(readlink -f "$pkg")" || return 1
-    assert "no legacy dotfiles path created" test ! -e "$home/dotfiles" || return 1
+    assert "legacy install reported on stderr" \
+      grep -q "NOTE: a legacy goalforge install still exists at $legacy_root/goalforge" \
+        <<<"$out" || return 1
+    assert "legacy install NOT migrated (still a real dir, not a link)" \
+      test -d "$legacy_root/goalforge" -a ! -L "$legacy_root/goalforge" || return 1
+    assert "legacy install untouched (marker intact)" \
+      grep -q "legacy marker" "$legacy_root/goalforge/SKILL.md" || return 1
   }
 
   # --- Case 10: fork origin remote → precheck WARNS and the install proceeds
@@ -601,6 +618,7 @@ self_test() {
     local out
     out="$(env -i HOME="$home" PATH="$PATH" CLAUDE_CONFIG_DIR= \
              GF_REPO="$repo" GF_LINK_TARGET="$pkg" \
+             GF_LEGACY_SKILLS_DIR="$home/dotfiles/claude/skills" \
              bash "$SCRIPT_DIR/install.sh" --mode contributor 2>&1)" || return 1
     assert "fork remote reported as a warning" \
       grep -q "WARNING: unexpected origin remote" <<<"$out" || return 1

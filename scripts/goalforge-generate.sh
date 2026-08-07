@@ -29,7 +29,17 @@
 #         -> child-aware: /<child>/... (dir with SKILL.md) becomes
 #            ${CLAUDE_PLUGIN_ROOT}/skills/<child>/..., everything else
 #            (references/, scripts/, workflow-authoring/, hooks/) becomes
-#            ${CLAUDE_PLUGIN_ROOT}/... at the plugin root
+#            ${CLAUDE_PLUGIN_ROOT}/... at the plugin root.
+#         SCOPE: the generator rewrites the three ABSOLUTE forms only. The two
+#         other author-path shapes the author-paths lint knows about are
+#         lint-only and must be fixed AT SOURCE, never here:
+#           - the relative `../skills/goalforge` climb (no absolute anchor to
+#             rewrite; a generated `${CLAUDE_PLUGIN_ROOT}` would be wrong for
+#             prose that is genuinely relative)
+#           - `$HOME/dotfiles` (a machine layout, not a goalforge path)
+#         Both are carved out in scripts/lint-baselines/author-paths-carveouts.txt
+#         for the PRESERVE'd hooks/ tree until wp-04 takes hooks/ out of PRESERVE
+#         and fixes them at source.
 #
 # Non-package plugin-packaging files (hooks/, commands/, relations.yaml,
 # .vendored-allowlist.txt)
@@ -76,6 +86,28 @@ GF_PLUGIN_VERSION="${GF_PLUGIN_VERSION-33b31eab96c9}"
 PRESERVE=(hooks commands relations.yaml .vendored-allowlist.txt)
 
 [ -d "$SRC" ] || { echo "FATAL: source not found: $SRC" >&2; exit 1; }
+
+# ── 0. Pre-flight: child-skill names must not collide with plugin-root dirs ──
+# The class-viii rewrite routes a path segment to skills/<child>/ iff it names a
+# child skill, and to the plugin root otherwise. That dispatch is only sound
+# while the two namespaces are disjoint — a child skill named e.g. "scripts"
+# would silently shadow the shared root dir. Checked BEFORE anything is written,
+# so a clash aborts without leaving a half-generated artifact behind.
+ROOT_NAMES=(references scripts hooks commands workflow-authoring .claude-plugin)
+_clash=""
+for entry in "$SRC"/*; do
+    [ -d "$entry" ] && [ -f "$entry/SKILL.md" ] || continue
+    base="$(basename "$entry")"
+    for r in "${ROOT_NAMES[@]}"; do
+        [ "$base" = "$r" ] && _clash="$_clash $base"
+    done
+done
+if [ -n "$_clash" ]; then
+    echo "FATAL: child skill name(s) collide with a plugin-root directory:$_clash" >&2
+    echo "       the class-viii author-path rewrite cannot disambiguate them." >&2
+    exit 1
+fi
+
 mkdir -p "$DST"
 
 # ── 1. Clear generated content (keep the preserve list + the plugin dir itself) ──
@@ -122,6 +154,9 @@ children = {
     d for d in (os.listdir(_skills_dir) if os.path.isdir(_skills_dir) else [])
     if os.path.isfile(os.path.join(_skills_dir, d, "SKILL.md"))
 }
+# Disjointness of `children` vs the plugin-root dir names is a precondition of
+# the class-viii dispatch below; it is asserted in the generator's step-0
+# pre-flight, before anything is written.
 
 def strip_telemetry(text):
     """Remove the top-level `hooks:` frontmatter block (100% skill-measure/
@@ -171,8 +206,12 @@ def rewrite_paths(text, child):
 # (viii) author install paths — all three absolute forms in one regex pass.
 # The optional first path segment decides where the reference lands: a child
 # skill goes under skills/<child>/, anything else at the plugin root.
+# The segment may not END in `.` or `-`, so a sentence-final period or an
+# em-dash-ish trailing hyphen in prose stays outside the match instead of being
+# swallowed into the segment (which would break the `seg in children` lookup).
 _AUTHOR_RE = re.compile(
-    r"(?:~|\$HOME|\$\{HOME\})/\.claude/skills/goalforge(?:/([A-Za-z0-9_.-]+))?")
+    r"(?:~|\$HOME|\$\{HOME\})/\.claude/skills/goalforge"
+    r"(?:/([A-Za-z0-9_][A-Za-z0-9_.-]*[A-Za-z0-9_]|[A-Za-z0-9_]))?")
 
 def rewrite_author_paths(text, children):
     def _sub(m):

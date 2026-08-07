@@ -13,10 +13,6 @@ plugins/goalforge/hooks/goalforge-pre-commit.sh::$HOME/.claude/skills/goalforge/
 plugins/goalforge/hooks/goalforge-transition-guard.sh::~/.claude/hooks/ -> ~/.claude/skills/goalforge/references/
 plugins/goalforge/hooks/goalforge-transition-guard.sh::../skills/goalforge/references/state-machine.md
 
-# --- install.sh: the single expected-remote default assignment. The upstream
-# --- slug is legitimate as a default there (task-03 makes it env-overridable).
-scripts/install.sh::github.com/Truncuso/cogwright
-
 # --- install.sh: the legacy skills root, referenced ONLY by
 # --- report_legacy_target(), which detects and reports a pre-rewrite install
 # --- and never migrates it. Retired when that reporting is dropped (i.e. when

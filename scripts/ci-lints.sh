@@ -10,6 +10,8 @@
 #   per section        prints `section <name>: PASS|FAIL (<n> files scanned)`
 #   any section fails  exit 1
 #   zero sections run  exit 2 — fail-closed, never a silent no-op
+#   section scans 0    exit 2 — fail-closed, unless the section opted in via
+#                      ALLOW_EMPTY_SECTIONS (empty by design)
 #
 # Registering a section: add its name to SECTIONS and define `lint_<name>`
 # with dashes replaced by underscores. The function prints its violations to
@@ -26,6 +28,12 @@ cd "$REPO_ROOT"
 # Registry of runnable sections, in run order.
 SECTIONS=(author-paths)
 
+# Opt-out list for the per-section zero-scan gate: sections named here may
+# legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
+# that silently stops matching any file is the failure mode this gate exists to
+# catch, so a new section must opt in here deliberately, with a reason.
+ALLOW_EMPTY_SECTIONS=()
+
 # Set by each section function; read by the dispatcher for the report line.
 SCANNED=0
 
@@ -40,13 +48,17 @@ die() {
   exit "$code"
 }
 
-is_section() {
-  local candidate="$1" s
-  for s in "${SECTIONS[@]}"; do
-    [ "$s" = "$candidate" ] && return 0
+# in_list <needle> <item>... — membership test. No pipeline, so no SIGPIPE.
+in_list() {
+  local needle="$1" item
+  shift
+  for item in "$@"; do
+    [ "$item" = "$needle" ] && return 0
   done
   return 1
 }
+
+is_section() { in_list "$1" "${SECTIONS[@]}"; }
 
 # Repo-relative file list for the given paths (tracked files only in a repo).
 list_files() {
@@ -69,6 +81,8 @@ load_carveouts() {
   [ -f "$CARVEOUT_FILE" ] || return 0
   local line
   while IFS= read -r line || [ -n "$line" ]; do
+    line="${line%$'\r'}"                        # CRLF-authored file
+    line="${line%"${line##*[![:space:]]}"}"     # trailing whitespace
     case "$line" in ''|'#'*) continue ;; esac
     CARVEOUTS+=("$line")
   done < "$CARVEOUT_FILE"
@@ -100,14 +114,16 @@ VIOLATIONS=0
 scan_pattern_set() {
   local re="$1"; shift
   [ "$#" -gt 0 ] || return 0
-  local hit file lineno content
-  while IFS= read -r hit; do
-    file="${hit%%:*}"; hit="${hit#*:}"
-    lineno="${hit%%:*}"; content="${hit#*:}"
+  # -Z terminates the file name with a NUL instead of ':', so a colon inside a
+  # path can never be mistaken for the field separator: read the name up to the
+  # NUL, then the `<lineno>:<content>` remainder up to the newline.
+  local file rest lineno content
+  while IFS= read -r -d '' file && IFS= read -r rest; do
+    lineno="${rest%%:*}"; content="${rest#*:}"
     carved_out "$file" "$content" && continue
     printf '  %s:%s: %s\n' "$file" "$lineno" "$content" >&2
     VIOLATIONS=$(( VIOLATIONS + 1 ))
-  done < <(grep -IHEn -- "$re" "$@" 2>/dev/null)
+  done < <(grep -IHEnZ -- "$re" "$@" 2>/dev/null)
 }
 
 lint_author_paths() {
@@ -152,7 +168,7 @@ main() {
   done
   local -a run=()
   for s in "${SECTIONS[@]}"; do
-    printf '%s\n' "${want[@]}" | grep -qxF -- "$s" && run+=("$s")
+    in_list "$s" "${want[@]}" && run+=("$s")
   done
 
   local ran=0 failed=0 status
@@ -161,6 +177,11 @@ main() {
     "lint_${s//-/_}"
     status=$?
     ran=$(( ran + 1 ))
+    # Fail-closed per section: a lint that matched no file proves nothing.
+    if [ "$SCANNED" -eq 0 ] \
+       && ! in_list "$s" ${ALLOW_EMPTY_SECTIONS+"${ALLOW_EMPTY_SECTIONS[@]}"}; then
+      die 2 "section $s scanned 0 files — refusing to report PASS"
+    fi
     if [ "$status" -eq 0 ]; then
       printf 'section %s: PASS (%d files scanned)\n' "$s" "$SCANNED"
     else
