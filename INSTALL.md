@@ -138,7 +138,7 @@ There are no lifecycle folders to maintain.
 ```
 
 Each plugin is self-contained — installing one never requires another. Declared
-companions degrade gracefully (a missing `interview-loop` falls back to a
+companions degrade gracefully (a missing `interview` plugin falls back to a
 one-question-at-a-time loop in the main session, not an error).
 
 ---

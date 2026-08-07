@@ -221,7 +221,7 @@ rc=$?
 if [[ "$rc" -eq 2 ]]; then
     n="$(unresolved_count "$FILE")"
     echo "goalforge-open-questions-gate: BLOCK — $FILE has $n unresolved open question(s); '→ ready' refused." >&2
-    echo "Resolve via goalforge-harden (interview-loop), or mark each bullet in '## Open Questions' resolved ([resolved] | [assumption] | [deferred] | ~~…~~)." >&2
+    echo "Resolve via goalforge-harden (the interview plugin engine), or mark each bullet in '## Open Questions' resolved ([resolved] | [assumption] | [deferred] | ~~…~~)." >&2
     exit 2
 fi
 exit 0
