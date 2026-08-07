@@ -72,7 +72,7 @@ jobs:
           if command -v claude >/dev/null 2>&1; then
             claude plugin validate --strict plugins/goalforge
           else
-            echo "claude CLI not found — skipping 'claude plugin validate --strict'"
+            echo "::warning::claude CLI not found — skipped 'claude plugin validate --strict' (local prerequisite; see INSTALL.md)"
           fi
 
       - name: goalforge hook self-tests (both trees)

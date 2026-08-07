@@ -81,11 +81,10 @@ PLUGIN_DESC="Goal-and-verification-driven development chain for Claude Code — 
 # drift this single authority exists to remove. A version-less manifest fails
 # `claude plugin validate --strict`, so an unreadable or non-semver value is a
 # hard abort rather than a silently omitted field.
+[ -d "$SRC" ] || { echo "FATAL: source not found: $SRC" >&2; exit 1; }
 PLUGIN_VERSION="$(awk '/^---$/{f++;next} f==1 && /^  version:/{gsub(/[" ]/,"",$2);print $2;exit}' "$SRC/SKILL.md")"
-case "$PLUGIN_VERSION" in
-    [0-9]*.[0-9]*.[0-9]*) ;;
-    *) echo "FATAL: packages/goalforge/SKILL.md metadata.version is absent or not semver: '$PLUGIN_VERSION'" >&2; exit 1 ;;
-esac
+printf '%s' "$PLUGIN_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+    || { echo "FATAL: packages/goalforge/SKILL.md metadata.version is absent or not semver: '$PLUGIN_VERSION'" >&2; exit 1; }
 
 # Author attribution is DERIVED from the marketplace owner — one authority, never
 # hand-written into the generated manifest. `--strict` warns on a missing author.
@@ -94,8 +93,6 @@ PLUGIN_AUTHOR_JSON="$(python3 -c 'import json,sys; print(json.dumps({"name": jso
 
 # Hand-authored, non-package plugin files preserved across regeneration.
 PRESERVE=(.vendored-allowlist.txt)
-
-[ -d "$SRC" ] || { echo "FATAL: source not found: $SRC" >&2; exit 1; }
 
 # ── 0. Pre-flight: child-skill names must not collide with plugin-root dirs ──
 # The class-viii rewrite routes a path segment to skills/<child>/ iff it names a
