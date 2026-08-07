@@ -203,6 +203,14 @@
     },
     {
       "from": "skills/harden/SKILL.md",
+      "path": "scripts/goalforge-attribution.sh"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "scripts/goalforge-preharden-lint.sh"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
       "path": "skills/harden/references/assumptions.md"
     },
     {

@@ -5,30 +5,44 @@
 # plugins/goalforge/references/reference-manifest.json, so ci-lints and the
 # doctor consume that manifest with no ignore-list of their own.
 #
-# One entry per line. An entry matches a raw token OR its resolved
-# plugin-root-relative path, either as a literal prefix or as an fnmatch glob.
-# Every entry names the class it belongs to — these are addresses OUTSIDE the
-# plugin tree, not dangling refs inside it.
+# One SCOPED entry per line, `<from-rel-path>::<token-pattern>` — the shape the
+# baseline files use. The from-path is an fnmatch pattern against the scanning
+# tree's root-relative source file (so one entry covers both the package tree,
+# `harden/SKILL.md`, and the plugin tree, `skills/harden/SKILL.md`); the token
+# part matches the raw token OR its resolved root-relative path, as an fnmatch
+# glob or a literal prefix. The bare unscoped format is REJECTED — an entry that
+# silences an address everywhere silences refs nobody adjudicated.
+#
+# Every entry here is an address OUTSIDE the tree being checked, not a dangling
+# ref inside it. Entries are live: ci-lints.sh fails on an entry that suppresses
+# nothing (the dead-entry leg of the same ratchet the baselines get).
 
-# class-vi cross-skill prose: paths into OTHER installed skills, deliberately
-# left verbatim by the generator (they address ~/.claude/skills, not the plugin).
-skills/adjudication/*
-skills/capture-learning/*
+# class-vi cross-skill prose: a path into ANOTHER installed skill, deliberately
+# left verbatim by the generator (it addresses ~/.claude/skills, not the plugin).
+*harden/*::skills/adjudication/*
 
-# idea / autopilot optional integrations: documented as optional in INSTALL.md;
-# the refs degrade to prose when those skills are not installed.
-skills/idea/*
-skills/autopilot/*
-
-# skills/sdd historicals: the retired sdd-* naming, kept in historic examples.
-skills/sdd
-skills/sdd/*
-
-# external pointers into the author's global rule set, not the plugin tree.
-references/rules/*
-~/.claude/plans
+# external pointer into the author's global rule set, not the plugin tree.
+*execute/references/dispatch-resolution.md::references/rules/*
 
 # repo-tooling pointer: maintainer prose in the parent SKILL.md names the
 # cogwright-repo-relative generator path (alongside packages/ and plugins/),
 # which by construction never ships inside the artifact it generates.
-scripts/goalforge-generate.sh
+SKILL.md::scripts/goalforge-generate.sh
+
+# ── Outside the grammar by construction — no entry needed ───────────────────
+# These classes were carried as ignore entries and never fired once: the
+# addresses they name are not ref tokens under the pinned grammar (unquoted
+# prose, a `~/` prefix outside REF_PREFIXES, or a trailing-slash directory), so
+# nothing reaches the ignore list to suppress. Listed for the record, NOT as
+# entries — a never-firing entry is a dead entry and fails the lint:
+#   - capture-learning / idea / autopilot optional-integration prose
+#   - the retired `skills/sdd` naming in historic examples
+#   - `~/.claude/plans` (outside REF_PREFIXES)
+#
+# ── Known hole: refs inside PRESERVE'd source ───────────────────────────────
+# The generator PRESERVEs commands/ and hooks/ (hand-authored, not derived from
+# the package), and the manifest emitter skips them, so a path ref inside a
+# PRESERVE'd .md is checked by NOTHING: it is absent from the manifest and has
+# no package-tree counterpart to lint. Retired by wp-03-packaging-homes
+# (commands/) and wp-04-hooks-event-wiring (hooks/), which move those trees into
+# generation; until then the hole is tracked, not covered.

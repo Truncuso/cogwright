@@ -19,7 +19,10 @@
 #
 # Path-rewrite rule table (pinned, wp-17 harden panel — classes i..vii):
 #   i.   root-script sibling refs ($SCRIPT_DIR/../references, ../hooks)     -> no-op (depth preserved at plugin root)
-#   ii.  child->root `../<shared-dir>` climbs (scripts, references, ...)     -> ${CLAUDE_PLUGIN_ROOT}[:-<orig>]/<shared-dir>
+#   ii.  child->root `../` climbs, RESTRICTED to a known landing site:
+#          ../(scripts|references|hooks|commands|workflow-authoring)/        -> ${CLAUDE_PLUGIN_ROOT}[:-<orig>]/<shared-dir>
+#          ../<child>/ (a dir with SKILL.md)                                 -> ${CLAUDE_PLUGIN_ROOT}/skills/<child>/
+#          any other `../` shape                                             -> left UNREWRITTEN, for the reference lint to see
 #   iii. ${CLAUDE_SKILL_DIR}/<sub> prose (in a child skill)                 -> ${CLAUDE_PLUGIN_ROOT}/skills/<child>/<sub>
 #   iv.  telemetry hook decls (skill-measure.sh / skill-trace.sh)           -> stripped from generated SKILL.md frontmatter
 #   v.   skills/sdd refs                                                    -> left verbatim (never rewritten to a dead plugin path; wp-21 retirement)
@@ -162,6 +165,11 @@ children = {
 # the class-viii dispatch below; it is asserted in the generator's step-0
 # pre-flight, before anything is written.
 
+# Shared dirs that sit at the plugin root — the only `../` landing sites the
+# restricted class-ii climb rewrites (besides a child skill).
+SHARED_ROOT_DIRS = ("scripts", "references", "hooks", "commands",
+                    "workflow-authoring")
+
 def strip_telemetry(text):
     """Remove the top-level `hooks:` frontmatter block (100% skill-measure/
     skill-trace telemetry decls) from a generated SKILL.md. Byte-stable:
@@ -198,10 +206,22 @@ def rewrite_paths(text, child):
                         "${CLAUDE_PLUGIN_ROOT:-$SCRIPT_DIR/../..}/scripts")
     text = text.replace("$SCRIPT_DIR/../scripts",
                         "${CLAUDE_PLUGIN_ROOT:-$SCRIPT_DIR/..}/scripts")
-    # (ii) prose child->root climbs via CLAUDE_SKILL_DIR — the `../` climb lands
-    # at the plugin root whatever shared dir it names (scripts/, references/, ...).
-    text = text.replace("${CLAUDE_SKILL_DIR}/../", "${CLAUDE_PLUGIN_ROOT}/")
-    text = text.replace("$CLAUDE_SKILL_DIR/../", "${CLAUDE_PLUGIN_ROOT}/")
+    # (ii) prose child->root climbs via CLAUDE_SKILL_DIR. RESTRICTED, not
+    # general: the climb is rewritten only when the segment it lands on is a
+    # KNOWN plugin-root address — a shared root dir, or a child skill (which the
+    # flat layout puts under skills/<child>/). Any other `../` shape is left
+    # UNREWRITTEN so the reference lint sees it, rather than being blessed into
+    # a plugin-root path that may not exist.
+    for _sd in SHARED_ROOT_DIRS:
+        text = text.replace("${CLAUDE_SKILL_DIR}/../%s/" % _sd,
+                            "${CLAUDE_PLUGIN_ROOT}/%s/" % _sd)
+        text = text.replace("$CLAUDE_SKILL_DIR/../%s/" % _sd,
+                            "${CLAUDE_PLUGIN_ROOT}/%s/" % _sd)
+    for _ch in children:
+        text = text.replace("${CLAUDE_SKILL_DIR}/../%s/" % _ch,
+                            "${CLAUDE_PLUGIN_ROOT}/skills/%s/" % _ch)
+        text = text.replace("$CLAUDE_SKILL_DIR/../%s/" % _ch,
+                            "${CLAUDE_PLUGIN_ROOT}/skills/%s/" % _ch)
     # (iii) ${CLAUDE_SKILL_DIR}/<sub> prose within a child skill
     if child:
         text = text.replace("${CLAUDE_SKILL_DIR}/",
@@ -259,7 +279,11 @@ for base, dirs, files in os.walk(dst):
 # itself lives once in scripts/goalforge_refs.py (shared with the package-side
 # lint). Emitted AFTER the rewrite passes above, over the GENERATED tree minus
 # every PRESERVE entry, so --check re-runs byte-identical.
-sys.path.insert(0, os.environ["GF_SCRIPTS_DIR"])
+_scripts_dir = os.environ.get("GF_SCRIPTS_DIR")
+if not _scripts_dir:
+    sys.exit("FATAL: GF_SCRIPTS_DIR unset — the manifest emitter cannot locate "
+             "goalforge_refs.py (the shared token grammar)")
+sys.path.append(_scripts_dir)
 import goalforge_refs as gfrefs
 
 refs = gfrefs.collect_refs(
@@ -268,6 +292,16 @@ refs = gfrefs.collect_refs(
     ignore_pats=gfrefs.load_ignore_list(os.environ["GF_REF_IGNORE"]),
     skip_top=preserve,
 )
+
+# A token that climbs out of the plugin tree is a violation, not a manifest
+# entry: emitting a manifest without it would launder the escape past every
+# consumer. Refuse to emit, naming the source file and the offending token.
+_escapes = ["%s -> %s" % (f, p.split(":", 1)[1])
+            for f, p in refs if p.startswith(gfrefs.ESCAPE_MARKER + ":")]
+if _escapes:
+    sys.exit("FATAL: reference escapes the plugin tree (refusing to emit "
+             "the manifest):\n  " + "\n  ".join(_escapes))
+
 _manifest = os.path.join(dst, "references", "reference-manifest.json")
 os.makedirs(os.path.dirname(_manifest), exist_ok=True)
 with open(_manifest, "w", encoding="utf-8", newline="") as fh:
