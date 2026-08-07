@@ -465,13 +465,21 @@ lint_version() {
 # Scan unit is the child SKILL.md, so SCANNED is the child count. The expected
 # count is PINNED: a child silently dropped by the generator, or added at
 # source without review, is exactly what this section exists to catch. Bump it
-# deliberately in the change that adds or removes a child.
+# deliberately in the change that adds or removes a child — together with the
+# skill count quoted in the goalforge catalog row, README.md:90.
+#
+# The marker literal itself lives INSIDE the python heredoc, not in a shell
+# variable passed through argv — see the note there.
 # ---------------------------------------------------------------------------
 
-PRIVACY_MARKER='goalforge-internal — use entry commands; do not auto-trigger'
-# The distinctive TAIL, asserted on the parent. The marker's head words recur
-# in ordinary prose; this phrase does not.
-PRIVACY_MARKER_TAIL='do not auto-trigger'
+# Cap on the parsed description length. THE UNIT IS CHARACTERS, by decision:
+# it is what a YAML-level reader counts, and it is stable under the em dash the
+# marker carries. The unit the plugin LOADER enforces is unpinned upstream, so
+# this is our unit, not a mirror of theirs. Worst case in the tree today is
+# archive at 1023 characters — 1 character of headroom — which is 1031 BYTES in
+# UTF-8: if the loader turns out to cap bytes, that child is already over
+# today. Tracked residual (wp-09 / feature-2). Note the marker alone consumes
+# 61 characters of every child's budget.
 PRIVACY_MAX_DESC=1024
 PRIVACY_EXPECTED_CHILDREN=18
 
@@ -483,11 +491,21 @@ lint_privacy_marker() {
   fi
 
   local n rc=0
-  n="$(python3 - "$PRIVACY_MARKER" "$PRIVACY_MARKER_TAIL" \
-        "$PRIVACY_MAX_DESC" "$PRIVACY_EXPECTED_CHILDREN" <<'PY'
+  n="$(python3 - "$PRIVACY_MAX_DESC" "$PRIVACY_EXPECTED_CHILDREN" <<'PY'
 import glob, sys, yaml
 
-marker, tail, max_desc, expected = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+# MARKER is a PYTHON LITERAL, mirroring MARKER in scripts/goalforge-generate.sh
+# — deliberately NOT passed through argv. It carries an em dash, and argv is
+# decoded with the process locale: under an ASCII locale (LC_ALL=C with UTF-8
+# mode off) the em dash arrives surrogate-escaped and every child false-FAILs
+# against a description read as UTF-8. Python SOURCE is always decoded as UTF-8
+# (PEP 3120), so the literal is locale-proof.
+MARKER = "goalforge-internal — use entry commands; do not auto-trigger"
+# The distinctive TAIL, asserted on the parent. The marker's head words recur
+# in ordinary prose; this phrase does not.
+TAIL = "do not auto-trigger"
+
+max_desc, expected = int(sys.argv[1]), int(sys.argv[2])
 parent = "plugins/goalforge/SKILL.md"
 children = sorted(glob.glob("plugins/goalforge/skills/*/SKILL.md"))
 bad = 0
@@ -500,12 +518,19 @@ def description(path):
     except OSError as exc:
         print("  %s: unreadable (%s)" % (path, exc), file=sys.stderr)
         return None
-    parts = raw.split("---", 2)
-    if len(parts) < 3 or parts[0].strip():
+    # Line-based delimiter scan, mirroring inject_marker in the generator: a
+    # substring split on "---" would cut a description that itself contains a
+    # triple hyphen and false-FAIL on unparseable frontmatter.
+    lines = raw.split("\n")
+    if not lines or lines[0].strip() != "---":
         print("  %s: no leading YAML frontmatter block" % path, file=sys.stderr)
         return None
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None:
+        print("  %s: unterminated YAML frontmatter block" % path, file=sys.stderr)
+        return None
     try:
-        fm = yaml.safe_load(parts[1])
+        fm = yaml.safe_load("\n".join(lines[1:end]))
     except yaml.YAMLError as exc:
         print("  %s: frontmatter does not parse as YAML (%s)"
               % (path, str(exc).replace("\n", " ")), file=sys.stderr)
@@ -528,9 +553,20 @@ for path in children:
     if desc is None:
         bad += 1
         continue
-    if not desc.startswith(marker):
+    if not desc.startswith(MARKER):
         print("  %s: description does not start with the privacy marker" % path,
               file=sys.stderr)
+        bad += 1
+    # Prefix INTEGRITY, not mere presence: exactly one marker (a re-run of the
+    # generator over already-generated output would stack a second one), and
+    # the original trigger wording still there behind it.
+    elif desc.count(MARKER) != 1:
+        print("  %s: description carries the privacy marker %d times, expected 1"
+              % (path, desc.count(MARKER)), file=sys.stderr)
+        bad += 1
+    elif len(desc) <= len(MARKER) + 1:
+        print("  %s: description is the bare privacy marker — the original "
+              "wording did not survive injection" % path, file=sys.stderr)
         bad += 1
     if len(desc) > max_desc:
         print("  %s: description is %d chars, over the %d cap"
@@ -540,9 +576,9 @@ for path in children:
 parent_desc = description(parent)
 if parent_desc is None:
     bad += 1
-elif tail in parent_desc:
+elif TAIL in parent_desc:
     print("  %s: parent description carries the child marker (%r)"
-          % (parent, tail), file=sys.stderr)
+          % (parent, TAIL), file=sys.stderr)
     bad += 1
 
 sys.exit(1 if bad else 0)

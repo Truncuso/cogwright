@@ -10,8 +10,9 @@ metadata:
 
 ## Visibility
 
-PRIVATE child of the `goalforge` package (frontmatter `description`); sole
-call site is detailed in §Consumed by.
+PRIVATE child of the `goalforge` package: skill discovery is one level deep,
+so nesting under the parent front door is what keeps this skill out of the
+top-level surface. Sole call site is detailed in §Consumed by.
 
 ## What this adds over the bare `interview` plugin engine
 

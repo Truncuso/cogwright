@@ -341,7 +341,12 @@ for base, dirs, files in os.walk(dst):
         new = text
         if name == "SKILL.md":
             new = strip_telemetry(new)
-            if child:
+            # Only the child's OWN top-level SKILL.md is marked
+            # (skills/<child>/SKILL.md, i.e. exactly three path parts). A
+            # SKILL.md nested deeper inside a child is not a flattened
+            # plugin-level skill and must not be injected; the path rewrites
+            # above keep their looser `child` predicate on purpose.
+            if child and len(parts) == 3:
                 new = inject_marker(new, rel)
         new = rewrite_paths(new, child)
         new = rewrite_author_paths(new, children)
