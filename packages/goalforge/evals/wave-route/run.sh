@@ -129,8 +129,8 @@ if [ -f "$RUN_SKILL" ]; then
   grep -q "Worked example — a 2-feature wave" "$RUN_SKILL" || DOC_OK="fail"
   grep -q "feature-a" "$RUN_SKILL" || DOC_OK="fail"
   grep -q "feature-b" "$RUN_SKILL" || DOC_OK="fail"
-  # Cross-references dispatch-template.md BY PATH.
-  grep -q "skills/goalforge/references/dispatch-template.md" "$RUN_SKILL" || DOC_OK="fail"
+  # Cross-references dispatch-template.md BY PATH (portable ${CLAUDE_*}-rooted form).
+  grep -qE '\$\{CLAUDE_(SKILL_DIR|PLUGIN_ROOT)\}[^`]*references/dispatch-template\.md' "$RUN_SKILL" || DOC_OK="fail"
   # All four active stages named in the section.
   grep -q "cross-spec judge" "$RUN_SKILL" || DOC_OK="fail"
 else
