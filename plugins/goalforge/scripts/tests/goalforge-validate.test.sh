@@ -111,7 +111,7 @@ EOF
 assert_clean() { # $1=label $2=plans-root
     local out rc
     out="$(bash "$VALIDATE" --quiet "$2" 2>&1)"
-    if ! echo "$out" | grep -q 'sdd-validate.*: 0 error(s)'; then
+    if ! echo "$out" | grep -q 'goalforge-validate.*: 0 error(s)'; then
         bad "$1"
         echo "${out:-<no output — validator did not run>}" | sed 's/^/        /'
         bash "$VALIDATE" --show "$2" 2>&1 | grep '^ERROR' | sed 's/^/        /'

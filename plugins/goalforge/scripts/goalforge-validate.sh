@@ -1892,7 +1892,7 @@ scope          = f" [{feature}]" if feature else ""
 #             a "run --show" note. Token-minimal; the leading ERROR line keeps
 #             the pre-commit hook's `grep ^ERROR | head -1` diagnostic working.
 if quiet:
-    print(f"sdd-validate{scope}: {total_errors} error(s), {total_warnings} warning(s) "
+    print(f"goalforge-validate{scope}: {total_errors} error(s), {total_warnings} warning(s) "
           f"— plans tree: {plans_dir}")
     sys.exit(0)
 
@@ -1909,7 +1909,7 @@ if show:
     else:
         print(f"OK — {len(all_files)} plan file(s) validated in {plans_dir}")
 elif errors or warnings:
-    print(f"sdd-validate{scope}: {total_errors} error(s), {total_warnings} warning(s) "
+    print(f"goalforge-validate{scope}: {total_errors} error(s), {total_warnings} warning(s) "
           f"(run --show to list)")
     if errors:
         filepath, msg, suggest = errors[0]
