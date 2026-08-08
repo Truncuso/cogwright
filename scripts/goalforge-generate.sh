@@ -399,6 +399,7 @@ printf '%s\n' \
     '  "name": "goalforge",' \
     "  \"version\": \"$PLUGIN_VERSION\"," \
     "  \"author\": $PLUGIN_AUTHOR_JSON," \
+    '  "dependencies": [{"name": "interview", "version": "^1.0.0"}],' \
     "  \"description\": \"$PLUGIN_DESC\"" \
     '}' > "$DST/.claude-plugin/plugin.json"
 

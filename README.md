@@ -1,6 +1,6 @@
 # cogwright
 
-**A marketplace of systems for running [Claude Code](https://claude.com/claude-code) as an agentic operating layer** — planning chains, project onboarding, memory, dispatch — built from one heavily-used personal setup and packaged so each system installs standalone.
+**A marketplace of systems for running [Claude Code](https://claude.com/claude-code) as an agentic operating layer** — planning chains, project onboarding, memory, dispatch — built from one heavily-used personal setup and packaged as systems that declare their relations explicitly.
 
 The thesis: agentic coding gets reliable when the *process* is engineered — goals with verification built in, guardrails enforced outside the model's context, memory that persists, and honest status everywhere. Each plugin here is one of those process systems, extracted and hardened.
 
@@ -11,7 +11,7 @@ The thesis: agentic coding gets reliable when the *process* is engineered — go
 /plugin install goalforge@cogwright
 ```
 
-Each plugin is self-contained: installing one never requires another (declared relations degrade gracefully — a missing companion produces a warning, not a failure).
+Most systems install standalone: relations declared as `recommends` degrade gracefully — a missing companion produces a warning, not a failure. A declared `requires` edge is hard: goalforge hard-requires the interview plugin, resolved from this marketplace at install time.
 
 ## Installing (contributor vs consumer)
 
@@ -143,7 +143,7 @@ Not everything in the suite is a Claude Code plugin, and this marketplace does n
 
 ## How systems relate
 
-Systems declare relations in a `relations.yaml` beside their `plugin.json`, with five kinds: `requires` (hard), `recommends` (soft — degrade, never block), `vendors` (copied files, gated by a committed allowlist), `provides-slot` / `fills-slot` (extension points, e.g. command-center panels), and `emits-to` (typed artifacts crossing ecosystems). The marketplace renders the resulting map; installing any single system alone always works.
+Systems declare relations in a `relations.yaml` beside their `plugin.json`, with five kinds: `requires` (hard), `recommends` (soft — degrade, never block), `vendors` (copied files, gated by a committed allowlist), `provides-slot` / `fills-slot` (extension points, e.g. command-center panels), and `emits-to` (typed artifacts crossing ecosystems). The marketplace renders the resulting map. A system with only `recommends` edges installs alone; a `requires` edge is resolved at install time — goalforge hard-requires the interview plugin.
 
 ## Authoring and contributing
 
