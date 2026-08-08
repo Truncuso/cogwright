@@ -620,7 +620,7 @@ a stale or absent audit triggers a re-run (a `feature-audit`-role dispatch).
 
 **Tier-2 freshness fallback.** `goalforge-harden` consumes Tier-1 as DATA for the WP it
 is hardening. If a *sibling* WP changed since the Tier-1 snapshot (hash mismatch),
-the cross-WP findings may be stale → `sdd-harden` falls back to a whole-feature
+the cross-WP findings may be stale → `goalforge-harden` falls back to a whole-feature
 review rather than trusting a stale delta.
 
 ---

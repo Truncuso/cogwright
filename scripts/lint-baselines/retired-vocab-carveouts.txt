@@ -81,10 +81,3 @@ packages/goalforge/watchdog/SKILL.md::(+ future `sdd-verification-integrity-gaps
 plugins/goalforge/skills/watchdog/SKILL.md::(+ future `sdd-verification-integrity-gaps`)
 packages/goalforge/onboard/SKILL.md::`setup-sdd-repo` surface
 plugins/goalforge/skills/onboard/SKILL.md::`setup-sdd-repo` surface
-
-# ── DEBT: one genuine live use of retired chain vocabulary ───────────────────
-# retired-by: feature-2 rename decision
-# references/schema.md is outside wp-09's boundaries, so this is recorded as
-# debt with a named owner rather than hidden by widening the pattern.
-packages/goalforge/references/schema.md::`sdd-harden` falls back to a whole-feature
-plugins/goalforge/references/schema.md::`sdd-harden` falls back to a whole-feature
