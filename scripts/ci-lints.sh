@@ -27,7 +27,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Registry of runnable sections, in run order.
-SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet)
+SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet relation-claims)
 
 # Opt-out list for the per-section zero-scan gate: sections named here may
 # legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
@@ -816,6 +816,69 @@ lint_prose_eval_ratchet() {
       "$count" "$PROSE_EVAL_CAP" >&2
     VIOLATIONS=$(( VIOLATIONS + 1 ))
   fi
+
+  [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# relation-claims — no public doc may assert the self-containment claim family
+# that wp-09 falsified.
+#
+# goalforge declares a HARD `requires` edge on the interview plugin, and the
+# wp-09 install spike observed that a missing dependency is an install FAILURE,
+# not a graceful degrade. Four public surfaces asserted the opposite; the sweep
+# that corrected them was driven by a hand-enumerated file list and missed
+# INSTALL.md. This section replaces that list with a repo-wide ban, so the next
+# relation-strength flip cannot leave a public doc behind.
+#
+# Scan unit is the tracked `.md` file, so SCANNED is the file count. No
+# ALLOW_EMPTY opt-in — the repo always carries public markdown.
+#
+# Matching is case-insensitive fixed-string: these are prose sentences that may
+# start a sentence ("Installing goalforge alone always works"), and a
+# case-sensitive miss is exactly the failure this section exists to catch.
+# ---------------------------------------------------------------------------
+RELATION_CLAIMS_BANNED=(
+  'installing one never requires another'
+  'packaged so each system installs standalone'
+  'installing any single system alone always works'
+  'alone always works'
+)
+# Path prefixes out of scope. `plans/` is gitignored by design (private planning
+# tree) and `docs/analysis/` records historical audits that legitimately QUOTE
+# the retired claims as evidence — banning them there would falsify the record.
+RELATION_CLAIMS_EXCLUDE=('plans/' 'docs/analysis/')
+
+lint_relation_claims() {
+  VIOLATIONS=0
+
+  local -a files=()
+  local f e skip
+  while IFS= read -r -d '' f; do
+    case "$f" in *.md) ;; *) continue ;; esac
+    skip=0
+    for e in "${RELATION_CLAIMS_EXCLUDE[@]}"; do
+      case "$f" in "$e"*) skip=1; break ;; esac
+    done
+    [ "$skip" -eq 0 ] && files+=("$f")
+  done < <(list_files .)
+
+  SCANNED=${#files[@]}
+  # Zero scanned files is the dispatcher's fail-closed case; return here so the
+  # grep below is never handed an empty argument list (which would read stdin).
+  [ "$SCANNED" -gt 0 ] || return 1
+
+  local -a pat_args=()
+  local p
+  for p in "${RELATION_CLAIMS_BANNED[@]}"; do pat_args+=(-e "$p"); done
+
+  local rest lineno content
+  while IFS= read -r -d '' f && IFS= read -r rest; do
+    lineno="${rest%%:*}"; content="${rest#*:}"
+    printf '  %s:%s: falsified self-containment claim (goalforge hard-requires interview): %s\n' \
+      "$f" "$lineno" "$content" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  done < <(grep -IHnZ -i -F "${pat_args[@]}" -- "${files[@]}" 2>/dev/null)
 
   [ "$VIOLATIONS" -eq 0 ]
 }
