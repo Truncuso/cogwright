@@ -69,11 +69,15 @@ Two kinds of edge. **Inside** the package, the public parent routes to private
 nested children — discovery is one level deep, so nesting is what keeps the
 children from triggering on their own. **Outside**, `relations.yaml` declares
 two edge strengths. A soft `recommends` edge degrades to a named fallback, it
-never blocks. A `requires` edge is hard and resolved at install time:
-goalforge hard-requires the interview plugin, declared both as a `requires`
-relation and as a `dependencies` entry in the generated `plugin.json`. The required
-companion keeps a `degrade:` line — that is the runtime fallback for a
-contributor-symlink install or a failed resolution, not an install-time
+never blocks. A `requires` edge is hard:
+goalforge hard-requires the interview plugin, declared once as a `requires`
+relation and derived from there into the `dependencies` entry of the generated
+`plugin.json` by `scripts/goalforge-generate.sh`. Resolution happens at install
+time against `{name}--v<version>` git tags on the dependency's own source
+repository, not against the marketplace entry's pinned `ref`/`sha` — the matched
+tag's `ref`/`sha` override that pin, and no satisfying tag fails the install.
+The required companion keeps a `degrade:` line — that is the runtime fallback
+for a contributor-symlink install or a failed resolution, not an install-time
 exemption.
 
 ```mermaid
@@ -123,7 +127,7 @@ flowchart TB
     VER -->|learning event| RED --> DEC
     VER --> ARC
 
-    subgraph REQ["requires — hard, resolved at install time"]
+    subgraph REQ["requires — hard, resolved from source-repo tags"]
         IL["interview engine<br/><i>plugin skill</i>"]
     end
 

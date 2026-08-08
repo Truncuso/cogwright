@@ -11,7 +11,7 @@ The thesis: agentic coding gets reliable when the *process* is engineered — go
 /plugin install goalforge@cogwright
 ```
 
-Most systems install standalone: relations declared as `recommends` degrade gracefully — a missing companion produces a warning, not a failure. A declared `requires` edge is hard: goalforge hard-requires the interview plugin, resolved from this marketplace at install time.
+Most systems install standalone: relations declared as `recommends` degrade gracefully — a missing companion produces a warning, not a failure. A declared `requires` edge is hard: goalforge hard-requires the interview plugin. This marketplace names the dependency's source repository; the version is resolved at install time from `interview--v<version>` git tags on that repository, matched against the declared range, and the matched tag's `ref`/`sha` override the marketplace entry's pin.
 
 ## Installing (contributor vs consumer)
 
@@ -143,7 +143,7 @@ Not everything in the suite is a Claude Code plugin, and this marketplace does n
 
 ## How systems relate
 
-Systems declare relations in a `relations.yaml` beside their `plugin.json`, with five kinds: `requires` (hard), `recommends` (soft — degrade, never block), `vendors` (copied files, gated by a committed allowlist), `provides-slot` / `fills-slot` (extension points, e.g. command-center panels), and `emits-to` (typed artifacts crossing ecosystems). The marketplace renders the resulting map. A system with only `recommends` edges installs alone; a `requires` edge is resolved at install time — goalforge hard-requires the interview plugin.
+Systems declare relations in a `relations.yaml` beside their `plugin.json`, with five kinds: `requires` (hard), `recommends` (soft — degrade, never block), `vendors` (copied files, gated by a committed allowlist), `provides-slot` / `fills-slot` (extension points, e.g. command-center panels), and `emits-to` (typed artifacts crossing ecosystems). The marketplace renders the resulting map. A system with only `recommends` edges installs alone; a `requires` edge is hard — goalforge hard-requires the interview plugin, resolved at install time from `{name}--v<version>` git tags on the dependency's own source repository rather than from this marketplace's pinned `ref`/`sha`.
 
 ## Authoring and contributing
 
