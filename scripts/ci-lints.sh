@@ -828,8 +828,14 @@ lint_prose_eval_ratchet() {
 # wp-09 install spike observed that a missing dependency is an install FAILURE,
 # not a graceful degrade. Four public surfaces asserted the opposite; the sweep
 # that corrected them was driven by a hand-enumerated file list and missed
-# INSTALL.md. This section replaces that list with a repo-wide ban, so the next
-# relation-strength flip cannot leave a public doc behind.
+# INSTALL.md. This section replaces that list with a repo-wide RATCHET over the
+# four known sentences, so the next relation-strength flip cannot leave a public
+# doc carrying one of them behind.
+#
+# Scope limit, stated so it is not mistaken for more than it is: this bans four
+# specific literals, NOT the claim class. A fresh paraphrase ("no plugin needs
+# any other") passes. Add the literal here when one is found; a semantic ban
+# would need a different instrument.
 #
 # Scan unit is the tracked `.md` file, so SCANNED is the file count. No
 # ALLOW_EMPTY opt-in — the repo always carries public markdown.
