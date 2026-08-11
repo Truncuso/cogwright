@@ -314,6 +314,10 @@ check_plans_root() {
     else
         leg="leg 2: git-root plans"
     fi
+    # Resolution is cwd-anchored and does not require the directory to exist
+    # (capture creates it) — disclose non-existence so a headless run from an
+    # unexpected cwd is diagnosable from the doctor line alone.
+    [ -d "$first" ] || leg="$leg, not yet created"
     ok "PLANS_ROOT: $first ($leg)"
 }
 
