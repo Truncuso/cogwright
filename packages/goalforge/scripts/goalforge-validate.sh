@@ -1503,6 +1503,16 @@ def _verify_path_tokens(verify):
             tok = raw.strip("()`;|&!<>").rstrip(',')
             if not tok or tok.startswith('-'):
                 continue
+            # A shell assignment (f=plans/x.md) carries the path in its RHS —
+            # resolving the whole word would probe <root>/f=plans/x.md, a path
+            # that can never exist, false-ERRORing every verified task that
+            # binds a path to a variable. '=' before the first '/' is the
+            # assignment shape; '=' later is part of a real path, left alone.
+            head = tok.split('/', 1)[0]
+            if '=' in head and not tok.startswith(('/', '~', '.')):
+                tok = tok.split('=', 1)[1]
+                if not tok:
+                    continue
             if ('/' in tok) or tok.endswith(VERIFY_PATH_EXT):
                 yield tok
 
