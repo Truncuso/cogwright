@@ -91,6 +91,50 @@ mapping + entry shape: `~/.claude/skills/idea/references/provenance-mapping.md`.
 **non-promotion** capture leaves `sources: []`; the typed form is a superset of
 the legacy bare-path list (a bare string reads as `{locator: <string>}`).
 
+#### Step 3b — Intake grill (vague Problem or Goal)
+
+Skip outright when `overview.md` frontmatter already carries `intake_grill: done`
+— one grill per feature, so a re-capture never re-grills (the same idempotence
+pattern as `route:` / `confidence: pinned`). Otherwise the stamped intent is
+**vague** iff the measurable predicate in the drafted Goal cannot be traced to
+the user's free-text input without inventing a threshold, **or** the **Problem**
+names no observable symptom. Sharpen a vague intake here — ahead of Step 4c, so
+the route classifier reads the sharpened Goal. A non-vague intake skips this step
+untouched: no prompt, no new mandatory gate. The Step 3 spike-candidate flag
+takes precedence — a Goal whose blocker meets the spike trigger
+(`${CLAUDE_PLUGIN_ROOT}/references/fidelity.md` §Trigger:
+how-should-it-look/behave/perform AND more talking will not settle) carries the
+downstream spike-candidate note and skips the grill; capture flags, it never
+spikes. At most **one** grill runs per capture; a second vague reading becomes a
+`## Notes` line instead (same carrier as below).
+
+**Resolve the engine first.** *Resolvable* := the `interview` skill (plugin
+`interview@cogwright`) appears in the session skill listing. Check this **before**
+evaluating the vague branch; unresolvable → take the non-vague path.
+
+**Frame, then delegate.** Restate the drafted Problem and Goal in the framing
+prose handed to the `interview` plugin skill with the literal
+`preset: capture-intake`. The `interview` plugin skill takes only a `preset:`
+argument (no artifact argument), so that framing is the only channel to the
+drafted text; question technique and stopping behavior stay with the engine.
+After a grill runs, stamp `intake_grill: done` on the frontmatter.
+
+**Fold the returned signals** back into `overview.md`: `RESOLVED_TERM` into the
+Problem/Goal prose; `HANDOFF_SUGGESTION` and `ADR_CANDIDATE` into a `## Notes`
+block (create the section if absent), the latter as an
+`ADR_CANDIDATE: <claim> — <why>` line for `goalforge-harden` to pick up. Stamp
+that block only **after** Step 4c has computed the route, so intake-derived
+deferrals never influence the route verdict. `glossary-write` and `adr-write` are
+deliberately **not** invoked here: "log inline, never write" means the `## Notes`
+line is the whole sink — never invoke `adr-write`/`glossary-write`, never create
+a decision file — which keeps capture's write-only-`overview.md` contract.
+
+Under `SDD_AUTONOMY=unattended` the grill does not fire: take the non-vague path
+and record the vague reading as one `## Notes` line under the same binding. No
+`AskUserQuestion` is introduced on any unattended path. If the `interview` plugin
+skill is missing or unresolvable, likewise proceed as non-vague — the hook never
+blocks capture.
+
 ### Step 4 — Bump timestamps
 
 Set `created:` and `updated:` in `overview.md` to today (`YYYY-MM-DD`). The `hooks/goalforge-frontmatter-touch.sh` hook can also bump these on

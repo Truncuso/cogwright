@@ -259,6 +259,11 @@ set the `resolution` pointer, **and release the claim: `claimed_by` and
 on a done ticket, which ages into a false stale signal. A dependency counts as
 satisfied when `resolved` OR `out-of-scope`.
 
+For `ticket_type: grilling` **only**, that findings file carries a REQUIRED
+`## Q&A resolution-notes` section — questions asked, answers in the user's
+terms, the decision, and confidence at stop. AUTHORING rule: no validator, no
+template; distinct from the OPTIONAL ticket-body `## Resolution notes` above.
+
 **Mid-loop fog moves:** surface new tickets when a resolution exposes fresh unknowns;
 graduate map `## Not yet specified` fog into real tickets; re-scope when a resolution
 invalidates an already-resolved decision. **No pre-slicing** — never split a ticket
