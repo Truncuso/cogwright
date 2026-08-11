@@ -72,6 +72,13 @@ check STATIC-CONTRACT "verification-before-completion fed the diff" "fed the DIF
 check STATIC-CONTRACT "promote implemented → verified at gate" "implemented → verified"
 check STATIC-CONTRACT "backfill commit from checkpoint.commit_sha" "checkpoint.commit_sha"
 check STATIC-CONTRACT "backfill BEFORE --require-commit gate" "before the \`--require-commit\` gate"
+
+# ── Commit-gate exemption (un-committable deliverable) ──────────────────────
+check STATIC-CONTRACT "commit_exempt marker named in Completion Step A" "commit_exempt: <prose reason>"
+check STATIC-CONTRACT "exemption is fail-closed on an empty/boolean value" "leaves the ERROR standing"
+check STATIC-CONTRACT "honoured exemption is a standing WARN, not a suppression" "not a suppression"
+check STATIC-CONTRACT "goalforge-verify reads but never writes the marker" "never WRITES \`commit_exempt:\`"
+
 check STATIC-CONTRACT "recap one-row-per-WP via record-wp" "record-wp"
 check STATIC-CONTRACT "last-WP cross-WP integration review" "integration review"
 

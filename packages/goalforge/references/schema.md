@@ -304,6 +304,13 @@ verify: "<exact cmd or check that proves the task done>"
 #                                 # from checkpoint.commit_sha (not written per-task
 #                                 # during execution). required for status: verified
 #                                 # under --require-commit validation.
+# commit_exempt: "<prose reason>" # optional; the ONLY sanctioned way to satisfy
+#                                 # --require-commit with an empty commit:. Declares the
+#                                 # deliverable un-committable by construction (written
+#                                 # outside the repo, or to a by-design-gitignored path).
+#                                 # Fails closed on an empty or boolean-ish value, and
+#                                 # ERRORs if commit: is also set. Authored by the task
+#                                 # author — goalforge-verify reads it, never writes it.
 ---
 ```
 
@@ -376,6 +383,7 @@ they are enforced at different lifecycle points:
 | Check | Plain run | Under `--strict` | Under `--require-commit` | Who uses it |
 |---|---|---|---|---|
 | **Missing commit hash** | WARN (exit 0) | WARN (exit 0) | **ERROR (exit 1)** | `goalforge-verify` gate — `--strict --require-commit` |
+| **Missing commit hash, `commit_exempt:` declared** | WARN (exit 0) | WARN (exit 0) | WARN (exit 0) — reason printed | same gate; the one sanctioned exemption |
 | **Stale feature rollup** | WARN (exit 0) | **ERROR (exit 1)** | WARN (exit 0) | pre-commit hook — `--strict` only |
 
 Rationale for the split: `commit:` is recorded **after** the task commit, so
@@ -386,7 +394,9 @@ verify-time only, via `--require-commit`. `goalforge-verify` uses both flags
 
 | Check | Condition | Fix |
 |---|---|---|
-| **Missing commit hash** | A `task-*.md` with `status: verified` has no `commit:` field (or it is empty) | Add `commit: <sha>` — recorded by `goalforge-execute` after the task's commit |
+| **Missing commit hash** | A `task-*.md` with `status: verified` has no `commit:` field (or it is empty) and no valid `commit_exempt:` | Add `commit: <sha>` — recorded by `goalforge-execute` after the task's commit — or, only when the deliverable is un-committable by construction, `commit_exempt: <prose reason>` |
+| **Malformed `commit_exempt:`** | The value is empty, whitespace, or boolean-ish (`true`/`yes`/`1`/`n/a`/`-`) | Replace with prose naming why no commit can exist |
+| **`commit_exempt:` with a hash** | Both `commit:` and `commit_exempt:` are non-empty | Drop `commit_exempt:` — the task WAS committed |
 | **Stale feature rollup** | `<feature>/todo.md` has `generated: true` and a Status Rollup cell that contradicts the current WP `status:` | Run `goalforge-rollup.sh <feature>` to regenerate |
 
 ---

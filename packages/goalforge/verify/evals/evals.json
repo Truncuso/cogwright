@@ -89,6 +89,23 @@
         "SKILL.md never sets status: archived — archival is explicit user action only, performed by goalforge-archive",
         "SKILL.md state transition adds feature: completed → archived (via goalforge-archive)"
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "Verify wp-09-hard-dependency. Two of its tasks completed correctly but have no commit: task-01 wrote its deliverable into a file outside this repo, and task-03 wrote only to plans/, which this repo gitignores by design. Both carry checkpoint.commit_sha: \"\".",
+      "expected_output": "goalforge-verify does NOT fabricate a hash and does NOT force-add a gitignored file. It recognises the un-committable-deliverable case: each such task declares commit_exempt: <prose reason> in its own frontmatter, is promoted to verified with commit: left empty, and goalforge-validate --strict --require-commit exits 0 while printing a WARN naming the reason for each exempted task. A task with no commit and no valid commit_exempt: still blocks finalization.",
+      "files": [],
+      "expectations": [
+        "SKILL.md Completion Step A names commit_exempt: <prose reason> as the ONLY exemption from the missing-hash error",
+        "SKILL.md still forbids fabricating a commit hash",
+        "SKILL.md states the exemption is opt-in and per-task (one line in that task's frontmatter)",
+        "SKILL.md states the exemption fails closed on an absent, empty, or boolean-ish value",
+        "SKILL.md states an honoured exemption is a standing WARN naming the reason, never a suppression",
+        "SKILL.md states a commit_exempt: on a task that DOES carry a hash is itself an ERROR",
+        "SKILL.md states goalforge-verify READS commit_exempt: and never writes it",
+        "scripts/tests/goalforge-validate.test.sh commit-exempt-accepted asserts --require-commit exits 0 AND the reason is printed",
+        "scripts/tests/goalforge-validate.test.sh commit-missing-still-errors asserts an un-exempted missing hash still ERRORs under --require-commit"
+      ]
     }
   ]
 }

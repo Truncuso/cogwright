@@ -34,6 +34,22 @@
 #   task-dep-pending-errors        Negative control for the TASK gate: a task at
 #                                  `in-progress` whose dep task is `pending`
 #                                  MUST still raise its task dep ERROR.
+#   commit-exempt-accepted         A verified task with an empty `commit:` and a
+#                                  prose `commit_exempt:` passes --require-commit
+#                                  (exit 0) AND the reason is printed as a WARN.
+#                                  Asserted POSITIVELY on both legs: an exit-0-only
+#                                  check would also pass if the exemption silently
+#                                  swallowed the line, which is the thing this
+#                                  mechanism must never do.
+#   commit-missing-still-errors    Negative control, the load-bearing one: the SAME
+#                                  fixture with the marker removed MUST still raise
+#                                  the missing-commit ERROR under --require-commit.
+#                                  The gate was given a channel, not removed.
+#   commit-exempt-empty-errors     Fail-closed control: `commit_exempt: ""` is not a
+#                                  reason — the ERROR stands.
+#   commit-exempt-with-hash-errors Contradiction control: a task carrying BOTH a real
+#                                  `commit:` and a `commit_exempt:` is an ERROR; the
+#                                  marker cannot be decoration on a committed task.
 set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -172,6 +188,86 @@ if echo "$OUT" | grep -q 'depends_on: task-01-first.*`pending`'; then
     ok "task-dep-pending-errors: TASK gate still fires"
 else
     bad "task-dep-pending-errors: TASK gate still fires"
+fi
+
+# ── Commit-gate exemption fixtures ──────────────────────────────────────────
+# mktask() writes no commit-related keys, so these cases need their own writer.
+# The body carries a `checkpoint:` line to satisfy the unrelated executing-WP
+# evidence invariant, keeping each assertion specific to the commit gate.
+mkvtask() { # $1=plans-root $2=feature $3=wp-slug $4=task $5=commit $6=commit_exempt
+    {
+        echo "---"
+        echo "name: $4"
+        echo "title: $4"
+        echo "status: verified"
+        echo "depends_on: []"
+        echo "commit: \"$5\""
+        [ -n "${6:-}" ] && echo "commit_exempt: $6"
+        echo "---"
+        echo
+        echo "# $4"
+        echo
+        echo "checkpoint: 2026-08-08 fixture"
+    } > "$1/$2/$3/$4.md"
+}
+
+mkcommitfixture() { # $1=root $2=commit $3=commit_exempt
+    mkfeature "$1" feat
+    mkwp "$1" feat wp-01-a executing "[]"
+    mkvtask "$1" feat wp-01-a task-01-x "$2" "${3:-}"
+}
+
+# assert on BOTH the emitted diagnostics and the real exit status.
+run_require_commit() { # $1=root → echoes --show output; sets RC
+    OUT="$(bash "$VALIDATE" --strict --require-commit --show "$1" 2>&1)"
+    bash "$VALIDATE" --strict --require-commit "$1" >/dev/null 2>&1; RC=$?
+}
+
+# ── Case: commit-exempt-accepted ────────────────────────────────────────────
+CE="$ROOT/commit-exempt"
+REASON='"deliverable is written outside this repo (base-system-map ticket-10)"'
+mkcommitfixture "$CE" "" "$REASON"
+run_require_commit "$CE"
+if [ "$RC" -eq 0 ] \
+   && echo "$OUT" | grep -q 'EXEMPT: deliverable is written outside this repo' \
+   && ! echo "$OUT" | grep -q '^ERROR'; then
+    ok "commit-exempt-accepted: --require-commit exits 0 and prints the reason"
+else
+    bad "commit-exempt-accepted: --require-commit exits 0 and prints the reason (rc=$RC)"
+    echo "${OUT:-<no output — validator did not run>}" | sed 's/^/        /'
+fi
+
+# ── Case: commit-missing-still-errors (negative control) ────────────────────
+CM="$ROOT/commit-missing"
+mkcommitfixture "$CM" "" ""
+run_require_commit "$CM"
+if [ "$RC" -ne 0 ] && echo "$OUT" | grep -q 'verified task missing `commit:`'; then
+    ok "commit-missing-still-errors: un-exempted missing hash still ERRORs"
+else
+    bad "commit-missing-still-errors: un-exempted missing hash still ERRORs (rc=$RC)"
+    echo "${OUT:-<no output — validator did not run>}" | sed 's/^/        /'
+fi
+
+# ── Case: commit-exempt-empty-errors (fail-closed control) ──────────────────
+CX="$ROOT/commit-exempt-empty"
+mkcommitfixture "$CX" "" '""'
+run_require_commit "$CX"
+if [ "$RC" -ne 0 ] && echo "$OUT" | grep -q '^ERROR'; then
+    ok "commit-exempt-empty-errors: an empty reason does not exempt"
+else
+    bad "commit-exempt-empty-errors: an empty reason does not exempt (rc=$RC)"
+    echo "${OUT:-<no output — validator did not run>}" | sed 's/^/        /'
+fi
+
+# ── Case: commit-exempt-with-hash-errors (contradiction control) ────────────
+CH="$ROOT/commit-exempt-hash"
+mkcommitfixture "$CH" "1f24c09b4aacc4cb81fd2546543da1694ace92a4" '"outside repo"'
+run_require_commit "$CH"
+if [ "$RC" -ne 0 ] && echo "$OUT" | grep -q 'AND carries a `commit:` hash'; then
+    ok "commit-exempt-with-hash-errors: marker + hash is a contradiction ERROR"
+else
+    bad "commit-exempt-with-hash-errors: marker + hash is a contradiction ERROR (rc=$RC)"
+    echo "${OUT:-<no output — validator did not run>}" | sed 's/^/        /'
 fi
 
 echo ""

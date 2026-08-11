@@ -3,7 +3,7 @@ name: goalforge-verify
 description: "Verify a WP at status `executing`: the SINGLE semantic gate. Confirms all child tasks are `implemented` and findings.md exists, runs ONE cumulative-diff review+simplify+second-opinion pass plus the WP goal.verification router, then promotes each task `implemented → verified`, backfills commit hashes, and advances `executing → verified`. Delegates to `superpowers:verification-before-completion`. TRIGGER: /goalforge-verify <wp-path> or when goalforge-run reaches the verify step in the chain. REFUSES to proceed if any child task is not at least `implemented` or `findings.md` is missing."
 metadata:
   skill-kind: preference
-  version: 2.0.0
+  version: 2.1.0
 hooks:
   Stop:
     - hooks:
@@ -101,10 +101,30 @@ passed, for every child task at `status: implemented`:
    row in the WP `overview.md` `## Tasks` table Status cell to `verified` (the
    wp-01 drift-detector hard-fails on a frontmatter/cell mismatch).
 
-A task missing its `checkpoint.commit_sha` (no recorded commit) is a real error —
-do not fabricate a hash; halt and report (the task was not committed). **Backfill
-+ promote MUST happen before the `--require-commit` gate below**, or the gate
-false-blocks on the not-yet-written `commit:` fields.
+A task missing its `checkpoint.commit_sha` (no recorded commit) is a real error
+by default — do not fabricate a hash; halt and report (the task was not
+committed). **Backfill + promote MUST happen before the `--require-commit` gate
+below**, or the gate false-blocks on the not-yet-written `commit:` fields.
+
+**One exemption, and only one — the un-committable deliverable.** A task whose
+deliverable *cannot* be committed by construction — it writes only outside the
+repo, or only to a path the repo gitignores by design — declares
+`commit_exempt: <prose reason>` in its own frontmatter. Such a task is promoted
+to `verified` with `commit:` left empty; the validator downgrades its missing
+hash to a WARN that prints the reason on every run. The exemption is:
+
+- **opt-in and per-task** — one line in that task's file, never a flag or a
+  directory rule;
+- **fail-closed** — no key, an empty value, or a bare assertion
+  (`true`/`yes`/`1`/`n/a`) leaves the ERROR standing;
+- **never silent** — an honoured exemption is a standing WARN naming the reason,
+  not a suppression; and a `commit_exempt:` on a task that DOES carry a hash is
+  itself an ERROR.
+
+**goalforge-verify never WRITES `commit_exempt:` — it only reads it.** The marker
+is authored by the task author at decompose/harden time (or by the human). A task
+that simply was not committed yet gets committed, never exempted; that is the
+failure the gate exists to catch.
 
 **Step B — Validator gate (fail-closed).** Now run the validator with both flags:
 
@@ -317,6 +337,6 @@ not a mystery.
 - The AI Slop Anti-Patterns check is delegated to `superpowers:verification-before-completion` — if that superpower is unavailable or misconfigured, the check may not run (or may error, depending on the session); a missed delegation can yield a false-positive "clean" verdict. Confirm the superpower loaded before trusting a pass.
 - Feature terminal status is `completed`, not `verified`. WP enums terminate at `verified` — or at `archived`, the second WP terminal, reached only by an explicit out-of-band edit and never by a transition edge (see `references/state-machine.md`); feature enums terminate at `completed` (draft→ready→active→completed→archived). Writing `status: verified` to a feature `overview.md` is always a bug — the feature has no `verified` state. Never backfill `verified` onto an `archived` WP either: it did not pass this gate, so writing it here fabricates verification evidence.
 - Last-WP rule: after advancing a WP to `verified`, always scan sibling `wp-*/overview.md` statuses before exiting. Skipping the scan leaves the feature stuck at `active` even when all work is done.
-- goalforge-verify is fail-closed on `goalforge-validate --strict --require-commit` — a verified task missing its `commit:` hash, or a stale rollup, BLOCKS finalization. **Order matters:** the commit hashes are backfilled from each task's `checkpoint.commit_sha` and the tasks promoted `implemented → verified` in Completion Step A, which MUST run BEFORE the `--require-commit` gate (Step B) — otherwise the gate false-blocks on the not-yet-written `commit:` fields. The `--require-commit` flag is exclusive to verify-time; the pre-commit hook uses `--strict` alone so it never false-blocks. A task with no `checkpoint.commit_sha` is a real error (it was never committed) — halt, do not fabricate a hash.
+- goalforge-verify is fail-closed on `goalforge-validate --strict --require-commit` — a verified task missing its `commit:` hash, or a stale rollup, BLOCKS finalization. **Order matters:** the commit hashes are backfilled from each task's `checkpoint.commit_sha` and the tasks promoted `implemented → verified` in Completion Step A, which MUST run BEFORE the `--require-commit` gate (Step B) — otherwise the gate false-blocks on the not-yet-written `commit:` fields. The `--require-commit` flag is exclusive to verify-time; the pre-commit hook uses `--strict` alone so it never false-blocks. A task with no `checkpoint.commit_sha` is a real error (it was never committed) — halt, do not fabricate a hash. **The single exemption** is a task that declares `commit_exempt: <prose reason>` because its deliverable is intentionally un-committable (outside the repo, or a by-design-gitignored path); that task's missing hash becomes a standing WARN naming the reason. Do not reach for it to unblock a task that merely has not been committed yet, and never write the marker from this skill — goalforge-verify reads `commit_exempt:`, it does not author it.
 - The semantic review runs **once here on the cumulative WP diff**, not per task — goalforge-execute deliberately skips per-task `verify-and-simplify`. After `verify-and-simplify`, goalforge-verify **re-runs the deterministic eval suite** (relocated Step 7.3) so a simplification that breaks green is caught at the boundary, not shipped. If you find yourself wanting per-task review, that is the opt-in high-risk exception in goalforge-execute, not the default.
 - The completion commit gate (step 5) is **path-scoped and branch-agnostic**: it commits only `<PLANS_ROOT>/<feature>` and runs `goalforge-ensure-committed.sh` against that same path, so unrelated dirt elsewhere never false-blocks, and it passes on `master` under the dotfiles exception (commit directly — no branch, no push). The archive prompt (step 6) is OFFERED, never performed: goalforge-verify never writes a feature to `status: archived` — that is `goalforge-archive`'s explicit, human-gated job.
