@@ -15,8 +15,8 @@
         "source": "git-subdir",
         "url": "https://github.com/Truncuso/elicitforge.git",
         "path": "adapters/claude-code",
-        "ref": "v1.0.3",
-        "sha": "7ff3d498dd618ba1a1b40512e70d641a67f953b7"
+        "ref": "v1.1.0",
+        "sha": "35f634fccafd4869b61711482c4a4779de53c550"
       },
       "description": "Harness-agnostic interview engine (socratic, adversarial, divergent, teachback, rapid presets) for grilling plans, specs, and ideas before they're acted on."
     }
