@@ -784,9 +784,13 @@ lint_retired_vocab() {
 # PACKAGE_REFS_FLOOR.
 #
 # Both constants are frozen against the tree measured at wp-09 task-02
-# execution: 337 assertions across 181 files.
+# execution: 337 assertions across 181 files. Re-frozen at 341 on 2026-08-11:
+# the human-adjudicated commit_exempt proposal (goalforge-verify 2.1.0) added
+# 4 STATIC-CONTRACT checks to verify/evals/run.sh, each pinning a SKILL.md
+# contract line that the deterministic goalforge-validate.test.sh cases lock
+# behaviourally. Deliberate, reviewed growth — not creep.
 # ---------------------------------------------------------------------------
-PROSE_EVAL_CAP=337
+PROSE_EVAL_CAP=341
 PROSE_EVAL_FILE_FLOOR=150
 
 lint_prose_eval_ratchet() {
