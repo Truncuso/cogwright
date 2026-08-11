@@ -2,5 +2,6 @@
   "name": "goalforge",
   "version": "3.0.0",
   "author": {"name": "Christoph Unger"},
+  "dependencies": [{"name": "interview", "version": "^1.0.0"}],
   "description": "Goal-and-verification-driven development chain for Claude Code — goal-object work packages with a harden/execute/verify lifecycle."
 }

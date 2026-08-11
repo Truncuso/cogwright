@@ -1,17 +1,26 @@
 # Declared relations for the goalforge system.
-# `recommends` is soft: a missing companion degrades, never blocks — installing
-# goalforge alone always works. See README.md "How systems relate".
+# `recommends` is soft: a missing companion degrades, never blocks. `requires` is
+# hard — goalforge hard-requires the interview plugin. The marketplace names the
+# dependency's source repo; the version is resolved at install time from
+# `{name}--v<version>` git tags on that repo, matched against the declared range, and
+# the matched tag's ref/sha override the marketplace entry's pin. The `degrade:`
+# line on a required companion is the runtime fallback (contributor-symlink
+# installs, or a failed resolution), not a licence to install without it.
+# See README.md "How systems relate".
+
+requires:
+  - name: interview
+    kind: skill
+    version: "^1.0.0"
+    source: interview@cogwright
+    used-by: wayfind, goalforge-interview
+    degrade: one-question-at-a-time AskUserQuestion loop in the main session
 
 recommends:
   - name: research-analyst
     kind: agent
     used-by: wayfind
     degrade: dispatch a general-purpose agent with an explicit research brief
-  - name: interview
-    kind: skill
-    source: interview@cogwright
-    used-by: wayfind, goalforge-interview
-    degrade: one-question-at-a-time AskUserQuestion loop in the main session
   - name: adr-write
     kind: skill
     used-by: wayfind

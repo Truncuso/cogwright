@@ -548,6 +548,23 @@ else
   fail "$name" "work-flow Dispatch slice does not say a map ## Notes row replaces the full row below"
 fi
 
+# wp-08 preset wiring, section-sliced. The pre-existing legs around it assert
+# only tokens that were ALREADY in the wp-05 placeholder prose ('quiz-back',
+# 'teach-back', the bare ticket_type names), so they were green before the
+# rewiring and stay green if it is removed — they measure nothing about it.
+# These two pin the `preset:` literals themselves, in the Dispatch slice, so
+# unwiring wayfind from the interview engine is a suite failure.
+name=doc-dispatch-preset-wiring
+missing=""
+contains "$dispatch_lc" 'preset: wayfind-probe' || missing="$missing grilling-preset"
+contains "$dispatch_lc" 'preset: teach-back'    || missing="$missing learning-preset"
+if [ -z "$missing" ]; then pass "$name"
+else fail "$name" "work-flow Dispatch table rows not wired to their interview presets:$missing"; fi
+
+name=doc-quiz-back-gate-preset
+if contains "$grad_lc" 'preset: quiz-back'; then pass "$name"
+else fail "$name" "graduate flow quiz-back gate not wired to \`preset: quiz-back\` (the bare 'quiz-back' token doc-quiz-back-gate matches is satisfied by the findings/quiz-back.md filename)"; fi
+
 name=doc-no-fog-early-exit
 if skgrep "No-fog" && skgrep "goalforge-capture"; then pass "$name"
 else fail "$name" "SKILL.md missing no-fog early exit straight to goalforge-capture"; fi

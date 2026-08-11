@@ -23,6 +23,11 @@
 #                      `commit:` hash. Use only at verify-time (goalforge-verify gate),
 #                      NOT in the pre-commit hook (which would false-block the very
 #                      commit that records the hash).
+#                      A task whose deliverable is intentionally un-committable opts
+#                      out with `commit_exempt: <prose reason>` in its own frontmatter:
+#                      the missing hash becomes a WARN that prints the reason on every
+#                      run. Empty / boolean-ish values, and a commit_exempt: alongside a
+#                      real `commit:`, are ERRORs — the gate fails closed.
 #   --quiet            Print one-line summary only; always exits 0.
 #   --stale-days N     Override staleness threshold (default 30).
 #
@@ -803,7 +808,10 @@ def commit_err(filepath, msg, suggest=""):
     """Missing commit-hash on a verified task.
     Under --require-commit: treated as an ERROR that forces non-zero exit.
     Otherwise: advisory WARN (exit 0) — the pre-commit hook must NOT use
-    --require-commit, because commit: is recorded AFTER the task commit."""
+    --require-commit, because commit: is recorded AFTER the task commit.
+    NOT reached for a task carrying a valid `commit_exempt: <reason>` — that
+    task's missing hash is a standing WARN naming the reason instead (see the
+    verified-task block below). The exemption never silences the line."""
     if require_commit:
         errors.append((str(filepath), msg, suggest))
         commit_missing.append(str(filepath))
@@ -836,6 +844,12 @@ WP_REQUIRED      = {'name','title','status','stage_updated'}
 # goalforge-verify promotes implemented → verified at the WP gate.
 TASK_STATUS_ENUM = {'pending','briefed','in-progress','implemented','verified'}
 TASK_REQUIRED    = {'name','title','status'}
+
+# `commit_exempt:` must carry a PROSE reason naming why no commit can exist.
+# These values normalize to a bare assertion rather than a reason and are
+# rejected, so the marker cannot degrade into a blanket opt-out flag.
+NON_REASONS      = {'true','false','yes','no','y','n','1','0',
+                    'none','null','n/a','na','-'}
 
 READY_PLUS = {'ready','executing','verified','completed','active'}  # "ready+" — dep satisfied
 # WP-level only: `archived` is a second WP terminal set by an out-of-band edit — no
@@ -1855,13 +1869,43 @@ for path, kind, fm, has_ckpt in all_files:
         # hook (which runs --strict) must NOT gate on it — that would false-block
         # the very commit that writes the hash.  goalforge-verify uses --strict
         # --require-commit to enforce the hash at verify-time only.
+        #
+        # ONE sanctioned exemption: a task whose deliverable is intentionally
+        # un-committable (it writes only outside the repo, or only to a path the
+        # repo gitignores by design) declares `commit_exempt: <prose reason>`.
+        # The exemption is opt-in, per-task, reason-bearing, and never silent —
+        # it downgrades the ERROR to a WARN that prints the reason every run.
+        # goalforge-verify READS this key; it must never write it.
         if status == 'verified':
             commit_val = fm.get('commit', None)
-            if not commit_val or not str(commit_val).strip():
+            has_commit = bool(commit_val and str(commit_val).strip())
+            exempt_raw = fm.get('commit_exempt', None)
+            exempt     = '' if exempt_raw is None else str(exempt_raw).strip()
+            exempt_ok  = bool(exempt) and exempt.lower() not in NON_REASONS
+
+            if has_commit and exempt:
+                err(path,
+                    "task declares `commit_exempt:` AND carries a `commit:` hash — "
+                    "the exemption asserts no commit can exist, the hash says one does",
+                    "Drop commit_exempt: (the task WAS committed)")
+            elif has_commit:
+                pass
+            elif exempt_ok:
+                # Honoured exemption — downgraded, never suppressed.
+                warn(path,
+                     "verified task has no `commit:` — EXEMPT: " + exempt)
+            elif exempt:
+                commit_err(path,
+                    "`commit_exempt:` is not a reason (got `" + exempt + "`) — the "
+                    "exemption requires prose naming why no commit can exist",
+                    "Replace with commit_exempt: <why this deliverable cannot be committed>")
+            else:
                 commit_err(path,
                     "verified task missing `commit:` (the completing commit hash) — "
                     "goalforge-execute records it after the task commit",
-                    "Add commit: <sha> or re-run goalforge-execute")
+                    "Add commit: <sha>, re-run goalforge-execute, or — only if the "
+                    "deliverable is intentionally un-committable — declare "
+                    "commit_exempt: <reason>")
 
 # ── Output ──────────────────────────────────────────────────────────────────
 

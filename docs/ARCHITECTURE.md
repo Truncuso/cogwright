@@ -68,8 +68,17 @@ Two rules make this safe to trust:
 Two kinds of edge. **Inside** the package, the public parent routes to private
 nested children — discovery is one level deep, so nesting is what keeps the
 children from triggering on their own. **Outside**, `relations.yaml` declares
-soft `recommends` edges: a missing companion degrades to a named fallback, it
-never blocks. Installing goalforge alone always works.
+two edge strengths. A soft `recommends` edge degrades to a named fallback, it
+never blocks. A `requires` edge is hard:
+goalforge hard-requires the interview plugin, declared once as a `requires`
+relation and derived from there into the `dependencies` entry of the generated
+`plugin.json` by `scripts/goalforge-generate.sh`. Resolution happens at install
+time against `{name}--v<version>` git tags on the dependency's own source
+repository, not against the marketplace entry's pinned `ref`/`sha` — the matched
+tag's `ref`/`sha` override that pin, and no satisfying tag fails the install.
+The required companion keeps a `degrade:` line — that is the runtime fallback
+for a contributor-symlink install or a failed resolution, not an install-time
+exemption.
 
 ```mermaid
 flowchart TB
@@ -118,30 +127,33 @@ flowchart TB
     VER -->|learning event| RED --> DEC
     VER --> ARC
 
+    subgraph REQ["requires — hard, resolved from source-repo tags"]
+        IL["interview engine<br/><i>plugin skill</i>"]
+    end
+
     subgraph EXT["recommends — soft, degrade never block"]
         direction LR
         RA["research-analyst<br/><i>agent</i>"]
-        IL["interview engine<br/><i>plugin skill</i>"]
         ADR["adr-write<br/><i>skill</i>"]
     end
 
     WAY -.-> RA
-    WAY -.-> IL
+    WAY --> IL
     WAY -.-> ADR
-    INT -.-> IL
+    INT --> IL
     HAR --> INT
 
     classDef ext stroke-dasharray: 4 3;
-    class RA,IL,ADR ext;
+    class RA,ADR ext;
 ```
 
 Declared degradations, verbatim from `packages/goalforge/relations.yaml`:
 
-| Missing | Used by | Degrades to |
-|---|---|---|
-| `research-analyst` | wayfind | dispatch a general-purpose agent with an explicit research brief |
-| `interview` | wayfind, goalforge-interview | one-question-at-a-time AskUserQuestion loop in the main session |
-| `adr-write` | wayfind | skip the ADR gate; log the skipped decisions in the graduation brief |
+| Missing | Relation | Used by | Degrades to |
+|---|---|---|---|
+| `interview` | `requires` | wayfind, goalforge-interview | one-question-at-a-time AskUserQuestion loop in the main session |
+| `research-analyst` | `recommends` | wayfind | dispatch a general-purpose agent with an explicit research brief |
+| `adr-write` | `recommends` | wayfind | skip the ADR gate; log the skipped decisions in the graduation brief |
 
 The `/spec`, `/plan`, `/implement`, `/verify` commands are the human entry
 points; each is a thin dispatch surface that reads the stage child's `SKILL.md`

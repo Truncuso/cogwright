@@ -133,9 +133,14 @@ There are no lifecycle folders to maintain.
 /plugin install interview@cogwright
 ```
 
-Each plugin is self-contained — installing one never requires another. Declared
-companions degrade gracefully (a missing `interview` plugin falls back to a
-one-question-at-a-time loop in the main session, not an error).
+Most plugins install standalone: a companion declared as `recommends` degrades
+to a named fallback rather than failing. A `requires` edge is hard — goalforge
+hard-requires the `interview` plugin, so installing goalforge installs interview
+with it. That dependency is resolved at install time from `interview--v<version>`
+git tags on the interview source repository, matched against the range in
+goalforge's generated `plugin.json`; the matched tag's `ref`/`sha` override the
+marketplace entry's pin. No satisfying tag means the goalforge install fails
+outright — a hard edge, not a degrade.
 
 ---
 
@@ -468,8 +473,8 @@ Stated plainly so you are not debugging a documented gap:
    spec, harden, execute, run, wayfind) name those skills — but **no
    `recommends:` row in
    `${CLAUDE_PLUGIN_ROOT}/relations.yaml` declares them**, so unlike the
-   declared companions (`research-analyst`, `interview`, `adr-write`) they
-   carry no named fallback. Those passages degrade *undeclared*: the section
+   soft-declared companions (`research-analyst`, `adr-write`) they carry no
+   named fallback. Those passages degrade *undeclared*: the section
    simply has nothing to route to. Nothing blocks — the rest of the chain is
    unaffected — but do not expect a documented degradation path for them.
    Declaring the two rows is an open item — file or follow it on the issue

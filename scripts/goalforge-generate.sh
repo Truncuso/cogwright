@@ -393,12 +393,61 @@ with open(_manifest, "w", encoding="utf-8", newline="") as fh:
 PYEOF
 
 # ── 4. Generate the plugin manifest (version + author derived; see above) ──
+#
+# `dependencies` is DERIVED, not literal: packages/goalforge/relations.yaml's
+# `requires:` block is the single authority for the hard-relation set, and the
+# manifest array is projected from it. A hardcoded array here would restate the
+# same fact with nothing tying the two together — add a second `requires:` entry
+# or change a range there, and the manifest would silently disagree while
+# --check and every lint section stayed green.
+#
+# The parse is deliberately shape-strict rather than a YAML dependency: a
+# `requires:` block with no entry, or an entry without a `version:` range, is a
+# FATAL abort, not an empty or partial array.
+PLUGIN_DEPENDENCIES="$(GF_RELATIONS="$SRC/relations.yaml" python3 - <<'PYEOF'
+import json, os, re, sys
+
+path = os.environ["GF_RELATIONS"]
+deps = []
+entry = None
+in_requires = False
+with open(path, encoding="utf-8") as fh:
+    for raw in fh:
+        line = raw.rstrip("\n")
+        if re.match(r"^[A-Za-z][A-Za-z0-9_-]*:", line):      # top-level key
+            in_requires = line.split(":", 1)[0] == "requires"
+            entry = None
+            continue
+        if not in_requires:
+            continue
+        m = re.match(r"^\s*-\s*name:\s*(\S+)\s*$", line)
+        if m:
+            entry = {"name": m.group(1).strip("\"'")}
+            deps.append(entry)
+            continue
+        m = re.match(r"^\s*version:\s*(\S+)\s*$", line)
+        if m and entry is not None:
+            entry["version"] = m.group(1).strip("\"'")
+
+if not deps:
+    sys.exit("FATAL: no `requires:` entries found in %s — refusing to emit a "
+             "manifest with an empty dependencies array" % path)
+_missing = [d["name"] for d in deps if "version" not in d]
+if _missing:
+    sys.exit("FATAL: `requires:` entries without a `version:` range in %s: %s"
+             % (path, ", ".join(_missing)))
+
+print(json.dumps(deps, separators=(", ", ": ")))
+PYEOF
+)"
+
 mkdir -p "$DST/.claude-plugin"
 printf '%s\n' \
     '{' \
     '  "name": "goalforge",' \
     "  \"version\": \"$PLUGIN_VERSION\"," \
     "  \"author\": $PLUGIN_AUTHOR_JSON," \
+    "  \"dependencies\": $PLUGIN_DEPENDENCIES," \
     "  \"description\": \"$PLUGIN_DESC\"" \
     '}' > "$DST/.claude-plugin/plugin.json"
 

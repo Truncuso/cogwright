@@ -225,10 +225,10 @@ first: a row there replaces the **full row below** for that `ticket_type`.
 | ticket_type | mode | Machinery | Model / effort |
 |---|---|---|---|
 | research | AFK | dispatched `research-analyst` → web+docs sweep → `findings/` summary, consumed as DATA | opus / medium (pure scan legs → sonnet / low) |
-| grilling | HITL | `interview` plugin engine directly in the **main session** (`goalforge-interview` is harden-only) — **(default type)** | not dispatched |
+| grilling | HITL | `interview` plugin engine, `preset: wayfind-probe`, in the **main session** (`goalforge-interview` is harden-only) — **(default type)** | not dispatched |
 | prototype | HITL | `prototype` skill in a worktree (owns its own branches + dispatch) | opus / medium (delegated) |
 | task | AFK default | agent-driven `implement` dispatch (or human checklist) | mechanical → haiku / low; standard → opus / low |
-| learning | HITL | `interview` plugin teach-back in the **main session** (teachback style pending wp-08; until it ships, a plain question-per-turn recall check) — optional dispatched material-gathering leg | main session (material legs: sonnet / low) |
+| learning | HITL | `interview` plugin `preset: teach-back` in the **main session** — optional dispatched material-gathering leg | main session (material legs: sonnet / low) |
 
 **`grilling` is the default type.** Discriminator: `task` = the output is
 executed work; `grilling` = the output is a **decision**, even when the decision
@@ -297,8 +297,8 @@ which point the map is simply `working` again (no status unwind needed).
    contract as chart). Fresh candidates → user triage. **Any accepted candidate
    becomes a new ticket and ABORTS graduate** (map is `working` again).
 
-3. **Quiz-back gate** (HITL, main session — never dispatched). The model quizzes
-   the user on the map's decisions; record questions/answers/gaps →
+3. **Quiz-back gate** (HITL, main session — never dispatched). `preset: quiz-back`
+   over the map's decisions; record questions/answers/gaps →
    `findings/quiz-back.md` (authoritative store). A surfaced gap either becomes a
    new ticket (**ABORT**) or a recorded **accepted-risk** (proceed).
 
