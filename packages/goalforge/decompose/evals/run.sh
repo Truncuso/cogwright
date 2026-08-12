@@ -195,6 +195,9 @@ check STATIC "Add-WP mode documented" "Add-WP mode"
 check STATIC "Add-WP tolerates an absent spec.md (fast route)" "tolerates an absent"
 check STATIC "Add-WP is an append, not a reconcile" "append, not a reconcile"
 check STATIC "Add-WP defers tier-1 re-audit to next harden" "next harden re-audits"
+# DOC-contract pin (not runtime): Add-WP is prose-enforced — there is no add-wp
+# script — so this asserts the section documents BOTH re-entry flags on one line.
+check STATIC "Add-WP re-entry flag pair documented (--derived-from / --source)" '`--derived-from <ref>` / `--source <record>`'
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

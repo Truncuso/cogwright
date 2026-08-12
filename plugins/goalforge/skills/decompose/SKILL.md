@@ -363,7 +363,30 @@ in reconcile vocabulary), stop and route through `goalforge-redecompose`. Two ca
   restructure: use `goalforge-redecompose`'s 5-bucket reconcile, not this mode.)
 
 Invocation: `goalforge-decompose --add-wp <slug> --goal "<outcome>"` (optionally
-`--depends-on <wp-slug>,…`, `--severity`, `--task-type`).
+`--depends-on <wp-slug>,…`, `--severity`, `--task-type`, plus the re-entry pair
+`--derived-from <ref>` / `--source <record>`).
+
+**Re-entry flags** — the generic seam by which an upstream artifact (a routed
+idea, a spike, an external ticket) re-enters an existing feature as one WP. Both
+are **schema-blind**: decompose parses neither value, it only stamps and
+re-emits, so the add-wp surface stays extraction-safe and no upstream vocabulary
+leaks into this skill.
+
+- `--derived-from <ref>` — an **opaque** back-pointer ref. Stamped **verbatim**
+  into the new WP's `overview.md` frontmatter as a top-level `derived_from:`
+  scalar at column 0, unquoted — that scalar is the authoritative, pinned
+  contract. The WP **additionally** carries a mirror row under `relationships:`,
+  `  - derived_from: [[<ref>]]`, so the knowledge graph indexes the edge
+  (`references/schema.md` — `relationships:` is the edge home). Both homes are
+  intentional. Decompose never resolves, validates, or path-expands the ref.
+- `--source <record>` — **repeatable**; each value is one **pre-marshalled**
+  provenance record (a YAML flow mapping, one per flag), appended verbatim to the
+  feature `overview.md` `sources[]`. Ownership split: the caller **marshals**
+  (e.g. `skills/idea/idea-route/scripts/idea-route.sh --marshal-provenance` maps a
+  routed idea's `references[]` plus its synthetic `idea-<slug>` self-link to one
+  record per line); decompose **writes** those records into `sources[]` and
+  updates `work_packages`. Decompose does not derive, dedupe against, or reformat
+  them beyond YAML re-emission.
 
 Procedure — the scoped subset of the full run:
 
@@ -376,11 +399,14 @@ Procedure — the scoped subset of the full run:
    a **complete goal block** — `goal.outcome` from `--goal`, WP-authored
    `goal.verification`, `inherits_from` set to the feature when it has a goal
    block (fast-path features have none — author self-contained, `inherits_from:
-   null`) — plus `todo.md` and task files.
+   null`) — plus `todo.md` and task files. With `--derived-from`, the same stamp
+   writes the top-level `derived_from:` scalar **and** its `relationships:` mirror
+   row (both homes, verbatim ref).
 4. **Self-check** (Step 7b) scoped to the new WP, plus: its `depends_on` targets
    exist and the dependency graph stays acyclic.
 5. **Refresh feature artifacts** (Steps 8–10): WP table row, `work_packages:`,
-   timestamps, `goalforge-rollup.sh`.
+   timestamps, `goalforge-rollup.sh` — plus every `--source <record>` appended to
+   the feature `sources[]` in the order given.
 6. **Lint** (Step 10.5): `goalforge-validate.sh --feature <feature>` — feature level,
    never the WP subtree alone.
 7. **Tier-1 hash note — do NOT re-audit here.** Adding a WP stales the feature
