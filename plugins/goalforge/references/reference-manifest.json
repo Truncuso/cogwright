@@ -123,6 +123,10 @@
     },
     {
       "from": "references/retrospective.md",
+      "path": "scripts/goalforge-issue"
+    },
+    {
+      "from": "references/retrospective.md",
       "path": "scripts/goalforge-trace-read"
     },
     {

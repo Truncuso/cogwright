@@ -6,6 +6,11 @@ goalforge's propose-only retrospective layer. Two capabilities:
    friction, records a schema-legal `issue.recorded` trace event via the wp-14
    emitter. Fire-and-forget: it never blocks the run (WARN + exit 0 on
    emitter-absent OR emitter-reject). Judgment-invoked — nothing auto-emits.
+   **Run it directly (`scripts/goalforge-issue …`) or with `python3` — never
+   `bash`.** It is a Python script; `bash goalforge-issue` dies on the first
+   module-level tuple (`line 44: KINDS = (`) and reads as a broken tool. That
+   misdiagnosis cost a real capture on 2026-08-11; `--self-test` is the
+   one-command way to confirm the tool is healthy before concluding otherwise.
 2. **Distill** (`goalforge-retrospect`) — a deterministic projection of a
    feature's trace window into `improvement-report.md` (Bottlenecks, Issues
    Chased, Routed Proposals — all propose-only). Owned by task-02.

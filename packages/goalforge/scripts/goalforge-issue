@@ -18,6 +18,11 @@ Interface:
   goalforge-issue --feature-dir <dir> --kind <k> [--wp <wp>] [--summary <s>]
                   [--decision-ref <ptr>]
 
+Invoke it DIRECTLY (it is executable) or with `python3` — never with `bash`.
+This is a Python script; `bash goalforge-issue` fails at the first module-level
+tuple with `line 44: KINDS = (` and looks like a broken tool. Observed
+2026-08-11: a session read that error as a defect and lost its friction capture.
+
 `--feature-dir` is MANDATORY (OQ3 — no PLANS_ROOT guessing). `--kind` is
 mandatory and must be in the vocabulary.
 
