@@ -23,6 +23,12 @@ top-level surface. Sole call site is detailed in §Consumed by.
 
 ## What this adds over the bare `interview` plugin engine
 
+Sense of the word, pinned here because it collides:
+specialization = caller-side framing of the shared engine — this skill wraps
+the one shared `interview` plugin instance in goal-hardening context, never a
+nested sibling skill forked off that engine, which is the retired sense typed
+presets superseded.
+
 The `interview` plugin engine is a domain-agnostic Q&A loop; it knows
 nothing about WPs, goal facets, or fidelity. This specialization supplies the
 goal-hardening framing the engine needs:

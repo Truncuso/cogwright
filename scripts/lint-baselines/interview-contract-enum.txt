@@ -1,0 +1,36 @@
+# interview-contract enum fixture — the frozen `HANDOFF_SUGGESTION` member set.
+#
+# Section: ci-lints.sh --only interview-contract (check C1). Seam:
+# GF_IC_ENUM_FIXTURE. Format: one enum member per line; `#` comments and blank
+# lines are ignored; the section sorts the remainder under LC_ALL=C, joins it
+# with single spaces, and compares the result to the literal frozen in
+# scripts/ci-lints.sh. Set equality, not substring probes: a sixth member AND a
+# dropped member each change the joined string, so both drift directions are
+# covered by construction.
+#
+# UPSTREAM SOURCE. The `interview` plugin's `references/signals-contract.md`,
+# section `## Frozen HANDOFF_SUGGESTION enum` ("Exactly five members. Closed set
+# — an emission outside this set is a contract violation."), vendored from
+# interview v1.1.0 on 2026-08-12.
+#
+# VENDORED PIN — nothing regenerates this file. No task, script, hook or
+# generator may rewrite it. It changes only in a reviewed human edit that
+# deliberately adopts an upstream enum change, never as a side effect of another
+# task. An auto-synced pin can never go red: a check that rewrites itself to
+# match its input has stopped being a check.
+#
+# WHY IT LIVES HERE (D8-wp13). scripts/ci-lints.sh is a GitHub Actions gate step
+# (.github/workflows/validate-plugins.yml, `repo lints`) running on a runner with
+# no Claude install and therefore no plugin cache, so C1 may not read the
+# installed contract. The claim "the INSTALLED plugin still matches this fixture"
+# is a property of a machine, not of repo bytes; it lives in the machine-local
+# scripts/interview-contract-sync.sh, which no workflow step invokes.
+#
+# `expert:<role>` carries its angle-bracket suffix exactly as the upstream table
+# writes it; the other four members are emitted bare.
+
+research
+expert:<role>
+user-judgment
+high-fidelity
+deferred

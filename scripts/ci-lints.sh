@@ -27,7 +27,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Registry of runnable sections, in run order.
-SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet relation-claims)
+SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet relation-claims interview-contract)
 
 # Opt-out list for the per-section zero-scan gate: sections named here may
 # legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
@@ -896,6 +896,176 @@ lint_relation_claims() {
       "$f" "$lineno" "$content" >&2
     VIOLATIONS=$(( VIOLATIONS + 1 ))
   done < <(grep -IHnZ -i -F "${pat_args[@]}" -- "${files[@]}" 2>/dev/null)
+
+  [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# interview-contract — the wp-13 audit-debt pins (F10, F11, F12).
+#
+# Four checks over SEVEN repo-tracked surfaces. Every input is resolved from a
+# repo-relative path, so the section behaves identically on the author machine
+# and on a CI runner — `scripts/ci-lints.sh` is a GitHub Actions gate step
+# (.github/workflows/validate-plugins.yml, step `repo lints`, ubuntu-latest with
+# no Claude install and therefore no plugin cache). NO check here may read a path
+# outside the repo. The claim that the INSTALLED interview plugin still matches
+# the vendored enum fixture is NOT CI-enforceable and lives only in the
+# machine-local `scripts/interview-contract-sync.sh`, which no workflow invokes.
+#
+#   C1 (F10a) — the vendored enum fixture declares EXACTLY the five frozen
+#               `HANDOFF_SUGGESTION` members, asserted as a SET. The two
+#               independent substring greps in packages/goalforge/evals/run.sh
+#               survive both a sixth member and a dropped one; set equality does
+#               not.                                                    (1 file)
+#   C2 (F10b) — the `harden` row of fidelity.md names the routing token the
+#               escalation actually rides on, in source AND generated mirror.
+#                                                                      (2 files)
+#   C3 (F11)  — the interview row lives under `requires:` with its degrade line,
+#               is ABSENT from `recommends:`, and the generated manifest agrees.
+#               F11's premise ("no WP decides where the row lives post-flip") is
+#               FALSIFIED — wp-09 decided it. This replaces the accidental
+#               coverage of scripts/goalforge-generate.sh, which only FATALs on
+#               an EMPTY `requires:` and therefore holds only while interview is
+#               the sole entry.                                        (2 files)
+#   C4 (F12)  — interview/SKILL.md carries the disambiguation literal that
+#               separates the caller-side sense of `specialization` from the
+#               retired nested-sibling sense, in source AND mirror.    (2 files)
+#
+# MISSING INPUT IS A VIOLATION, NEVER A SKIP. Every surface is repo-tracked, so
+# "not present" always means something is wrong, never "not applicable". There is
+# no WARN-skip branch and no `2>/dev/null` that resolves into a passing state:
+# deleting any file this section reads makes it RED, not green. The one negative
+# leg (interview must not appear under `recommends:`) is CONJOINED behind the two
+# `requires:` positives, which fail first if relations.yaml is gutted.
+#
+# GF_IC_*: test seams, following the GF_MANIFEST_FILE / GF_MANIFEST_ROOT
+# precedent above, so each check has an unattended mutation probe that points the
+# section at a scratch copy instead of mutating a real file.
+# ---------------------------------------------------------------------------
+GF_IC_ENUM_FIXTURE="${GF_IC_ENUM_FIXTURE:-scripts/lint-baselines/interview-contract-enum.txt}"
+GF_IC_FIDELITY_SRC="${GF_IC_FIDELITY_SRC:-packages/goalforge/references/fidelity.md}"
+GF_IC_FIDELITY_MIRROR="${GF_IC_FIDELITY_MIRROR:-plugins/goalforge/references/fidelity.md}"
+GF_IC_RELATIONS="${GF_IC_RELATIONS:-packages/goalforge/relations.yaml}"
+GF_IC_PLUGIN_JSON="${GF_IC_PLUGIN_JSON:-plugins/goalforge/.claude-plugin/plugin.json}"
+GF_IC_SKILL_SRC="${GF_IC_SKILL_SRC:-packages/goalforge/interview/SKILL.md}"
+GF_IC_SKILL_MIRROR="${GF_IC_SKILL_MIRROR:-plugins/goalforge/skills/interview/SKILL.md}"
+
+# The frozen set, joined the way ic_enum_set() joins the fixture. Vendored from
+# the interview plugin's references/signals-contract.md §Frozen
+# HANDOFF_SUGGESTION enum (v1.1.0); see the fixture header for the pin contract.
+IC_ENUM_EXPECTED='deferred expert:<role> high-fidelity research user-judgment'
+IC_FIDELITY_TOKEN='HANDOFF_SUGGESTION: high-fidelity'
+IC_RELATIONS_ENTRY='- name: interview'
+IC_RELATIONS_DEGRADE='degrade: one-question-at-a-time AskUserQuestion loop in the main session'
+IC_MANIFEST_DEP='"dependencies": [{"name": "interview"'
+IC_SKILL_LITERAL='specialization = caller-side framing of the shared engine'
+
+# ic_enum_set <file> — drop `#` comments and blank lines, sort under LC_ALL=C,
+# join with single spaces. Set equality covers a sixth member and a dropped
+# member alike; two independent substring probes cover neither.
+ic_enum_set() {
+  local joined
+  joined="$(grep -v '^[[:space:]]*#' "$1" | grep -v '^[[:space:]]*$' \
+            | LC_ALL=C sort | tr '\n' ' ')"
+  printf '%s' "${joined% }"
+}
+
+# ic_yaml_block <file> <top-level-key> — slice from `<key>:` to the next
+# top-level key. Same shape as the awk in wp-13 task-03.
+ic_yaml_block() {
+  awk -v key="$2" '$0 == key ":" {f=1; next} f && /^[a-z][a-z-]*:$/ {f=0} f' "$1"
+}
+
+lint_interview_contract() {
+  VIOLATIONS=0
+  SCANNED=0
+  local f found req rec requires_ok
+
+  # --- C1: the vendored enum fixture declares exactly the five members ------
+  SCANNED=$(( SCANNED + 1 ))
+  if [ ! -f "$GF_IC_ENUM_FIXTURE" ]; then
+    printf '  %s: vendored enum fixture missing\n' "$GF_IC_ENUM_FIXTURE" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  else
+    found="$(ic_enum_set "$GF_IC_ENUM_FIXTURE")"
+    if [ "$found" != "$IC_ENUM_EXPECTED" ]; then
+      printf '  %s: frozen HANDOFF_SUGGESTION enum drifted\n' "$GF_IC_ENUM_FIXTURE" >&2
+      printf '    expected: %s\n    found:    %s\n' "$IC_ENUM_EXPECTED" "$found" >&2
+      VIOLATIONS=$(( VIOLATIONS + 1 ))
+    fi
+  fi
+
+  # --- C2: the `harden` row names the routing token, source AND mirror ------
+  for f in "$GF_IC_FIDELITY_SRC" "$GF_IC_FIDELITY_MIRROR"; do
+    SCANNED=$(( SCANNED + 1 ))
+    if [ ! -f "$f" ]; then
+      printf '  %s: fidelity routing table missing\n' "$f" >&2
+      VIOLATIONS=$(( VIOLATIONS + 1 ))
+      continue
+    fi
+    if ! awk '/^\| `harden` \|/' "$f" | grep -qF -e "$IC_FIDELITY_TOKEN"; then
+      printf '  %s: §Per-stage routing `harden` row does not name `%s`\n' \
+        "$f" "$IC_FIDELITY_TOKEN" >&2
+      VIOLATIONS=$(( VIOLATIONS + 1 ))
+    fi
+  done
+
+  # --- C3: interview is a HARD requirement, and the manifest agrees ---------
+  SCANNED=$(( SCANNED + 1 ))
+  requires_ok=0
+  if [ ! -f "$GF_IC_RELATIONS" ]; then
+    printf '  %s: relations file missing\n' "$GF_IC_RELATIONS" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  else
+    requires_ok=1
+    req="$(ic_yaml_block "$GF_IC_RELATIONS" requires)"
+    if ! printf '%s\n' "$req" | grep -qF -e "$IC_RELATIONS_ENTRY"; then
+      printf '  %s: `requires:` block does not carry `%s`\n' \
+        "$GF_IC_RELATIONS" "$IC_RELATIONS_ENTRY" >&2
+      VIOLATIONS=$(( VIOLATIONS + 1 ))
+      requires_ok=0
+    fi
+    if ! printf '%s\n' "$req" | grep -qF -e "$IC_RELATIONS_DEGRADE"; then
+      printf '  %s: the interview `requires:` entry lost its degrade line\n' \
+        "$GF_IC_RELATIONS" >&2
+      VIOLATIONS=$(( VIOLATIONS + 1 ))
+      requires_ok=0
+    fi
+    # Negative leg, conjoined behind both positives so a gutted file can never
+    # be the thing that satisfies it.
+    if [ "$requires_ok" -eq 1 ]; then
+      rec="$(ic_yaml_block "$GF_IC_RELATIONS" recommends)"
+      if printf '%s\n' "$rec" | grep -qF -e "$IC_RELATIONS_ENTRY"; then
+        printf '  %s: interview appears under `recommends:` — it is a HARD requirement (wp-09)\n' \
+          "$GF_IC_RELATIONS" >&2
+        VIOLATIONS=$(( VIOLATIONS + 1 ))
+      fi
+    fi
+  fi
+
+  SCANNED=$(( SCANNED + 1 ))
+  if [ ! -f "$GF_IC_PLUGIN_JSON" ]; then
+    printf '  %s: generated plugin manifest missing\n' "$GF_IC_PLUGIN_JSON" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  elif ! grep -qF -e "$IC_MANIFEST_DEP" "$GF_IC_PLUGIN_JSON"; then
+    printf '  %s: manifest does not carry %s\n' "$GF_IC_PLUGIN_JSON" "$IC_MANIFEST_DEP" >&2
+    VIOLATIONS=$(( VIOLATIONS + 1 ))
+  fi
+
+  # --- C4: the disambiguation literal, source AND mirror --------------------
+  for f in "$GF_IC_SKILL_SRC" "$GF_IC_SKILL_MIRROR"; do
+    SCANNED=$(( SCANNED + 1 ))
+    if [ ! -f "$f" ]; then
+      printf '  %s: goalforge-interview SKILL.md missing\n' "$f" >&2
+      VIOLATIONS=$(( VIOLATIONS + 1 ))
+      continue
+    fi
+    if ! grep -qF -e "$IC_SKILL_LITERAL" "$f"; then
+      printf '  %s: missing the pinned disambiguation literal `%s`\n' \
+        "$f" "$IC_SKILL_LITERAL" >&2
+      VIOLATIONS=$(( VIOLATIONS + 1 ))
+    fi
+  done
 
   [ "$VIOLATIONS" -eq 0 ]
 }
