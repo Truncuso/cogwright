@@ -789,8 +789,15 @@ lint_retired_vocab() {
 # 4 STATIC-CONTRACT checks to verify/evals/run.sh, each pinning a SKILL.md
 # contract line that the deterministic goalforge-validate.test.sh cases lock
 # behaviourally. Deliberate, reviewed growth — not creep.
+#
+# Re-frozen at 342 on 2026-08-13: commit 91aa914 added one STATIC-CONTRACT check
+# to decompose/evals/run.sh pinning that the Add-WP section documents the
+# `--derived-from` / `--source` flag pair. Add-WP is prose-enforced (there is no
+# add-wp script), so the doc contract is the only assertable surface for that
+# flag pair. Human-adjudicated 2026-08-13. Deliberate, reviewed growth — not
+# creep.
 # ---------------------------------------------------------------------------
-PROSE_EVAL_CAP=341
+PROSE_EVAL_CAP=342
 PROSE_EVAL_FILE_FLOOR=150
 
 lint_prose_eval_ratchet() {

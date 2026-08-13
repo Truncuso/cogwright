@@ -21,6 +21,11 @@
 # left verbatim by the generator (it addresses ~/.claude/skills, not the plugin).
 *harden/*::skills/adjudication/*
 
+# class-vi cross-skill prose: decompose's Add-WP re-entry section names the
+# caller that marshals `--source` records (the idea package's idea-route), which
+# is a peer installed skill under ~/.claude/skills, never part of this plugin.
+*decompose/SKILL.md::skills/idea/idea-route/*
+
 # external pointer into the author's global rule set, not the plugin tree.
 *execute/references/dispatch-resolution.md::references/rules/*
 
