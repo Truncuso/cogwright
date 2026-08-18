@@ -19,8 +19,6 @@ metadata:
 hooks:
   Stop:
     - hooks:
-        - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge"
 ---
 
 # goalforge — Spec-Driven Development chain (LOCAL authority)

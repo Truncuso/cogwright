@@ -8,8 +8,6 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-decompose"
-        - type: command
           command: "$HOME/.claude/hooks/skill-trace.sh goalforge-decompose:stop"
 ---
 

@@ -14,8 +14,6 @@ metadata:
 hooks:
   Stop:
     - hooks:
-        - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-onboard"
 ---
 
 # goalforge-onboard

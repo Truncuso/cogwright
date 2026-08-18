@@ -97,10 +97,11 @@ do
 done
 check "all referenced bundled files exist on disk" "$REFS_OK"
 
-# F7: Stop hook measurement present
-grep -q "skill-measure.sh goalforge" "$SKILL_MD" \
-  && check "Stop measurement hook present" "pass" \
-  || check "Stop measurement hook present" "fail"
+# F7: retired skill-measure hook must be ABSENT (retired 2026-08-07, wp-06 D10;
+# measurement is global via skill-usage.sh + ledger/events streams)
+grep -q "skill-measure.sh" "$SKILL_MD" \
+  && check "retired skill-measure hook absent" "fail" \
+  || check "retired skill-measure hook absent" "pass"
 
 # F8: canonical role→tier map eval passes (deterministic, no network)
 if python3 "$SKILL_DIR/scripts/goalforge-pick-agent.py" --test-tiers >/dev/null 2>&1; then

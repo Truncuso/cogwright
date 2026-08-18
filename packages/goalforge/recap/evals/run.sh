@@ -49,7 +49,13 @@ check "record-wp subcommand documented"  "record-wp"
 check "one commit per WP (no per-task commit column)" "one commit per WP"
 check "task table is 2-col (no Commit column)" "| Task | Result |"
 check "Gotchas section present"          "## Gotchas"
-check "skill-measure.sh hook present"    "skill-measure.sh goalforge-recap"
+if grep -qF "skill-measure" "$SKILL_MD"; then
+  echo "  FAIL: retired skill-measure hook still present"
+  FAIL=$((FAIL + 1))
+else
+  echo "  PASS: retired skill-measure hook absent"
+  PASS=$((PASS + 1))
+fi
 check "skill-trace.sh hook present"      "skill-trace.sh goalforge-recap:stop"
 check "append-task subcommand documented" "append-task"
 check "finalize subcommand documented"   "finalize"

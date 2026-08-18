@@ -8,8 +8,6 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-recap"
-        - type: command
           command: "$HOME/.claude/hooks/skill-trace.sh goalforge-recap:stop"
 ---
 

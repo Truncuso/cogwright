@@ -8,8 +8,6 @@ hooks:
   Stop:
     - hooks:
         - type: command
-          command: "$HOME/.claude/scripts/skill-measure.sh goalforge-arbiter"
-        - type: command
           command: "$HOME/.claude/hooks/skill-trace.sh goalforge-arbiter:stop"
 ---
 
