@@ -80,6 +80,22 @@ do_check() {
     [[ "$v" == "illegal" ]] && return 2 || return 0
 }
 
+# ── WIP-freeze gate (base-system-map ticket-13) ─────────────────────────────
+# A feature frozen for a consolidation wave carries `status: paused` in its
+# plans/<feature>/overview.md. Any WP status edit under a paused feature is
+# refused until the feature is unfrozen (its overview status edited off
+# `paused` first — that edit is feature-level and passes this gate).
+# Zero-breakage: unreadable/absent feature overview, or the edited file IS the
+# feature overview itself → not frozen.
+feature_frozen() {
+    # args: <edited wp overview path>; returns 0 when the owning feature is paused
+    local wp_file="$1" feat_overview
+    feat_overview="$(dirname "$(dirname "$wp_file")")/overview.md"
+    [[ "$feat_overview" == "$wp_file" ]] && return 1
+    [[ -r "$feat_overview" ]] || return 1
+    grep -Eq "^status:[[:space:]]*['\"]?paused" "$feat_overview" 2>/dev/null
+}
+
 # ── Cheap bash prefilter ────────────────────────────────────────────────────
 # Runs on the raw payload BEFORE any interpreter spawn, on every Edit in the
 # session. CONSERVATIVE by construction: it returns 1 only for a payload that
@@ -214,6 +230,30 @@ self_test() {
     leg "leg 3: \$HOME/.claude/plans/** -> hook engaged"           "$hs/.claude/plans/f/overview.md"   engage
     leg "leg 3 negative: \$HOME/.claude outside plans/ -> silent"  "$hs/.claude/notplans/overview.md"  silent
 
+    # WIP-freeze gate (ticket-13): a LEGAL edge under a paused feature blocks;
+    # the same edge unfreezes when the feature overview leaves `paused`; the
+    # feature-overview edit itself is never frozen (that is the unfreeze path).
+    local fz="$d/plans/frozen-feature" fz_out fz_rc
+    mkdir -p "$fz/wp-01"
+    printf 'status: paused\n' > "$fz/overview.md"
+    legal_payload() { # <overview path> — spec -> hardened is a legal edge
+        python3 -c 'import json,sys; print(json.dumps({"tool_name":"Edit","tool_input":{"file_path":sys.argv[1],"old_string":"status: spec\n","new_string":"status: hardened\n"}}))' "$1"
+    }
+    fz_out="$(legal_payload "$fz/wp-01/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1 >/dev/null)"; fz_rc=$?
+    { [[ "$fz_rc" -eq 2 ]] && [[ "$fz_out" == *paused* ]]; } \
+        && ok "legal edge under paused feature -> exit 2 naming the freeze" \
+        || no "paused feature should block with reason (rc=$fz_rc, err='$fz_out')"
+
+    printf 'status: executing\n' > "$fz/overview.md"
+    legal_payload "$fz/wp-01/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" >/dev/null 2>&1; fz_rc=$?
+    [[ "$fz_rc" -eq 0 ]] && ok "same edge after unfreeze -> exit 0" \
+        || no "unfrozen feature should pass (rc=$fz_rc)"
+
+    printf 'status: paused\n' > "$fz/overview.md"
+    feature_frozen "$fz/overview.md" && \
+        no "feature overview itself must not count as frozen" || \
+        ok "feature overview edit exempt from its own freeze"
+
     rm -rf "$d"
 
     echo ""
@@ -260,6 +300,10 @@ if [[ -z "${FROM:-}" || -z "${TO:-}" ]]; then
 fi
 # Fast path: a status edit outside every resolved plans root is not ours.
 goalforge_under_plans_root "${FILE:-}" || exit 0
+if feature_frozen "$FILE"; then
+    echo "goalforge-transition-guard: BLOCK — $FILE: owning feature is 'status: paused' (WIP freeze, base-system-map ticket-13). Unfreeze the feature's overview.md first." >&2
+    exit 2
+fi
 do_check "$FROM" "$TO"
 rc=$?
 if [[ "$rc" -eq 2 ]]; then
