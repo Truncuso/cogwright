@@ -341,6 +341,17 @@ which point the map is simply `working` again (no status unwind needed).
 
 ## Gotchas
 
+- **An uncommitted claim is invisible to parallel sessions.** The claim stamp
+  only synchronizes once it reaches the shared git state — a stamp sitting in
+  your working tree protects nothing, and a parallel session can resolve the
+  same ticket while you dispatch over it (live failure 2026-08-20: base-map
+  ticket-41 resolved by one session while another, holding only a local claim,
+  dispatched a duplicate research agent). On a map worked by concurrent
+  sessions, COMMIT the claim stamp immediately after claiming — do not batch it
+  into the end-of-session commit — and immediately before claiming, re-read the
+  ticket file and check `git log` freshness for the map: a same-day parallel
+  resolution may postdate the frontier output you are holding.
+
 - **A stale claim is not a free ticket.** `claimed_by` + `claimed_at` are
   stamp-only and the ticket status stays `open`, so a claimed ticket is excluded
   from `frontier` while still counting against `converged`. A session that dies
