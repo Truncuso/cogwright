@@ -414,6 +414,10 @@
       "path": "skills/wayfind/references/ticket-fanout.md"
     },
     {
+      "from": "skills/wayfind/SKILL.md",
+      "path": "skills/wayfind/scripts/wayfind-status.sh"
+    },
+    {
       "from": "skills/wayfind/references/graduation-brief.md",
       "path": "skills/wayfind/references/learning-goals.md"
     },
