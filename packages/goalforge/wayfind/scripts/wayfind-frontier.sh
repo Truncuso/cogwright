@@ -251,6 +251,20 @@ if [ "${1:-}" = "--self-test" ]; then
     fail "$name" "stderr does not name both the file and the unpadded token: $ERR"
   else pass "$name"; fi
 
+  # 16. blocked-and-claimed: an open ticket with BOTH unsatisfied deps and a
+  #     claim stamp appears in BOTH `blocked` (with its waiting_on edge — the
+  #     diagnostic that keeps dep-cycles through claimed nodes traceable) AND
+  #     `claimed`. The overlap is INTENTIONAL: the arrays are not a partition
+  #     (SKILL.md §work flow "at least one").
+  run_case "$FIXROOT/blocked-and-claimed"
+  name=blocked-and-claimed
+  if [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
+  elif ! contains "$OUT" '"waiting_on": ["ticket-01"]'; then fail "$name" "waiting_on edge lost for claimed+blocked ticket: $OUT"
+  elif ! contains "$OUT" '"blocked": [{"ticket": "ticket-02-dep"'; then fail "$name" "ticket-02-dep missing from blocked: $OUT"
+  elif ! contains "$OUT" '"by": "session-abc123"'; then fail "$name" "ticket-02-dep missing from claimed: $OUT"
+  elif ! contains "$OUT" '"frontier": ["ticket-01-base"]'; then fail "$name" "frontier wrong: $OUT"
+  else pass "$name"; fi
+
   if [ "$st_fail" -eq 0 ]; then
     printf '\nself-test: ALL PASS (WAYFIND_NOW=%s)\n' "$WAYFIND_NOW"
     exit 0
@@ -426,7 +440,12 @@ for base in "${SORTED_BASES[@]}"; do
     frontier_items+=("\"$base_j\"")
   fi
 
-  # blocked: open AND >=1 unsatisfied dep (human-diagnostic only)
+  # blocked: open AND >=1 unsatisfied dep (human-diagnostic only). DELIBERATELY
+  # not gated on claim state: a claimed ticket with unsatisfied deps appears in
+  # BOTH blocked and claimed — the waiting_on edge is diagnostic information
+  # (dep-cycles through claimed nodes stay traceable); dropping it would make a
+  # claimed-ticket deadlock indistinguishable from healthy live work. The
+  # arrays overlap by design; consumers must not treat them as a partition.
   if [ "$status" = "open" ] && [ "${#unsat[@]}" -gt 0 ]; then
     mapfile -t unsat_sorted < <(printf '%s\n' "${unsat[@]}" | LC_ALL=C sort)
     waiting=""

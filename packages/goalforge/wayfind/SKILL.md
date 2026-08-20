@@ -60,6 +60,16 @@ global `~/.claude/plans/`. Wayfind cites that rule, never its own convention.
 map present → **work** (work offers graduate when the frontier script reports
 `converged: true`). `/wayfind <effort-slug> chart` forces a re-chart / add-tickets pass.
 
+**Discovery (`/wayfind` with NO slug)** — the session-resume entry point: run
+`bash ${CLAUDE_SKILL_DIR}/scripts/wayfind-status.sh <PLANS_ROOT>` and present the
+active efforts it lists (slug, `open` count, `frontier`) to pick from; the pick
+continues into the auto-phase above. Read-only; `frontier`/`converged`/`stale_claims`
+pass through verbatim from the sibling frontier script; `open` is counted directly
+from ticket files with `status: open` (the arrays are no disjoint partition). stdout `{"efforts": [{"slug", "status": working|charting, "frontier",
+"open", "converged", "stale_claims"}]}`; exit 0 in every valid state (zero
+efforts → `{"efforts": []}`), exit 2 only on a missing `<PLANS_ROOT>`; a
+malformed effort degrades to `{"slug", "error"}` and never hides the rest.
+
 ---
 
 ## chart flow
@@ -208,9 +218,10 @@ is `--self-test`-only. Read-only, sole computer of convergence (Constraints).
 | `claimed` non-empty, all ages ≤ 7 days, and every `blocked` chain terminates in a claimed ticket | ordinary dependency wait behind a live claim | do not dispatch over a live claim — resolve the claimed ticket first, or end the session; there is nothing else to pick |
 | `blocked` non-empty, `claimed` empty (or no `waiting_on` chain reaches a claimed ticket) | no open ticket has a satisfiable path — a `depends_on` **cycle**, or a chain rooted in a ticket nobody will work | trace `waiting_on` to the cycle or the root; break it by re-scoping a ticket, splitting it, or marking one `out-of-scope` |
 
-Every open ticket lands in exactly one of `frontier` / `blocked` / `claimed`, so
-an empty `frontier` with `converged: false` always leaves at least one of
-`blocked` / `claimed` non-empty — one of the rows above always applies.
+Every open ticket lands in at least one — NOT exactly one — of `frontier` /
+`blocked` / `claimed`: a claimed ticket with unsatisfied deps is in BOTH `blocked`
+(`waiting_on` stays traceable through dep-cycles) and `claimed`. An empty `frontier`
+with `converged: false` thus leaves one non-empty — a row above always applies.
 
 A dependency naming a nonexistent ticket (typo, deletion, or a zero-padding slip
 like `ticket-1` for `ticket-01-<slug>.md`) is a structural error, not a stall —
