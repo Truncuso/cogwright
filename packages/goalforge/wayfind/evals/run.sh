@@ -474,13 +474,16 @@ if grep -qE '^[[:space:]]+version: 0\.3\.0$' "$SKILL_MD"; then pass "$name"
 else fail "$name" "SKILL.md frontmatter does not read metadata.version: 0.3.0"; fi
 
 # Prose budget as an ASSERTION, not an inspection: SKILL.md is always-loaded, so
-# growth is a real cost. Ceiling 385 = 361 (0.2.0 as-built: 301 baseline + 60)
-# + 8 (0.3.0 ticket fan-out) + 12 (0.3.0 learning goals) + 4 slack.
+# growth is a real cost. Ceiling 396 = 361 (0.2.0 as-built: 301 baseline + 60)
+# + 8 (0.3.0 ticket fan-out) + 12 (0.3.0 learning goals) + 4 slack
+# + 11 (claim-commit-visibility gotcha, 2026-08-20: a live parallel-session
+#   duplicate dispatch; the failure mode is invisible without the worked
+#   example, so it is bumped-with-justification rather than compressed).
 # An unmeasured budget is not a constraint.
 name=skill-line-budget
 sk_lines="$(wc -l < "$SKILL_MD")"
-if [ "$sk_lines" -le 385 ]; then pass "$name"
-else fail "$name" "SKILL.md is $sk_lines lines, over the 385 ceiling (361 as-built at 0.2.0 + 8 fan-out + 12 learning + 4 slack)"; fi
+if [ "$sk_lines" -le 396 ]; then pass "$name"
+else fail "$name" "SKILL.md is $sk_lines lines, over the 396 ceiling (361 as-built at 0.2.0 + 8 fan-out + 12 learning + 4 slack + 11 claim-commit gotcha)"; fi
 
 name=doc-chart-flow
 skgrep "chart flow" && pass "$name" || fail "$name" "SKILL.md missing 'chart flow' section"
