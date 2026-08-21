@@ -19,6 +19,11 @@
         "sha": "5673955567aec7ed35d9d4faab6dffcaefc5701c"
       },
       "description": "Harness-agnostic interview engine (socratic, adversarial, divergent, teachback, rapid presets) for grilling plans, specs, and ideas before they're acted on."
+    },
+    {
+      "name": "xquik-x-data",
+      "source": "./plugins/xquik-x-data",
+      "description": "Xquik X data API, MCP endpoint, SDKs, and webhooks for Claude Code."
     }
   ]
 }
