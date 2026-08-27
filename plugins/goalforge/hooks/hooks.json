@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit",
+        "matcher": "Edit|Write|MultiEdit|mcp__lean-ctx__ctx_patch|mcp__lean-ctx__ctx_call",
         "hooks": [
           {
             "type": "command",
@@ -10,7 +10,7 @@
             "timeout": 5
           }
         ],
-        "description": "goalforge single-writer: blocks tool-surface mutation of status:/goal_approved_version: on plan files under a resolved PLANS_ROOT. The BLANKET field guard — it simulates Edit, MultiEdit and Write payloads alike, which is why the two Edit-only guards below can stay narrow. Fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
+        "description": "goalforge single-writer: blocks tool-surface mutation of status:/goal_approved_version: on plan files under a resolved PLANS_ROOT. The BLANKET field guard — it simulates Edit, MultiEdit, Write and ctx_patch payloads alike (ctx_call unwrapped one level), which is why the two Edit-only guards below can stay narrow. Fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
       },
       {
         "matcher": "Edit",

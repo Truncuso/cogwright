@@ -69,6 +69,33 @@
 # form needs no additional dependency and has no code-interpolation surface
 # at all).
 #
+# CTX_PATCH (lean-ctx MCP write surface): the Edit/Write/MultiEdit matcher is
+# not the whole tool surface — `mcp__lean-ctx__ctx_patch` writes files too, and
+# `mcp__lean-ctx__ctx_call{name:"ctx_patch"}` proxies it. Both are accepted here
+# (bare spellings included) and mapped onto the SAME simulate-and-compare
+# machinery, so the single-writer guarantee is tool-agnostic. One level of
+# ctx_call unwrap only — ctx_call cannot invoke itself. The payload is
+# normalized into a uniform op list (an explicit `ops[]`, else the top-level
+# {path, old_text|find, new_text|replace} as a single op), and EVERY op is
+# checked against ITS OWN path: the first offending op blocks the whole call
+# (the real call is not atomic per-op, so one blocking op is enough).
+#
+# Per-op classes:
+#   reconstructable old/new (old_text|find + new_text|replace) -> the Edit
+#     simulation verbatim (replace_all does the all-occurrences form).
+#   op=create on a nonexistent path -> the scaffolding exemption above.
+#   op=delete, or any op WITHOUT a reconstructable old (set_line,
+#     replace_lines, insert_after, replace_symbol, ...) -> UN-SIMULATABLE: the
+#     real post-write content cannot be derived from the payload. Brief
+#     immutability still applies (it is content-independent). Otherwise the
+#     fallback is a CONSERVATIVE scan of the op's new text for a protected
+#     `<field>:` key ($FIELDS — the same list, not a new one): a set_line
+#     carrying `status: ready` blocks; an op carrying no protected key allows.
+#     This is deliberately weaker than simulate-and-compare (it cannot see a
+#     bare-value substitution landing on a status: line), because the payload
+#     genuinely does not say what lands on disk — allowing is the zero-breakage
+#     side of that ambiguity.
+#
 # ZERO-BREAKAGE: any internal error (malformed JSON, missing jq, unreadable
 # file) exits 0 — this hook must never block because it broke internally.
 # The ONLY non-zero exit is exit 2 for a confirmed direct mutation of
@@ -165,6 +192,115 @@ changed_field() {
     return 1
 }
 
+# ── ctx_patch normalization ──────────────────────────────────────────────────
+
+# Shared jq `def`s for the lean-ctx write surface. Kept inline (this package
+# ships portable — it never sources a helper from outside its own hooks dir).
+#   cp_bare  — strip a leading "mcp__lean-ctx__" from a string, else pass through.
+#   cp_str   — coerce a non-string (or absent) value to "".
+#   cp_tool  — the EFFECTIVE tool name: for ctx_call, .tool_input.name; else the
+#              outer tool_name. Bare-ified either way.
+#   cp_input — the EFFECTIVE tool_input: for ctx_call, .tool_input.arguments;
+#              else the outer tool_input. Non-objects become {} so a malformed
+#              payload yields an empty op list rather than a jq error.
+#   cp_ops   — the uniform op list: {path, op, old, new} per op, paths falling
+#              back to the top-level .path, old = old_text|find, new =
+#              new_text|replace.
+CTXP_JQ='
+def cp_bare: if type == "string" and startswith("mcp__lean-ctx__") then sub("^mcp__lean-ctx__";"") else . end;
+def cp_str: if type == "string" then . else "" end;
+def cp_outer: (.tool_name? // "") | cp_bare;
+def cp_tool: (cp_outer) as $o | if $o == "ctx_call" then ((.tool_input.name? // "") | cp_bare) else $o end;
+def cp_input: (cp_outer) as $o
+  | (if $o == "ctx_call" then .tool_input.arguments? else .tool_input? end) as $t
+  | if ($t | type) == "object" then $t else {} end;
+def cp_ops: cp_input as $i
+  | (if (($i.ops?) | type) == "array" then [$i.ops[] | select(type == "object")] else [] end) as $ops
+  | (if ($ops | length) > 0 then $ops else [$i] end)
+  | map({
+      path: ((.path? // $i.path?) | cp_str),
+      op:   ((.op?) | cp_str),
+      old:  ((.old_text? // .find?) | cp_str),
+      new:  ((.new_text? // .replace?) | cp_str)
+    });
+'
+
+# Prints the first field of $FIELDS whose `<field>:` key opens a line in $1, or
+# empty. The conservative fallback for un-simulatable ops (see CTX_PATCH in the
+# header) — a key-presence test on the payload's own new text, NOT a value diff
+# against disk, because for these ops the on-disk result is unknowable here.
+new_text_has_field() {
+    local text="$1" f
+    [ -n "$text" ] || return 1
+    for f in $FIELDS; do
+        if printf '%s\n' "$text" | grep -qE "^[[:space:]]*${f}:" 2>/dev/null; then
+            printf '%s' "$f"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# ctx_patch decision. Same stdout contract as decide(): "<field>|<file>" for a
+# blocking op, nothing otherwise; never exits non-zero. Ops are checked in
+# payload order and the FIRST offending one wins.
+decide_ctx_patch() {
+    local input="$1" eff ops entry path op old new existing simulated old_fm new_fm field
+    eff="$(printf '%s' "$input" | command jq -r "${CTXP_JQ}"'cp_tool' 2>/dev/null)" || return 0
+    [ "$eff" = "ctx_patch" ] || return 0
+    ops="$(printf '%s' "$input" | command jq -c "${CTXP_JQ}"'cp_ops | .[]' 2>/dev/null)" || return 0
+    [ -z "$ops" ] && return 0
+
+    while IFS= read -r entry; do
+        [ -z "$entry" ] && continue
+        path="$(printf '%s' "$entry" | command jq -r '.path // empty' 2>/dev/null)" || return 0
+        [ -z "$path" ] && continue
+        is_scoped "$path" || continue
+
+        # SCAFFOLDING EXEMPTION, uniform with the tool branches: a path that does
+        # not exist yet is authoring (this is also where op=create lands).
+        [ -f "$path" ] || continue
+
+        # BRIEF IMMUTABILITY is content-independent, so it applies to every
+        # ctx_patch op class — including the un-simulatable ones.
+        case "$(basename -- "$path")" in
+            brief-task-*.md) printf '%s|%s' "brief-immutable" "$path"; return 0 ;;
+        esac
+
+        op="$(printf '%s' "$entry" | command jq -r '.op // empty' 2>/dev/null)" || return 0
+        old="$(printf '%s' "$entry" | command jq -r '.old // empty' 2>/dev/null)" || return 0
+        new="$(printf '%s' "$entry" | command jq -r '.new // empty' 2>/dev/null)" || return 0
+
+        if [ -n "$old" ]; then
+            # Reconstructable: the Edit simulation, verbatim semantics.
+            existing="$(cat "$path" 2>/dev/null)" || return 0
+            case "$existing" in
+                *"$old"*) : ;;
+                *) continue ;;   # old text absent -> the real op would fail -> nothing to protect
+            esac
+            if [ "$op" = "replace_all" ]; then
+                simulated="${existing//"$old"/"$new"}"
+            else
+                simulated="${existing/"$old"/"$new"}"
+            fi
+            old_fm="$(extract_frontmatter "$existing")"
+            new_fm="$(extract_frontmatter "$simulated")"
+            if field="$(changed_field "$old_fm" "$new_fm")" && [ -n "$field" ]; then
+                printf '%s|%s' "$field" "$path"
+                return 0
+            fi
+        else
+            # Un-simulatable (op=delete, set_line, replace_lines, insert_after,
+            # replace_symbol, ...): conservative protected-key scan of new text.
+            if field="$(new_text_has_field "$new")" && [ -n "$field" ]; then
+                printf '%s|%s' "$field" "$path"
+                return 0
+            fi
+        fi
+    done <<< "$ops"
+    return 0
+}
+
 # ── main decision ────────────────────────────────────────────────────────────
 
 # Reads PreToolUse JSON on stdin. On stdout: "<field>|<file>" if a blocking
@@ -177,6 +313,13 @@ decide() {
     tool_name="$(printf '%s' "$input" | command jq -r '.tool_name // empty' 2>/dev/null)" || return 0
     case "$tool_name" in
         Edit|Write|MultiEdit) : ;;
+        # The lean-ctx write surface — direct, or proxied through ctx_call.
+        # decide_ctx_patch re-checks the EFFECTIVE tool name, so a ctx_call
+        # naming some other inner tool falls out there.
+        mcp__lean-ctx__ctx_patch|ctx_patch|mcp__lean-ctx__ctx_call|ctx_call)
+            decide_ctx_patch "$input"
+            return 0
+            ;;
         *) return 0 ;;
     esac
 
