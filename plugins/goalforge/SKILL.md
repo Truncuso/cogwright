@@ -65,8 +65,8 @@ orchestrator, or referenced here.
 
 `/spec`, `/plan`, `/implement`, `/verify` are the human entry points; each is a
 thin dispatch surface that reads the stage child's `SKILL.md` directly and runs
-the procedure in-session. The `goalforge-run` orchestrator (`run/`) is the named
-alternative for driving the whole chain end-to-end.
+the procedure in-session. `/goalforge-run` is the fifth entry point: it pins the
+`goalforge-run` orchestrator (`run/`) for driving the whole chain end-to-end.
 
 Note: `prototype/` and `wayfind/` are non-chain tenants co-located in this
 package (not chain stages), reachable via the installer's top-level symlinks
@@ -89,11 +89,11 @@ name map: `references/alias-map.md`.
   (`full`⇒`standard`, `one-go`⇒`fast`) so old pins keep working, but neither is
   ever emitted or written. `run/evals/run.sh` derives the enum from the
   classifier and fails if the prose drifts back.
-- **`goalforge-run` is named but not reachable by the Skill tool.** It is a
-  PRIVATE nested child with no `commands/` wrapper and no discovery entry, so
-  invoking `goalforge-run` by name answers "Unknown skill". The only way in is
-  to read `run/SKILL.md` by path and follow it in-session. Prefer `/spec`,
-  `/plan`, `/implement`, `/verify` for stage-at-a-time work.
+- **`goalforge-run` is PUBLIC-PINNED as `/goalforge-run`, not as a Skill-tool
+  name.** It is still a PRIVATE nested child with no discovery entry, so
+  invoking `goalforge-run` by name answers "Unknown skill" — do not retry that
+  call. `commands/goalforge-run.md` is the pin: it loads `run/SKILL.md` by path.
+  Prefer `/spec`, `/plan`, `/implement`, `/verify` for stage-at-a-time work.
 - **No nested child here resolves via the Skill tool.** Discovery is one level
   deep: only `goalforge`, `prototype`, and `wayfind` are discoverable. Every
   other name in the Children table — `goalforge-capture`, `goalforge-harden`,

@@ -9,7 +9,7 @@ argument-hint: "[<effort-slug>] [chart]"
 > directory holding this command file. On a direct, non-plugin load the
 > variable is unset; resolve it that way.
 
-<!-- AUTHORITATIVE SOURCE: the five command files in `packages/goalforge/commands/`
+<!-- AUTHORITATIVE SOURCE: the six command files in `packages/goalforge/commands/`
      are the single source for every route — the plugin copies under
      `plugins/goalforge/commands/` are GENERATED from them by
      the repo-root scripts/goalforge-generate.sh, and the maintainer's `~/.claude/commands/`

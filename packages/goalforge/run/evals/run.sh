@@ -196,6 +196,36 @@ else
   FAIL=$((FAIL+1))
 fi
 
+# ── WRAPPER: goalforge-run is PUBLIC-PINNED and its dry-run gate resolves ────
+# Doctrine item 7 (S28/S46): the orchestrator is named in every command and in
+# the parent SKILL.md, so it MUST have a reachable entry. The pin is a
+# commands/ wrapper that loads run/SKILL.md by path; these checks assert the
+# wrapper exists, that the path it names resolves, and that the deterministic
+# router gate resolves every chain step.
+WRAPPER="$PKG_ROOT/commands/goalforge-run.md"
+file_check WRAPPER "commands/goalforge-run.md wrapper exists" "$WRAPPER"
+
+if [ -f "$WRAPPER" ] && grep -qF 'skills/run/SKILL.md' "$WRAPPER"; then
+  echo "  PASS [WRAPPER]: wrapper loads run/SKILL.md by path"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL [WRAPPER]: wrapper does not load run/SKILL.md by path"
+  FAIL=$((FAIL+1))
+fi
+
+ROUTER_RC=0
+ROUTER_OUT="$(bash "$SKILL_DIR/scripts/goalforge-router.sh" --dry-run goalforge-run-wrapper-probe 2>&1)" || ROUTER_RC=$?
+RESOLVED_STEPS="$(printf '%s\n' "$ROUTER_OUT" | grep -c ': RESOLVED ' || true)"
+if [ "$ROUTER_RC" -eq 0 ] && [ "$RESOLVED_STEPS" -eq 7 ] \
+   && ! printf '%s\n' "$ROUTER_OUT" | grep -q 'UNRESOLVED'; then
+  echo "  PASS [WRAPPER]: router --dry-run resolves all 7 chain steps"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL [WRAPPER]: router --dry-run did not resolve all 7 chain steps (rc=$ROUTER_RC, resolved=$RESOLVED_STEPS)"
+  printf '%s\n' "$ROUTER_OUT" | sed 's/^/        /'
+  FAIL=$((FAIL+1))
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then

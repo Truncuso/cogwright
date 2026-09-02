@@ -15,6 +15,10 @@
     },
     {
       "from": "SKILL.md",
+      "path": "commands/goalforge-run.md"
+    },
+    {
+      "from": "SKILL.md",
       "path": "references/alias-map.md"
     },
     {
@@ -28,6 +32,14 @@
     {
       "from": "SKILL.md",
       "path": "scripts/goalforge-route.sh"
+    },
+    {
+      "from": "commands/goalforge-run.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "commands/goalforge-run.md",
+      "path": "skills/run/SKILL.md"
     },
     {
       "from": "commands/implement.md",
