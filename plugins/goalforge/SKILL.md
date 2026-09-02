@@ -84,10 +84,11 @@ name map: `references/alias-map.md`.
 ## Gotchas
 
 - **Route vocabulary is `fast | standard | wave` — nothing else.** That set is
-  what `scripts/goalforge-route.sh` actually emits. Prose elsewhere in the
-  package has said `full` (`run/chain.yaml`, `commands/spec.md`) and `one-go`
-  (`run/SKILL.md`); neither value is ever produced by the classifier. Trust the
-  classifier's output, not the prose, and read a route value as one of the three.
+  what `scripts/goalforge-route.sh` actually emits, and the package's prose now
+  says only that. The retired `full` and `one-go` still normalize on READ
+  (`full`⇒`standard`, `one-go`⇒`fast`) so old pins keep working, but neither is
+  ever emitted or written. `run/evals/run.sh` derives the enum from the
+  classifier and fails if the prose drifts back.
 - **`goalforge-run` is named but not reachable by the Skill tool.** It is a
   PRIVATE nested child with no `commands/` wrapper and no discovery entry, so
   invoking `goalforge-run` by name answers "Unknown skill". The only way in is

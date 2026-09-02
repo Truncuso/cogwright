@@ -1,5 +1,5 @@
 name: goalforge-run
-description: "SDD planning chain, route-aware: full = capture → spec → decompose → harden → execute → verify; fast = capture → add-wp → deterministic gates → execute → verify"
+description: "SDD planning chain, route-aware over the canonical enum fast|standard|wave: standard = capture → spec → decompose → harden → execute → verify; fast = capture → add-wp → deterministic gates → execute → verify"
 
 inputs:
   feature: opt        # feature slug; required for /spec entry
@@ -14,18 +14,18 @@ ctx:
 # stamped by goalforge-capture (goalforge-route.sh; capture is the routing home).
 # Absent => standard (back-compat). Steps carry `when_route:`; a step without it
 # runs on every route.
-#   full: goalforge-capture → goalforge-spec → goalforge-decompose → goalforge-harden → goalforge-execute → goalforge-verify
+#   standard: goalforge-capture → goalforge-spec → goalforge-decompose → goalforge-harden → goalforge-execute → goalforge-verify
 #   fast: goalforge-capture → goalforge-decompose (add-wp, single WP, no spec.md)
 #         → deterministic gates (goalforge-validate + hooks/goalforge-open-questions-gate.sh --check
 #           + goalforge-wp-complexity: simple AND severity ≤ MEDIUM AND non-migration)
 #         → goalforge-transition <wp> ready --mode auto → goalforge-execute → goalforge-verify
 #   fast escalation: ANY gate trip leaves the WP at `spec` and routes it through
-#   goalforge-harden (the full-path step) — the gates, not the classifier, are the
+#   goalforge-harden (the standard-route step) — the gates, not the classifier, are the
 #   safety net. goalforge-verify runs on EVERY route (never skipped).
 
 steps:
   - skill: goalforge/capture
-    purpose: "Elicit raw input; write feature overview.md (status: draft); classify + stamp route: via goalforge-route.sh (borderline verdict => confirm with human; unattended => full)"
+    purpose: "Elicit raw input; write feature overview.md (status: draft); classify + stamp route: via goalforge-route.sh (borderline verdict => confirm with human; unattended => standard)"
     precondition: null   # chain entry; no prior status required
 
   - skill: goalforge/spec

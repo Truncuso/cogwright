@@ -17,7 +17,7 @@ name: captured-full-chain
 provenance: fixtures/trace-events.jsonl
 ---
 
-# Captured execution_plan route: captured-full-chain
+# Captured execution_plan: captured-full-chain
 
 Captured from a completed goalforge-chain run; loads UNMODIFIED through
 `run/scripts/goalforge-plan-consumer.sh`.

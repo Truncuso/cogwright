@@ -116,11 +116,12 @@ status: draft|spec|ready|active|executing|completed|archived
 # active: reserved-for-future (no skill writes it yet; sdd-lifecycle-redesign)
 created: YYYY-MM-DD
 feature: <feature>
-route: standard                   # one-go|fast|standard|wave — chain route,
+route: standard                   # fast|standard|wave — chain route,
                                   # stamped by goalforge-capture (goalforge-route.sh
-                                  # verdict). Back-compat: fast|full still
-                                  # accepted on read; full normalizes to
-                                  # standard. Absent ⇒ standard (back-compat).
+                                  # verdict). Retired vocabulary normalizes on
+                                  # READ only (`full`⇒standard, `one-go`⇒fast);
+                                  # neither is ever emitted or written.
+                                  # Absent ⇒ standard (back-compat).
 # confidence: clear|borderline|pinned  # classifier confidence for the route
                                   # verdict (optional; goalforge-route.sh output
                                   # field, not gating). pinned = human override.
@@ -149,17 +150,18 @@ in frontmatter. No folder move is ever required or meaningful.
 
 ## Route enum + execution_plan block
 
-`route:` classifies how much of the chain a feature needs. Four values:
+`route:` classifies how much of the chain a feature needs. Three values — the
+set `scripts/goalforge-route.sh` emits, and the only route vocabulary:
 
 | Route | Meaning |
 |---|---|
-| `one-go` | Smallest unit — reuses fast-path 1-WP mechanics with a single dispatch (full goal-contract + deterministic gates preserved). |
 | `fast` | capture → single WP → execute/verify, no `spec.md`. |
-| `standard` | Full chain: spec → decompose → harden → execute → verify. Default. |
+| `standard` | Whole chain: spec → decompose → harden → execute → verify. Default. |
 | `wave` | Multi-WP with parallel fan-out (explore, parallel spec authors, cross-spec judge, hygiene). |
 
-Back-compat: `fast`/`full` are still accepted on read; `full` normalizes to
-`standard`. Absent `route:` ⇒ `standard` (legacy behavior).
+Back-compat on READ only: the retired `full` normalizes to `standard` and the
+retired `one-go` to `fast`. Neither is ever emitted or written. Absent `route:`
+⇒ `standard` (legacy behavior).
 
 Classifier confidence (optional `confidence:` field, output of
 `goalforge-route.sh`, never gating): `clear` (unambiguous signals), `borderline`
@@ -171,7 +173,7 @@ alongside `route:` — persisted DATA, inspectable and human-overridable at the
 spec gate, consumed (never re-classified) by the runner:
 
 ```yaml
-route: standard            # one-go | fast | standard | wave
+route: standard            # fast | standard | wave
 execution_plan:
   steps: [spec, decompose, harden, execute, verify]   # subset per route
   dispatch:                # inline | agent, per step

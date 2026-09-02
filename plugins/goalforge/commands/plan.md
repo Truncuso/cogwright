@@ -39,7 +39,7 @@ a `--mode auto` ledger record.
 
 A `route: fast` feature normally skips `/plan` entirely — its single WP is
 authored and gated at capture time. Invoke `/plan` on it only when promoting to
-the full route.
+the standard route.
 
 ## Rules
 

@@ -22,7 +22,7 @@ before changing any `status:` field.
 `goalforge-capture`) has no `spec.md` by design — its single WP carries the complete
 goal block. Invoking goalforge-spec on a fast feature is the deliberate promotion
 path (the feature outgrew the fast route — e.g. 3+ WPs or a cross-WP
-contract): author the spec retroactively and flip `route: full` with a note.
+contract): author the spec retroactively and flip `route: standard` with a note.
 
 Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
 Templates: `~/.claude/skills/goalforge/references/templates/`.

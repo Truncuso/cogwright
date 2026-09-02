@@ -8,7 +8,7 @@
 # Cases (WP goal.verification.check, plans/goalforge/wp-01-schema-v5/overview.md):
 #   (a) v5-marked WP missing goal: at ready → rejected
 #   (b) legacy no-marker WP at ready → accepted
-#   (c) execution_plan: block (4-route enum + steps/dispatch/parallel/tiers)
+#   (c) execution_plan: block (3-route enum + steps/dispatch/parallel/tiers)
 #       parses without error
 #   (d) dangling optional_depends_on target → non-fatal WARN, exit 0
 #   (e) v5-marked WP WITH complete goal at ready → accepted, AND a
@@ -65,9 +65,9 @@ fi
 out_c="$(bash "$VALIDATE_SH" --show "$FIXTURES_DIR/c-execution-plan-roundtrip" 2>&1)"
 rc_c=$?
 if [ "$rc_c" -eq 0 ] && ! echo "$out_c" | grep -q "^ERROR"; then
-  check "(c) execution_plan: block (4-route enum + steps/dispatch/parallel/tiers) parses without error" "pass"
+  check "(c) execution_plan: block (3-route enum + steps/dispatch/parallel/tiers) parses without error" "pass"
 else
-  check "(c) execution_plan: block (4-route enum + steps/dispatch/parallel/tiers) parses without error" "fail"
+  check "(c) execution_plan: block (3-route enum + steps/dispatch/parallel/tiers) parses without error" "fail"
 fi
 
 # ── (d) dangling optional_depends_on target → non-fatal WARN, exit 0 ────────

@@ -33,10 +33,10 @@ the alternative when the whole chain should be driven end-to-end.
 
 1. Run `goalforge-capture` — scaffolds `<feature>/overview.md` with frontmatter
    metadata, captures the raw idea, creates the feature folder in the flat
-   layout, and **stamps the chain route** (`route: fast|full`; borderline
-   verdicts are confirmed with the user).
+   layout, and **stamps the chain route** (`route: fast|standard|wave`;
+   borderline verdicts are confirmed with the user).
 2. **Branch on the stamped route:**
-   - `route: full` — run `goalforge-spec`: an interview-style design pass
+   - `route: standard` (or `wave`) — run `goalforge-spec`: an interview-style design pass
      producing `<feature>/spec.md`; continue below.
    - `route: fast` — **skip `goalforge-spec` entirely.** Follow
      `goalforge-capture` §Fast path: single WP via `goalforge-decompose
@@ -46,12 +46,12 @@ the alternative when the whole chain should be driven end-to-end.
 **If the feature folder already exists (resuming or refining):** run
 `goalforge-spec` on it — updates or completes `spec.md` (on a `route: fast`
 feature this is the deliberate promotion path: author the spec retroactively
-and flip `route: full`).
+and flip `route: standard`).
 
 `<PLANS_ROOT>` resolves per `${CLAUDE_PLUGIN_ROOT}/references/schema.md`
 §PLANS_ROOT resolution.
 
-## Human gate (draft → spec, full route)
+## Human gate (draft → spec, standard route)
 
 - Present the full `spec.md` to the user.
 - **Wait for explicit user approval** before the feature status advances.
@@ -61,8 +61,8 @@ and flip `route: full`).
 
 ## Rules
 
-- No code. Terminal state (full route): an approved `spec.md` with work
+- No code. Terminal state (standard route): an approved `spec.md` with work
   packages at `status: spec`. Fast route: one WP at `status: ready` via the
   deterministic gates.
 - Layout is FLAT: `<PLANS_ROOT>/<feature>/<wp>/` — no lifecycle folders.
-- Next: `/plan` (full route) or `/implement` directly (fast route).
+- Next: `/plan` (standard route) or `/implement` directly (fast route).

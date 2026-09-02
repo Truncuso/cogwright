@@ -18,7 +18,7 @@ relationships: []
 sources: []
 ---
 
-<!-- Fixture: schema-v5 case (c) — a full execution_plan: block (4-route enum
+<!-- Fixture: schema-v5 case (c) — a full execution_plan: block (3-route enum
      value `wave` + steps/dispatch/parallel/tiers keys) on the FEATURE overview.
      Expect: parses clean, round-trips through goalforge-validate.sh with zero
      errors/warnings (exit 0). No WPs needed — the block is feature-level data,

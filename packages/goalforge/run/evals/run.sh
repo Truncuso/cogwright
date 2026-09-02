@@ -80,7 +80,7 @@ else
   FAIL=$((FAIL+1))
 fi
 
-# chain.yaml: route awareness — fast/full routing keys present
+# chain.yaml: route awareness — routing keys present
 check_yaml "spec step is standard-route only (when_route: standard)" "when_route: standard"
 check_yaml "decompose declares the fast_route add-wp override" "mode: add-wp"
 
@@ -131,6 +131,70 @@ check_contract "entry command /spec documented" "/spec"
 check_contract "entry command /plan documented" "/plan"
 check_contract "entry command /implement documented" "/implement"
 check_contract "entry command /verify documented" "/verify"
+
+# ── ROUTE-ENUM: the documented enum is DERIVED from goalforge-route.sh ───────
+# goalforge-route.sh is the only thing that emits a route value, so it — not a
+# list typed into this harness — defines the enum. The probe set is lifted from
+# the classifier's own accepted-value alternation (canonical plus whatever
+# retired vocabulary it still normalizes on read); pinning each probe and
+# collecting what it echoes back yields the emitted set, which is strictly the
+# canonical enum.
+PKG_ROOT="$(cd "$SKILL_DIR/.." && pwd)"
+ROUTE_SH="$PKG_ROOT/scripts/goalforge-route.sh"
+PROBE_VALUES="$(grep -E '\^route:' "$ROUTE_SH" | head -1 \
+  | grep -oE '\(([a-z-]+\|)+[a-z-]+\)' | tr -d '()' | tr '|' ' ' || true)"
+if [ -z "$PROBE_VALUES" ]; then
+  echo "  FAIL [ROUTE-ENUM]: could not lift the accepted-route alternation from $ROUTE_SH"
+  FAIL=$((FAIL+1))
+fi
+PROBE_DIR="$(mktemp -d)"
+trap 'rm -rf "$PROBE_DIR"' EXIT
+
+EMITTED=""
+for v in $PROBE_VALUES; do
+  printf -- '---\nroute: %s\n---\n## Goal\n\nenum probe\n' "$v" > "$PROBE_DIR/overview.md"
+  emitted_v="$(bash "$ROUTE_SH" "$PROBE_DIR/overview.md" 2>/dev/null \
+    | grep -o '"route": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
+  if [ -n "$emitted_v" ]; then
+    EMITTED="$(printf '%s\n%s' "$EMITTED" "$emitted_v")"
+  fi
+done
+EMITTED_SET="$(printf '%s\n' "$EMITTED" | grep -v '^$' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
+
+# ROUTE-ENUM 1: run/SKILL.md's canonical-enum line lists exactly the emitted set
+DOC_SET="$(grep -o 'canonical enum `[^`]*`' "$SKILL_MD" | head -1 \
+  | sed 's/.*`\(.*\)`.*/\1/' | tr '|' '\n' | tr -d ' ' | grep -v '^$' \
+  | sort -u | tr '\n' ' ' | sed 's/ *$//')"
+if [ -n "$EMITTED_SET" ] && [ "$DOC_SET" = "$EMITTED_SET" ]; then
+  echo "  PASS [ROUTE-ENUM]: SKILL.md canonical enum == goalforge-route.sh emitted set ($EMITTED_SET)"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL [ROUTE-ENUM]: SKILL.md canonical enum != goalforge-route.sh emitted set"
+  echo "        emitted:   '$EMITTED_SET'"
+  echo "        documented:'$DOC_SET'"
+  FAIL=$((FAIL+1))
+fi
+
+# ROUTE-ENUM 2: no retired route word (a probe value the classifier never emits)
+# survives as a standalone word on a route-bearing line in run/ or commands/.
+# The word boundary excludes '-' so an identifier like `captured-full-chain` is
+# a name, not a route value.
+STRAY_LINES=""
+for v in $PROBE_VALUES; do
+  case " $EMITTED_SET " in *" $v "*) continue ;; esac
+  hits="$(grep -rniE "route" "$SKILL_DIR" "$PKG_ROOT/commands" \
+    | grep -E "(^|[^A-Za-z0-9_-])${v}([^A-Za-z0-9_-]|$)" || true)"
+  [ -n "$hits" ] && STRAY_LINES="$(printf '%s\n%s' "$STRAY_LINES" "$hits")"
+done
+STRAY_LINES="$(printf '%s\n' "$STRAY_LINES" | grep -v '^$' || true)"
+if [ -z "$STRAY_LINES" ]; then
+  echo "  PASS [ROUTE-ENUM]: no retired route vocabulary in run/ or commands/"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL [ROUTE-ENUM]: retired route vocabulary still present:"
+  printf '%s\n' "$STRAY_LINES" | sed 's/^/        /'
+  FAIL=$((FAIL+1))
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

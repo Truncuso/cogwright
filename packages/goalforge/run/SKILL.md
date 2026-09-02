@@ -1,6 +1,6 @@
 ---
 name: goalforge-run
-description: "Orchestrator for the SDD planning chain, route-aware over the canonical route enum one-go|fast|standard|wave: standard = capture → spec → decompose → harden → execute → verify; fast = capture → add-wp → deterministic gates → execute → verify (route: read from the feature overview frontmatter, stamped by goalforge-capture). Routes the entry commands /spec /plan /implement /verify to the correct chain step, resumes mid-chain by reading the current WP status:, and supports --dry-run. Invoke goalforge-run when a user runs any of the four entry commands or when the chain must resume from a known WP stage. SKIP for single-step work: invoke the child skill directly (goalforge-capture, goalforge-spec, goalforge-decompose, goalforge-harden, goalforge-execute, goalforge-verify)."
+description: "Orchestrator for the SDD planning chain, route-aware over the canonical route enum fast|standard|wave: standard = capture → spec → decompose → harden → execute → verify; fast = capture → add-wp → deterministic gates → execute → verify (route: read from the feature overview frontmatter, stamped by goalforge-capture). Routes the entry commands /spec /plan /implement /verify to the correct chain step, resumes mid-chain by reading the current WP status:, and supports --dry-run. Invoke goalforge-run when a user runs any of the four entry commands or when the chain must resume from a known WP stage. SKIP for single-step work: invoke the child skill directly (goalforge-capture, goalforge-spec, goalforge-decompose, goalforge-harden, goalforge-execute, goalforge-verify)."
 metadata:
   skill-kind: preference
   version: 1.1.0
@@ -32,7 +32,8 @@ autonomously reorder or extend the chain; any modification goes through
 
 ## Route awareness (canonical route enum)
 
-Routes are the canonical enum `one-go | fast | standard | wave`. The chain
+Routes are the canonical enum `fast | standard | wave` — the set
+`scripts/goalforge-route.sh` emits, and the only route vocabulary. The chain
 adapts to the goal's size: `goalforge-run` reads the feature overview's `route:`
 frontmatter (stamped by `goalforge-capture` via `goalforge-route.sh` — capture is the
 routing home; absent ⇒ `standard`) and skips the steps marked
@@ -45,7 +46,7 @@ routing home; absent ⇒ `standard`) and skips the steps marked
   `goalforge-wp-complexity.sh` verdict `simple`, severity ≤ MEDIUM, non-migration)
   → `goalforge-transition.sh <wp> ready --mode auto` → execute → verify.
 - **Escalation:** ANY fast-gate trip leaves the WP at `spec` and re-enters the
-  chain at the harden step (full treatment). The gates, not the classifier,
+  chain at the harden step (standard treatment). The gates, not the classifier,
   are the safety net.
 - **Never skipped:** `goalforge-verify` — every route ends at the single semantic
   gate; the outcome→verification contract is route-independent.

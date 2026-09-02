@@ -15,10 +15,6 @@
     },
     {
       "from": "SKILL.md",
-      "path": "commands/spec.md"
-    },
-    {
-      "from": "SKILL.md",
       "path": "references/alias-map.md"
     },
     {
@@ -144,6 +140,10 @@
     {
       "from": "references/schema.md",
       "path": "references/trace-events.md"
+    },
+    {
+      "from": "references/schema.md",
+      "path": "scripts/goalforge-route.sh"
     },
     {
       "from": "references/state-machine.md",
@@ -376,6 +376,10 @@
     {
       "from": "skills/run/SKILL.md",
       "path": "references/specialist-map.yaml"
+    },
+    {
+      "from": "skills/run/SKILL.md",
+      "path": "scripts/goalforge-route.sh"
     },
     {
       "from": "skills/run/SKILL.md",
