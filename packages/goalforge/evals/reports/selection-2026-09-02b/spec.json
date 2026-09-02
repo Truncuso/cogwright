@@ -1,0 +1,40 @@
+{
+  "schema_version": "1",
+  "tree": "/home/cunger/10_projects/cogwright/packages/goalforge",
+  "observe": "first",
+  "trials": 3,
+  "model": "haiku",
+  "claude_version": "2.1.258 (Claude Code)",
+  "files_found": 1,
+  "files_canonical": 1,
+  "shape_errors": [],
+  "mode": "aborted",
+  "config_dir": {
+    "path": "/tmp/skill-trigger-cfg-ogykj1yc/cfg",
+    "mode": "snapshot",
+    "content_hash": "sha256:8effc579aaeda183b55ce2e7416863cfc09ffa823eae4e8fbbc9cf995dabbe23",
+    "skills": [
+      "onboard",
+      "spec"
+    ],
+    "commands": [
+      "goalforge-run",
+      "implement",
+      "plan",
+      "spec",
+      "verify",
+      "wayfind"
+    ],
+    "commands_under_test": [],
+    "collisions": [
+      {
+        "name": "spec",
+        "skill_src": "/home/cunger/10_projects/cogwright/packages/goalforge/spec",
+        "command_src": "/home/cunger/10_projects/cogwright/packages/goalforge/commands/spec.md"
+      }
+    ],
+    "unresolved_siblings": [],
+    "surface": null
+  },
+  "coverage": "skipped"
+}

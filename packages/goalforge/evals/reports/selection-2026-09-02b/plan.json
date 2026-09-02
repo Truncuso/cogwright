@@ -1,0 +1,655 @@
+{
+  "schema_version": "1",
+  "tree": "/home/cunger/10_projects/cogwright/packages/goalforge",
+  "observe": "first",
+  "trials": 3,
+  "model": "haiku",
+  "claude_version": "2.1.258 (Claude Code)",
+  "files_found": 1,
+  "files_canonical": 1,
+  "shape_errors": [],
+  "mode": "snapshot",
+  "config_dir": {
+    "path": "/tmp/skill-trigger-cfg-bo5cyb2t/cfg",
+    "mode": "snapshot",
+    "content_hash": "sha256:ce225a370570c927583a5a22cc9bba501a0fd317edd62805db0a0b5209c3be65",
+    "skills": [
+      "redecompose"
+    ],
+    "commands": [
+      "goalforge-run",
+      "implement",
+      "plan",
+      "spec",
+      "verify",
+      "wayfind"
+    ],
+    "commands_under_test": [
+      "plan"
+    ],
+    "collisions": [],
+    "unresolved_siblings": [],
+    "surface": {
+      "skills": [
+        "redecompose",
+        "deep-research",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator"
+      ],
+      "slash_commands": [
+        "redecompose",
+        "goalforge-run",
+        "implement",
+        "plan",
+        "spec",
+        "verify",
+        "wayfind",
+        "deep-research",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "context",
+        "effort",
+        "fast",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage-credits",
+        "extra-usage",
+        "usage",
+        "insights",
+        "recap",
+        "goal",
+        "design",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding"
+      ],
+      "builtin_entries": [
+        "__remote-workflow",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "batch",
+        "claude-api",
+        "clear",
+        "code-review",
+        "color",
+        "compact",
+        "config",
+        "context",
+        "dataviz",
+        "debug",
+        "deep-research",
+        "design",
+        "design-consent",
+        "design-revoke",
+        "design-sync",
+        "doctor",
+        "effort",
+        "extra-usage",
+        "fast",
+        "fewer-permission-prompts",
+        "goal",
+        "heapdump",
+        "import",
+        "init",
+        "insights",
+        "list-agents",
+        "loop",
+        "mcp",
+        "model",
+        "recap",
+        "reload-skills",
+        "rename",
+        "run",
+        "run-skill-generator",
+        "schedule",
+        "security-review",
+        "simplify",
+        "team-onboarding",
+        "ultrareview",
+        "update-config",
+        "usage",
+        "usage-credits",
+        "workflow-authoring",
+        "workflow-launch-exec"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "skill": "plan",
+      "case_id": "sel-pos-decompose-and-harden",
+      "case_file": "packages/goalforge/evals/selection/plan.json",
+      "should_trigger": true,
+      "prompt": "plans/payments-refund/spec.md is approved \u2014 decompose it into work packages and harden them to ready.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.036105,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 28812
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.024225,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 19332
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.001993,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19332,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 3,
+      "pass_k": true,
+      "abstains": 0,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": null
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-pos-break-spec-into-wps",
+      "case_file": "packages/goalforge/evals/selection/plan.json",
+      "should_trigger": true,
+      "prompt": "Break plans/notification-batching/spec.md into work packages with goal blocks and dependencies.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.012527,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 20685,
+            "cache_creation_input_tokens": 8295
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.002988,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 28980,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.002973,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 9,
+            "cache_read_input_tokens": 28980,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 3,
+      "pass_k": true,
+      "abstains": 0,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": null
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-pos-harden-goal-blocks",
+      "case_file": "packages/goalforge/evals/selection/plan.json",
+      "should_trigger": true,
+      "prompt": "Grill the goal blocks on the work packages under plans/billing-api/ until they're ready for execution.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.012542,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 20685,
+            "cache_creation_input_tokens": 8307
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.002989,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 28992,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.002989,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 28992,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 3,
+      "pass_k": true,
+      "abstains": 0,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": null
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-neg-no-spec-yet",
+      "case_file": "packages/goalforge/evals/selection/plan.json",
+      "should_trigger": false,
+      "prompt": "There's no spec for this feature yet \u2014 scaffold it and write one.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.008362,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 13790,
+            "cache_creation_input_tokens": 5520
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.003458,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19310,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.003223,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19310,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 3,
+      "expected_owner": "spec",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-neg-start-executing",
+      "case_file": "packages/goalforge/evals/selection/plan.json",
+      "should_trigger": false,
+      "prompt": "All the work packages are ready. Start executing the first one.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "implement",
+          "all_observed": [
+            "implement"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.008304,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 2,
+            "cache_read_input_tokens": 13790,
+            "cache_creation_input_tokens": 5516
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "implement",
+          "all_observed": [
+            "implement"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.001991,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19306,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "implement",
+          "all_observed": [
+            "implement"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.001991,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19306,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 3,
+      "pass_k": true,
+      "abstains": 0,
+      "expected_owner": "implement",
+      "owner_hit": true,
+      "failing_assertion": null
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-neg-confirm-and-advance",
+      "case_file": "packages/goalforge/evals/selection/plan.json",
+      "should_trigger": false,
+      "prompt": "Every task in wp-02 is verified and findings.md is there \u2014 confirm it and advance the status.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "verify",
+          "all_observed": [
+            "verify"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.008389,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 13790,
+            "cache_creation_input_tokens": 5536
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "verify",
+          "all_observed": [
+            "verify"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.001993,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19326,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "verify",
+          "all_observed": [
+            "verify"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.002989,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 28989,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 3,
+      "pass_k": true,
+      "abstains": 0,
+      "expected_owner": "verify",
+      "owner_hit": true,
+      "failing_assertion": null
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-neg-redo-the-split",
+      "case_file": "packages/goalforge/evals/selection/plan.json",
+      "should_trigger": false,
+      "prompt": "The work-package split came out wrong \u2014 redo the decomposition for this feature.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "wayfind",
+          "all_observed": [
+            "wayfind"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.012565,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 21,
+            "cache_read_input_tokens": 20685,
+            "cache_creation_input_tokens": 8289
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.003386,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19316,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.003731,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19316,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 1,
+      "pass_k": false,
+      "abstains": 2,
+      "expected_owner": "redecompose",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    }
+  ],
+  "cost": {
+    "total_usd": 0.159711,
+    "cap_usd": 0.25,
+    "capped": false
+  },
+  "summary": {
+    "cases": 7,
+    "trials_per_case": 3,
+    "positive_cases": 3,
+    "positive_pass_k": 3,
+    "negative_cases": 4,
+    "negative_pass_k": 2,
+    "abstains": 5,
+    "hits": 9,
+    "observed_skill_calls": 16,
+    "owner_hits": 2
+  },
+  "coverage": "full"
+}
