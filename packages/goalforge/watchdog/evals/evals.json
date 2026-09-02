@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "goalforge-verify just confirmed wp-03 acceptance criteria pass. Audit the WP diff against its spec.",
       "expected_output": "Reconstructs the WP goal block, reads changed files + neighbors, reports claimed-vs-implemented / missing tests-docs / deviations as a light summary; does not change WP status.",
       "files": [],
@@ -16,6 +17,7 @@
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "Run a deep gap audit on this high-severity WP.",
       "expected_output": "Writes a full <wp>/verify-gap.md deep report (opt-in mode), not just the light summary.",
       "files": [],
@@ -27,6 +29,7 @@
     },
     {
       "id": 3,
+      "should_trigger": true,
       "prompt": "The rollup todo.md is stale for this feature — report it.",
       "expected_output": "goalforge-watchdog should NOT report stale rollup — that is a mechanical check owned by goalforge-validate, not the semantic audit. Out of scope.",
       "files": [],
@@ -38,6 +41,7 @@
     },
     {
       "id": 4,
+      "should_trigger": false,
       "prompt": "Format my Python file with black.",
       "expected_output": "goalforge-watchdog should NOT trigger — this is a formatting request, not a WP gap audit. Not applicable.",
       "files": [],
@@ -48,6 +52,7 @@
     },
     {
       "id": 5,
+      "should_trigger": true,
       "prompt": "The WP changed a function signature but findings.md records this as an intentional API change. Is that a gap?",
       "expected_output": "Not a gap — a deviation documented in findings.md is an intentional decision, so it must not be flagged.",
       "files": [],

@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "Initialize a recap file for the 'session-memory-pipeline' feature.",
       "expected_output": "Creates recap.md with header '# Recap — session-memory-pipeline' and maintenance comment.",
       "files": [],
@@ -14,6 +15,7 @@
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "After goalforge-execute completes task 'implement-schema' in WP wp-02 with result ok, record it in the feature recap.",
       "expected_output": "Appends a task row under ## wp-02 with the task slug, short commit hash, and result 'ok'. If wp-02 section is absent it is created.",
       "files": [],
@@ -25,6 +27,7 @@
     },
     {
       "id": 3,
+      "should_trigger": true,
       "prompt": "goalforge-execute re-ran task 'run-tests' in wp-03 for the second time because the first attempt failed with a timeout. Record this loop-back.",
       "expected_output": "Adds a Loop-backs: entry: '- iter 2: timeout (re-executed run-tests)' under the wp-03 section.",
       "files": [],
@@ -36,6 +39,7 @@
     },
     {
       "id": 4,
+      "should_trigger": true,
       "prompt": "wp-01 finished with one loop-back. Finalize it with status yellow and summary 'all tasks verified after retry'.",
       "expected_output": "Writes 'Status: yellow — all tasks verified after retry' in the wp-01 section. Running finalize twice updates the line in place without duplicating it.",
       "files": [],
@@ -47,6 +51,7 @@
     },
     {
       "id": 5,
+      "should_trigger": true,
       "prompt": "All WPs for feature 'sdd-orchestration-layer' are finalized. Generate the feature rollup.",
       "expected_output": "Rewrites ## Feature rollup with counts: e.g. '3 green, 1 yellow, 0 red (of 4 WPs)'. Running rollup twice produces the same section (idempotent).",
       "files": [],
@@ -59,6 +64,7 @@
     },
     {
       "id": 6,
+      "should_trigger": true,
       "prompt": "Run the recap.sh --self-test flag to verify the full lifecycle.",
       "expected_output": "All self-test assertions pass; script exits 0.",
       "files": [],

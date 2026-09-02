@@ -3,9 +3,12 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "Run a design pass for the notification-service feature",
       "expected_output": "Reads overview.md (status: draft), writes spec.md, advances overview.md status to ready. HUMAN-GATED: must present draft and await approval before writing files.",
-      "files": ["evals/fixtures/overview.md"],
+      "files": [
+        "evals/fixtures/overview.md"
+      ],
       "expectations": [
         "SKILL.md declares name: goalforge-spec",
         "SKILL.md input is overview.md with status: draft",
@@ -19,6 +22,7 @@
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "Write the design document and spec for the payment-gateway feature",
       "expected_output": "Reads plans/payment-gateway/overview.md (status: draft), conducts design pass, authors goal block in spec.md frontmatter, presents draft to user for approval, then writes spec.md and updates overview.md status to ready.",
       "files": [],
@@ -30,6 +34,7 @@
     },
     {
       "id": 3,
+      "should_trigger": false,
       "prompt": "Commit my changes and push to main.",
       "expected_output": "goalforge-spec should NOT trigger — this is a git operation request, not a spec authoring request. The skill is not applicable.",
       "files": [],
@@ -40,6 +45,7 @@
     },
     {
       "id": 4,
+      "should_trigger": true,
       "prompt": "Author the spec for the search-indexing-pipeline with a numeric verification strategy",
       "expected_output": "Conducts design pass; authors goal block with task_type and goal.verification.strategy = 'numeric'; goal.verification.check includes bench/metric/op/threshold fields; presents draft for approval before writing files.",
       "files": [],
@@ -51,6 +57,7 @@
     },
     {
       "id": 5,
+      "should_trigger": true,
       "prompt": "Write a spec for a feature but its overview.md is already at status: ready (spec already approved)",
       "expected_output": "Skill warns the user that overview.md status is not 'draft' and asks for confirmation before proceeding. Does NOT silently overwrite or skip. If spec.md already exists, asks whether to overwrite or merge.",
       "files": [],

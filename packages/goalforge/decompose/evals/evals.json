@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "Decompose the notification-service feature into work packages",
       "expected_output": "Creates wp-01-api-scaffold/ and wp-02-delivery-adapters/ each with overview.md (status: spec), todo.md, and at least one task-*.md (status: pending). Updates feature overview.md work packages table.",
       "files": [
@@ -24,6 +25,7 @@
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "Break the payment-gateway feature down into work packages and tasks",
       "expected_output": "Reads plans/payment-gateway/spec.md, creates wp-NN-* folders with overview.md (status: spec), todo.md, task files (status: pending), and updates feature overview.md WP table",
       "files": [],
@@ -35,6 +37,7 @@
     },
     {
       "id": 3,
+      "should_trigger": false,
       "prompt": "Approve the spec for the search-indexing-pipeline feature.",
       "expected_output": "goalforge-decompose should NOT trigger — approving a spec is a goalforge-spec human-gate action, not a decompose action. The skill is not applicable here.",
       "files": [],
@@ -45,6 +48,7 @@
     },
     {
       "id": 4,
+      "should_trigger": true,
       "prompt": "Decompose the notification-service spec; wp-01-api-scaffold/ already exists",
       "expected_output": "Skips wp-01-api-scaffold entirely (idempotent). Creates wp-02-delivery-adapters/ normally if absent. Logs that wp-01-api-scaffold was already present.",
       "files": [
@@ -59,6 +63,7 @@
     },
     {
       "id": 5,
+      "should_trigger": true,
       "prompt": "Decompose the notification-service feature but spec.md does not exist",
       "expected_output": "Skill fails: spec.md is a required input. Emits an error stating spec.md must exist before decompose can run. Does not create any WP folders.",
       "files": [],

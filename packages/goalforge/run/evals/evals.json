@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "--dry-run: resolve all chain steps and verify each skill exists",
       "expected_output": "chain.yaml parses successfully; exactly 6 steps in order (goalforge-capture, goalforge-spec, goalforge-decompose, goalforge-harden, goalforge-execute, goalforge-verify); each step's skill resolves to an existing SKILL.md; precondition status values are valid schema stages; no side effects.",
       "files": [],
@@ -23,6 +24,7 @@
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "Run the full SDD chain for my notification-service feature",
       "expected_output": "goalforge-run orchestrates the chain: reads current feature status, enters at the correct step, delegates to the appropriate child skill (goalforge-capture → goalforge-spec → goalforge-decompose → goalforge-harden → goalforge-execute → goalforge-verify), and pauses at human-gated transitions.",
       "files": [],
@@ -34,6 +36,7 @@
     },
     {
       "id": 3,
+      "should_trigger": true,
       "prompt": "Continue where we left off on the payment-gateway feature",
       "expected_output": "goalforge-run reads the current WP status: field, identifies the next actionable step in the chain, and resumes at that step by invoking the appropriate child skill.",
       "files": [],
@@ -45,6 +48,7 @@
     },
     {
       "id": 4,
+      "should_trigger": false,
       "prompt": "Fix the bug in the authentication middleware.",
       "expected_output": "goalforge-run should NOT trigger — this is a direct bug-fix request, not a request to run the goalforge chain. The skill is not applicable.",
       "files": [],
@@ -55,6 +59,7 @@
     },
     {
       "id": 5,
+      "should_trigger": true,
       "prompt": "Resume the SDD chain for wp-03-notifications which is at status: archived",
       "expected_output": "goalforge-run HALTS with a clear message: archived is a terminal status. No child skill is dispatched, no status fields are mutated.",
       "files": [],

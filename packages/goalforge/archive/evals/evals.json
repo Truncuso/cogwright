@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "Archive the completed feature feature-completed.",
       "expected_output": "Reads overview.md, confirms status: completed (gate passes), sets status: archived + updated:, runs goalforge-validate --strict over the plans root, then goalforge-ensure-committed after the orchestrator commits.",
       "files": [
@@ -19,6 +20,7 @@
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "feature idea-system-v2 supersedes ideas-skill-system — archive both with the supersession edges.",
       "expected_output": "Verifies both slugs exist, writes supersedes: [[ideas-skill-system]] on the new feature and superseded_by: [[idea-system-v2]] on the old, sets status: archived + updated: on both, then validates.",
       "files": [],
@@ -32,6 +34,7 @@
     },
     {
       "id": 3,
+      "should_trigger": true,
       "prompt": "Run a migration archive for this feature now that the new one shipped.",
       "expected_output": "goalforge-archive triggers — 'migration archive' is a stated trigger phrase. It archives the completed feature and (if a replacement is named) records supersession.",
       "files": [],
@@ -42,6 +45,7 @@
     },
     {
       "id": 4,
+      "should_trigger": false,
       "prompt": "Check my implementation for code quality issues.",
       "expected_output": "goalforge-archive should NOT trigger — a generic code-quality check is not a feature-archival request. The trigger surface requires archiving a completed feature; a code-reviewer agent is appropriate instead.",
       "files": [],
@@ -52,6 +56,7 @@
     },
     {
       "id": 5,
+      "should_trigger": true,
       "prompt": "Archive feature-active (a feature still at status: active).",
       "expected_output": "Skill REFUSES: status is active, not completed. Prints the offending status, makes no edits, halts. A feature must be completed before it can be archived.",
       "files": [
@@ -66,6 +71,7 @@
     },
     {
       "id": 6,
+      "should_trigger": true,
       "prompt": "Archive this completed feature and a --supersedes slug that does not exist.",
       "expected_output": "Skill REFUSES: the --supersedes target overview.md is missing. Prints the missing slug, makes no edits. Existence of both slugs is checked before any write.",
       "files": [],
@@ -77,9 +83,12 @@
     },
     {
       "id": 7,
+      "should_trigger": true,
       "prompt": "Archive the completed feature feature-completed and verify it moves to _archived/.",
       "expected_output": "Skill edits overview.md (status: archived), then moves <PLANS_ROOT>/feature-completed/ to <PLANS_ROOT>/_archived/feature-completed/. The original path no longer exists.",
-      "files": ["evals/fixtures/feature-completed/overview.md"],
+      "files": [
+        "evals/fixtures/feature-completed/overview.md"
+      ],
       "expectations": [
         "SKILL.md Step 2b moves the feature folder to <PLANS_ROOT>/_archived/<feature>/ after frontmatter edit",
         "SKILL.md halts if _archived/<feature>/ already exists (conflict guard)",
@@ -89,6 +98,7 @@
     },
     {
       "id": 8,
+      "should_trigger": true,
       "prompt": "Archive feature-completed while another live feature declares depends_on: [[feature-completed]].",
       "expected_output": "Archiving PROCEEDS. Typed relation edges (wikilinks) are graph edges that survive archiving and resolve to the archived target — only PATH refs (<slug>/) gate under --strict-refs. The inbound edge is left byte-identical; it is never rewritten or used as a refusal reason.",
       "files": [

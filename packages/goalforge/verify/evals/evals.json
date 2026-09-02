@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "Verify wp-01-api-scaffold (all tasks verified, findings.md present)",
       "expected_output": "Delegates to superpowers:verification-before-completion; on pass advances executing → verified and updates overview.md frontmatter.",
       "files": [
@@ -25,6 +26,7 @@
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "Verify wp when tasks are not yet verified — expect refusal",
       "expected_output": "Skill REFUSES: prints task names not yet verified and findings.md presence, does not advance status.",
       "files": [],
@@ -36,6 +38,7 @@
     },
     {
       "id": 3,
+      "should_trigger": true,
       "prompt": "Confirm that wp-02-delivery-adapters is complete and mark it verified",
       "expected_output": "goalforge-verify runs precondition checks: all task-*.md must be status: verified AND findings.md must exist. On both passing, delegates to superpowers:verification-before-completion and advances status to verified.",
       "files": [],
@@ -47,6 +50,7 @@
     },
     {
       "id": 4,
+      "should_trigger": false,
       "prompt": "Check my implementation for code quality issues.",
       "expected_output": "goalforge-verify should NOT trigger — a generic code quality check is not a WP verification request. The skill is not applicable; a code-reviewer agent or verify-and-simplify would be appropriate instead.",
       "files": [],
@@ -57,6 +61,7 @@
     },
     {
       "id": 5,
+      "should_trigger": true,
       "prompt": "Verify wp-01-api-scaffold: all tasks are verified but findings.md is missing",
       "expected_output": "Skill REFUSES: findings.md is a required precondition. Prints that findings.md is MISSING and lists zero unverified tasks. Does not advance status. Suggests creating findings.md before retrying.",
       "files": [],
@@ -68,6 +73,7 @@
     },
     {
       "id": 6,
+      "should_trigger": true,
       "prompt": "After verifying the last WP and advancing the feature to completed, finalize and confirm a clean tree.",
       "expected_output": "Completion step 5 stages+commits only the feature plan artifacts (docs(goalforge): finalize <wp> verification) on the current branch, then runs goalforge-ensure-committed.sh on the feature path; on non-zero it reports dirty paths and HALTS instead of declaring done.",
       "files": [],
@@ -80,6 +86,7 @@
     },
     {
       "id": 7,
+      "should_trigger": true,
       "prompt": "The last WP is verified and the feature is now completed — should goalforge-verify archive it?",
       "expected_output": "No. Completion step 6 only PRINTS a gated offer to run goalforge-archive; archival is an explicit user action. goalforge-verify never sets status: archived on a feature.",
       "files": [],
@@ -92,6 +99,7 @@
     },
     {
       "id": 8,
+      "should_trigger": true,
       "prompt": "Verify wp-09-hard-dependency. Two of its tasks completed correctly but have no commit: task-01 wrote its deliverable into a file outside this repo, and task-03 wrote only to plans/, which this repo gitignores by design. Both carry checkpoint.commit_sha: \"\".",
       "expected_output": "goalforge-verify does NOT fabricate a hash and does NOT force-add a gitignored file. It recognises the un-committable-deliverable case: each such task declares commit_exempt: <prose reason> in its own frontmatter, is promoted to verified with commit: left empty, and goalforge-validate --strict --require-commit exits 0 while printing a WARN naming the reason for each exempted task. A task with no commit and no valid commit_exempt: still blocks finalization.",
       "files": [],

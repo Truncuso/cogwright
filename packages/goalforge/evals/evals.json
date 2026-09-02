@@ -3,24 +3,28 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "What is SDD and how does the planning chain work? I've heard the term but never used it.",
       "expected_output": "Explanation of SDD as a goal-driven planning workflow, description of the 6-step chain (capture → spec → decompose → harden → execute → verify), mention of the status-frontmatter-driven approach, and which skill or command to use to start.",
       "files": []
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "I have a feature where overview.md has status: spec. What's the right next SDD skill to call and what will it produce?",
       "expected_output": "Should say goalforge-decompose (or /plan), explain it breaks the spec into WP overview.md files with task stubs, and that goalforge-harden follows to grill goal blocks.",
       "files": []
     },
     {
       "id": 3,
+      "should_trigger": true,
       "prompt": "What's the difference between goalforge-harden and goalforge-execute? When do I use each?",
       "expected_output": "goalforge-harden: takes WP at status spec, grills the goal block via goalforge-interview (which drives the interview plugin engine), human-gated transition to ready. goalforge-execute: takes WP at status ready, runs the actual implementation sub-cycle. Clear distinction between planning/hardening vs execution.",
       "files": []
     },
     {
       "id": 4,
+      "should_trigger": true,
       "prompt": "Where do I find the SDD frontmatter schema and file templates?",
       "expected_output": "Should point to goalforge/references/schema.md for schemas and goalforge/references/templates/ for the 7 canonical templates. Should mention what each contains.",
       "files": []

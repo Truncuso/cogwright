@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "I want to build a notification service that sends emails and SMS when events occur.",
       "expected_output": "Creates ~/.claude/plans/notification-service/overview.md with status: draft and todo.md from template",
       "files": [],
@@ -20,6 +21,7 @@
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "Start a plan for 'User Auth Revamp'",
       "expected_output": "Slugifies to user-auth-revamp; creates overview.md with status: draft",
       "files": [],
@@ -31,6 +33,7 @@
     },
     {
       "id": 3,
+      "should_trigger": true,
       "prompt": "Create a new feature plan for a search indexing pipeline",
       "expected_output": "Slugifies to search-indexing-pipeline; creates overview.md (status: draft) and todo.md; does not create spec.md or any WP folder",
       "files": [],
@@ -42,6 +45,7 @@
     },
     {
       "id": 4,
+      "should_trigger": false,
       "prompt": "Run the test suite and report which tests are failing.",
       "expected_output": "goalforge-capture should NOT trigger — this is a test-execution request, not a feature-planning request. The skill is not applicable.",
       "files": [],
@@ -52,6 +56,7 @@
     },
     {
       "id": 5,
+      "should_trigger": true,
       "prompt": "I want to add a caching layer, but I haven't decided on Redis vs Memcached yet.",
       "expected_output": "Captures the intent with status: draft; records the Redis vs Memcached decision as an open question or scope note; does NOT block on the unresolved choice. Slugifies to something like 'caching-layer'.",
       "files": [],
@@ -64,6 +69,7 @@
     },
     {
       "id": 6,
+      "should_trigger": true,
       "prompt": "Start a plan for okf-substrate.",
       "expected_output": "The slug is absent from the ACTIVE plans root but present at plans/_archived/okf-substrate/ (and plans/ideas/_archived/okf-substrate.md). Capture must NOT treat it as absent and stamp a fresh status: draft — it HALTS and presents restore-the-archived-feature vs pick-a-new-slug. Exactly one node exists for the slug afterwards, never two.",
       "files": [

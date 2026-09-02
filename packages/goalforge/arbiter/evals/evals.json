@@ -3,6 +3,7 @@
   "evals": [
     {
       "id": 1,
+      "should_trigger": true,
       "prompt": "goalforge-harden is processing wp-04 and two approaches surfaced: (A) migrate the session store to Redis with a new abstraction layer, (B) extend the existing in-memory store with a TTL eviction policy. The spec marks this section decision-required. Arbitrate.",
       "expected_output": "Normalizes both approaches along seven axes (objective, assumptions, files touched, sequencing, validation, rollback, cost), cross-reviews dimension-by-dimension, and emits a decision memo with chosen direction, rejected alternative with reason, and verification gates for the chosen path.",
       "files": [],
@@ -16,6 +17,7 @@
     },
     {
       "id": 2,
+      "should_trigger": true,
       "prompt": "goalforge-arbiter produced a decision memo recommending approach B. Can goalforge-arbiter advance the WP from hardened to ready now?",
       "expected_output": "No — goalforge-arbiter is advisory only. It does not change the human-gated hardened→ready transition. Status authority stays with the human gate in goalforge-harden.",
       "files": [],
@@ -27,6 +29,7 @@
     },
     {
       "id": 3,
+      "should_trigger": true,
       "prompt": "goalforge-harden is hardening wp-07. Only one approach exists in the spec — add an index to the users table. Should goalforge-arbiter run?",
       "expected_output": "No arbitration needed — a single approach with no competing option does not warrant goalforge-arbiter. Return immediately noting arbitration is not applicable.",
       "files": [],
@@ -37,6 +40,7 @@
     },
     {
       "id": 4,
+      "should_trigger": false,
       "prompt": "Can you use goalforge-arbiter to pick the best color scheme for a dashboard UI?",
       "expected_output": "goalforge-arbiter should NOT trigger — this is a UI styling decision, not an goalforge WP approach arbitration with a hard-to-reverse bet. Not applicable.",
       "files": [],
