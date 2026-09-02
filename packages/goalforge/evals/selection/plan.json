@@ -4,19 +4,19 @@
     {
       "id": "sel-pos-decompose-and-harden",
       "should_trigger": true,
-      "prompt": "spec.md is approved — decompose it into work packages and harden them to ready.",
-      "expected_output": "Fires. Runs goalforge-decompose to produce WP overview.md files with goal blocks, then goalforge-harden to grill each goal block, pausing at the human-gated hardened→ready transition."
+      "prompt": "plans/payments-refund/spec.md is approved — decompose it into work packages and harden them to ready.",
+      "expected_output": "Fires. Runs goalforge-decompose to produce WP overview.md files with goal blocks under plans/payments-refund/, then goalforge-harden to grill each goal block, pausing at the human-gated hardened→ready transition."
     },
     {
       "id": "sel-pos-break-spec-into-wps",
       "should_trigger": true,
-      "prompt": "Break the current feature's spec into work packages with goal blocks and dependencies.",
+      "prompt": "Break plans/notification-batching/spec.md into work packages with goal blocks and dependencies.",
       "expected_output": "Fires. Decomposes the spec into WPs carrying goal blocks, depends_on, and status: spec; no code is written and nothing is executed."
     },
     {
       "id": "sel-pos-harden-goal-blocks",
       "should_trigger": true,
-      "prompt": "Grill the goal blocks on my work packages until they're ready for execution.",
+      "prompt": "Grill the goal blocks on the work packages under plans/billing-api/ until they're ready for execution.",
       "expected_output": "Fires — hardening is the second half of this command. Each WP's goal block is grilled to a declared completion strategy and the hardened→ready gate is presented for confirmation."
     },
     {

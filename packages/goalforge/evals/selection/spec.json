@@ -10,13 +10,13 @@
     {
       "id": "sel-pos-idea-to-spec",
       "should_trigger": true,
-      "prompt": "I have a rough write-up of what I want. Turn it into a reviewed spec.md I can decompose from.",
-      "expected_output": "Fires. Captures the write-up as the feature draft, then drafts spec.md from it and presents the draft→spec gate for human approval."
+      "prompt": "I have a rough write-up for a feature I want to call `webhook-retries`. Turn it into a reviewed spec.md under plans/ that I can decompose from.",
+      "expected_output": "Fires. Captures the write-up as the draft for plans/webhook-retries/, then drafts its spec.md and presents the draft→spec gate for human approval."
     },
     {
       "id": "sel-pos-kick-off-chain",
       "should_trigger": true,
-      "prompt": "Kick off the SDD chain from scratch for the payments-refund feature.",
+      "prompt": "Kick off the SDD chain from scratch for the `payments-refund` feature.",
       "expected_output": "Fires — this is the first step of /spec → /plan → /implement → /verify. Scaffolds the feature and produces spec.md; explicitly does not decompose or execute."
     },
     {

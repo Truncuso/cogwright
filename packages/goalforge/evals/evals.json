@@ -4,29 +4,29 @@
     {
       "id": 1,
       "should_trigger": true,
-      "prompt": "What is SDD and how does the planning chain work? I've heard the term but never used it.",
-      "expected_output": "Explanation of SDD as a goal-driven planning workflow, description of the 6-step chain (capture → spec → decompose → harden → execute → verify), mention of the status-frontmatter-driven approach, and which skill or command to use to start.",
+      "prompt": "I'm about to start plans/notification-batching/ from nothing and I've never used this chain. Use the goalforge front door to name the six stages in order, the skill that owns each one, and where I enter.",
+      "expected_output": "Names the 6-step chain in order (capture → spec → decompose → harden → execute → verify), the goalforge-<stage> child owning each step, the status-frontmatter field that drives the routing, and /spec as the entry point for a feature that does not exist yet. Answering requires this package's own stage list, not general SDD knowledge.",
       "files": []
     },
     {
       "id": 2,
       "should_trigger": true,
-      "prompt": "I have a feature where overview.md has status: spec. What's the right next SDD skill to call and what will it produce?",
-      "expected_output": "Should say goalforge-decompose (or /plan), explain it breaks the spec into WP overview.md files with task stubs, and that goalforge-harden follows to grill goal blocks.",
+      "prompt": "plans/billing-api/overview.md says status: spec. Use the goalforge front door to tell me which child skill is next and exactly what files it writes.",
+      "expected_output": "Routes to goalforge-decompose (reached via /plan): it writes WP overview.md files with goal blocks and task stubs under plans/billing-api/, and goalforge-harden follows to grill those goal blocks to ready. The status→stage mapping is package content, not inferable from the prompt.",
       "files": []
     },
     {
       "id": 3,
       "should_trigger": true,
-      "prompt": "What's the difference between goalforge-harden and goalforge-execute? When do I use each?",
-      "expected_output": "goalforge-harden: takes WP at status spec, grills the goal block via goalforge-interview (which drives the interview plugin engine), human-gated transition to ready. goalforge-execute: takes WP at status ready, runs the actual implementation sub-cycle. Clear distinction between planning/hardening vs execution.",
+      "prompt": "plans/payments-refund/wp-02/overview.md exists and I can't tell whether goalforge-harden or goalforge-execute is the right call on it. Route me, and say what each one does to the WP status.",
+      "expected_output": "Routes by the WP's status field: goalforge-harden takes a WP at status spec, grills the goal block via goalforge-interview, and stops at the human-gated hardened→ready transition; goalforge-execute takes a WP already at status ready and runs the implementation sub-cycle. The answer must state the status precondition of each, which only this package declares.",
       "files": []
     },
     {
       "id": 4,
       "should_trigger": true,
-      "prompt": "Where do I find the SDD frontmatter schema and file templates?",
-      "expected_output": "Should point to goalforge/references/schema.md for schemas and goalforge/references/templates/ for the 7 canonical templates. Should mention what each contains.",
+      "prompt": "I need to hand-write plans/billing-api/wp-03/overview.md without running the chain. Point me at goalforge's frontmatter schema and the canonical templates, and say what each covers.",
+      "expected_output": "Points at goalforge/references/schema.md for the frontmatter schema (including the status enum and the goal block) and goalforge/references/templates/ for the 7 canonical templates, naming which template covers a WP overview.md. Both paths are internal to this package.",
       "files": []
     },
     {

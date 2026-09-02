@@ -10,8 +10,8 @@
     {
       "id": "sel-pos-verify-just-finished",
       "should_trigger": true,
-      "prompt": "Verify the work package I just finished.",
-      "expected_output": "Fires — resolves the WP, runs the completion checks, and stamps status: verified, or reports exactly which check failed."
+      "prompt": "Verify wp-04 — I just finished it.",
+      "expected_output": "Fires — resolves wp-04, runs the completion checks, and stamps status: verified, or reports exactly which check failed."
     },
     {
       "id": "sel-pos-completion-criteria",

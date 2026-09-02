@@ -4,7 +4,7 @@
     {
       "id": 1,
       "should_trigger": true,
-      "prompt": "--dry-run: resolve all chain steps and verify each skill exists",
+      "prompt": "--dry-run the chain for plans/notification-batching/: resolve all chain steps and verify each skill exists.",
       "expected_output": "chain.yaml parses successfully; exactly 6 steps in order (goalforge-capture, goalforge-spec, goalforge-decompose, goalforge-harden, goalforge-execute, goalforge-verify); each step's skill resolves to an existing SKILL.md; precondition status values are valid schema stages; no side effects.",
       "files": [],
       "expectations": [
@@ -25,7 +25,7 @@
     {
       "id": 2,
       "should_trigger": true,
-      "prompt": "Run the full SDD chain for my notification-service feature",
+      "prompt": "Run the full SDD chain for the feature in plans/notification-service/.",
       "expected_output": "goalforge-run orchestrates the chain: reads current feature status, enters at the correct step, delegates to the appropriate child skill (goalforge-capture → goalforge-spec → goalforge-decompose → goalforge-harden → goalforge-execute → goalforge-verify), and pauses at human-gated transitions.",
       "files": [],
       "expectations": [
@@ -37,7 +37,7 @@
     {
       "id": 3,
       "should_trigger": true,
-      "prompt": "Continue where we left off on the payment-gateway feature",
+      "prompt": "Continue the SDD chain where we left off in plans/payment-gateway/.",
       "expected_output": "goalforge-run reads the current WP status: field, identifies the next actionable step in the chain, and resumes at that step by invoking the appropriate child skill.",
       "files": [],
       "expectations": [

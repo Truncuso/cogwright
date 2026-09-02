@@ -46,8 +46,25 @@
 #   ./trigger-run.sh --cases run/evals/evals.json \
 #       --commands "$(dirname "$0")/../commands" --with-siblings --trials 3
 #
-# Case material — the 3/3 bar, installable owners, and negative phrasing the
-# converter preserves — is gated offline by evals/selection.test.sh.
+# Two rules govern the case material on this surface, and they are twins:
+#
+#   an owner must be INSTALLABLE   — every negative's backticked owner is a real
+#                                    alternative the runner can put on the
+#                                    surface, or the model can only abstain;
+#   an argument must be LITERAL    — every positive's argument appears IN the
+#                                    prompt as a plans/ path, a wp-NN id, or a
+#                                    backticked feature/WP name.
+#
+# The second follows from this surface: cwd is an empty temp dir, --tools is
+# Skill only, and there is no Read. A prompt that points at its argument
+# deictically ("the current feature's spec", "the work package I just finished")
+# names nothing the model can resolve, so it asks for the argument and emits no
+# Skill call — an abstain that measures the harness, not the description. The
+# 2026-09-02 baseline abstained on 16 of 20 positives for exactly this reason.
+#
+# Case material — the 3/3 bar, installable owners, literal positive arguments,
+# and negative phrasing the converter preserves — is gated offline by
+# evals/selection.test.sh.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

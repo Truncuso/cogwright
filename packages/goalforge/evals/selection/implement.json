@@ -10,13 +10,13 @@
     {
       "id": "sel-pos-next-ready-wp",
       "should_trigger": true,
-      "prompt": "Pick up the next ready work package whose dependencies are satisfied and run it.",
-      "expected_output": "Fires — with no argument this command selects the next ready WP with satisfied depends_on and executes it."
+      "prompt": "Pick up the next ready work package under plans/billing-api/ whose dependencies are satisfied and run it.",
+      "expected_output": "Fires — with no WP named, this command selects the next ready WP under the named feature with satisfied depends_on and executes it."
     },
     {
       "id": "sel-pos-run-subcycle",
       "should_trigger": true,
-      "prompt": "Run the implementation sub-cycle on the current work package: dispatch the tasks and advance the status.",
+      "prompt": "Run the implementation sub-cycle on wp-02: dispatch the tasks and advance the status.",
       "expected_output": "Fires. Delegates to goalforge-execute, which dispatches tasks, records per-task verification, and moves the WP status forward."
     },
     {

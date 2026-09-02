@@ -7,7 +7,7 @@
 # `goalforge-run`, and the four commands /spec /plan /implement /verify.
 #
 # This asserts case MATERIAL, not model behaviour — it does no model work and is
-# safe to run in CI. Two properties per entry:
+# safe to run in CI. Four properties per entry:
 #   1. at least 3 positives AND at least 3 negatives (Item 9 bar);
 #   2. every negative's expected_output names a sibling owner in backticks that
 #      the RUNNER can actually put on the selection surface (T5/T6/T7). The
@@ -21,6 +21,17 @@
 #      should_trigger there is DERIVED from that prose, so a negative that
 #      matches no phrase is silently reclassified as a positive on the next
 #      converter run — the exact way a load-bearing case gets destroyed.
+#   4. every POSITIVE prompt names its argument LITERALLY — a `plans/` path, a
+#      `wp-NN` id, or a backticked feature/WP name. This is the twin of rule 2:
+#      an owner must be installable, an argument must be literal. The selection
+#      surface is cwd=/tmp with `--tools Skill` and no Read, so a prompt that
+#      refers to its argument deictically ("the current feature's spec", "the
+#      work package I just finished") names something the model cannot resolve;
+#      it asks for the missing argument and emits no `Skill` call at all. The
+#      2026-09-02 baseline measured that directly: 16 of 20 positives abstained,
+#      and substituting a concrete path into plan/sel-pos-decompose-and-harden
+#      flipped it from abstain to a `plan` hit. A deictic positive therefore
+#      measures the harness's blindness, not the skill's description.
 #
 # The commands own no skill dir, so their cases live in evals/selection/<name>.json
 # with a top-level skill_name — outside runner discovery, which keeps
@@ -49,6 +60,12 @@ trap 'rm -f "$universe_file" "$phrase_file"' EXIT
 } | sort -u >"$universe_file"
 
 resolves() { grep -qxF "$1" "$universe_file"; }
+
+# --- the LITERAL-ARGUMENT predicate (positive side) --------------------------
+# A positive prompt must carry its argument in the prompt text: a plans/ path, a
+# wp-NN id, or a backticked feature/WP name. Nothing else is resolvable on a
+# Skill-only surface rooted at an empty cwd.
+literal_arg() { printf '%s' "$1" | grep -Eq 'plans/|wp-[0-9]+|`[^`]+`'; }
 
 # --- the converter's negative-phrase list (single source: the converter) -----
 sed -n '/^NEGATIVE_PHRASES = ($/,/^)$/p' "$HERE/convert-canonical.py" \
@@ -96,6 +113,18 @@ for pair in "${entries[@]}"; do
     if [ "$pos" -ge 3 ]; then pass "$entry: $pos positives"; else fail "$entry: $pos positives (need >= 3)"; fi
     if [ "$neg" -ge 3 ]; then pass "$entry: $neg negatives"; else fail "$entry: $neg negatives (need >= 3)"; fi
 
+    # every positive names its argument literally — deixis is unresolvable here
+    while IFS= read -r line; do
+        id="${line%%$'\t'*}"
+        prompt="${line#*$'\t'}"
+        if literal_arg "$prompt"; then
+            pass "$entry/$id: positive argument is literal"
+        else
+            fail "$entry/$id: positive prompt is deictic — no plans/ path, wp-NN id, or backticked name"
+        fi
+    done < <(jq -r '.evals[]? | select(.should_trigger == true)
+                    | ((.id // "evals[?]") | tostring) + "\t" + (.prompt // "")' "$file")
+
     # every negative names a resolvable owner in backticks
     n=-1
     while IFS= read -r line; do
@@ -134,7 +163,7 @@ done
 
 printf '\n'
 if [ "$fails" -eq 0 ]; then
-    echo "PASS selection.test.sh — 6/6 entries meet the 3/3 bar with installable owners"
+    echo "PASS selection.test.sh — 6/6 entries meet the 3/3 bar: literal positives, installable owners"
     exit 0
 fi
 echo "FAIL selection.test.sh — $fails assertion(s) failed"
