@@ -904,6 +904,52 @@ that presents it as an available route.
 resolves all seven chain steps. If deleted, `grep -rn 'goalforge/run\|goalforge-run'
 commands/ SKILL.md` returns only historical notes explicitly marked as such.
 
+### Item 8 — Wire the shared trigger runner — DEFECT, BLOCKS 9
+
+> **AMENDED 2026-09-02 by human ruling.** This item said *build one runner, at
+> package root*. It now says **consume, do not build**. The engine is shared
+> tooling owned by the dotfiles corpus at `scripts/skill-trigger-runner/`
+> (knowledge home: its `README.md` there, the single normative statement of the
+> case shape, the oracle, and the pass^k contract). This package contributes a
+> caller, not an engine. Full survey, home selection, and extraction plan:
+> [`shared-trigger-runner-design.md`](shared-trigger-runner-design.md).
+> §4.12 is amended in the same lap to record the override.
+>
+> **Why the original was wrong.** The runner's natural input is the whole
+> installed corpus; four of the five existing static pieces and the only working
+> prompt driver already live in dotfiles; and a dotfiles-side caller reaching
+> *into* cogwright is the machine-local dependency self-containment forbids. A
+> package-root runner would also invert the ratio — cogwright owning a tool whose
+> cases are 13 of ~370.
+
+**Change:** ship `packages/goalforge/evals/trigger-run.sh` — resolve the shared
+runner (`$SKILL_TRIGGER_RUNNER`, then
+`${CLAUDE_CONFIG_DIR:-$HOME/.claude}/scripts/skill-trigger-run.sh`), point it at
+this package by a relative climb, pass its exit code through, and on absence
+print one `gap:` marker and exit 0 with `coverage: skipped` in the report — a
+skipped run is measured, never read as a pass. No author path anywhere. Nothing
+here ships: `scripts/goalforge-generate.sh` excludes every `evals/` directory
+from `plugins/goalforge/`, so this is dev-time-only tooling.
+
+**Verify** (run from the repo root; each line is executable as written):
+
+```sh
+bash packages/goalforge/evals/trigger-run.sh --dry-run
+# → files_found 13, files_canonical 0, coverage "skipped", 13 shape errors, exit 2.
+#   The honest zero: this is the RED baseline item 9 then moves, not a broken tool.
+
+SKILL_TRIGGER_RUNNER=/nonexistent bash packages/goalforge/evals/trigger-run.sh --dry-run
+# → exactly one line on stderr beginning `gap: `, exit 0.
+
+bash scripts/ci-lints.sh
+# → 9 `section <name>: PASS` lines, exit 0 (author-paths included).
+```
+
+**Unblocks:** item 9. Do not author cases before the caller resolves a runner.
+
+<details>
+<summary>Superseded text (kept for the record)</summary>
+
 ### Item 8 — Build the trigger runner — DEFECT, BLOCKS 9
 
 This is the keystone item. **Zero canonical trigger cases exist across all 19 skills**:
@@ -932,7 +978,35 @@ That last assertion is the whole point — it is the sabotage test the corpus cu
 
 **Unblocks:** item 9. Do not author cases before the runner exists.
 
+</details>
+
 ### Item 9 — Convert and author the trigger cases — DEFECT
+
+> **RE-SCOPED 2026-09-02 by human ruling, on reachability.** Skill discovery
+> walks **one level deep**, so 16 of this package's 19 skills are not in the
+> model's selection surface at all — verifiable in any session's own skill
+> listing, which carries `goalforge` and `goalforge-run` and no
+> `goalforge-<child>`. Positive *selection* cases for a private child can never
+> pass. Authoring all 19 as selection cases produces 16 permanent zeros that read
+> as a broken runner; the split below is not a refinement, without it the metric
+> is a lie.
+>
+> **SELECTION cases — now, and the only gated half.** Six reachable entries: the
+> `goalforge` front door, the `/spec`, `/plan`, `/implement`, `/verify` commands,
+> and `goalforge-run` if item 7 pins it. Oracle: the first `Skill` `tool_use`,
+> string-equal to the skill under test. 3 positives / 3 negatives each.
+>
+> **ROUTING cases — DEFERRED behind `--observe all`.** Seeding the parent and
+> asserting the routed child name is a different oracle on a different surface,
+> and it contradicts the default early exit: the parent's call is observed first,
+> so a first-call oracle can never see the child. The runner ships `--observe
+> all` (collect every `Skill` call until turn end) and exercises it against
+> replay fixtures, but **no routing oracle ships in this lap** — under `--observe
+> all` the oracle still reads the first call and the full list is reported in
+> `all_observed` for diagnosis only. Routing cases are authored once that oracle
+> exists, in a separate report column, and are not counted toward this item.
+>
+> The conversion half below is unchanged and still applies to all 13 files.
 
 Thirteen `evals.json` files convert to the canonical `should_trigger` shape (T13: rename, not
 rewrite — `prompt` and `expected_output` byte-identical, re-running produces zero diff).
@@ -948,12 +1022,20 @@ parent's description enumerates its children's trigger phrases verbatim, so the 
 discriminating negative for `goalforge` is a prompt that is a verbatim substring of its own
 trigger list.
 
-**Change:** convert 13, author cases for 6, meet 3/3 across all 19.
+**Change:** convert all 13 to the canonical shape (T13, rename not rewrite), then
+author SELECTION cases to 3/3 for the **six reachable entries** named in the
+re-scope above. The remaining 16 private children are ROUTING material, deferred;
+their `evals.json` files still convert, but their cases are not authored as
+selection cases and their pass^k is not gated in this lap.
 
-**Verify:** the T2 jq one-liner prints two integers, both at least 3, for every skill; every
-negative's `expected_output` contains at least one backticked name resolving against the
-union of declared names and basenames under `find -L`; the runner from item 8 executes all
-of them and reports pass^k; conversion re-run produces zero diff.
+**Verify:** the T2 jq one-liner prints two integers for all 13 converted files, both
+at least 3 for each of the six reachable entries; every negative's `expected_output`
+contains at least one backticked name resolving against the union of declared names
+and basenames under `find -L`; `bash packages/goalforge/evals/trigger-run.sh --dry-run`
+reports 13 canonical and 0 shape errors; the shared runner executes the six selection
+suites and reports pass^k with positives and negatives tabulated separately, and an
+`abstain` (no `Skill` call at all) counting as a failure for **both** polarities;
+conversion re-run produces zero diff.
 
 ### Item 10 — Promote the five inert harnesses to execute something — DEFECT
 
@@ -1193,10 +1275,28 @@ change outside this package's scope — recorded here so it is not silently re-o
 (S5). Nothing in this change set retires anything, and the `interview` and `brief` children —
 which ship no evals — are candidates for *cases*, not for deletion.
 
-**4.12 We are not building a general skill-system harness owner.** The ownership table
-records honestly that a skill **system** (router plus children) has no harness owner in the
-general case. Item 8 builds one runner for *this* package, per H8's per-system rule. A
-corpus-general runner is a separate decision with a separate cost.
+**4.12 We are not building a general skill-system harness owner — AMENDED
+2026-09-02 (human ruling; override recorded).** The original text read: *"The
+ownership table records honestly that a skill system (router plus children) has no
+harness owner in the general case. Item 8 builds one runner for this package, per
+H8's per-system rule. A corpus-general runner is a separate decision with a
+separate cost."*
+
+That separate decision has now been taken, and the cost has been **measured, not
+argued**: `shared-trigger-runner-design.md` §4 records three live `claude -p`
+probes on 2026-09-02 — ~$0.0026 per trial with a kill-on-first-`Skill` early exit
+against ~$0.086-0.108 for a full run, a ~35× cliff — putting the
+reachability-scoped goalforge suite (6 surfaces × 6 cases × k=3) at ~$0.30 and
+~2 minutes. The ruling: **one shared engine, home in dotfiles at
+`scripts/skill-trigger-runner/`, two case corpora.** Cogwright consumes it
+through `packages/goalforge/evals/trigger-run.sh` (item 8) and owns none of it.
+
+This clause therefore no longer forbids the work item 8 now describes. What it
+still forbids is unchanged and load-bearing: **cogwright does not become the
+owner** of a corpus-general harness. H8's per-system rule is satisfied by the
+per-system *caller*, not by a second engine. Anyone reading §4 to refute item 8
+should read this paragraph first — the veto was lifted deliberately, on measured
+cost, and not by omission.
 
 **4.13 We are not deleting the 75 narrative eval cases.** The choice is wire them or delete
 them, and item 9 wires them — they carry real authored intent including explicit negatives.

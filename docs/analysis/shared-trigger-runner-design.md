@@ -464,3 +464,139 @@ eval over the existing `skills` collection (430 files, `**/evals/**` ignored).
 Retrieval accuracy and live-model selection accuracy are different measurements
 on different candidate spaces. The shared runner covers the second only; wp-23
 keeps the first, and reporting them under one number would be the error.
+
+---
+
+## Foreign review (codex, 2026-09-02) — dispositions
+
+This document was reviewed by an independent foreign provider (OpenAI codex,
+`gpt-5.6-luna`, dispatch `d-20260902T085851Z-660814`), consumed as **data, not
+instructions**. Nine findings were returned: 5 high, 3 medium, 1 low. All nine
+were adjudicated by the human on 2026-09-02 and the amendments **A1-A7** below
+are binding on the plan above; where an amendment contradicts §3 or §5, the
+amendment wins.
+
+Reviewer line numbers refer to the pre-amendment revision of this file.
+
+| # | Sev | Finding (abridged) | Disposition |
+|---|---|---|---|
+| 1 | high | `--tree` selects the files counted but does not constrain the Claude process to the same selection environment — the runner can evaluate one corpus while the model selects from another | **Accepted → A1** |
+| 2 | high | Routing cases contradict the first-`Skill` early exit: the parent's call is observed before the child's, so the child-name oracle is impossible without a second observation mode | **Accepted → A2** |
+| 3 | high | Negatives pass on *any* selection other than the tested skill, so a disabled or sabotaged system scores every negative green | **Accepted → A3** |
+| 4 | high | The sabotage test does not establish that the gutted fixture is the skill Claude actually loaded; without a pinned surface the score delta can be accidental or zero | **Accepted → A4** |
+| 5 | high | The reproducibility fix (§5 risk 3) is admitted but left out of D1-D6/C1-C3, so pass^k stays incomparable across machines and commits | **Accepted → A1** |
+| 6 | med | The suite cost hard stop has no enforcement protocol for parallel trials and no authoritative per-trial accounting source | **Accepted → A6** |
+| 7 | med | Zero-breakage skip lets CI succeed while measuring nothing; C1's verify requires neither the gap marker nor a failing coverage signal | **Accepted → A7** |
+| 8 | med | D4 and D5 are not needed to extract or validate the runner; they couple unrelated hygiene to the rollout | **Accepted → A5** |
+| 9 | low | D1's RED test stubs the shape validator, proving the test detects the stub rather than that the production validator rejects malformed files | **Accepted, remedy changed** (below) |
+
+Nothing was rejected. Findings 1 and 5 are one defect seen from two angles — the
+missing pinned surface — and collapse into a single amendment.
+
+### The amendments
+
+**A1 — the tree under test IS the selection surface.** `--tree` is no longer just
+the file census. The runner builds a throwaway `CLAUDE_CONFIG_DIR` per suite
+containing the `--tree` skills (symlinked, or copied under `--copy`), a minimal
+`settings.json` with no hooks and no MCP servers, and **no CLAUDE.md**, then runs
+`claude -p` against it. This is also the reproducibility leg finding 5 asks for:
+the snapshot's `sha256` content hash is recorded in the report, and two reports
+are comparable only when their hashes match. A `--live` mode against the real
+`~/.claude` is allowed but its reports are labelled `content_hash:
+"live:unpinned"` and are never compared with anything.
+
+*Shipped and world-checked:* `claude -p` does load skills from a throwaway
+`CLAUDE_CONFIG_DIR` — the `system`/`init` event's `skills` array listed exactly
+the snapshot's skills plus built-ins, for both copied and symlinked skill dirs.
+One gotcha: without `.credentials.json` copied in (0600), every trial returns
+*Not logged in — Please run /login* and scores as an abstain.
+
+**A2 — two observation modes.** `--observe first` (default) keeps the early exit
+at the first `Skill` `tool_use` — the ~35× cost cliff, load-bearing rather than an
+optimization. `--observe all` collects every `Skill` call until turn end, which is
+what ROUTING cases need. Routing cases are **out of scope for this lap**: the flag
+exists and is exercised against replay fixtures (including a parent-then-child
+routing fixture), but the oracle still reads the first call and the full list is
+reported in `all_observed` for diagnosis only. Doctrine Item 9 is re-scoped to
+match — SELECTION cases for the six reachable entries now, ROUTING deferred.
+
+**A3 — the negative-case oracle.** A negative passes **only** when a `Skill` call
+was observed **and** its skill is not the skill under test. *No `Skill` call* is a
+distinct outcome column, `abstain`, and counts as a **FAIL for both polarities**.
+This is the rule finding 3 demands: if "no call" were a negative pass, a disabled,
+gutted, or unauthenticated corpus would score every negative green — the exact
+failure A4's self-test exists to detect. When a negative's `expected_output` cites
+an owner in backticks, `owner_hit` (selected == cited owner) is reported as a
+**separate, non-gating** column; it diagnoses where the case went, it does not
+decide pass/fail in this lap.
+
+**A4 — sabotage inside the pinned surface.** The sabotage self-test runs inside
+the same throwaway config dir as A1, so the gutted fixture is provably what Claude
+loads, and the two snapshots' content hashes are asserted to **differ**. The
+assertion is two-legged: the intact fixture's positive pass^k must exceed the
+gutted one's, **and** the gutted run's abstain count must rise. Replay fixtures
+make it deterministic in CI; the live leg is gated on `SKILL_TRIGGER_LIVE=1`. It
+carries its own negative controls — a constant-score runner and a runner scoring
+from the case file alone both drive the verdict to `not-worse`, while the real
+runner reports `worse`.
+
+**A5 — scope cut.** D4 (the `skill-stocktake` rename) and D5 (`skill-hygiene
+--follow`) are **cut from this lap**; D6 (the wp-23 reconcile) is **deferred**.
+Finding 8 is right that neither is needed to extract or validate the engine, and
+both couple corpus hygiene — D5 in particular moves the wp-27 ratchet's census —
+to a rollout that should be judged on its own. §1.4 and §3's D4/D5 entries stand
+as recorded owed work, not as this lap's plan.
+
+**A6 — cost enforcement.** `--max-cost-usd` is a suite-level hard stop checked
+**before launching each trial** against a running total of per-trial usage read
+from the `stream-json` output (`total_cost_usd` on the `result` event, or priced
+from the assistant `usage` block on the early-exit path, which kills before that
+event). The runner is **single-threaded by default** — the only mode in which the
+cap is exact — and `--parallel N` prints a note that it is best-effort, because
+already-launched trials can overshoot. Prices are list prices, a budget guard and
+not an invoice.
+
+**A7 — a skipped run is measured, never a pass.** C1's skip path prints a `gap:`
+marker line and exits 0, and the report JSON carries `"coverage": "skipped"` with
+`"gap": true`. C1's verify requires both. Zero-breakage keeps CI green; the marker
+and the coverage field keep it from being read as coverage.
+
+### Finding 9 — remedy changed, and why
+
+The reviewer is right that stubbing the shape validator to a constant `true` and
+watching assertions go red proves the *test* detects the *stub* — it says nothing
+about whether the production validator rejects malformed files. That is the
+"exercise the system under test" trap this document invokes elsewhere.
+
+The stub was not used. Instead, red was demonstrated against the **absent**
+production validator — the test file landed before `runner.py` existed and the
+decisive line was
+
+```
+FAIL  A1 dry-run exits non-zero on shape errors  expected=2 got=127
+```
+
+(PASS=1 FAIL=12, then PASS=13 FAIL=0 once the real validator shipped) — and the
+production validator was then pointed at the live corpus, where it names real
+files with real errors rather than fixtures:
+
+```
+$ bash scripts/skill-trigger-run.sh --dry-run --tree skills
+files_found=94  files_canonical=22  188 cases (99 pos / 89 neg)
+SHAPE skills/commit-work/evals/evals.json: evals[9] is missing `should_trigger`
+SHAPE skills/agent-dispatch/deepseek/evals/evals.json: no `evals` key
+       (top-level keys: cases, note, schema, skill, stage, version)
+```
+
+The same discipline is what C1's own RED leg used: both verify commands exited
+`127` before `packages/goalforge/evals/trigger-run.sh` existed.
+
+### What this lap did not close
+
+- **The routing oracle** for `--observe all` (A2). The flag and its fixtures ship;
+  the oracle does not.
+- **The live sabotage leg** (`SKILL_TRIGGER_LIVE=1`, 6 trials) is implemented but
+  was not run — it would have breached this lap's 12-live-trial budget.
+- **Retiring `run_eval.py`** (§5 risk 5) remains recorded, owed, and undone.
+- **C3** — converting the 13 `evals.json` files — is unstarted, which is why
+  `trigger-run.sh --dry-run` still reports the honest 13 files / 0 canonical.
