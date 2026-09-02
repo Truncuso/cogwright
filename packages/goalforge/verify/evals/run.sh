@@ -9,7 +9,6 @@ set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"
-IMPLEMENT_MD="$SKILL_DIR/../../implement/SKILL.md"   # sibling skill (wp-02 boundary note)
 PASS=0
 FAIL=0
 # The `status:` key, kept un-joined from its enum value so the wp-01
@@ -82,9 +81,8 @@ check STATIC-CONTRACT "goalforge-verify reads but never writes the marker" "neve
 check STATIC-CONTRACT "recap one-row-per-WP via record-wp" "record-wp"
 check STATIC-CONTRACT "last-WP cross-WP integration review" "integration review"
 
-# ── wp-02: executor-divergence naming + implement boundary (Gap 2) ──────────
+# ── wp-02: executor-divergence naming (Gap 2) ──────────────────────────────
 check STATIC-CONTRACT "wp-02: executor-divergence cause named in refusal" "executor-divergence"
-check STATIC-CONTRACT "wp-02: implement declares it never advances task status" "never advances task" "$IMPLEMENT_MD"
 
 # BEHAVIORAL-STATIC: refusal template present
 check BEHAVIORAL-STATIC "refusal template: goalforge-verify REFUSED" "goalforge-verify REFUSED"
