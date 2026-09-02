@@ -1,0 +1,51 @@
+{
+  "skill_name": "implement",
+  "evals": [
+    {
+      "id": "sel-pos-execute-named-wp",
+      "should_trigger": true,
+      "prompt": "wp-03 is ready — execute it end to end.",
+      "expected_output": "Fires. Runs the WP through the full goalforge sub-cycle: reads the WP, dispatches its tasks, verifies each, and advances status toward verified."
+    },
+    {
+      "id": "sel-pos-next-ready-wp",
+      "should_trigger": true,
+      "prompt": "Pick up the next ready work package whose dependencies are satisfied and run it.",
+      "expected_output": "Fires — with no argument this command selects the next ready WP with satisfied depends_on and executes it."
+    },
+    {
+      "id": "sel-pos-run-subcycle",
+      "should_trigger": true,
+      "prompt": "Run the implementation sub-cycle on the current work package: dispatch the tasks and advance the status.",
+      "expected_output": "Fires. Delegates to goalforge-execute, which dispatches tasks, records per-task verification, and moves the WP status forward."
+    },
+    {
+      "id": "sel-neg-nothing-decomposed",
+      "should_trigger": false,
+      "prompt": "Nothing is decomposed yet — split the spec into work packages first.",
+      "expected_output": "Does not fire: there is no ready WP to execute. The `plan` command owns decompose-then-harden.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-confirm-tasks-verified",
+      "should_trigger": false,
+      "prompt": "Confirm every task in wp-03 is verified and findings.md exists, then stamp the WP.",
+      "expected_output": "Does not fire — execution is already done; this is the completion check. The `verify` command owns it.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-brief-a-fresh-agent",
+      "should_trigger": false,
+      "prompt": "Write me a short brief of this work package so a fresh agent can pick it up cold.",
+      "expected_output": "Does not fire — producing a pointer brief is not executing the WP. `brief` owns the WP brief artifact.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-archive-finished-wp",
+      "should_trigger": false,
+      "prompt": "wp-03 is finished and verified — move it out of the active set.",
+      "expected_output": "Does not fire. `archive` owns the terminal archived transition; executing a finished WP again would be wrong.",
+      "files": []
+    }
+  ]
+}

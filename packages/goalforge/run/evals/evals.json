@@ -50,7 +50,7 @@
       "id": 4,
       "should_trigger": false,
       "prompt": "Fix the bug in the authentication middleware.",
-      "expected_output": "goalforge-run should NOT trigger — this is a direct bug-fix request, not a request to run the goalforge chain. The skill is not applicable.",
+      "expected_output": "goalforge-run should NOT trigger — this is a direct bug-fix request, not a request to run the goalforge chain. The skill is not applicable. A bare bug fix is not a chain step; if it needs planning at all, `capture` owns the intake.",
       "files": [],
       "expectations": [
         "SKILL.md trigger is specific: invoked when a user runs /spec /plan /implement /verify or when the chain must resume from a known WP stage",
@@ -68,6 +68,27 @@
         "SKILL.md never attempts to resume from an archived WP",
         "SKILL.md --dry-run has no side effects and would also report archived as terminal"
       ]
+    },
+    {
+      "id": "sel-neg-single-step-spec",
+      "should_trigger": false,
+      "prompt": "Just draft the spec for this one feature. Don't run anything after it.",
+      "expected_output": "Does not fire — the SKIP clause is explicit that single-step work goes to the child directly. The `spec` command (and `goalforge-spec` behind it) owns drafting one spec with no downstream orchestration.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-single-step-harden",
+      "should_trigger": false,
+      "prompt": "Grill the goal block on wp-02 until it is ready. Nothing else.",
+      "expected_output": "Does not fire. `harden` owns grilling a WP goal block to status ready; a single hardening pass is not a chain run or a mid-chain resume.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-explain-not-run",
+      "should_trigger": false,
+      "prompt": "Before I run anything, explain what the goalforge chain is and which skill owns which stage.",
+      "expected_output": "Does not fire — this is an explanation request, not a run or a resume. `goalforge` is the front door that explains the chain and routes stage names.",
+      "files": []
     }
   ]
 }

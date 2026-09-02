@@ -28,6 +28,34 @@
       "prompt": "Where do I find the SDD frontmatter schema and file templates?",
       "expected_output": "Should point to goalforge/references/schema.md for schemas and goalforge/references/templates/ for the 7 canonical templates. Should mention what each contains.",
       "files": []
+    },
+    {
+      "id": "sel-neg-run-the-chain",
+      "should_trigger": false,
+      "prompt": "RUN the chain",
+      "expected_output": "T10 case: the prompt is a VERBATIM substring of this skill's own description (\"Do NOT use to RUN the chain\"), which is exactly why the router is likely to fire on it. It must not. `goalforge-run` owns end-to-end chain execution; the front door only explains the chain and routes names.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-scaffold-and-draft",
+      "should_trigger": false,
+      "prompt": "Scaffold a new feature called notification-batching and draft its spec.md. I don't want an explanation, I want the files.",
+      "expected_output": "Does not fire — this is chain WORK, not an explanation of the chain. The `spec` command owns the scaffold-then-draft entry step, delegating to `capture` and then the spec stage.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-decompose-into-wps",
+      "should_trigger": false,
+      "prompt": "spec.md for the billing feature is approved — decompose it into work packages now.",
+      "expected_output": "Does not fire. `decompose` owns splitting an approved spec into work packages, reached through the `plan` command; the front door would only describe that step.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-execute-ready-wp",
+      "should_trigger": false,
+      "prompt": "wp-04 is at status ready. Execute it.",
+      "expected_output": "Does not fire. `execute` owns the implementation sub-cycle for a ready WP, reached through the `implement` command. Explaining the chain is not executing it.",
+      "files": []
     }
   ]
 }

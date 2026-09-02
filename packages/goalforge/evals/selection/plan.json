@@ -1,0 +1,51 @@
+{
+  "skill_name": "plan",
+  "evals": [
+    {
+      "id": "sel-pos-decompose-and-harden",
+      "should_trigger": true,
+      "prompt": "spec.md is approved — decompose it into work packages and harden them to ready.",
+      "expected_output": "Fires. Runs goalforge-decompose to produce WP overview.md files with goal blocks, then goalforge-harden to grill each goal block, pausing at the human-gated hardened→ready transition."
+    },
+    {
+      "id": "sel-pos-break-spec-into-wps",
+      "should_trigger": true,
+      "prompt": "Break the current feature's spec into work packages with goal blocks and dependencies.",
+      "expected_output": "Fires. Decomposes the spec into WPs carrying goal blocks, depends_on, and status: spec; no code is written and nothing is executed."
+    },
+    {
+      "id": "sel-pos-harden-goal-blocks",
+      "should_trigger": true,
+      "prompt": "Grill the goal blocks on my work packages until they're ready for execution.",
+      "expected_output": "Fires — hardening is the second half of this command. Each WP's goal block is grilled to a declared completion strategy and the hardened→ready gate is presented for confirmation."
+    },
+    {
+      "id": "sel-neg-no-spec-yet",
+      "should_trigger": false,
+      "prompt": "There's no spec for this feature yet — scaffold it and write one.",
+      "expected_output": "Does not fire: there is nothing to decompose. The `spec` command owns scaffolding via `capture` and drafting spec.md.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-start-executing",
+      "should_trigger": false,
+      "prompt": "All the work packages are ready. Start executing the first one.",
+      "expected_output": "Does not fire — planning is finished at status ready. The `implement` command owns dispatching a ready WP through `execute`.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-confirm-and-advance",
+      "should_trigger": false,
+      "prompt": "Every task in wp-02 is verified and findings.md is there — confirm it and advance the status.",
+      "expected_output": "Does not fire. The `verify` command owns the completion check and the status advance to verified.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-redo-the-split",
+      "should_trigger": false,
+      "prompt": "The work-package split came out wrong — redo the decomposition for this feature.",
+      "expected_output": "Does not fire, and this is the discriminating pair: re-splitting an already-decomposed feature is not the first-pass decompose. `redecompose` owns re-deriving WPs over existing ones.",
+      "files": []
+    }
+  ]
+}

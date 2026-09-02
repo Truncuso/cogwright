@@ -21,6 +21,20 @@
 # Usage: trigger-run.sh [--dry-run] [--trials k] [--report <path>] [...]
 #   Every argument is forwarded to the runner unchanged. --tree defaults to this
 #   package root (a relative climb from $0); pass --tree yourself to override.
+#
+# Selection suites: the four reachable COMMANDS (/spec /plan /implement /verify)
+# own no skill dir, so their cases live in evals/selection/<name>.json — outside
+# discovery, which keeps --dry-run at 13 canonical files. Run one per file:
+#
+#   ./trigger-run.sh --cases evals/selection/spec.json \
+#       --commands "$(dirname "$0")/../commands" --with-siblings --trials 3
+#
+# --commands puts the command basenames on the selection surface (a suite whose
+# skill_name names a command needs it); --with-siblings installs each negative's
+# backticked owner so the model has a real alternative to pick rather than
+# abstaining. The two skill-owned entries (goalforge, goalforge-run) are
+# discovered normally and need only --with-siblings. Case material — the 3/3 bar
+# and owner resolution — is gated offline by evals/selection.test.sh.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

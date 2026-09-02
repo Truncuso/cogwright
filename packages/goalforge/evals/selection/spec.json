@@ -1,0 +1,51 @@
+{
+  "skill_name": "spec",
+  "evals": [
+    {
+      "id": "sel-pos-scaffold-new-feature",
+      "should_trigger": true,
+      "prompt": "Start a new feature called notification-batching — scaffold it under plans/ and draft the spec.",
+      "expected_output": "Fires. Runs the chain entry step: goalforge-capture scaffolds <PLANS_ROOT>/notification-batching/ at status draft, then goalforge-spec drafts spec.md and stops at the human-gated draft→spec transition. No code is written."
+    },
+    {
+      "id": "sel-pos-idea-to-spec",
+      "should_trigger": true,
+      "prompt": "I have a rough write-up of what I want. Turn it into a reviewed spec.md I can decompose from.",
+      "expected_output": "Fires. Captures the write-up as the feature draft, then drafts spec.md from it and presents the draft→spec gate for human approval."
+    },
+    {
+      "id": "sel-pos-kick-off-chain",
+      "should_trigger": true,
+      "prompt": "Kick off the SDD chain from scratch for the payments-refund feature.",
+      "expected_output": "Fires — this is the first step of /spec → /plan → /implement → /verify. Scaffolds the feature and produces spec.md; explicitly does not decompose or execute."
+    },
+    {
+      "id": "sel-neg-already-specced-decompose",
+      "should_trigger": false,
+      "prompt": "The spec is written and approved. Break it into work packages.",
+      "expected_output": "Does not fire — the spec already exists, so the entry step is done. The `plan` command owns decompose-then-harden, delegating to `decompose`.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-execute-ready-wp",
+      "should_trigger": false,
+      "prompt": "wp-01 is ready — go implement it.",
+      "expected_output": "Does not fire. `implement` owns running a ready work package through `execute`; spec authoring is three steps upstream.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-too-foggy-to-spec",
+      "should_trigger": false,
+      "prompt": "This effort spans several sessions and I don't know the shape yet — map the unknowns before anyone writes a spec.",
+      "expected_output": "Does not fire, and this is the sharp boundary: work too foggy to spec is exactly what the pre-spec on-ramp is for. `wayfind` owns the multi-session decision map, graduating into capture once it converges.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-explain-the-chain",
+      "should_trigger": false,
+      "prompt": "Before I start, explain what spec-driven development is and how the planning chain works.",
+      "expected_output": "Does not fire — an explanation request is not a scaffold-and-draft request. `goalforge` is the front door for describing the chain.",
+      "files": []
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "skill_name": "verify",
+  "evals": [
+    {
+      "id": "sel-pos-check-and-advance",
+      "should_trigger": true,
+      "prompt": "Check that every task in wp-02 is verified and findings.md is present, then advance its status.",
+      "expected_output": "Fires. Confirms all tasks are verified and findings.md exists, then advances the WP status to verified. Fourth step of the chain."
+    },
+    {
+      "id": "sel-pos-verify-just-finished",
+      "should_trigger": true,
+      "prompt": "Verify the work package I just finished.",
+      "expected_output": "Fires — resolves the WP, runs the completion checks, and stamps status: verified, or reports exactly which check failed."
+    },
+    {
+      "id": "sel-pos-completion-criteria",
+      "should_trigger": true,
+      "prompt": "Confirm wp-05 meets its declared completion criteria and mark it verified.",
+      "expected_output": "Fires. Evaluates the WP against its goal-declared completion strategy and advances status only when every task check passes."
+    },
+    {
+      "id": "sel-neg-not-executed-yet",
+      "should_trigger": false,
+      "prompt": "The work package hasn't been run yet — dispatch its tasks.",
+      "expected_output": "Does not fire: there is nothing to verify until the WP has been executed. The `implement` command owns dispatching a ready WP through `execute`.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-feature-retrospective",
+      "should_trigger": false,
+      "prompt": "The whole feature is done — write a retrospective across its work packages.",
+      "expected_output": "Does not fire — a cross-WP retrospective is not a per-WP completion check. `recap` owns the retrospective.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-adjudicate-disagreement",
+      "should_trigger": false,
+      "prompt": "Two reviewers disagree about whether wp-04 actually meets its goal. Settle it.",
+      "expected_output": "Does not fire, and this is the discriminating pair: adjudicating conflicting judgements is not running the deterministic completion check. `arbiter` owns adjudication.",
+      "files": []
+    },
+    {
+      "id": "sel-neg-monitor-running-chain",
+      "should_trigger": false,
+      "prompt": "Keep an eye on the running chain and flag it if a stage stalls.",
+      "expected_output": "Does not fire — monitoring an in-flight chain is not a WP completion check. `watchdog` owns stall detection.",
+      "files": []
+    }
+  ]
+}
