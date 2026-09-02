@@ -1,0 +1,505 @@
+{
+  "schema_version": "1",
+  "tree": "/home/cunger/10_projects/cogwright/packages/goalforge",
+  "observe": "first",
+  "trials": 3,
+  "model": "haiku",
+  "files_found": 1,
+  "files_canonical": 1,
+  "shape_errors": [],
+  "mode": "snapshot",
+  "config_dir": {
+    "path": "/tmp/skill-trigger-cfg-dsfo37qy/cfg",
+    "mode": "snapshot",
+    "content_hash": "sha256:5606680918f26a4b2a1797228f4e6500b375ca8025684b66accc93759123a7a5",
+    "skills": [
+      "redecompose",
+      "spec",
+      "verify"
+    ],
+    "commands": [
+      "goalforge-run",
+      "implement",
+      "plan",
+      "spec",
+      "verify",
+      "wayfind"
+    ],
+    "commands_under_test": [
+      "plan"
+    ],
+    "unresolved_siblings": [
+      {
+        "skill": "plan",
+        "case_id": "sel-neg-start-executing",
+        "owner": "implement"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "skill": "plan",
+      "case_id": "sel-pos-decompose-and-harden",
+      "case_file": "evals/selection/plan.json",
+      "should_trigger": true,
+      "prompt": "spec.md is approved \u2014 decompose it into work packages and harden them to ready.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.022853,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 19182
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.022902,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 19306
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.007091,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19306,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 3,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": "positive case: every trial must select the skill under test"
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-pos-break-spec-into-wps",
+      "case_file": "evals/selection/plan.json",
+      "should_trigger": true,
+      "prompt": "Break the current feature's spec into work packages with goal blocks and dependencies.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.009216,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 2,
+            "cache_read_input_tokens": 13788,
+            "cache_creation_input_tokens": 5510
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.005542,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19298,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.004762,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19298,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 3,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": "positive case: every trial must select the skill under test"
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-pos-harden-goal-blocks",
+      "case_file": "evals/selection/plan.json",
+      "should_trigger": true,
+      "prompt": "Grill the goal blocks on my work packages until they're ready for execution.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.009717,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 13788,
+            "cache_creation_input_tokens": 5514
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.004519,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 2,
+            "cache_read_input_tokens": 19302,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.004399,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19302,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 3,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": "positive case: every trial must select the skill under test"
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-neg-no-spec-yet",
+      "case_file": "evals/selection/plan.json",
+      "should_trigger": false,
+      "prompt": "There's no spec for this feature yet \u2014 scaffold it and write one.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.008581,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 13788,
+            "cache_creation_input_tokens": 5510
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.004537,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19298,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.004847,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 6,
+            "cache_read_input_tokens": 19298,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 3,
+      "expected_owner": "spec",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-neg-start-executing",
+      "case_file": "evals/selection/plan.json",
+      "should_trigger": false,
+      "prompt": "All the work packages are ready. Start executing the first one.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "goalforge-run",
+          "all_observed": [
+            "goalforge-run"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.012437,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 20682,
+            "cache_creation_input_tokens": 8259
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.003555,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19294,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.0035,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19294,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 1,
+      "pass_k": false,
+      "abstains": 2,
+      "expected_owner": "implement",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-neg-confirm-and-advance",
+      "case_file": "evals/selection/plan.json",
+      "should_trigger": false,
+      "prompt": "Every task in wp-02 is verified and findings.md is there \u2014 confirm it and advance the status.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "verify",
+          "all_observed": [
+            "verify"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.012564,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 21,
+            "cache_read_input_tokens": 20682,
+            "cache_creation_input_tokens": 8289
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.005581,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19314,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "verify",
+          "all_observed": [
+            "verify"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.002987,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 28971,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 2,
+      "pass_k": false,
+      "abstains": 1,
+      "expected_owner": "verify",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    },
+    {
+      "skill": "plan",
+      "case_id": "sel-neg-redo-the-split",
+      "case_file": "evals/selection/plan.json",
+      "should_trigger": false,
+      "prompt": "The work-package split came out wrong \u2014 redo the decomposition for this feature.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.00817,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 2,
+            "cache_read_input_tokens": 13788,
+            "cache_creation_input_tokens": 5516
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.003405,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19304,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.0031,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19304,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 3,
+      "expected_owner": "redecompose",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    }
+  ],
+  "cost": {
+    "total_usd": 0.164267,
+    "cap_usd": 0.25,
+    "capped": false
+  },
+  "summary": {
+    "cases": 7,
+    "trials_per_case": 3,
+    "positive_cases": 3,
+    "positive_pass_k": 0,
+    "negative_cases": 4,
+    "negative_pass_k": 0,
+    "abstains": 18,
+    "observed_skill_calls": 3,
+    "owner_hits": 0
+  },
+  "coverage": "full"
+}

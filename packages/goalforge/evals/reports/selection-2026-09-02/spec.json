@@ -1,0 +1,528 @@
+{
+  "schema_version": "1",
+  "tree": "/home/cunger/10_projects/cogwright/packages/goalforge",
+  "observe": "first",
+  "trials": 3,
+  "model": "haiku",
+  "files_found": 1,
+  "files_canonical": 1,
+  "shape_errors": [],
+  "mode": "snapshot",
+  "config_dir": {
+    "path": "/tmp/skill-trigger-cfg-8q70vo2j/cfg",
+    "mode": "snapshot",
+    "content_hash": "sha256:8ce3a74c3055662688ba42ecc404c7b8db243316721dd0fda0392cda4e4e3a63",
+    "skills": [
+      "onboard",
+      "spec",
+      "wayfind"
+    ],
+    "commands": [
+      "goalforge-run",
+      "implement",
+      "plan",
+      "spec",
+      "verify",
+      "wayfind"
+    ],
+    "commands_under_test": [],
+    "unresolved_siblings": [
+      {
+        "skill": "spec",
+        "case_id": "sel-neg-already-specced-decompose",
+        "owner": "plan"
+      },
+      {
+        "skill": "spec",
+        "case_id": "sel-neg-execute-ready-wp",
+        "owner": "implement"
+      }
+    ]
+  },
+  "cases": [
+    {
+      "skill": "spec",
+      "case_id": "sel-pos-scaffold-new-feature",
+      "case_file": "evals/selection/spec.json",
+      "should_trigger": true,
+      "prompt": "Start a new feature called notification-batching \u2014 scaffold it under plans/ and draft the spec.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.023883,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 6,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 19176
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "onboard",
+          "all_observed": [
+            "onboard"
+          ],
+          "outcome": "other",
+          "pass": false,
+          "cost_usd": 0.036262,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 9,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 28950
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "spec",
+          "all_observed": [
+            "spec"
+          ],
+          "outcome": "hit",
+          "pass": true,
+          "cost_usd": 0.00294,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 28950,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 1,
+      "pass_k": false,
+      "abstains": 1,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": "positive case: every trial must select the skill under test"
+    },
+    {
+      "skill": "spec",
+      "case_id": "sel-pos-idea-to-spec",
+      "case_file": "evals/selection/spec.json",
+      "should_trigger": true,
+      "prompt": "I have a rough write-up of what I want. Turn it into a reviewed spec.md I can decompose from.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.009229,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 13790,
+            "cache_creation_input_tokens": 5522
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.004749,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19312,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.004649,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19312,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 3,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": "positive case: every trial must select the skill under test"
+    },
+    {
+      "skill": "spec",
+      "case_id": "sel-pos-kick-off-chain",
+      "case_file": "evals/selection/spec.json",
+      "should_trigger": true,
+      "prompt": "Kick off the SDD chain from scratch for the payments-refund feature.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.013182,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 14,
+            "cache_read_input_tokens": 13790,
+            "cache_creation_input_tokens": 5504
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.006394,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19294,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "onboard",
+          "all_observed": [
+            "onboard"
+          ],
+          "outcome": "other",
+          "pass": false,
+          "cost_usd": 0.002969,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 9,
+            "cache_read_input_tokens": 28941,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 2,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": "positive case: every trial must select the skill under test"
+    },
+    {
+      "skill": "spec",
+      "case_id": "sel-neg-already-specced-decompose",
+      "case_file": "evals/selection/spec.json",
+      "should_trigger": false,
+      "prompt": "The spec is written and approved. Break it into work packages.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.00961,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 6,
+            "cache_read_input_tokens": 13790,
+            "cache_creation_input_tokens": 5496
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.002983,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 28929,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "plan",
+          "all_observed": [
+            "plan"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.001959,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 2,
+            "cache_read_input_tokens": 19286,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 2,
+      "pass_k": false,
+      "abstains": 1,
+      "expected_owner": "plan",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    },
+    {
+      "skill": "spec",
+      "case_id": "sel-neg-execute-ready-wp",
+      "case_file": "evals/selection/spec.json",
+      "should_trigger": false,
+      "prompt": "wp-01 is ready \u2014 go implement it.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "implement",
+          "all_observed": [
+            "implement"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.012456,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 12,
+            "cache_read_input_tokens": 20685,
+            "cache_creation_input_tokens": 8238
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "implement",
+          "all_observed": [
+            "implement"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.002967,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 9,
+            "cache_read_input_tokens": 28923,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "pass": false,
+          "cost_usd": 0.004232,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19282,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 2,
+      "pass_k": false,
+      "abstains": 1,
+      "expected_owner": "implement",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    },
+    {
+      "skill": "spec",
+      "case_id": "sel-neg-too-foggy-to-spec",
+      "case_file": "evals/selection/spec.json",
+      "should_trigger": false,
+      "prompt": "This effort spans several sessions and I don't know the shape yet \u2014 map the unknowns before anyone writes a spec.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "wayfind",
+          "all_observed": [
+            "wayfind"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.008309,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 2,
+            "cache_read_input_tokens": 13790,
+            "cache_creation_input_tokens": 5520
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "wayfind",
+          "all_observed": [
+            "wayfind"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.002942,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 28965,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "wayfind",
+          "all_observed": [
+            "wayfind"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.001991,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19310,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 3,
+      "pass_k": true,
+      "abstains": 0,
+      "expected_owner": "wayfind",
+      "owner_hit": true,
+      "failing_assertion": null
+    },
+    {
+      "skill": "spec",
+      "case_id": "sel-neg-bootstrap-the-repo",
+      "case_file": "evals/selection/spec.json",
+      "should_trigger": false,
+      "prompt": "This repo has no plans/ directory and no SDD hook yet. Set the chain up here first.",
+      "trials": [
+        {
+          "trial": 1,
+          "observed": "onboard",
+          "all_observed": [
+            "onboard"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.012479,
+          "usage": {
+            "input_tokens": 30,
+            "output_tokens": 9,
+            "cache_read_input_tokens": 20685,
+            "cache_creation_input_tokens": 8268
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observed": "onboard",
+          "all_observed": [
+            "onboard"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.00203,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 16,
+            "cache_read_input_tokens": 19302,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observed": "onboard",
+          "all_observed": [
+            "onboard"
+          ],
+          "outcome": "other",
+          "pass": true,
+          "cost_usd": 0.00199,
+          "usage": {
+            "input_tokens": 20,
+            "output_tokens": 8,
+            "cache_read_input_tokens": 19302,
+            "cache_creation_input_tokens": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 3,
+      "pass_k": true,
+      "abstains": 0,
+      "expected_owner": "onboard",
+      "owner_hit": true,
+      "failing_assertion": null
+    }
+  ],
+  "cost": {
+    "total_usd": 0.168205,
+    "cap_usd": 0.25,
+    "capped": false
+  },
+  "summary": {
+    "cases": 7,
+    "trials_per_case": 3,
+    "positive_cases": 3,
+    "positive_pass_k": 0,
+    "negative_cases": 4,
+    "negative_pass_k": 2,
+    "abstains": 8,
+    "observed_skill_calls": 13,
+    "owner_hits": 2
+  },
+  "coverage": "full"
+}
