@@ -15,6 +15,7 @@ description: >
   /verify directly (they dispatch the stage children directly; the goalforge/run
   orchestrator is the end-to-end alternative).
 metadata:
+  skill-kind: preference
   version: 3.0.0
 ---
 
@@ -26,9 +27,10 @@ truth; `plugins/goalforge/` is its generated artifact (`scripts/goalforge-genera
 drift-gated). The maintainer's dotfiles reach this package via a per-machine
 symlink (installer contributor mode).
 
-This is a **v2 package**: a PUBLIC parent (this file) owning PRIVATE nested
-children. Children do not trigger by discovery — they are invoked by name from
-the entry commands and the orchestrator, or referenced here.
+This is a **PUBLIC-parent package** (`metadata.version` 3.0.0): a PUBLIC parent
+(this file) owning PRIVATE nested children. Children do not trigger by
+discovery — they are invoked by name from the entry commands and the
+orchestrator, or referenced here.
 
 ## Children (name → stage → path)
 
@@ -78,3 +80,22 @@ briefs that `goalforge-execute` consumes.
 
 The `sdd-*` skill/script aliases were RETIRED 2026-07-21. Historic
 name map: `references/alias-map.md`.
+
+## Gotchas
+
+- **Route vocabulary is `fast | standard | wave` — nothing else.** That set is
+  what `scripts/goalforge-route.sh` actually emits. Prose elsewhere in the
+  package has said `full` (`run/chain.yaml`, `commands/spec.md`) and `one-go`
+  (`run/SKILL.md`); neither value is ever produced by the classifier. Trust the
+  classifier's output, not the prose, and read a route value as one of the three.
+- **`goalforge-run` is named but not reachable by the Skill tool.** It is a
+  PRIVATE nested child with no `commands/` wrapper and no discovery entry, so
+  invoking `goalforge-run` by name answers "Unknown skill". The only way in is
+  to read `run/SKILL.md` by path and follow it in-session. Prefer `/spec`,
+  `/plan`, `/implement`, `/verify` for stage-at-a-time work.
+- **No nested child here resolves via the Skill tool.** Discovery is one level
+  deep: only `goalforge`, `prototype`, and `wayfind` are discoverable. Every
+  other name in the Children table — `goalforge-capture`, `goalforge-harden`,
+  and the rest — must be reached by reading `<child>/SKILL.md` by path. A
+  command or brief that says "invoke goalforge-<stage>" is stating a dispatch
+  that the runtime cannot perform.
