@@ -41,10 +41,10 @@
       "files": []
     },
     {
-      "id": "sel-neg-explain-the-chain",
+      "id": "sel-neg-bootstrap-the-repo",
       "should_trigger": false,
-      "prompt": "Before I start, explain what spec-driven development is and how the planning chain works.",
-      "expected_output": "Does not fire — an explanation request is not a scaffold-and-draft request. `goalforge` is the front door for describing the chain.",
+      "prompt": "This repo has no plans/ directory and no SDD hook yet. Set the chain up here first.",
+      "expected_output": "Does not fire — bootstrapping the chain into a repo is not scaffolding a feature and drafting its spec. `onboard` owns creating plans/, installing the validate hook, and stamping the CLAUDE.md pointer.",
       "files": []
     }
   ]

@@ -73,7 +73,7 @@
       "id": "sel-neg-single-step-spec",
       "should_trigger": false,
       "prompt": "Just draft the spec for this one feature. Don't run anything after it.",
-      "expected_output": "Does not fire — the SKIP clause is explicit that single-step work goes to the child directly. The `spec` command (and `goalforge-spec` behind it) owns drafting one spec with no downstream orchestration.",
+      "expected_output": "Does not fire — the SKIP clause is explicit that single-step work goes to the child directly. The `spec` command owns drafting one spec with no downstream orchestration.",
       "files": []
     },
     {
@@ -84,10 +84,10 @@
       "files": []
     },
     {
-      "id": "sel-neg-explain-not-run",
+      "id": "sel-neg-archive-terminal-wp",
       "should_trigger": false,
-      "prompt": "Before I run anything, explain what the goalforge chain is and which skill owns which stage.",
-      "expected_output": "Does not fire — this is an explanation request, not a run or a resume. `goalforge` is the front door that explains the chain and routes stage names.",
+      "prompt": "wp-07 is verified. Archive it, and don't touch anything else.",
+      "expected_output": "Does not fire — archiving one terminal WP is a single-step transition, not a chain run or a mid-chain resume. `archive` owns the verified→archived transition.",
       "files": []
     }
   ]

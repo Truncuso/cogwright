@@ -9,9 +9,18 @@
 # This asserts case MATERIAL, not model behaviour — it does no model work and is
 # safe to run in CI. Two properties per entry:
 #   1. at least 3 positives AND at least 3 negatives (Item 9 bar);
-#   2. every negative's expected_output names a sibling owner in backticks by a
-#      DECLARED name, resolving against the union of `find -L` basenames,
-#      command basenames, and skill_name values under packages/goalforge (T5/T6/T7).
+#   2. every negative's expected_output names a sibling owner in backticks that
+#      the RUNNER can actually put on the selection surface (T5/T6/T7). The
+#      predicate mirrors runner.resolve_sibling — a directory carrying SKILL.md —
+#      plus the README's command carve-out (a basename under commands/). A
+#      basename that is merely a file, or a `skill_name` declared inside a
+#      SKILL.md, is NOT installable and does not count: certifying one would
+#      green-light a negative the model can only abstain on.
+#   3. every negative under the converter's scope (*/evals/evals.json) phrases
+#      its expected_output with one of convert-canonical.py's NEGATIVE_PHRASES.
+#      should_trigger there is DERIVED from that prose, so a negative that
+#      matches no phrase is silently reclassified as a positive on the next
+#      converter run — the exact way a load-bearing case gets destroyed.
 #
 # The commands own no skill dir, so their cases live in evals/selection/<name>.json
 # with a top-level skill_name — outside runner discovery, which keeps
@@ -27,17 +36,33 @@ pass() { printf 'ok   %s\n' "$*"; }
 
 command -v jq >/dev/null 2>&1 || { echo "FAIL jq not installed"; exit 1; }
 
-# --- the declared-name universe --------------------------------------------
+# --- the INSTALLABLE-owner universe -----------------------------------------
+# Exactly what the runner can install: a skill dir (SKILL.md present, addressed
+# by its DIRECTORY basename, which is what resolve_skill_dir matches) or a
+# command basename already on the surface via --commands.
 universe_file="$(mktemp)"
-trap 'rm -f "$universe_file"' EXIT
+phrase_file="$(mktemp)"
+trap 'rm -f "$universe_file" "$phrase_file"' EXIT
 {
-    find -L "$PKG_ROOT" -mindepth 1 -printf '%f\n' 2>/dev/null
+    find -L "$PKG_ROOT" -mindepth 2 -name SKILL.md -printf '%h\n' 2>/dev/null | xargs -r -n1 basename
     find -L "$PKG_ROOT/commands" -maxdepth 1 -name '*.md' -printf '%f\n' 2>/dev/null | sed 's/\.md$//'
-    while IFS= read -r f; do jq -r '.skill_name // empty' "$f" 2>/dev/null; done \
-        < <(find -L "$PKG_ROOT" -name '*.json' -path '*evals*')
 } | sort -u >"$universe_file"
 
 resolves() { grep -qxF "$1" "$universe_file"; }
+
+# --- the converter's negative-phrase list (single source: the converter) -----
+sed -n '/^NEGATIVE_PHRASES = ($/,/^)$/p' "$HERE/convert-canonical.py" \
+    | grep -o '"[^"]*"' | tr -d '"' >"$phrase_file"
+[ -s "$phrase_file" ] || { echo "FAIL could not read NEGATIVE_PHRASES from convert-canonical.py"; exit 1; }
+
+phrased() {
+    local hay; hay="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+    while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        case "$hay" in *"$p"*) return 0 ;; esac
+    done <"$phrase_file"
+    return 1
+}
 
 # --- entry → cases file -----------------------------------------------------
 # entry:relative path
@@ -88,17 +113,28 @@ for pair in "${entries[@]}"; do
             resolves "$owner" && { hit=1; break; }
         done <<<"$owners"
         if [ "$hit" -eq 1 ]; then
-            pass "$entry/$id: owner resolves"
+            pass "$entry/$id: owner installable"
         else
-            fail "$entry/$id: no backticked owner resolves ($(printf '%s' "$owners" | tr '\n' ' '))"
+            fail "$entry/$id: no backticked owner is installable ($(printf '%s' "$owners" | tr '\n' ' '))"
         fi
+
+        # under the converter's scope, the polarity is derived from this prose
+        case "$rel" in
+            */evals/evals.json|evals/evals.json)
+                if phrased "$eo"; then
+                    pass "$entry/$id: negative phrasing survives conversion"
+                else
+                    fail "$entry/$id: expected_output matches no NEGATIVE_PHRASE — convert-canonical.py would flip it to a positive"
+                fi
+                ;;
+        esac
     done < <(jq -r '.evals[]? | select(.should_trigger == false)
                     | ((.id // "evals[?]") | tostring) + "\t" + (.expected_output // "")' "$file")
 done
 
 printf '\n'
 if [ "$fails" -eq 0 ]; then
-    echo "PASS selection.test.sh — 6/6 entries meet the 3/3 bar with resolvable owners"
+    echo "PASS selection.test.sh — 6/6 entries meet the 3/3 bar with installable owners"
     exit 0
 fi
 echo "FAIL selection.test.sh — $fails assertion(s) failed"

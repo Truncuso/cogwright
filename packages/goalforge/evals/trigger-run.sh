@@ -29,12 +29,25 @@
 #   ./trigger-run.sh --cases evals/selection/spec.json \
 #       --commands "$(dirname "$0")/../commands" --with-siblings --trials 3
 #
-# --commands puts the command basenames on the selection surface (a suite whose
-# skill_name names a command needs it); --with-siblings installs each negative's
-# backticked owner so the model has a real alternative to pick rather than
-# abstaining. The two skill-owned entries (goalforge, goalforge-run) are
-# discovered normally and need only --with-siblings. Case material — the 3/3 bar
-# and owner resolution — is gated offline by evals/selection.test.sh.
+# --commands puts the command basenames on the selection surface; --with-siblings
+# installs each negative's backticked owner so the model has a real alternative
+# to pick rather than abstaining.
+#
+# ALL SIX suites need --commands, not just the four command ones. Sibling
+# resolution matches a skill dir by its DIRECTORY basename, and four owners this
+# material cites — `goalforge-run`, `spec`, `plan`, `implement` — reach the
+# surface only as commands/<name>.md (the goalforge-run skill dir is run/, and
+# plan/implement own no dir at all). Omit --commands and those negatives have no
+# alternative owner installed, so the model abstains and the oracle fails them.
+# The `goalforge` front door is never installable as a sibling — it IS the
+# --tree root, never walked as a subdir — so no negative may cite it as its
+# owner. Run the two skill-owned suites the same way:
+#
+#   ./trigger-run.sh --cases run/evals/evals.json \
+#       --commands "$(dirname "$0")/../commands" --with-siblings --trials 3
+#
+# Case material — the 3/3 bar, installable owners, and negative phrasing the
+# converter preserves — is gated offline by evals/selection.test.sh.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

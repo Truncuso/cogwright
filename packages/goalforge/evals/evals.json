@@ -33,7 +33,7 @@
       "id": "sel-neg-run-the-chain",
       "should_trigger": false,
       "prompt": "RUN the chain",
-      "expected_output": "T10 case: the prompt is a VERBATIM substring of this skill's own description (\"Do NOT use to RUN the chain\"), which is exactly why the router is likely to fire on it. It must not. `goalforge-run` owns end-to-end chain execution; the front door only explains the chain and routes names.",
+      "expected_output": "T10 case: the prompt is a VERBATIM substring of this skill's own description (\"Do NOT use to RUN the chain\"), which is exactly why the router is likely to fire on it. It must not trigger. `goalforge-run` owns end-to-end chain execution; the front door only explains the chain and routes names.",
       "files": []
     },
     {
