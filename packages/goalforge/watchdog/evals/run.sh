@@ -64,6 +64,46 @@ check "Gotchas section present" "## Gotchas"
 # Wiring: goalforge-verify references goalforge-watchdog
 check "verify wires goalforge-watchdog" "goalforge-watchdog" "$SDD_VERIFY_MD"
 
+
+# ── BEHAVIORAL (via validator): the claimed-vs-implemented gap, mechanically ─
+# The watchdog's semantic pass must not be the first thing that notices a WP
+# claiming `verified` over a task that is only `implemented`. That form of the
+# gap class is deterministic, so it is asserted here by executing
+# goalforge-validate.sh against a fixture whose ONLY defect is that mismatch.
+VALIDATE="$(cd "$SKILL_DIR/.." && pwd)/scripts/goalforge-validate.sh"
+GAP_FIXTURE="$SKILL_DIR/evals/fixtures/wp-claimed-verified"
+if [ -f "$GAP_FIXTURE/wp-01-gap-audit/overview.md" ]; then
+  echo "  PASS: wp-claimed-verified fixture tree exists"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: wp-claimed-verified fixture tree missing: $GAP_FIXTURE"
+  FAIL=$((FAIL + 1))
+fi
+
+if bash "$VALIDATE" --strict "$GAP_FIXTURE" >/dev/null 2>&1; then
+  echo "  FAIL: WP verified over an implemented task must be rejected (validator must exit non-zero)"
+  FAIL=$((FAIL + 1))
+else
+  echo "  PASS: WP verified over an implemented task rejected by validator"
+  PASS=$((PASS + 1))
+fi
+
+# Green counterpart: the same tree with the task promoted (and its status
+# mirror updated) validates clean, so the non-zero above is the gap and
+# nothing else.
+GAP_TMP="$(mktemp -d)"
+cp -R "$GAP_FIXTURE" "$GAP_TMP/f"
+sed -i 's/^status: implemented$/status: verified/' "$GAP_TMP/f/wp-01-gap-audit/task-01-gap-probe.md"
+sed -i 's/| Gap probe | implemented |/| Gap probe | verified |/' "$GAP_TMP/f/wp-01-gap-audit/overview.md"
+if bash "$VALIDATE" --strict "$GAP_TMP/f" >/dev/null 2>&1; then
+  echo "  PASS: the same tree with the task promoted validates clean"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: the same tree with the task promoted should validate clean"
+  bash "$VALIDATE" --strict "$GAP_TMP/f" 2>&1 | sed 's/^/        /' || true
+  FAIL=$((FAIL + 1))
+fi
+rm -rf "$GAP_TMP"
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then

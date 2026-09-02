@@ -117,6 +117,38 @@ if [ -f "$WP_DIR/task-01-router-setup.md" ]; then
   check FIXTURE "fixture task has non-empty verify field" "verify:" "$WP_DIR/task-01-router-setup.md"
 fi
 
+
+# ── BEHAVIORAL (via validator): the findings.md precondition is ENFORCED ─────
+# goalforge-verify's precondition "findings.md exists" was asserted only as
+# SKILL.md prose. These runs execute goalforge-validate.sh — the script that
+# actually owns the invariant — against a fixture tree whose ONLY defect is the
+# missing evidence file, following the pattern harden/evals/run.sh:106-131 set.
+VALIDATE="$SKILL_DIR/../scripts/goalforge-validate.sh"
+NF_FIXTURE="$SKILL_DIR/evals/fixtures/wp-verified-no-findings"
+file_check FIXTURE "wp-verified-no-findings fixture tree exists" "$NF_FIXTURE/wp-01-api-scaffold/overview.md"
+
+if bash "$VALIDATE" --strict "$NF_FIXTURE" >/dev/null 2>&1; then
+  echo "  FAIL [BEHAVIORAL]: verified WP without findings.md must be rejected (validator must exit non-zero)"
+  FAIL=$((FAIL+1))
+else
+  echo "  PASS [BEHAVIORAL]: verified WP without findings.md rejected by validator"
+  PASS=$((PASS+1))
+fi
+
+# Green counterpart on a copy of the SAME tree plus findings.md. Without it the
+# assertion above would also pass on a fixture broken in some unrelated way.
+NF_TMP="$(mktemp -d)"
+cp -R "$NF_FIXTURE" "$NF_TMP/f"
+printf '# Findings\n\nVerification evidence.\n' > "$NF_TMP/f/wp-01-api-scaffold/findings.md"
+if bash "$VALIDATE" --strict "$NF_TMP/f" >/dev/null 2>&1; then
+  echo "  PASS [BEHAVIORAL]: the same tree plus findings.md validates clean"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL [BEHAVIORAL]: the same tree plus findings.md should validate clean"
+  bash "$VALIDATE" --strict "$NF_TMP/f" 2>&1 | sed 's/^/        /' || true
+  FAIL=$((FAIL+1))
+fi
+rm -rf "$NF_TMP"
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then

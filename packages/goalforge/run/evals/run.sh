@@ -226,6 +226,51 @@ else
   FAIL=$((FAIL+1))
 fi
 
+
+# ── HERMETIC: chain resolution proven against a fixture skills tree ──────────
+# The WRAPPER router run above resolves against the INSTALLED tree
+# ($HOME/.claude/skills), so it passes or fails with the author's machine and
+# its UNRESOLVED path is never exercised. These two runs pin
+# CLAUDE_SKILLS_ROOT — the override goalforge-router.sh already supports — at a
+# tree this harness builds, so both the resolve and the fail path are real.
+HERMETIC_ROOT="$(mktemp -d)"
+CHAIN_STEPS="$(grep -E '^[[:space:]]*- skill:' "$CHAIN_YAML" | sed 's/.*skill:[[:space:]]*//')"
+for s in $CHAIN_STEPS; do
+  mkdir -p "$HERMETIC_ROOT/$s"
+  printf -- '---\nname: %s\n---\n' "${s##*/}" > "$HERMETIC_ROOT/$s/SKILL.md"
+done
+
+H_RC=0
+H_OUT="$(CLAUDE_SKILLS_ROOT="$HERMETIC_ROOT" bash "$SKILL_DIR/scripts/goalforge-router.sh" \
+  --dry-run hermetic-probe 2>&1)" || H_RC=$?
+H_RESOLVED="$(printf '%s\n' "$H_OUT" | grep -c ': RESOLVED ' || true)"
+if [ "$H_RC" -eq 0 ] && [ "$H_RESOLVED" -eq 7 ] \
+   && ! printf '%s\n' "$H_OUT" | grep -q 'UNRESOLVED'; then
+  echo "  PASS [HERMETIC]: router resolves all 7 steps against the fixture skills tree"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL [HERMETIC]: router did not resolve 7 steps in the fixture tree (rc=$H_RC, resolved=$H_RESOLVED)"
+  printf '%s\n' "$H_OUT" | sed 's/^/        /'
+  FAIL=$((FAIL+1))
+fi
+
+# Deliberately broken fixture tree: one step's SKILL.md removed. The resolver
+# must report it UNRESOLVED and exit non-zero — the failure path the installed
+# tree can never exercise.
+BROKEN_STEP="$(printf '%s\n' "$CHAIN_STEPS" | head -1)"
+rm -f "$HERMETIC_ROOT/$BROKEN_STEP/SKILL.md"
+B_RC=0
+B_OUT="$(CLAUDE_SKILLS_ROOT="$HERMETIC_ROOT" bash "$SKILL_DIR/scripts/goalforge-router.sh" \
+  --dry-run hermetic-probe 2>&1)" || B_RC=$?
+if [ "$B_RC" -ne 0 ] && printf '%s\n' "$B_OUT" | grep -q "^$BROKEN_STEP: UNRESOLVED$"; then
+  echo "  PASS [HERMETIC]: a missing step SKILL.md is UNRESOLVED and exits non-zero"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL [HERMETIC]: a missing step SKILL.md must be UNRESOLVED and exit non-zero (rc=$B_RC)"
+  printf '%s\n' "$B_OUT" | sed 's/^/        /'
+  FAIL=$((FAIL+1))
+fi
+rm -rf "$HERMETIC_ROOT"
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then

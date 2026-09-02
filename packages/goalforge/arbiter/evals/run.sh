@@ -71,6 +71,48 @@ check "Gotchas section present" "## Gotchas"
 # Wiring: harden references goalforge-arbiter
 check "harden wires goalforge-arbiter" "goalforge-arbiter" "$SDD_HARDEN_MD"
 
+
+# ── BEHAVIORAL (via goal router): a judgment goal is never decided in-script ─
+# The arbiter's boundary — advisory, model-driven, never a deterministic
+# verdict — has a deterministic half that IS executable: goalforge-goal-eval.py
+# must route a `judge` goal OUT (exit 2 with a dispatch directive) instead of
+# deciding it, and must fail closed on a malformed judge check rather than
+# fabricating one.
+GOAL_EVAL="$(cd "$SKILL_DIR/.." && pwd)/scripts/goalforge-goal-eval.py"
+JUDGE_FIXTURE="$SKILL_DIR/evals/fixtures/judge-goal.md"
+BAD_JUDGE_FIXTURE="$SKILL_DIR/evals/fixtures/malformed-judge-goal.md"
+
+for f in "$JUDGE_FIXTURE" "$BAD_JUDGE_FIXTURE"; do
+  if [ -f "$f" ]; then
+    echo "  PASS: fixture exists: $(basename "$f")"
+    PASS=$((PASS + 1))
+  else
+    echo "  FAIL: fixture missing: $f"
+    FAIL=$((FAIL + 1))
+  fi
+done
+
+JRC=0
+JOUT="$(python3 "$GOAL_EVAL" --wp "$JUDGE_FIXTURE" 2>&1)" || JRC=$?
+if [ "$JRC" -eq 2 ] && printf '%s' "$JOUT" | grep -q '"dispatch": "judge"'; then
+  echo "  PASS: judge goal routed out undecided (exit 2 + dispatch directive)"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: judge goal must exit 2 with a judge dispatch directive (rc=$JRC)"
+  printf '%s\n' "$JOUT" | sed 's/^/        /'
+  FAIL=$((FAIL + 1))
+fi
+
+BRC=0
+BOUT="$(python3 "$GOAL_EVAL" --wp "$BAD_JUDGE_FIXTURE" 2>&1)" || BRC=$?
+if [ "$BRC" -ne 0 ] && [ "$BRC" -ne 2 ] && printf '%s' "$BOUT" | grep -q 'not a mapping'; then
+  echo "  PASS: malformed judge check fails closed (no fabricated verdict)"
+  PASS=$((PASS + 1))
+else
+  echo "  FAIL: malformed judge check must fail closed, not decide (rc=$BRC)"
+  printf '%s\n' "$BOUT" | sed 's/^/        /'
+  FAIL=$((FAIL + 1))
+fi
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then

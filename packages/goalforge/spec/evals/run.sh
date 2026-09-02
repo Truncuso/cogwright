@@ -72,6 +72,41 @@ else
   FAIL=$((FAIL+1))
 fi
 
+
+# ── BEHAVIORAL (via validator): the frontmatter goalforge-spec writes is legal
+# The fixture checks above only assert that the fixture CONTAINS `status:
+# draft`. They cannot tell a schema-valid feature overview from a malformed
+# one. These runs execute goalforge-validate.sh — the schema oracle — over the
+# green fixture and over a deliberately broken copy carrying a non-enum status.
+VALIDATE="$(cd "$SKILL_DIR/.." && pwd)/scripts/goalforge-validate.sh"
+BAD_FIXTURE="$SKILL_DIR/evals/fixtures/invalid-status"
+
+SPEC_TMP="$(mktemp -d)"
+cp "$FIXTURE" "$SPEC_TMP/overview.md"
+if bash "$VALIDATE" --strict "$SPEC_TMP" >/dev/null 2>&1; then
+  echo "  PASS: draft fixture validates clean against the schema"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL: draft fixture should validate clean against the schema"
+  bash "$VALIDATE" --strict "$SPEC_TMP" 2>&1 | sed 's/^/        /' || true
+  FAIL=$((FAIL+1))
+fi
+rm -rf "$SPEC_TMP"
+
+if [ -f "$BAD_FIXTURE/overview.md" ]; then
+  echo "  PASS: invalid-status fixture exists"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL: invalid-status fixture missing: $BAD_FIXTURE/overview.md"
+  FAIL=$((FAIL+1))
+fi
+if bash "$VALIDATE" --strict "$BAD_FIXTURE" >/dev/null 2>&1; then
+  echo "  FAIL: a non-enum status must be rejected (validator must exit non-zero)"
+  FAIL=$((FAIL+1))
+else
+  echo "  PASS: a non-enum status is rejected by the validator"
+  PASS=$((PASS+1))
+fi
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then
