@@ -74,7 +74,11 @@ self_test() {
 
   # hermetic: distill the fixture under an SDD_PLANS_DIR-style temp feature dir,
   # never touching the live plans/, .memory/, or trace logs.
-  local tmp before_plans
+  local tmp plans_root before_plans after_plans
+  plans_root="$(cd "$HERE/../../../.." && pwd)/plans"
+  chk "plans root is a git repo (isolation check is falsifiable)" \
+    "git -C '$plans_root' rev-parse --git-dir >/dev/null 2>&1"
+  before_plans="$(git -C "$plans_root" status --porcelain 2>/dev/null)"
   tmp="$(mktemp -d)"
   mkdir -p "$tmp/plans/sample-feature"
   export SDD_PLANS_DIR="$tmp/plans"
@@ -92,9 +96,9 @@ self_test() {
   chk "distill byte-idempotent (self-test)" \
     "diff -q '$tmp/first.md' '$tmp/plans/sample-feature/improvement-report.md' >/dev/null"
 
-  # live-tree isolation: no report artifact leaked into the repo's plans tree
-  chk "no live plans/ mutation (isolation held)" \
-    "[ ! -e '$HERE/../../../../plans/goalforge/wp-15-retrospective-stage/improvement-report.md' ]"
+  # live-tree isolation: the run must leave the live plans repo working tree byte-identical
+  after_plans="$(git -C "$plans_root" status --porcelain 2>/dev/null)"
+  chk "no live plans/ mutation (isolation held)" '[ "$before_plans" = "$after_plans" ]'
 
   unset SDD_PLANS_DIR
   rm -rf "$tmp"
