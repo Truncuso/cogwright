@@ -123,8 +123,14 @@ if [ -f "$INBOUND" ]; then
 fi
 
 # BEHAVIORAL: --relocate gate logic on real fixtures (exit-code contract)
-SCRIPT="$HOME/.claude/skills/goalforge/scripts/goalforge-archive.sh"
-if [ -x "$SCRIPT" ] || [ -f "$SCRIPT" ]; then
+# Package-relative (self-contained): never a machine-local install path, and its
+# absence is a hard FAIL — a silent skip would report green with zero behavior tested.
+SCRIPT="$SKILL_DIR/../scripts/goalforge-archive.sh"
+if [ ! -f "$SCRIPT" ]; then
+  echo "  FAIL [BEHAVIORAL]: archive script not found — behavioral block cannot run: $SCRIPT"
+  FAIL=$((FAIL+1))
+fi
+if [ -f "$SCRIPT" ]; then
   TT="$(mktemp -d)"; mkdir -p "$TT/plans"
   cp -r "$SKILL_DIR/evals/fixtures/feature-archived"  "$TT/plans/feat-arch"
   cp -r "$SKILL_DIR/evals/fixtures/feature-completed" "$TT/plans/feat-comp"
