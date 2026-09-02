@@ -4,6 +4,10 @@ description: "Decompose the current feature's spec.md into work packages via goa
 
 # /plan
 
+> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
+> directory holding this command file. On a direct, non-plugin load the
+> variable is unset; resolve it that way.
+
 Decompose and harden the current feature's spec into work packages before any
 code is written.
 

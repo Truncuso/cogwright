@@ -4,6 +4,10 @@ description: "Spec authoring via the goalforge chain — scaffold a new feature 
 
 # /spec
 
+> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
+> directory holding this command file. On a direct, non-plugin load the
+> variable is unset; resolve it that way.
+
 Entry point of the goalforge chain: `/spec → /plan → /implement → /verify`.
 
 `/spec` produces a written, reviewed `spec.md` under `<PLANS_ROOT>/<feature>/`.

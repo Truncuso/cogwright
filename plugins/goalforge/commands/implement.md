@@ -4,6 +4,10 @@ description: "Execute a work package via goalforge-execute — read the WP, disp
 
 # /implement
 
+> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
+> directory holding this command file. On a direct, non-plugin load the
+> variable is unset; resolve it that way.
+
 Execute a work package through the full goalforge sub-cycle.
 
 ## Arguments

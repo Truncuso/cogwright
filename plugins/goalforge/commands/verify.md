@@ -4,6 +4,10 @@ description: "Verify a work package via goalforge-verify — confirms all tasks 
 
 # /verify
 
+> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
+> directory holding this command file. On a direct, non-plugin load the
+> variable is unset; resolve it that way.
+
 Verify a work package in the goalforge chain.
 
 ## Arguments

@@ -5,15 +5,15 @@ argument-hint: "[<effort-slug>] [chart]"
 
 # /wayfind
 
-<!-- AUTHORED SOURCE: packages/goalforge/commands/wayfind.md. The plugin copy
-     plugins/goalforge/commands/wayfind.md is GENERATED from this file by
-     scripts/goalforge-generate.sh — edit here, never there.
-     MIRROR-SYNC OBLIGATION: the maintainer's dotfiles copy is a downstream
-     mirror loaded by a direct, non-plugin /wayfind. Any contract change here
-     must be propagated there in the same lap. The mirror is NOT byte-identical:
-     besides the skill-path form (the plugin route uses ${CLAUDE_PLUGIN_ROOT}),
-     it carries an extra Discovery step and a wider argument-hint. evals/e2e.sh
-     gates THIS file. -->
+> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
+> directory holding this command file. On a direct, non-plugin load the
+> variable is unset; resolve it that way.
+
+<!-- AUTHORITATIVE SOURCE: the five command files in `packages/goalforge/commands/`
+     are the single source for every route — the plugin copies under
+     `plugins/goalforge/commands/` are GENERATED from them by
+     the repo-root scripts/goalforge-generate.sh, and the maintainer's `~/.claude/commands/`
+     entries are symlinks to them; edit here, never there. -->
 
 Thin dispatch surface into the `wayfind` skill — no logic lives here; the
 skill owns chart/work/graduate.
