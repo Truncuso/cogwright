@@ -1,5 +1,5 @@
 ---
-description: "Execute a work package via goalforge-execute — read the WP, dispatch tasks, verify, advance status to verified. With no argument, picks the next ready WP whose depends_on are satisfied."
+description: "Execute ONE work package end to end via goalforge-execute: read the WP, dispatch the tasks, advance the status to verified. With no argument, picks the next ready work package whose dependencies are satisfied and runs it. This is the per-WP implementation sub-cycle, NOT the whole chain — the full chain is /goalforge-run, decomposing a spec is /plan, the completion check is /verify."
 ---
 
 # /implement
