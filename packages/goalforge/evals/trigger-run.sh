@@ -19,32 +19,38 @@
 # so coverage is measured rather than asserted (design risk 7 / ruling A7).
 #
 # Usage: trigger-run.sh [--dry-run] [--trials k] [--report <path>] [...]
-#   Every argument is forwarded to the runner unchanged. --tree defaults to this
-#   package root (a relative climb from $0); pass --tree yourself to override.
+#        trigger-run.sh --list-suites
+#        trigger-run.sh --suite <name> [--trials k] [--report <path>] [...]
+#        trigger-run.sh --all [--trials k] [...]
+#   Every other argument is forwarded to the runner unchanged. --tree defaults to
+#   this package root (a relative climb from $0); pass --tree yourself to override.
 #
-# Selection suites: the four reachable COMMANDS (/spec /plan /implement /verify)
-# own no skill dir, so their cases live in evals/selection/<name>.json — outside
-# discovery, which keeps --dry-run at 13 canonical files. Run one per file:
+# TWO PATHS, and they are not the same thing:
 #
-#   ./trigger-run.sh --cases evals/selection/spec.json \
-#       --commands "$(dirname "$0")/../commands" --with-siblings --trials 3
+#   the CENSUS   — `--dry-run` with no --cases. Full-tree discovery, 13 canonical
+#                  files. Under a nested package "has evals/evals.json" is a
+#                  case-file LOCATION CONVENTION, not a selectability claim
+#                  (doctrine H1), so this counts material; it never scores it.
+#   the SCORING  — `--cases`-driven, one run per REACHABLE entry. Skill discovery
+#                  walks one level deep, so only those entries are on the model's
+#                  selection surface.
+#
+# The roster of both lives in evals/suites.txt — DATA, one row per name, read by
+# --list-suites / --suite / --all. It is not duplicated here; add a child or a
+# command without a row there and evals/selection.test.sh goes red.
 #
 # --commands puts the command basenames on the selection surface; --with-siblings
 # installs each negative's backticked owner so the model has a real alternative
-# to pick rather than abstaining.
-#
-# ALL SIX suites need --commands, not just the four command ones. Sibling
-# resolution matches a skill dir by its DIRECTORY basename, and four owners this
-# material cites — `goalforge-run`, `spec`, `plan`, `implement` — reach the
-# surface only as commands/<name>.md (the goalforge-run skill dir is run/, and
-# plan/implement own no dir at all). Omit --commands and those negatives have no
-# alternative owner installed, so the model abstains and the oracle fails them.
-# The `goalforge` front door is never installable as a sibling — it IS the
-# --tree root, never walked as a subdir — so no negative may cite it as its
-# owner. Run the two skill-owned suites the same way:
-#
-#   ./trigger-run.sh --cases run/evals/evals.json \
-#       --commands "$(dirname "$0")/../commands" --with-siblings --trials 3
+# to pick rather than abstaining. EVERY runnable suite needs --commands, not just
+# the command-owned ones: sibling resolution matches a skill dir by its DIRECTORY
+# basename, and four owners this material cites — `goalforge-run`, `spec`,
+# `plan`, `implement` — reach the surface only as commands/<name>.md (the
+# goalforge-run skill dir is run/, and plan/implement own no dir at all). Omit
+# --commands and those negatives have no alternative owner installed, so the
+# model abstains and the oracle fails them. The `goalforge` front door is never
+# installable as a sibling — it IS the --tree root, never walked as a subdir —
+# so no negative may cite it as its owner. suites.txt carries the --commands
+# column for exactly this reason.
 #
 # Two rules govern the case material on this surface, and they are twins:
 #
@@ -69,6 +75,38 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PKG_ROOT="$(cd "$HERE/.." && pwd)"
+SUITES_FILE="$HERE/suites.txt"
+
+# --- suites.txt: the roster, as data ----------------------------------------
+# Emits "name cases commands status" per non-comment, non-blank row.
+suite_rows() {
+    [ -r "$SUITES_FILE" ] || { printf 'gap: %s missing — no suite roster\n' "$SUITES_FILE" >&2; return 1; }
+    awk 'NF && $1 !~ /^#/ { print $1, $2, $3, $4 }' "$SUITES_FILE"
+}
+
+# --- pull the suite-selection flags out of the forwarded args ----------------
+mode="passthrough"
+want_suite=""
+FORWARD=()
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --list-suites) mode="list" ;;
+        --all)         mode="all" ;;
+        --suite)       mode="suite"; want_suite="${2:?--suite needs a name}"; shift ;;
+        --suite=*)     mode="suite"; want_suite="${1#--suite=}" ;;
+        *)             FORWARD+=("$1") ;;
+    esac
+    shift
+done
+set -- ${FORWARD[@]+"${FORWARD[@]}"}
+
+if [ "$mode" = "list" ]; then
+    printf '%-16s %-32s %-10s %s\n' NAME CASES COMMANDS STATUS
+    suite_rows | while read -r name cases cmds status; do
+        printf '%-16s %-32s %-10s %s\n' "$name" "$cases" "$cmds" "$status"
+    done
+    exit 0
+fi
 
 # --- resolve the runner -----------------------------------------------------
 RUNNER=""
@@ -124,6 +162,51 @@ fi
 # The runner's exit code is passed through untouched. 2 (shape errors) is the
 # expected RED baseline while this package's 13 evals.json files are still in
 # the pre-canonical dialect; it is a real failure, not a plumbing problem.
+run_runner() {
+    if [ "$have_tree" -eq 1 ]; then
+        bash "$RUNNER" "$@"
+    else
+        bash "$RUNNER" --tree "$PKG_ROOT" "$@"
+    fi
+}
+
+# --- suite dispatch: --cases-driven, one run per reachable entry -------------
+run_suite() {
+    local name="$1" cases="$2" cmds="$3" status="$4"; shift 4
+    if [ "$cases" = "-" ]; then
+        printf 'gap: suite %s is %s — no cases file yet, nothing measured\n' "$name" "$status" >&2
+        return 0
+    fi
+    local extra=(--cases "$PKG_ROOT/$cases")
+    [ "$cmds" = "-" ] || extra+=(--commands "$PKG_ROOT/$cmds")
+    printf '== suite %s (%s) ==\n' "$name" "$cases" >&2
+    run_runner "${extra[@]}" "$@"
+}
+
+case "$mode" in
+    suite)
+        row="$(suite_rows | awk -v n="$want_suite" '$1 == n { print; exit }')"
+        [ -n "$row" ] || { printf 'error: no suite %s in %s\n' "$want_suite" "$SUITES_FILE" >&2; exit 2; }
+        # shellcheck disable=SC2086
+        set -- $row "$@"
+        name="$1" cases="$2" cmds="$3" status="$4"; shift 4
+        run_suite "$name" "$cases" "$cmds" "$status" "$@"
+        exit $?
+        ;;
+    all)
+        if [ -n "$report_path" ]; then
+            printf 'error: --report writes one file; --all runs many suites. Use --suite <name> --report <path>.\n' >&2
+            exit 2
+        fi
+        worst=0
+        while read -r name cases cmds status; do
+            [ "$status" = "run" ] || continue
+            run_suite "$name" "$cases" "$cmds" "$status" "$@" || worst=$?
+        done < <(suite_rows)
+        exit "$worst"
+        ;;
+esac
+
 if [ "$have_tree" -eq 1 ]; then
     exec bash "$RUNNER" "$@"
 else

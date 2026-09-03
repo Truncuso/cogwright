@@ -1,0 +1,65 @@
+# suites.txt — the goalforge trigger-eval suite roster. DATA, not prose.
+#
+# One row per NAME on this package's selection census. Columns, whitespace-
+# separated, package-root-relative paths:
+#
+#   name        cases           commands        status
+#
+#   name      the selection-surface name — a discovered dir's basename
+#             (runner.py's p.parent.parent.name) or a commands/<name>.md stem.
+#   cases     the --cases file for that name, or `-` when none exists yet.
+#   commands  the --commands dir to put on the surface, or `-`.
+#   status    run | nested | pending  (see below)
+#
+# status=run      a REACHABLE entry. Skill discovery walks one level deep, so
+#                 only these are on the model's selection surface: the
+#                 `goalforge` front door, `goalforge-run`, and the four commands
+#                 /spec /plan /implement /verify. These are the scoring path, and
+#                 `trigger-run.sh --all` loops exactly these.
+#
+# status=nested   a PRIVATE child of this package. Its evals/evals.json is a
+#                 case-file LOCATION CONVENTION, not a selectability claim
+#                 (doctrine H1). Full-tree discovery counts it in the --dry-run
+#                 census; it is never scored on its own.
+#
+# status=pending  a name that IS a claimant on the surface (it owns a
+#                 commands/<name>.md) but carries no cases yet. Allowlisted
+#                 explicitly so the gate says so out loud instead of going
+#                 silent. `wayfind` ships evals/e2e.sh and no trigger cases
+#                 (doctrine:1015).
+#
+# COLLISIONS. `spec` and `verify` exist both as a nested child dir and as a
+# command. The command wins — runner.py:377-378 skips installing a same-named
+# skill dir beside a command — so each carries ONE row, pointing at the
+# command's selection cases. The nested spec/ and verify/ evals.json files stay
+# census material under that one name.
+#
+# `run` and `goalforge-run` are two names for one file: the dir basename is what
+# discovery records, the command stem is what the model can select.
+#
+# Coverage of this file against the live tree is asserted offline by
+# evals/selection.test.sh — add a child or a command without a row here, or
+# leave a row whose cases file is gone, and that test goes red.
+
+# --- reachable entries: the scoring path -----------------------------------
+goalforge       evals/evals.json                commands        run
+goalforge-run   run/evals/evals.json            commands        run
+spec            evals/selection/spec.json       commands        run
+plan            evals/selection/plan.json       commands        run
+implement       evals/selection/implement.json  commands        run
+verify          evals/selection/verify.json     commands        run
+
+# --- claimant with no cases yet --------------------------------------------
+wayfind         -                               commands        pending
+
+# --- private children: census only, never scored alone ----------------------
+arbiter         arbiter/evals/evals.json        -               nested
+archive         archive/evals/evals.json        -               nested
+capture         capture/evals/evals.json        -               nested
+decompose       decompose/evals/evals.json      -               nested
+execute         execute/evals/evals.json        -               nested
+harden          harden/evals/evals.json         -               nested
+onboard         onboard/evals/evals.json        -               nested
+recap           recap/evals/evals.json          -               nested
+run             run/evals/evals.json            -               nested
+watchdog        watchdog/evals/evals.json       -               nested

@@ -36,6 +36,12 @@
 # The commands own no skill dir, so their cases live in evals/selection/<name>.json
 # with a top-level skill_name — outside runner discovery, which keeps
 # `trigger-run.sh --dry-run` at 13 canonical files.
+#
+# A fifth property is asserted before any of the four: evals/suites.txt — the
+# roster this test and trigger-run.sh --all both read — covers EXACTLY the
+# discovered evals.json names ∪ the commands/*.md basenames, with every row
+# backed by a real file. That is the staleness gate; the entries scored below are
+# derived from it, so the list cannot drift from the tree in silence.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -81,16 +87,91 @@ phrased() {
     return 1
 }
 
+# --- STALENESS GATE: suites.txt vs the live tree -----------------------------
+# suites.txt is the roster both this test and trigger-run.sh read. It must cover
+# EXACTLY the union of two name sets:
+#
+#   discovery — every evals/evals.json under the package, named by its
+#               dir-two-levels-up basename (runner.py's p.parent.parent.name,
+#               which for the package's own evals/ is `goalforge`);
+#   commands  — every commands/<name>.md basename.
+#
+# `spec` and `verify` are in both. The command wins — runner.py:377-378 skips
+# installing a same-named skill dir beside a command — so each is ONE name with
+# ONE row, and the nested spec/ verify/ case files stay census material under it.
+# That is doctrine H1 in operation: under a nested package, "has evals/evals.json"
+# is a case-file location convention, not a selectability claim.
+#
+# A missing row (new child, new command) and a row whose backing file is gone are
+# both failures. `wayfind` is the third case: it owns commands/wayfind.md, so it
+# IS a claimant, but ships evals/e2e.sh and no trigger cases (doctrine:1015). It
+# is allowlisted as status=pending — said out loud, never silence.
+SUITES_FILE="$HERE/suites.txt"
+roster_file="$(mktemp)"
+expected_file="$(mktemp)"
+trap 'rm -f "$universe_file" "$phrase_file" "$roster_file" "$expected_file"' EXIT
+
+if [ ! -r "$SUITES_FILE" ]; then
+    fail "suites.txt missing at $SUITES_FILE"
+else
+    awk 'NF && $1 !~ /^#/ { print $1 }' "$SUITES_FILE" | sort >"$roster_file"
+    dupes="$(uniq -d "$roster_file" | tr '\n' ' ')"
+    [ -z "${dupes// /}" ] || fail "suites.txt: duplicate rows: $dupes"
+
+    {
+        find -L "$PKG_ROOT" -name evals.json -path '*/evals/evals.json' -printf '%h\n' 2>/dev/null \
+            | xargs -r -n1 dirname | xargs -r -n1 basename
+        find -L "$PKG_ROOT/commands" -maxdepth 1 -name '*.md' -printf '%f\n' 2>/dev/null \
+            | sed 's/\.md$//'
+    } | sort -u >"$expected_file"
+
+    missing="$(comm -13 "$roster_file" "$expected_file" | tr '\n' ' ')"
+    extra="$(comm -23 "$roster_file" "$expected_file" | tr '\n' ' ')"
+    if [ -n "${missing// /}" ]; then
+        fail "suites.txt: no row for discovered/command name(s): $missing"
+    else
+        pass "suites.txt: covers every discovered evals.json and every command"
+    fi
+    if [ -n "${extra// /}" ]; then
+        fail "suites.txt: row(s) with no backing child or command: $extra"
+    else
+        pass "suites.txt: every row is backed by a real name"
+    fi
+
+    # every row's cases/commands paths resolve; status is one of three
+    while read -r name cases cmds status; do
+        case "$status" in
+            run|nested)
+                if [ -r "$PKG_ROOT/$cases" ]; then
+                    pass "suites.txt/$name: cases file present ($cases)"
+                else
+                    fail "suites.txt/$name: cases file missing: $cases"
+                fi
+                ;;
+            pending)
+                if [ "$cases" = "-" ] && [ -r "$PKG_ROOT/commands/$name.md" ]; then
+                    pass "suites.txt/$name: pending claimant — commands/$name.md, no cases yet"
+                else
+                    fail "suites.txt/$name: status=pending needs cases '-' and commands/$name.md"
+                fi
+                ;;
+            *) fail "suites.txt/$name: unknown status '$status' (run|nested|pending)" ;;
+        esac
+        if [ "$cmds" != "-" ] && [ ! -d "$PKG_ROOT/$cmds" ]; then
+            fail "suites.txt/$name: commands dir missing: $cmds"
+        fi
+    done < <(awk 'NF && $1 !~ /^#/ { print $1, $2, $3, $4 }' "$SUITES_FILE")
+fi
+
 # --- entry → cases file -----------------------------------------------------
-# entry:relative path
-entries=(
-    "goalforge:evals/evals.json"
-    "goalforge-run:run/evals/evals.json"
-    "spec:evals/selection/spec.json"
-    "plan:evals/selection/plan.json"
-    "implement:evals/selection/implement.json"
-    "verify:evals/selection/verify.json"
-)
+# Derived from suites.txt (status=run) — one roster, so the 3/3 material bar
+# below and `trigger-run.sh --all` always score exactly the same entries.
+entries=()
+while read -r name cases _cmds status; do
+    [ "$status" = "run" ] || continue
+    entries+=("$name:$cases")
+done < <(awk 'NF && $1 !~ /^#/ { print $1, $2, $3, $4 }' "$SUITES_FILE" 2>/dev/null)
+[ "${#entries[@]}" -gt 0 ] || fail "suites.txt: no status=run suites to score"
 
 for pair in "${entries[@]}"; do
     entry="${pair%%:*}"
@@ -163,7 +244,7 @@ done
 
 printf '\n'
 if [ "$fails" -eq 0 ]; then
-    echo "PASS selection.test.sh — 6/6 entries meet the 3/3 bar: literal positives, installable owners"
+    echo "PASS selection.test.sh — suites.txt matches the tree; ${#entries[@]}/${#entries[@]} entries meet the 3/3 bar: literal positives, installable owners"
     exit 0
 fi
 echo "FAIL selection.test.sh — $fails assertion(s) failed"
