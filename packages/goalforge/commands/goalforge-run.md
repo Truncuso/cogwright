@@ -1,5 +1,5 @@
 ---
-description: "Run the full SDD chain end-to-end via the goalforge-run orchestrator, route-aware over fast|standard|wave. Continue the SDD chain where you left off, or resume the SDD chain mid-chain from the current status: (archived halts). --dry-run resolves all chain steps with no side effects. WHOLE chain only: one work package is /implement; one stage is /spec, /plan or /verify."
+description: "Drive the whole goalforge SDD chain end-to-end via the goalforge-run orchestrator — route-aware over the canonical enum fast|standard|wave, resumes mid-chain from the current status:, and supports --dry-run. Use when the chain should run end-to-end rather than one stage at a time."
 argument-hint: "[<feature-or-wp-slug>] [--dry-run]"
 ---
 
