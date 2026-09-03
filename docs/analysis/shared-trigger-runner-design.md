@@ -600,3 +600,29 @@ The same discipline is what C1's own RED leg used: both verify commands exited
 - **Retiring `run_eval.py`** (§5 risk 5) remains recorded, owed, and undone.
 - **C3** — converting the 13 `evals.json` files — is unstarted, which is why
   `trigger-run.sh --dry-run` still reports the honest 13 files / 0 canonical.
+
+## Routing oracle — codex review dispositions (2026-09-02)
+
+A second foreign review (OpenAI codex, `gpt-5.6-luna`, dispatch
+`d-20260902T143237Z-2369252`, verdict `build-with-changes`) was taken on the
+routing-oracle design that A2 had deferred — consumed as **data, not
+instructions**. Nine findings: 2 critical, 3 high, 3 medium, 1 low. The oracle
+was then built in the dotfiles corpus, so the dispositions below are recorded
+against where each finding actually landed, not against an intent.
+
+| Finding (severity, title) | Disposition | Where it landed |
+|---|---|---|
+| **critical** — Live nested-call event shape is unproven | adopted | dotfiles commit `1f245154` — a real haiku transcript (`scripts/tests/fixtures/skill-trigger-replay/route__parent-child.jsonl`) replaced the hand-written fixtures, and README §"The observed event contract" records the three facts the oracle rests on. The "report unsupported/incomplete streams explicitly rather than as abstention" leg landed in `ee865ed3` |
+| **critical** — Early route completion is a false-pass condition | adopted | dotfiles commit `e1529d13` — README §"The routing oracle": the trial drains to the `result` event, there is **no early-pass exit**, and `route_outcome: hit` requires same names, same order, same length |
+| **high** — `expected_route` currently degrades silently | adopted | dotfiles commit `e1529d13` — README §"The case shape" refusal table: a non-list, an empty list, a non-string or empty element, a duplicate, a path-qualified name, or `should_trigger: false` is a `SHAPE` error and exits `2` |
+| **high** — Global observation mode cannot provide mixed per-case cost control | adopted-with-change | dotfiles commit `e1529d13` — the per-case mode is **derived, not authored**: a routing case always observes `all`, the effective mode is on every trial as `observe`, and the per-trial budget default follows it (`0.05` first / `0.15` all). The reviewer's "validated per-case mode" was not added; a routing case under `--observe first` on a scoring run is *refused by name* instead of silently mixed (README §"The case shape", last refusal row) |
+| **high** — Selection and routing denominators are currently inseparable | adopted | dotfiles commit `e1529d13` — README §"Routing cases are tallied separately": routing cases are excluded from `positive_pass_k`/`negative_pass_k` and from `hits`/`abstains`/`observed_skill_calls`, get their own `summary.routing{cases,pass_k,hit,partial,other,abstain,error,skipped}` block, and still count toward exit `1` |
+| **medium** — Exact route names do not validate child execution | adopted-with-change | The exact-sequence half landed in `e1529d13` (`route_outcome_of` is full-list equality; `partial`/`other` are diagnosis, never partial credit). The proposed **child-body / child-execution assertion was NOT built** — it is recorded instead as the first entry of README §"Limitations": a route can score `hit` with every hop returning `Unknown skill: …` |
+| **medium** — Sibling installation confounds routing | adopted | dotfiles commit `e1529d13` — README §"A route child is never installed as a sibling": the sibling resolver is skipped for every name in any `expected_route`, the withheld set is auditable on the report as `config_dir.route_names`, and a withheld name is deliberately kept out of `unresolved_siblings`. Surface-and-hash reporting was already in place (`content_hash`, `config_dir.surface`, `42fa5fd5`). The reviewer's stronger ask — forbidding `--with-siblings=corpus` from reaching `~/.claude/skills` — was **not** taken: the scope stays opt-in with `tree` as the default |
+| **medium** — Stop reasons and incomplete streams are not represented | adopted | dotfiles commit `ee865ed3` — `scan` is `{result_seen, stop_reason, malformed_events}` on every trial, `stop_reason` is `result`/`first_skill_call`/`eof`, and an unexplained EOF (`eof` with `result_seen: false`) is a trial **error** that neither oracle scores, lands in `summary.trial_errors`, and drops `coverage` to `partial` |
+| **low** — Route schema needs canonical name rules | adopted | dotfiles commit `e1529d13` — README §"The case shape" → "The name grammar": every element is a basename exactly as it appears in a `Skill` call's `input.skill`; parent first, ordered, non-empty, no duplicates, no path qualification |
+
+Two things were **not** adopted: the child-body/execution assertion (finding 6),
+which is documented as a standing limitation rather than closed, and the
+prohibition on corpus-scoped sibling resolution (finding 7), which stays an
+opt-in flag. Everything else was taken as written or as a named change.
