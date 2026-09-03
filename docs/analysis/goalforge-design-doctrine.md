@@ -1028,6 +1028,18 @@ re-scope above. The remaining 16 private children are ROUTING material, deferred
 their `evals.json` files still convert, but their cases are not authored as
 selection cases and their pass^k is not gated in this lap.
 
+**Ruling (human, 2026-09-03):** the selection suite is `--cases`-driven per reachable
+entry and full-tree discovery is the CENSUS (`--dry-run`) only, never the scoring path,
+because under a nested package "has `evals/evals.json`" is a case-file location
+convention rather than a selectability claim (H1) — sound because command precedence
+(`scripts/skill-trigger-runner/runner.py:377-378`, "a name on any `--commands` roster is
+owned by the command") already resolves the expected `spec/` and `verify/` collisions with
+`commands/spec.md` and `commands/verify.md`, and the roster in
+`packages/goalforge/evals/suites.txt` plus the coverage assertion in
+`evals/selection.test.sh` (rows ≡ discovered `evals.json` names ∪ `commands/*.md`
+basenames, `wayfind` allowlisted `pending` because it ships `e2e.sh` and no cases) is the
+drift guard against that split going stale.
+
 **Verify:** the T2 jq one-liner prints two integers for all 13 converted files, both
 at least 3 for each of the six reachable entries; every negative's `expected_output`
 contains at least one backticked name resolving against the union of declared names
