@@ -26,7 +26,7 @@
       "id": 4,
       "should_trigger": true,
       "prompt": "I need to hand-write plans/billing-api/wp-03/overview.md without running the chain. Point me at goalforge's frontmatter schema and the canonical templates, and say what each covers.",
-      "expected_output": "Points at goalforge/references/schema.md for the frontmatter schema (including the status enum and the goal block) and goalforge/references/templates/ for the 7 canonical templates, naming which template covers a WP overview.md. Both paths are internal to this package.",
+      "expected_output": "Points at goalforge/references/schema.md for the frontmatter schema (including the status enum and the goal block) and goalforge/references/templates/ for the 8 canonical templates, naming which template covers a WP overview.md. Both paths are internal to this package.",
       "files": []
     },
     {
