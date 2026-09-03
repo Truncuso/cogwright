@@ -37,6 +37,14 @@
 # with a top-level skill_name — outside runner discovery, which keeps
 # `trigger-run.sh --dry-run` at 13 canonical files.
 #
+# A sixth property is asserted after the four, over the committed reports rather
+# than the cases: every report in the NEWEST dated evals/reports/selection-*
+# directory must carry the config_dir.content_hash that the current tree emits
+# (`trigger-run.sh --suite <n> --dry-run --with-siblings`). A report is a
+# measurement of a SURFACE; if the tree moved between the run and the commit, the
+# numbers describe a surface no commit reproduces and every gain claimed from them
+# is unfalsifiable. Older directories are historical and skipped OUT LOUD.
+#
 # A fifth property is asserted before any of the four: evals/suites.txt — the
 # roster this test and trigger-run.sh --all both read — covers EXACTLY the
 # discovered evals.json names ∪ the commands/*.md basenames, with every row
@@ -241,6 +249,76 @@ for pair in "${entries[@]}"; do
     done < <(jq -r '.evals[]? | select(.should_trigger == false)
                     | ((.id // "evals[?]") | tostring) + "\t" + (.expected_output // "")' "$file")
 done
+
+# --- REPORT SURFACE PROVENANCE GATE -----------------------------------------
+# A committed report is a measurement of a SURFACE, not of a commit. The runner
+# stamps that surface as config_dir.content_hash. If the tree moved between the
+# run and the commit — a transient uncommitted edit live during the run, a later
+# description change — the numbers in the report describe a surface no commit
+# reproduces, and every gain claimed from them is unfalsifiable.
+#
+# The rule, deliberately simple: reports in the NEWEST dated selection-* directory
+# are the "after" record for their suite and MUST carry the hash the current tree
+# emits. Older directories are historical and skipped OUT LOUD — a skip line per
+# file, never silence.
+#
+# The current-tree hash is the one `trigger-run.sh --suite <n> --dry-run
+# --with-siblings` prints: same suite roster, same sibling install, no model work,
+# no cost. When the shared runner is absent trigger-run.sh degrades to a gap, so
+# this gate degrades with it (a `gap:` line, no failure) rather than going red on
+# a plumbing problem.
+REPORTS_DIR="$HERE/reports"
+if [ ! -d "$REPORTS_DIR" ]; then
+    pass "provenance: no reports/ directory — nothing to gate"
+else
+    newest_dir="$(find -L "$REPORTS_DIR" -mindepth 1 -maxdepth 1 -type d -name 'selection-*' -printf '%f\n' 2>/dev/null | sort | tail -1)"
+    if [ -z "$newest_dir" ]; then
+        pass "provenance: no selection-* report directories — nothing to gate"
+    else
+        pass "provenance: newest report directory is $newest_dir"
+
+        # every older directory is historical: said out loud, one line per file
+        while IFS= read -r old_dir; do
+            [ -n "$old_dir" ] || continue
+            [ "$old_dir" = "$newest_dir" ] && continue
+            for rf in "$REPORTS_DIR/$old_dir"/*.json; do
+                [ -e "$rf" ] || continue
+                printf 'skip stale: historical — %s/%s (superseded by %s)\n' \
+                    "$old_dir" "$(basename "$rf")" "$newest_dir"
+            done
+        done < <(find -L "$REPORTS_DIR" -mindepth 1 -maxdepth 1 -type d -name 'selection-*' -printf '%f\n' 2>/dev/null | sort)
+
+        # roster of scorable suite names — the only stems with a current-tree hash
+        run_suites_file="$(mktemp)"
+        awk 'NF && $1 !~ /^#/ && $4 == "run" { print $1 }' "$SUITES_FILE" 2>/dev/null | sort >"$run_suites_file"
+
+        for rf in "$REPORTS_DIR/$newest_dir"/*.json; do
+            [ -e "$rf" ] || continue
+            stem="$(basename "$rf" .json)"
+            if ! grep -qxF "$stem" "$run_suites_file"; then
+                printf 'skip stale: not a roster suite — %s/%s has no current-tree hash to compare\n' \
+                    "$newest_dir" "$stem"
+                continue
+            fi
+            got="$(jq -r '.config_dir.content_hash // ""' "$rf")"
+            want="$("$HERE/trigger-run.sh" --suite "$stem" --dry-run --with-siblings 2>/dev/null \
+                    | grep -o 'sha256:[0-9a-f]\{64\}' | head -1)"
+            if [ -z "$want" ]; then
+                printf 'gap: no current-tree hash for suite %s (shared runner absent?) — %s/%s not gated\n' \
+                    "$stem" "$newest_dir" "$stem"
+                continue
+            fi
+            if [ -z "$got" ]; then
+                fail "provenance/$newest_dir/$stem: report carries no config_dir.content_hash"
+            elif [ "$got" = "$want" ]; then
+                pass "provenance/$newest_dir/$stem: surface hash matches the current tree ($want)"
+            else
+                fail "provenance/$newest_dir/$stem: surface hash $got does not match the current tree $want — the report measures a surface no commit reproduces"
+            fi
+        done
+        rm -f "$run_suites_file"
+    fi
+fi
 
 printf '\n'
 if [ "$fails" -eq 0 ]; then
