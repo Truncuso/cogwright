@@ -1,0 +1,1174 @@
+{
+  "schema_version": "1",
+  "tree": "/home/cunger/10_projects/cogwright/packages/goalforge",
+  "observe": "first",
+  "trials": 5,
+  "model": "haiku",
+  "claude_version": "2.1.259 (Claude Code)",
+  "files_found": 1,
+  "files_canonical": 1,
+  "shape_errors": [],
+  "mode": "snapshot",
+  "config_dir": {
+    "path": "/tmp/skill-trigger-cfg-d6bh540l/cfg",
+    "mode": "snapshot",
+    "content_hash": "sha256:3828b66e4666676f3636495fadd1b1d77d0340487847bfc605e3aea17751e5b9",
+    "skills": [
+      "arbiter",
+      "recap",
+      "watchdog"
+    ],
+    "commands": [
+      "goalforge-run",
+      "implement",
+      "plan",
+      "spec",
+      "verify",
+      "wayfind"
+    ],
+    "commands_under_test": [
+      "verify"
+    ],
+    "collisions": [],
+    "unresolved_siblings": [],
+    "route_names": [],
+    "surface": {
+      "skills": [
+        "arbiter",
+        "recap",
+        "watchdog",
+        "deep-research",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "verify",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator"
+      ],
+      "slash_commands": [
+        "arbiter",
+        "recap",
+        "watchdog",
+        "goalforge-run",
+        "implement",
+        "plan",
+        "spec",
+        "verify",
+        "wayfind",
+        "deep-research",
+        "design-sync",
+        "dataviz",
+        "update-config",
+        "debug",
+        "code-review",
+        "simplify",
+        "batch",
+        "fewer-permission-prompts",
+        "doctor",
+        "loop",
+        "schedule",
+        "claude-api",
+        "workflow-authoring",
+        "run",
+        "run-skill-generator",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "clear",
+        "color",
+        "compact",
+        "config",
+        "context",
+        "effort",
+        "fast",
+        "heapdump",
+        "init",
+        "mcp",
+        "import",
+        "model",
+        "__remote-workflow",
+        "workflow-launch-exec",
+        "reload-skills",
+        "rename",
+        "ultrareview",
+        "security-review",
+        "usage",
+        "insights",
+        "skill-doctor",
+        "goal",
+        "design",
+        "design-consent",
+        "design-revoke",
+        "list-agents",
+        "team-onboarding"
+      ],
+      "builtin_entries": [
+        "__remote-workflow",
+        "agents",
+        "auto-mode-setup",
+        "autocompact",
+        "batch",
+        "claude-api",
+        "clear",
+        "code-review",
+        "color",
+        "compact",
+        "config",
+        "context",
+        "dataviz",
+        "debug",
+        "deep-research",
+        "design",
+        "design-consent",
+        "design-revoke",
+        "design-sync",
+        "doctor",
+        "effort",
+        "fast",
+        "fewer-permission-prompts",
+        "goal",
+        "heapdump",
+        "import",
+        "init",
+        "insights",
+        "list-agents",
+        "loop",
+        "mcp",
+        "model",
+        "reload-skills",
+        "rename",
+        "run",
+        "run-skill-generator",
+        "schedule",
+        "security-review",
+        "simplify",
+        "skill-doctor",
+        "team-onboarding",
+        "ultrareview",
+        "update-config",
+        "usage",
+        "workflow-authoring",
+        "workflow-launch-exec"
+      ]
+    }
+  },
+  "cases": [
+    {
+      "skill": "verify",
+      "case_id": "sel-pos-check-and-advance",
+      "case_file": "/home/cunger/10_projects/cogwright/packages/goalforge/evals/selection/verify.json",
+      "should_trigger": true,
+      "expected_route": null,
+      "prompt": "Check that every task in wp-02 is verified and findings.md is present, then advance its status.",
+      "trials": [
+        {
+          "trial": 1,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "recap",
+          "all_observed": [
+            "recap"
+          ],
+          "outcome": "other",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.012014,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 9587
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "wayfind",
+          "all_observed": [
+            "wayfind"
+          ],
+          "outcome": "other",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.000984,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 9587,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "wayfind",
+          "all_observed": [
+            "wayfind"
+          ],
+          "outcome": "other",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.012091,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 9649
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 4,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "recap",
+          "all_observed": [
+            "recap"
+          ],
+          "outcome": "other",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.00099,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 9649,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 5,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "recap",
+          "all_observed": [
+            "recap"
+          ],
+          "outcome": "other",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.00098,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 1,
+            "cache_read_input_tokens": 9649,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 0,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": "positive case: every trial must select the skill under test"
+    },
+    {
+      "skill": "verify",
+      "case_id": "sel-pos-verify-just-finished",
+      "case_file": "/home/cunger/10_projects/cogwright/packages/goalforge/evals/selection/verify.json",
+      "should_trigger": true,
+      "expected_route": null,
+      "prompt": "Verify wp-04 \u2014 I just finished it.",
+      "trials": [
+        {
+          "trial": 1,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "verify",
+          "all_observed": [
+            "verify"
+          ],
+          "outcome": "hit",
+          "route_outcome": null,
+          "pass": true,
+          "cost_usd": 0.004143,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 6895,
+            "cache_creation_input_tokens": 2743
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "verify",
+          "all_observed": [
+            "verify"
+          ],
+          "outcome": "hit",
+          "route_outcome": null,
+          "pass": true,
+          "cost_usd": 0.000994,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9638,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "verify",
+          "all_observed": [
+            "verify"
+          ],
+          "outcome": "hit",
+          "route_outcome": null,
+          "pass": true,
+          "cost_usd": 0.000994,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9638,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 4,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "verify",
+          "all_observed": [
+            "verify"
+          ],
+          "outcome": "hit",
+          "route_outcome": null,
+          "pass": true,
+          "cost_usd": 0.000994,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9638,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 5,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.006068,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9638,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 4,
+      "pass_k": false,
+      "abstains": 1,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": "positive case: every trial must select the skill under test"
+    },
+    {
+      "skill": "verify",
+      "case_id": "sel-pos-completion-criteria",
+      "case_file": "/home/cunger/10_projects/cogwright/packages/goalforge/evals/selection/verify.json",
+      "should_trigger": true,
+      "expected_route": null,
+      "prompt": "Confirm wp-05 meets its declared completion criteria and mark it verified.",
+      "trials": [
+        {
+          "trial": 1,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.010231,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 1,
+            "cache_read_input_tokens": 6895,
+            "cache_creation_input_tokens": 2747
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "wayfind",
+          "all_observed": [
+            "wayfind"
+          ],
+          "outcome": "other",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.000994,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9642,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.004827,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9642,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 4,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.004247,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 9642,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 5,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.005182,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 1,
+            "cache_read_input_tokens": 9642,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 4,
+      "expected_owner": null,
+      "owner_hit": null,
+      "failing_assertion": "positive case: every trial must select the skill under test"
+    },
+    {
+      "skill": "verify",
+      "case_id": "sel-neg-not-executed-yet",
+      "case_file": "/home/cunger/10_projects/cogwright/packages/goalforge/evals/selection/verify.json",
+      "should_trigger": false,
+      "expected_route": null,
+      "prompt": "The work package hasn't been run yet \u2014 dispatch its tasks.",
+      "trials": [
+        {
+          "trial": 1,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.009868,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 6895,
+            "cache_creation_input_tokens": 2744
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.003709,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9639,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.004689,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 1,
+            "cache_read_input_tokens": 9639,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 4,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.004624,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9639,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 5,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.004629,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9639,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 5,
+      "expected_owner": "implement",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    },
+    {
+      "skill": "verify",
+      "case_id": "sel-neg-feature-retrospective",
+      "case_file": "/home/cunger/10_projects/cogwright/packages/goalforge/evals/selection/verify.json",
+      "should_trigger": false,
+      "expected_route": null,
+      "prompt": "The whole feature is done \u2014 write a retrospective across its work packages.",
+      "trials": [
+        {
+          "trial": 1,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "recap",
+          "all_observed": [
+            "recap"
+          ],
+          "outcome": "other",
+          "route_outcome": null,
+          "pass": true,
+          "cost_usd": 0.004152,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 6895,
+            "cache_creation_input_tokens": 2746
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "recap",
+          "all_observed": [
+            "recap"
+          ],
+          "outcome": "other",
+          "route_outcome": null,
+          "pass": true,
+          "cost_usd": 0.000989,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 9641,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.004061,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9641,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 4,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.004781,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9641,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 5,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.005101,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9641,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 2,
+      "pass_k": false,
+      "abstains": 3,
+      "expected_owner": "recap",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    },
+    {
+      "skill": "verify",
+      "case_id": "sel-neg-adjudicate-disagreement",
+      "case_file": "/home/cunger/10_projects/cogwright/packages/goalforge/evals/selection/verify.json",
+      "should_trigger": false,
+      "expected_route": null,
+      "prompt": "Two reviewers disagree about whether wp-04 actually meets its goal. Settle it.",
+      "trials": [
+        {
+          "trial": 1,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.009333,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 1,
+            "cache_read_input_tokens": 6895,
+            "cache_creation_input_tokens": 2751
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.004402,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9646,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.004087,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 9646,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 4,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.003972,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9646,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 5,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": "recap",
+          "all_observed": [
+            "recap"
+          ],
+          "outcome": "other",
+          "route_outcome": null,
+          "pass": true,
+          "cost_usd": 0.00098,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 1,
+            "cache_read_input_tokens": 9646,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": false,
+            "stop_reason": "first_skill_call",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 1,
+      "pass_k": false,
+      "abstains": 4,
+      "expected_owner": "arbiter",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    },
+    {
+      "skill": "verify",
+      "case_id": "sel-neg-monitor-running-chain",
+      "case_file": "/home/cunger/10_projects/cogwright/packages/goalforge/evals/selection/verify.json",
+      "should_trigger": false,
+      "expected_route": null,
+      "prompt": "Keep an eye on the running chain and flag it if a stage stalls.",
+      "trials": [
+        {
+          "trial": 1,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.008587,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 6895,
+            "cache_creation_input_tokens": 2747
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 2,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.003707,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9642,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 3,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.002917,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9642,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 4,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.003272,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9642,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        },
+        {
+          "trial": 5,
+          "observe": "first",
+          "budget_usd": 0.05,
+          "observed": null,
+          "all_observed": [],
+          "outcome": "abstain",
+          "route_outcome": null,
+          "pass": false,
+          "cost_usd": 0.003427,
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 4,
+            "cache_read_input_tokens": 9642,
+            "cache_creation_input_tokens": 0
+          },
+          "scan": {
+            "result_seen": true,
+            "stop_reason": "result",
+            "malformed_events": 0
+          },
+          "source": "live",
+          "error": null
+        }
+      ],
+      "passes": 0,
+      "pass_k": false,
+      "abstains": 5,
+      "expected_owner": "watchdog",
+      "owner_hit": false,
+      "failing_assertion": "negative case: every trial must select a DIFFERENT skill (abstain fails)"
+    }
+  ],
+  "cost": {
+    "total_usd": 0.157019,
+    "cap_usd": 0.2,
+    "capped": false
+  },
+  "summary": {
+    "cases": 7,
+    "trials_per_case": 5,
+    "positive_cases": 3,
+    "positive_pass_k": 0,
+    "negative_cases": 4,
+    "negative_pass_k": 0,
+    "abstains": 22,
+    "trial_errors": 0,
+    "hits": 4,
+    "observed_skill_calls": 13,
+    "owner_hits": 0,
+    "routing": {
+      "cases": 0,
+      "pass_k": 0,
+      "hit": 0,
+      "partial": 0,
+      "other": 0,
+      "abstain": 0,
+      "error": 0,
+      "skipped": 0
+    }
+  },
+  "coverage": "full"
+}
