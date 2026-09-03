@@ -1040,6 +1040,15 @@ owned by the command") already resolves the expected `spec/` and `verify/` colli
 basenames, `wayfind` allowlisted `pending` because it ships `e2e.sh` and no cases) is the
 drift guard against that split going stale.
 
+**Cross-suite rerun rule (codex, 2026-09-03; accepted as doctrine, not yet
+mechanized):** editing a skill or command description invalidates every suite it
+can appear in, not just its own — so an edit is accepted only if **every** suite
+whose positives' owner, or whose negatives' cited owner, equals an edited entry is
+re-run on the edited surface and meets the same non-regression rule; the live proof
+is `implement.md`'s `2bfc0a8` rewrite moving the `verify` suite's
+`sel-neg-not-executed-yet` from `implement ×3` to `ABSTAIN ×5`
+(`packages/goalforge/evals/reports/selection-2026-09-03c/README.md` §5).
+
 **Verify:** the T2 jq one-liner prints two integers for all 13 converted files, both
 at least 3 for each of the six reachable entries; every negative's `expected_output`
 contains at least one backticked name resolving against the union of declared names
