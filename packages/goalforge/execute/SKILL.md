@@ -326,7 +326,7 @@ selects the *specialist*, never the strategy.
 `resolve_role_tier`), then instantiated to an explicit `{model, effort}` via
 `tier_to_dispatch`/`resolve_dispatch` — values live in
 `references/dispatch-resolution.md` §Model tier + effort, do not restate them
-here. The `implement` role is **complexity-driven**, so the
+here. The `implement-code` role is **complexity-driven**, so the
 discovery callable supplies the `complexity` estimate when frontmatter omits it;
 **blast radius** (auth/schema/migration/exported-API/3+ files) deterministically
 forces the high tier (→ opus@high). Every brief states model **and** effort
@@ -343,8 +343,8 @@ tiers: `references/dispatch-resolution.md`.
 
 ### Step 5 — Dispatch subagent
 
-Delegate code-writing to the `implement` skill. **Do NOT reimplement**
-`implement`'s logic here — invoke it by name and let it run. Pass:
+Delegate code-writing to the `implement-code` skill. **Do NOT reimplement**
+`implement-code`'s logic here — invoke it by name and let it run. Pass:
 
 - Task spec (goal, steps, `verify:` command).
 - Working directory (main tree or worktree path).
@@ -354,16 +354,16 @@ Delegate code-writing to the `implement` skill. **Do NOT reimplement**
   `from goalforge_goal_eval import should_invoke_testing` — the predicate has ONE home
   in `goalforge-goal-eval.py`, not here. It returns `True` when the WP is
   `task_type == 'code'` **AND** `verification.strategy == 'deterministic'`; then
-  pass `use_testing: true` so `implement` routes test authoring through
+  pass `use_testing: true` so `implement-code` routes test authoring through
   `testing:write`/`update`. When `False`, pass **no** hint — the dispatch is
-  byte-identical to today. The guard is additive and goal-predicated; `implement`
+  byte-identical to today. The guard is additive and goal-predicated; `implement-code`
   stays goal-agnostic and never re-derives `effective_goal`.
 
 **doc-check (pre-coding convention).** Before writing code against anything
 external — a third-party API, a versioned package, a provider with quotas/limits —
 do a quick docs/web-search pass to confirm current signatures, the pinned
 version's behavior, and provider limits. Cheap up front; prevents coding against a
-stale or imagined interface. Pass this to `implement` for any task touching
+stale or imagined interface. Pass this to `implement-code` for any task touching
 external surfaces.
 
 **premise-check (blocked-return convention).** The brief MUST instruct the
@@ -375,10 +375,10 @@ workaround, widening scope, or shipping a false-green edit. A blocked return is
 a first-class success outcome, not a failure to route around. On such a return,
 append the named site + unmet premise to `findings.md` as a blocker (same trail
 as the outer-loop `blocked_stop` case) and leave task status unadvanced — never
-mark a premise-blocked task implemented. Pass this to `implement` for every
+mark a premise-blocked task implemented. Pass this to `implement-code` for every
 dispatched task.
 
-After `implement` returns, write the checkpoint immediately (Step 6b).
+After `implement-code` returns, write the checkpoint immediately (Step 6b).
 
 ### Step 6 — Evaluation pass (deterministic only)
 
@@ -396,7 +396,7 @@ second-opinion are amortized to the WP boundary, Step 7 / `goalforge-verify`):
    cheap). **After each parallel wave merges back** (Step 3.4), run one whole-repo
    type-check to catch cross-file/merge defects.
 
-**On failure:** loop back to Step 5 (re-dispatch via `implement`) with the full
+**On failure:** loop back to Step 5 (re-dispatch via `implement-code`) with the full
 failure output as context. The retry cap is **`SDD_MAX_RETRIES`** (default 3;
 resolved per `goalforge/references/schema.md` §Retry budget resolution). On hitting the
 cap, append a blocker to `<wp>/findings.md` (the task name, all failure output
@@ -571,7 +571,7 @@ post-condition table: `references/goal-directive.md`.
   human has answered (Step 9 idempotency).
 
 **Reason-feedback.** When the goal is not met and the loop continues, carry
-`verdict.reason` into the next outer iteration and pass it to `implement` as
+`verdict.reason` into the next outer iteration and pass it to `implement-code` as
 guidance (mirrors native `/goal`'s per-turn reason).
 
 ### Step 10 — WP exit (single status-advance authority)
@@ -601,7 +601,7 @@ whether this step runs. `goalforge-verify` is the **sole authority** for the
 
 | Skill / Superpower | Used for |
 |---|---|
-| `implement` | Code-writing subagent dispatch (Step 5) |
+| `implement-code` | Code-writing subagent dispatch (Step 5) |
 | `verify-and-simplify` | **Opt-in only** for a flagged high-risk task (Step 7); the one review + simplify + second-opinion pass runs at the WP boundary in `goalforge-verify` |
 | `superpowers:dispatching-parallel-agents` | Wave batched dispatch (Step 3) |
 | `superpowers:using-git-worktrees` | Worktree create/merge per parallel task (Step 3) |
@@ -611,6 +611,13 @@ whether this step runs. `goalforge-verify` is the **sole authority** for the
 ---
 
 ## Gotchas
+
+- **`/implement` is a command, not the Skill named `implement-code`.** Before
+  2026-09-04 the bare code-phase skill was named `implement` and shadowed the
+  `/implement` command in Skill-tool resolution — a WP run through it left tasks
+  un-advanced and `goalforge-verify` refused it (wp-30, 2026-09-03). Run a WP via
+  the `/implement` command (`commands/implement.md` → this skill); the bare code
+  phase is `implement-code` and is only dispatched from Step 5.
 
 - **Commit-hash ordering.** The hash is stashed in `checkpoint.commit_sha` at
   Step 8, not written to frontmatter `commit:` during execution; `goalforge-verify`

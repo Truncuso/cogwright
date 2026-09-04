@@ -251,6 +251,10 @@
     },
     {
       "from": "skills/execute/SKILL.md",
+      "path": "commands/implement.md"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
       "path": "references/fidelity.md"
     },
     {
