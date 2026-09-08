@@ -703,6 +703,134 @@ EOF
         echo "$vout" >&2; no "verify-path-quoted-negation-does-not-suppress"
     fi
 
+    # ── gitignore-escape-hatch specificity (wp-audit finding): a bare catch-all
+    # `*` rule (the "ignore everything, then whitelist" idiom real ~/.claude/
+    # .gitignore files open with) must NOT satisfy the verify-path WARN escape
+    # hatch — only a rule that names something is a meaningful, path-specific
+    # exclusion. Two isolated git repos (own verify_base) give the contrast:
+    # a catch-all-only .gitignore vs. a path-specific one, same missing target.
+    local giA giA_pr giA_feat giA_wp giB giB_pr giB_feat giB_wp giout
+    giA="$tmp/gi-catchall"; giA_pr="$giA/plans"; giA_feat="$giA_pr/gifeat"; giA_wp="$giA_feat/wp-01-gi"
+    mkdir -p "$giA_wp"
+    ( cd "$giA" && git init -q . && printf '*\n' > .gitignore )
+    cat > "$giA_feat/overview.md" <<'EOF'
+---
+name: gifeat
+title: gitignore-escape-hatch self-test (catch-all)
+status: active
+created: 2026-06-23
+---
+
+# fixture feature
+EOF
+    cat > "$giA_wp/overview.md" <<'EOF'
+---
+name: wp-01-gi
+title: gitignore catch-all WP
+status: verified
+stage_updated: 2026-06-23
+severity: LOW
+parallel: false
+depends_on: []
+plan: gifeat
+---
+
+# gitignore catch-all wp
+EOF
+    echo "# findings" > "$giA_wp/findings.md"
+    cat > "$giA_wp/task-01-gicatchall.md" <<'EOF'
+---
+name: task-01-gicatchall
+title: missing path under a bare `*` gitignore
+status: verified
+commit: abc1234
+verify: "test -f docs/__gf_catchall__/report.md"
+---
+
+# missing path, catch-all-only gitignore
+EOF
+
+    giB="$tmp/gi-specific"; giB_pr="$giB/plans"; giB_feat="$giB_pr/gifeat"; giB_wp="$giB_feat/wp-01-gi"
+    mkdir -p "$giB_wp"
+    ( cd "$giB" && git init -q . && printf 'docs/\n' > .gitignore )
+    cat > "$giB_feat/overview.md" <<'EOF'
+---
+name: gifeat
+title: gitignore-escape-hatch self-test (specific)
+status: active
+created: 2026-06-23
+---
+
+# fixture feature
+EOF
+    cat > "$giB_wp/overview.md" <<'EOF'
+---
+name: wp-01-gi
+title: gitignore specific-rule WP
+status: verified
+stage_updated: 2026-06-23
+severity: LOW
+parallel: false
+depends_on: []
+plan: gifeat
+---
+
+# gitignore specific-rule wp
+EOF
+    echo "# findings" > "$giB_wp/findings.md"
+    cat > "$giB_wp/task-01-gispecific.md" <<'EOF'
+---
+name: task-01-gispecific
+title: missing path under a path-specific gitignore rule
+status: verified
+commit: abc1234
+verify: "test -f docs/__gf_catchall__/report.md"
+---
+
+# missing path, path-specific gitignore (docs/)
+EOF
+
+    # (r) bare `*` gitignore ⇒ escape hatch does NOT apply ⇒ ERROR (not WARN).
+    giout="$(bash "$SELF" --show "$giA_pr" 2>&1)"
+    if echo "$giout" | grep -i 'verify-path' | grep '__gf_catchall__' | grep -qi 'does not exist' \
+        && ! echo "$giout" | grep -i 'verify-path' | grep '__gf_catchall__' | grep -qi 'gitignored'; then
+        ok "verify-path-gitignore-catchall-not-escaped"
+    else
+        echo "$giout" >&2; no "verify-path-gitignore-catchall-not-escaped"
+    fi
+
+    # (s) path-specific `docs/` gitignore ⇒ escape hatch DOES apply ⇒ WARN
+    #     "gitignored" (never ERROR) — proves the fix did not break the
+    #     legitimate case (a repo-specific deliberately-untracked path).
+    giout="$(bash "$SELF" --show "$giB_pr" 2>&1)"
+    if echo "$giout" | grep -i 'verify-path' | grep '__gf_catchall__' | grep -qi 'gitignored' \
+        && ! echo "$giout" | grep -i 'verify-path' | grep '__gf_catchall__' | grep -qi 'does not exist'; then
+        ok "verify-path-gitignore-specific-still-escaped"
+    else
+        echo "$giout" >&2; no "verify-path-gitignore-specific-still-escaped"
+    fi
+
+    # ── --feature <slug> naming no directory (wp-audit finding): must ERROR +
+    # exit non-zero, never print "OK — <slug> clean". Reuses the vpr tree
+    # (already populated above) with a slug that names nothing under it.
+    local featout featrc
+    featout="$(bash "$SELF" "$vpr" --feature __goalforge_nonexistent_feature__ 2>&1)"; featrc=$?
+    if [[ "$featrc" -ne 0 ]] && echo "$featout" | grep -qi 'ERROR' \
+        && ! echo "$featout" | grep -qi 'clean'; then
+        ok "feature-not-found-errors"
+    else
+        echo "$featout" >&2; no "feature-not-found-errors (rc=$featrc)"
+    fi
+
+    # --quiet keeps its documented always-exit-0 contract even for a missing
+    # --feature slug (the session-end hook must never be blocked by it).
+    featout="$(bash "$SELF" "$vpr" --feature __goalforge_nonexistent_feature__ --quiet 2>&1)"; featrc=$?
+    if [[ "$featrc" -eq 0 ]]; then
+        ok "feature-not-found-quiet-still-exits-zero"
+    else
+        echo "$featout" >&2; no "feature-not-found-quiet-still-exits-zero (rc=$featrc)"
+    fi
+
     echo ""
     echo "Results: $t_pass passed, $t_fail failed"
     [[ "$t_fail" -eq 0 ]]
@@ -1517,10 +1645,32 @@ def _verify_path_tokens(verify):
                 yield tok
 
 def _verify_path_gitignored(tok):
+    """True only when `tok` is excluded by a PATH-SPECIFIC ignore rule — never by
+    a bare catch-all glob (`*` / `**`, the "ignore everything, then whitelist"
+    idiom `~/.claude/.gitignore` opens with). Under that idiom EVERY unwhitelisted
+    token matches, so a plain `-q` check-ignore is constant-True and the
+    verify-path ERROR branch below it can never fire (wp-audit finding). A
+    catch-all names no path — it cannot be read as "this specific path is
+    intentionally excluded" — so it must not satisfy the escape hatch."""
     try:
         r = subprocess.run(['git', '-C', str(verify_base), 'check-ignore', '-q', '--', tok],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
-        return r.returncode == 0
+        if r.returncode != 0:
+            return False
+        # -q already confirmed tok is ignored (never by a negated rule, since a
+        # negation makes -q report NOT-ignored). Re-run -v to see WHICH pattern
+        # decided it, so a bare catch-all can be told apart from a real one.
+        # (git's own `-v` exit status is unreliable for negated matches — read
+        # only its stdout, never its returncode.)
+        v = subprocess.run(['git', '-C', str(verify_base), 'check-ignore', '-v', '--', tok],
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5, text=True)
+        line = v.stdout.strip().splitlines()[0] if v.stdout.strip() else ''
+        prefix = line.split('\t', 1)[0] if '\t' in line else ''
+        src_parts = prefix.split(':', 2)              # <source>:<linenum>:<pattern>
+        pattern = src_parts[2] if len(src_parts) == 3 else ''
+        if pattern and not re.search(r'[^*/]', pattern.rstrip('/')):
+            return False   # catch-all glob (`*`, `**`, `**/*`, ...) — not path-specific
+        return True
     except (OSError, subprocess.TimeoutExpired):
         return False
 
@@ -1929,6 +2079,18 @@ if feature:
     def _in_feat(fp):
         ap = os.path.abspath(fp)
         return ap == feat_root or ap.startswith(feat_root + os.sep)
+    if not os.path.isdir(feat_root):
+        # A --feature slug naming no directory under plans_dir is a usage error,
+        # not "nothing to report": filtering errors/warnings to it below would
+        # leave both empty and print a false "OK — <slug> clean" (wp-audit
+        # finding). Match the PLANS_DIR-not-found convention above: ERROR +
+        # exit 1, except under --quiet, which keeps its documented "always
+        # exits 0" contract (the session-end hook must never be blocked by it).
+        if quiet:
+            print(f"goalforge-validate [{feature}]: feature not found — {feat_root}")
+            sys.exit(0)
+        print(f"ERROR: feature not found: {feat_root}", file=sys.stderr)
+        sys.exit(1)
     errors         = [e for e in errors if _in_feat(e[0])]
     warnings       = [w for w in warnings if _in_feat(w[0])]
     fatal          = [f for f in fatal if _in_feat(f)]
