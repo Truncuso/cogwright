@@ -78,7 +78,22 @@ for ln in text.splitlines():
         continue
     if not in_oq:
         continue
-    b = re.match(r"^\s*[-*]\s+(.*\S)\s*$", ln)
+    # A question is a TOP-LEVEL markdown list item under the heading.
+    #
+    # BOTH list forms count: real work packages write open questions as an
+    # ORDERED list (`1. **Q?**`), and a bullet-only pattern silently counts them
+    # as zero — the gate then reads green against a WP that holds unresolved
+    # questions.
+    #
+    # The anchor is `^` with NO leading-whitespace class, which is load-bearing
+    # in the other direction: a question's body routinely carries an INDENTED
+    # sub-list (a consumer list, an option list). Those are part of one
+    # question, not questions of their own, and `^\s*` counts every one of them
+    # — inflating the count and, worse, reporting a non-zero count for a
+    # document whose questions are all resolved.
+    #
+    # A wrapped continuation line starts with neither marker, so it is skipped.
+    b = re.match(r"^(?:[-*+]|\d+[.)])\s+(.*\S)\s*$", ln)
     if not b:
         continue
     body = b.group(1)
@@ -174,6 +189,30 @@ self_test() {
     n="$(unresolved_count "$d/done.md")"
     [[ "$n" -eq 0 ]] && ok "all-marked OQ -> count 0" || no "all-marked OQ -> count $n (want 0)"
 
+    # ORDERED-list OQ with wrapped continuation lines → count 2. This is the
+    # shape real work packages actually use; a bullet-only pattern counts 0 and
+    # the gate reads green while the WP holds unresolved questions.
+    printf -- '## Open Questions\n\n1. **First question?** rationale that wraps\n   onto a continuation line that is not itself an item.\n2. **Second question?** more prose\n   also wrapped.\n' > "$d/numbered.md"
+    n="$(unresolved_count "$d/numbered.md")"
+    [[ "$n" -eq 2 ]] && ok "numbered OQ with wrapped lines -> count 2" || no "numbered OQ -> count $n (want 2)"
+
+    # ordered-list items carrying resolution markers → count 0
+    printf -- '## Open Questions\n\n1. [resolved] OQ1\n2. ~~OQ2~~\n3) DEFERRED OQ3\n' > "$d/numbered-done.md"
+    n="$(unresolved_count "$d/numbered-done.md")"
+    [[ "$n" -eq 0 ]] && ok "numbered marked-resolved OQ -> count 0" || no "numbered marked-resolved -> count $n (want 0)"
+
+    # mixed markers in one section → every unmarked item counts
+    printf -- '## Open Questions\n\n- bullet Q?\n1. numbered Q?\n+ plus Q?\n' > "$d/mixed.md"
+    n="$(unresolved_count "$d/mixed.md")"
+    [[ "$n" -eq 3 ]] && ok "mixed -/1./+ markers -> count 3" || no "mixed markers -> count $n (want 3)"
+
+    # an INDENTED sub-list inside a question body is part of that question, not
+    # a question of its own. Counting it inflates the total and can report a
+    # non-zero count for a document whose questions are all resolved.
+    printf -- '## Open Questions\n\n1. [resolved] Question with a consumer list:\n\n   - consumer one\n   - consumer two\n   - consumer three\n\n2. [resolved] Second question.\n' > "$d/nested.md"
+    n="$(unresolved_count "$d/nested.md")"
+    [[ "$n" -eq 0 ]] && ok "indented sub-list is not a question -> count 0" || no "nested sub-list counted -> count $n (want 0)"
+
     # no OQ section → count 0
     printf -- '## Goal\n\nstuff\n' > "$d/none.md"
     n="$(unresolved_count "$d/none.md")"
@@ -248,8 +287,15 @@ self_test() {
     mkdir -p "$hs/.claude/plans/f" "$hs/.claude/notplans"
     git init -q "$d/leg2repo" 2>/dev/null
     mkdir -p "$d/leg2repo/plans/f" "$d/leg2repo/notplans"
+    # Leg 2b shape: plans/ is its OWN git repo nested in the outer one. The git
+    # root of a file below it is the plans dir itself, so leg 2 alone resolves
+    # to `plans/plans` and the file falls out of scope. This is the real-world
+    # layout of a private plans repo gitignored by a public parent.
+    git init -q "$d/leg2brepo" 2>/dev/null
+    mkdir -p "$d/leg2brepo/plans/f"
+    git init -q "$d/leg2brepo/plans" 2>/dev/null
     local lf
-    for lf in "$d/leg2repo/plans/f" "$d/leg2repo/notplans" "$hs/.claude/plans/f" "$hs/.claude/notplans"; do
+    for lf in "$d/leg2repo/plans/f" "$d/leg2repo/notplans" "$d/leg2brepo/plans/f" "$hs/.claude/plans/f" "$hs/.claude/notplans"; do
         printf -- "$oq" > "$lf/overview.md"
     done
     leg() { # <label> <overview path> <engage|silent>
@@ -263,6 +309,7 @@ self_test() {
     }
     leg "leg 2: <git-root>/plans/** -> hook engaged"               "$d/leg2repo/plans/f/overview.md"   engage
     leg "leg 2 negative: same git repo outside plans/ -> silent"   "$d/leg2repo/notplans/overview.md"  silent
+    leg "leg 2b: plans/ is its OWN git repo -> hook engaged"       "$d/leg2brepo/plans/f/overview.md"  engage
     leg "leg 3: \$HOME/.claude/plans/** -> hook engaged"           "$hs/.claude/plans/f/overview.md"   engage
     leg "leg 3 negative: \$HOME/.claude outside plans/ -> silent"  "$hs/.claude/notplans/overview.md"  silent
 
