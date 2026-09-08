@@ -71,6 +71,60 @@ if [[ "$rc" -eq 1 ]]; then ok "block-own-error"; else no "block-own-error" "rc=$
 rc=$( ( cd "$TMP" && CLAUDE_PLUGIN_ROOT=/nonexistent bash "$HOOK" >/dev/null 2>&1 ); echo $? )
 if [[ "$rc" -eq 1 ]]; then ok "block-with-poisoned-CLAUDE_PLUGIN_ROOT"; else no "block-with-poisoned-CLAUDE_PLUGIN_ROOT" "rc=$rc (expected 1)"; fi
 
+# ── PLANS-REPO-ROOTED layout (goalforge-plans-root.sh leg 2b) ──────────────────
+# The plans tree kept as its OWN git repo — the git root is itself named
+# `plans`, so staged paths are rooted directly at the feature (no `plans/`
+# path segment at all). Without the fix, the plans/<feature>/ predicate
+# extracts zero features from every such path and the hook never validates.
+TMP2="$(mktemp -d)/plans"
+mkdir -p "$TMP2"
+trap 'rm -rf "$TMP"; rm -rf "$(dirname "$TMP2")"' EXIT
+git -C "$TMP2" init -q
+git -C "$TMP2" config user.email t@t.t
+git -C "$TMP2" config user.name t
+
+mk_feature_rooted() { # <slug> <status> [relationships-block]
+    local slug="$1" status="$2" rel="${3:-}"
+    local d="$TMP2/$slug"
+    mkdir -p "$d"
+    {
+        echo "---"
+        echo "name: $slug"
+        echo "title: $slug"
+        echo "status: $status"
+        echo "created: 2026-06-29"
+        echo "feature: $slug"
+        echo "work_packages: []"
+        printf '%s' "$rel"
+        echo "---"
+        echo ""
+        echo "## Problem"
+        echo "x"
+    } > "$d/overview.md"
+}
+
+run_hook_rooted() { # runs the hook with the staged index of $TMP2; echoes rc
+    ( cd "$TMP2" && GOALFORGE_VALIDATE_SCRIPT="$VALIDATE" bash "$HOOK" >/dev/null 2>&1 )
+    echo $?
+}
+
+mk_feature_rooted foundation2 ready
+git -C "$TMP2" add -A >/dev/null; git -C "$TMP2" commit -qm seed
+
+# ── ALLOW (plans-repo-rooted): a clean feature ─────────────────────────────────
+mk_feature_rooted consumer2 ready
+git -C "$TMP2" add consumer2/overview.md >/dev/null
+rc=$(run_hook_rooted)
+if [[ "$rc" -eq 0 ]]; then ok "plans-repo-rooted: allow-clean-feature"; else no "plans-repo-rooted: allow-clean-feature" "rc=$rc (expected 0)"; fi
+git -C "$TMP2" add -A >/dev/null; git -C "$TMP2" commit -qm consumer2
+
+# ── BLOCK (plans-repo-rooted): a feature with its OWN invalid status enum ──────
+mk_feature_rooted broken2 not-a-valid-status
+git -C "$TMP2" add broken2/overview.md >/dev/null
+rc=$(run_hook_rooted)
+if [[ "$rc" -eq 1 ]]; then ok "plans-repo-rooted: block-own-error"; else no "plans-repo-rooted: block-own-error" "rc=$rc (expected 1)"; fi
+git -C "$TMP2" reset >/dev/null
+
 echo ""
 echo "Results: $pass passed, $fail failed"
 [[ "$fail" -eq 0 ]]

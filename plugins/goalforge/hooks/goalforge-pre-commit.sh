@@ -29,6 +29,14 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || pr
 # plugin trees stay byte-identical here.
 GF_HOME="$SCRIPT_DIR/.."
 
+# Sourced for goalforge_plans_roots — the ONE place that knows a plans tree
+# kept as its own git repo (leg 2b) makes the git root ITSELF the plans root.
+# Zero-breakage: missing file → the leg-2b case below is simply never
+# detected (git root != "plans" root, so the plain plans/<feature>/ predicate
+# still runs unchanged).
+# shellcheck disable=SC1091
+[[ -r "$SCRIPT_DIR/goalforge-plans-root.sh" ]] && source "$SCRIPT_DIR/goalforge-plans-root.sh"
+
 _goalforge_pre_commit_main() {
     set -uo pipefail
 
@@ -57,27 +65,46 @@ _goalforge_pre_commit_main() {
     # A staged path contains a plans/<feature>/ segment anywhere, e.g.:
     #   claude/plans/my-feature/wp-01/task.md   →   <repo>/claude/plans/my-feature
     #   plans/my-feature/wp-01/task.md           →   <repo>/plans/my-feature
+    # A SECOND layout (goalforge-plans-root.sh leg 2b): a plans tree kept as
+    # its OWN git repo has no `plans/` segment at all — REPO_ROOT already IS
+    # the plans root, so staged paths are rooted directly at the feature, e.g.:
+    #   my-feature/wp-01/task.md                 →   <repo>/my-feature
+    local plans_root_is_self=0
+    if declare -f goalforge_plans_roots >/dev/null 2>&1; then
+        local _pr
+        while IFS= read -r _pr; do
+            [[ "$_pr" == "$REPO_ROOT" ]] && plans_root_is_self=1
+        done < <(goalforge_plans_roots "$REPO_ROOT/x")
+    fi
+
     local -A _seen
     local -a TOUCHED_FEATURES
     TOUCHED_FEATURES=()
 
-    local staged_path feat_dir
+    local staged_path feat_dir feat_slug
     while IFS= read -r staged_path; do
         [[ -z "$staged_path" ]] && continue
-        # Group 1 = everything up to and including "plans"
-        # Group 3 = the feature name (first path component after plans/)
+        feat_slug=""
         if [[ "$staged_path" =~ ^(([^/]*/)*plans)/([^/]+)/ ]]; then
-            # Archived plans are frozen historical records — never strict-validate
-            # them on commit (they predate the current schema). Matches the
-            # validator's full-tree _archived/_archive skip.
-            if [[ "${BASH_REMATCH[3]}" == "_archived" || "${BASH_REMATCH[3]}" == "_archive" ]]; then
-                continue
-            fi
-            feat_dir="${REPO_ROOT}/${BASH_REMATCH[1]}/${BASH_REMATCH[3]}"
-            if [[ -z "${_seen[$feat_dir]:-}" ]]; then
-                _seen["$feat_dir"]=1
-                TOUCHED_FEATURES+=("$feat_dir")
-            fi
+            # Group 1 = everything up to and including "plans"
+            # Group 3 = the feature name (first path component after plans/)
+            feat_slug="${BASH_REMATCH[3]}"
+            feat_dir="${REPO_ROOT}/${BASH_REMATCH[1]}/${feat_slug}"
+        elif [[ $plans_root_is_self -eq 1 && "$staged_path" =~ ^([^/]+)/ ]]; then
+            feat_slug="${BASH_REMATCH[1]}"
+            feat_dir="${REPO_ROOT}/${feat_slug}"
+        else
+            continue
+        fi
+        # Archived plans are frozen historical records — never strict-validate
+        # them on commit (they predate the current schema). Matches the
+        # validator's full-tree _archived/_archive skip.
+        if [[ "$feat_slug" == "_archived" || "$feat_slug" == "_archive" ]]; then
+            continue
+        fi
+        if [[ -z "${_seen[$feat_dir]:-}" ]]; then
+            _seen["$feat_dir"]=1
+            TOUCHED_FEATURES+=("$feat_dir")
         fi
     done <<< "$STAGED"
 
