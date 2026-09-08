@@ -216,6 +216,13 @@ self_test() {
     mkdir -p "$hs/.claude/plans/f" "$hs/.claude/notplans"
     git init -q "$d/leg2repo" 2>/dev/null
     mkdir -p "$d/leg2repo/plans/f" "$d/leg2repo/notplans"
+    # Leg 2b shape: plans/ is its OWN git repo nested in the outer one. The git
+    # root of a file below it is the plans dir itself, so leg 2 alone resolves
+    # to `plans/plans` and the file falls out of scope. This is the real-world
+    # layout of a private plans repo gitignored by a public parent.
+    git init -q "$d/leg2brepo" 2>/dev/null
+    mkdir -p "$d/leg2brepo/plans/f"
+    git init -q "$d/leg2brepo/plans" 2>/dev/null
     leg() { # <label> <overview path> <engage|silent>
         local out rc
         out="$(payload "$2" | env -u SDD_PLANS_DIR HOME="$hs" bash "$SELF" 2>&1)"; rc=$?
@@ -227,6 +234,7 @@ self_test() {
     }
     leg "leg 2: <git-root>/plans/** -> hook engaged"               "$d/leg2repo/plans/f/overview.md"   engage
     leg "leg 2 negative: same git repo outside plans/ -> silent"   "$d/leg2repo/notplans/overview.md"  silent
+    leg "leg 2b: plans/ is its OWN git repo -> hook engaged"       "$d/leg2brepo/plans/f/overview.md"  engage
     leg "leg 3: \$HOME/.claude/plans/** -> hook engaged"           "$hs/.claude/plans/f/overview.md"   engage
     leg "leg 3 negative: \$HOME/.claude outside plans/ -> silent"  "$hs/.claude/notplans/overview.md"  silent
 

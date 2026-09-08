@@ -5,6 +5,12 @@
 # Resolution order (spec §Interface Contract, "PLANS_ROOT resolution"):
 #   1. $SDD_PLANS_DIR          (explicit override; smoke/test harnesses set it)
 #   2. <git-root>/plans        (git root of the EDITED file, not of $PWD)
+#   2b. <git-root>             when the git root IS itself named `plans` — a
+#                              plans tree kept as its OWN git repo, nested in
+#                              and gitignored by a public parent repo. Without
+#                              this leg, leg 2 resolves to `<...>/plans/plans`
+#                              and NO plan file in such a tree is ever in scope,
+#                              silently disabling every goalforge hook there.
 #   3. $HOME/.claude/plans     (the global plans root)
 #
 # A hardcoded `$HOME/.claude/plans`-only resolution is a defect — no hook may
@@ -49,7 +55,12 @@ goalforge_plans_roots() {
     [ -n "${SDD_PLANS_DIR:-}" ] && printf '%s\n' "$SDD_PLANS_DIR"
     if [ -n "$file" ]; then
         gitroot="$(git -C "$(dirname -- "$file")" rev-parse --show-toplevel 2>/dev/null)" || gitroot=""
-        [ -n "$gitroot" ] && printf '%s\n' "$gitroot/plans"
+        if [ -n "$gitroot" ]; then
+            printf '%s\n' "$gitroot/plans"
+            # Leg 2b — the plans tree is its own git repo, so the git root IS
+            # the plans root and leg 2 above would look for `plans/plans`.
+            case "${gitroot##*/}" in plans) printf '%s\n' "$gitroot" ;; esac
+        fi
     fi
     [ -n "${HOME:-}" ] && printf '%s\n' "$HOME/.claude/plans"
     return 0
