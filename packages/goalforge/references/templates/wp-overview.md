@@ -1,47 +1,51 @@
 ---
 name: <wp-id>
 title: "<human title>"
-status: draft
-schema_version: 5          # opt-in marker (schema.md "Version lineage"): makes
-                            # goal: mandatory at ready/executing/verified
+status: spec               # spec|hardened|ready|executing|implemented|verified|abandoned|archived
+schema_version: 6          # C1-C7 slim shape (schema.md "Version lineage")
+register: spike             # spike|production
+severity: MEDIUM            # LOW|MEDIUM|HIGH
+task_type: code             # code|docs|research|ops
 stage_updated: YYYY-MM-DD
-severity: MEDIUM
-cross_wp_contract: false   # set true at harden if this WP co-owns a file/section with another WP (complexity signal S5)
-parallel: false
 depends_on: []
+owned_files: []              # the WP's file boundary; verify gate A diff must be a subset
+parallel: false
+contract_slice: [C1, C2, C3, C4, C5, C6, C7]
+human_required: null         # null, or "<reason>" naming why a human must gate this WP
 plan: <feature>
 tags: []
-task_type: code            # code | research | ops | writing | optimization | analysis
-goal:                      # optional goal object (Codex 6-part anatomy); omit for legacy WPs
-  outcome: "<what is true when done — one measurable sentence>"
-  verification:
-    strategy: deterministic   # deterministic | numeric | judge | human
-    check: "<command | metric spec | judge spec | gate prompt>"
-  constraints: []
-  boundaries: []
-  iteration_policy: "<how to choose the next action after each attempt>"
-  blocked_stop: "<when to halt and report paths exhausted>"
-inherits_from: <feature-slug | null>   # cascade source for unset goal fields (WP-only)
-goal_approved_version: null            # sha256[:12] of the goal block; set at harden gate; null until first approval
 relationships: []
 sources: []
+goal:
+  outcome: "<what is true when done — one measurable sentence>"
+  verification:
+    strategy: deterministic   # deterministic | judge | human
+    command: "<the exact reproducible command — command-only, no prose>"
+    behaviors: []             # optional; b1..bN oracle rows the Checklist tags reference
+goal_approved_version: null   # sha256[:12] of outcome+verification; set at harden gate
 ---
 
 <!-- Template: wp-overview v4 (frontmatter-first, flat layout) -->
 
 ## Goal
 
-<one measurable sentence — what this WP delivers>
+<mirror of goal.outcome>
 
 ## Verification
 
-<exact command or check that proves the WP done>
+<rendered goal.verification: command, behaviors>
 
-## Tasks
+## Owned Files
 
-| Task | Title | Status | Complexity |
-|---|---|---|---|
-| | | | |
+<the boundary; diff paths at verify gate A must be a subset of frontmatter owned_files>
+
+## Depends On
+
+<WP ids this WP cannot start before, or "None">
+
+## Checklist
+
+<!-- - [ ] T1 <imperative outcome> {files: a, b} [b1,b2] -->
 
 ## Open Questions
 
@@ -49,8 +53,7 @@ sources: []
 
 ## Decisions
 
-<!-- Resolved design decisions (one `- ` item each). Count feeds complexity signal S2
-     (decision_count). A decision usually starts as an Open Question that got answered. -->
+<!-- Resolved design decisions (one `- ` item each). -->
 
 ## Goal Changelog
 

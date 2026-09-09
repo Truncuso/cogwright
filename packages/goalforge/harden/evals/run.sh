@@ -1,134 +1,63 @@
 #!/usr/bin/env bash
-# evals/run.sh — goalforge-harden static-contract checks
+# evals/run.sh — goalforge-harden checks
 #
-# All checks are STATIC-CONTRACT — the skill delegates to goalforge-interview (which drives the interview plugin engine)
-# — a conversational agent — so behavioral output requires a model.
+# Check types:
+#   STATIC-CONTRACT: asserts SKILL.md declares the C1-C7 contract this slim
+#                     skill now states (wp-01-slim-core: G1-G4 gates)
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"
 PASS=0
 FAIL=0
-# The `status:` key, kept un-joined from its enum value so the wp-01
-# transition-writer gate (greps for a literal "status: <enum>") does not
-# false-match these read/precondition/fixture assertions. Runtime grep is
-# byte-identical — "$SK spec" expands to the full status line at run time.
-SK="status:"
 
 check() {
   local desc="$1"
   local pattern="$2"
-  local file="${3:-$SKILL_MD}"
-  if grep -qF "$pattern" "$file"; then
-    echo "  PASS: $desc"
+  if grep -qF -- "$pattern" "$SKILL_MD"; then
+    echo "  PASS [STATIC-CONTRACT]: $desc"
     PASS=$((PASS+1))
   else
-    echo "  FAIL: $desc"
+    echo "  FAIL [STATIC-CONTRACT]: $desc"
     echo "        expected to find: $pattern"
     FAIL=$((FAIL+1))
   fi
 }
 
-file_check() {
-  local desc="$1"
-  local path="$2"
-  if [ -f "$path" ]; then
-    echo "  PASS: $desc"
-    PASS=$((PASS+1))
-  else
-    echo "  FAIL: $desc — not found: $path"
-    FAIL=$((FAIL+1))
-  fi
-}
+echo "=== goalforge-harden: contract checks ==="
 
-echo "=== goalforge-harden: static-contract checks ==="
-
-# Identity
 check "skill name declared" "name: goalforge-harden"
+check "precondition: WP overview.md at status: spec, C1 eight-section shape" "the WP \`overview.md\`"
+check "four fixed gates named (G1-G4)" "G1 dependency frontier, G2 deterministic"
 
-# Precondition
-check "precondition status is spec" "$SK spec"
+# G1 — dependency frontier
+check "G1 runs goalforge-frontier.sh" "goalforge-frontier.sh"
+check "G1 hardens only a WP in hardenable[], deps verified or archived" "hardenable[]"
 
-# Delegated skill
-check "delegates to goalforge-interview" "goalforge-interview"
-check 'engine repointed to the interview plugin' 'the `interview` plugin engine'
+# G2 — deterministic lint + open questions
+check "G2 runs goalforge-preharden-lint.sh" "goalforge-preharden-lint.sh"
+check "G2 runs goalforge-open-questions-gate.sh --check" "goalforge-open-questions-gate.sh --check"
+check "unattended respondent is an agent, stamped answered_by: agent" "stamping \`answered_by:"
 
-# State transitions
-check "spec → hardened transition documented" "spec → hardened"
-check "hardened → ready transition documented" "hardened → ready"
-check "spec → hardened is automated" "automated"
-check "hardened → ready is human-gated by default" "human-gated by default"
+# G3 — review pass, bounded by stop rule
+check "G3 stop-rule script goalforge-harden-stop.sh with exit codes 0/3/2" "goalforge-harden-stop.sh <wp-dir>   # 0 run, 3 park, 2 error"
+check "G3 panel convened iff severity HIGH and register production" "iff \`severity: HIGH\`"
+check "G3 reviewers run in fresh context, consumed as DATA" "Reviewers run in fresh"
 
-# Guardrail: two doors only — human approval, or the signal-scoped rule
-check "signal-scoped auto-advance rule documented" "signal-scoped"
-check "auto-advance transitions with --mode auto" "mode auto"
-check "risk-accepted marker requires a resolving Risks row" "risk-accepted"
-check "never advance outside the two doors" "Never"
+# G4 — goal validate, changelog, hash, transition
+check "G4 runs goalforge-validate.sh --strict" "goalforge-validate.sh --strict"
+check "G4 runs goalforge-goal-changelog.sh append" "goalforge-goal-changelog.sh append"
+check "G4 runs goalforge-goal-hash.sh --record" "goalforge-goal-hash.sh --record"
+check "G4 records hash last, after the goal block validates" "record the hash last so"
 
-# Findings file
-check "findings.md written" "findings.md"
+# hardened -> ready human gate (C7)
+check "human_required is a veto an agent may set but never clear" "a **veto** over"
+check "human decides iff register production and severity HIGH" "register: production\` and \`severity: HIGH\`"
+check "auto-advance leaves signal evidence in the ledger" "advance autonomously"
 
-# Fixture
-FIXTURE="$SKILL_DIR/evals/fixtures/wp-overview.md"
-file_check "fixture wp-overview.md exists" "$FIXTURE"
-if [ -f "$FIXTURE" ]; then
-  check "fixture has $SK spec" "$SK spec" "$FIXTURE"
-fi
-
-# ── Goal-awareness (WP-04) ──────────────────────────────────────────────────
-
-# STATIC-CONTRACT: harden grills incomplete goal facets.
-# Anchor on the grilling-section phrasing specifically — NOT bare field names,
-# which also appear in the Step 2 gate-presentation list and would stay green
-# even if the grilling block were deleted (false-pass for a reward signal).
-check "grills goal-facet completeness" "Goal-facet completeness (interview targets)"
-check "grills empty/vague outcome" "is vague, empty, or not a measurable end-state"
-check "grills verification strategy" "is unset or outside"
-check "grills blocked_stop" "is empty **and** not"
-check "interview question is concrete" "When does the loop halt?"
-
-# STATIC-CONTRACT: hardened→ready gated on a validating goal block
-check "ready gate runs goal-block validation" "Goal-block validation gate"
-check "never advance ready with invalid/incomplete goal block" "caught here, at hardening, not at runtime"
-
-# ── Adversarial-verification topology (Tier-1 once / Tier-2 delta) ───────────
-check "Step 0a is the Tier-2 WP-scoped delta" "Tier-2 WP-scoped delta"
-check "consumes Tier-1 feature audit" ".tier1-audit.md"
-check "freshness guard via feature-hash" "goalforge-feature-hash.sh"
-check "stale Tier-1 → whole-feature fallback" "Fall back to a whole-feature review"
-check "reviewer tier via role wp-harden-delta" "wp-harden-delta"
-check "role-exclusive dedup contract present" "Role-exclusive dedup"
-check "panel scoped to this WP's design dissent" "this WP's design dissent"
-
-# BEHAVIORAL (via validator): a WP with an incomplete goal block (empty outcome)
-# is caught at hardening — the validator rejects it (fatal, non-zero) so
-# hardened→ready must not proceed.
-VALIDATE="$SKILL_DIR/../scripts/goalforge-validate.sh"
-BAD_FIXTURE="$SKILL_DIR/evals/fixtures/incomplete-goal"
-file_check "incomplete-goal fixture tree exists" "$BAD_FIXTURE/wp-01-incomplete-goal/overview.md"
-if [ -f "$VALIDATE" ] && [ -d "$BAD_FIXTURE" ]; then
-  # Expect NON-ZERO exit (fatal goal-block violation), even without --strict.
-  if bash "$VALIDATE" "$BAD_FIXTURE" >/dev/null 2>&1; then
-    echo "  FAIL: incomplete goal block should be rejected at hardening (validator must exit non-zero)"
-    FAIL=$((FAIL+1))
-  else
-    echo "  PASS: incomplete goal block rejected by validator (caught at hardening, not runtime)"
-    PASS=$((PASS+1))
-  fi
-fi
-
-# Frontier scheduler self-test (deterministic regression). Step 0's gate is
-# computed by goalforge-frontier.sh, and no eval harness in the package invoked
-# its `--self-test` before this block, so those cases never ran under CI.
-# COVERAGE, not a red-before-green proof: over an unmodified frontier this
-# block is green — it only earns its keep when a frontier case regresses.
-if bash "$SKILL_DIR/../scripts/goalforge-frontier.sh" --self-test >/dev/null 2>&1; then
-  echo "  PASS: goalforge-frontier.sh --self-test green"
-  PASS=$((PASS+1))
-else
-  echo "  FAIL: goalforge-frontier.sh --self-test failed"
-  FAIL=$((FAIL+1))
-fi
+# Gotchas
+check "goal edit after approval trips evolved-goal-without-reharden under --strict" "evolved-goal-without-reharden"
+check "a park is only reviewable through harden.parked + answered_by: agent stamps" "\`harden.parked\` row and the"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

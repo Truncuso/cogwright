@@ -226,8 +226,8 @@ change the human gate or any status transition):
    (prior art, libraries, the repo's own patterns). Do not invent where a known
    solution fits.
 2. **Hard-bets-first** — surface the hard-to-reverse decisions early and make
-   them explicit in the spec; when two or more such approaches compete, that is
-   the `goalforge-arbiter` trigger at harden.
+   them explicit in the spec; when two or more such approaches compete, resolve
+   the choice explicitly in the spec's `## Decisions` before handoff.
 3. **Standalone** — the spec must read on its own: a reader with no session
    context can understand the outcome, constraints, and boundaries.
 4. **Concrete-first** — prefer concrete outcomes and measurable verification over

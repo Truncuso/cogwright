@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # goalforge-smoke.sh — offline end-to-end proof that the SHIPPED state-machine
-# scripts drive a work package from `draft` to `verified`.
+# scripts drive a work package from `spec` to `verified`.
 #
 # Usage:
 #   goalforge-smoke.sh --throwaway     provision a temp git plans root, walk it,
@@ -10,20 +10,20 @@
 #                                      (single-shot; refuses on a second run)
 #
 # The driver writes a one-WP fixture feature into the plans root from the
-# heredocs below and walks its WP through the PINNED edge chain
-#   draft -> spec -> hardened -> [goal-hash --record] -> ready (--mode auto)
-#         -> executing -> [task status write] -> verified
+# heredocs below — the WP is born `spec` (C1: no WP-level `draft`) — and walks
+# its WP through the PINNED edge chain
+#   spec -> hardened -> [goal-hash --record] -> ready (--mode auto)
+#        -> executing -> implemented -> verified
 # then takes the fixture FEATURE's one legal forward edge draft -> completed, so
-# both edge tables and both classify_target branches are exercised. The on-disk
-# `status:` is read back after EVERY hop and the first mismatch fails the run.
-# A shortcut (e.g. the legal one-hop draft -> verified) is a spec violation here,
-# not a simplification.
+# both edge tables and both classify_target branches are exercised (the
+# FEATURE-level `draft` status is unaffected by wp-01 T6/T10, which retires
+# `draft` at the WP level only). The on-disk `status:` is read back after EVERY
+# hop and the first mismatch fails the run. A shortcut (e.g. the legal one-hop
+# spec -> verified) is a spec violation here, not a simplification.
 #
-# Exactly ONE non-transition frontmatter write is sanctioned: the fixture task's
-# `status: pending -> verified`, written between the `executing` and `verified`
-# hops (no shipped script transitions a task-*.md, and a verified WP needs every
-# sibling task verified). It uses the atomic tempfile + os.replace pattern of
-# goalforge-transition.sh do_write.
+# wp-01 T10: the fixture carries no task-*.md file — C1 retires the task-file
+# format; a schema-6 WP's `verified` invariant is `findings.md` exists (no
+# sibling-task check, since there are no sibling tasks).
 #
 # Exit codes:
 #   0  the WP reads `status: verified`, the ledger holds exactly one row per
@@ -51,7 +51,6 @@ VALIDATE="$SCRIPT_DIR/goalforge-validate.sh"
 
 FIXTURE_FEATURE="gf-smoke-fixture"
 FIXTURE_WP="wp-01-smoke"
-FIXTURE_TASK="task-01-smoke"
 
 usage() {
     sed -n '2,10p' "$SELF" | sed 's/^# \{0,1\}//'
@@ -132,7 +131,7 @@ FEATURE_DIR="$ROOT/$FIXTURE_FEATURE"
 WP_DIR="$FEATURE_DIR/$FIXTURE_WP"
 FEATURE_OVERVIEW="$FEATURE_DIR/overview.md"
 WP_OVERVIEW="$WP_DIR/overview.md"
-TASK_FILE="$WP_DIR/$FIXTURE_TASK.md"
+FINDINGS="$WP_DIR/findings.md"
 LEDGER="$FEATURE_DIR/.sdd-transitions.jsonl"
 TODAY="$(date +%F)"
 
@@ -165,7 +164,7 @@ EOF
 ---
 name: $FIXTURE_WP
 title: "goalforge smoke fixture work package"
-status: draft
+status: spec
 schema_version: 5
 stage_updated: $TODAY
 severity: LOW
@@ -193,19 +192,6 @@ Walk the pinned edge chain. No real work.
 ## Decisions
 
 - Fixture emitted by goalforge-smoke.sh; no pre-computed goal hash.
-EOF
-
-    cat > "$TASK_FILE" <<EOF
----
-name: $FIXTURE_TASK
-title: "goalforge smoke fixture task"
-status: pending
-verify: "true"
----
-
-# goalforge smoke fixture task
-
-checkpoint: fixture task emitted by goalforge-smoke.sh (body-level, defence-in-depth)
 EOF
 }
 
@@ -235,71 +221,31 @@ assert_status() {
     echo "goalforge-smoke: ok $3 -> $2"
 }
 
-# Write the fixture task's status atomically (tempfile + os.replace), mirroring
-# goalforge-transition.sh do_write. This is the ONE sanctioned non-transition
-# frontmatter write: no shipped script transitions a task-*.md, and validate
-# invariant 1 requires every sibling task verified under a verified WP.
-write_task_status() {
-    python3 - "$1" "$2" <<'PY'
-import sys, os, re, tempfile
-path, to = sys.argv[1], sys.argv[2]
-lines = open(path, encoding="utf-8").read().split("\n")
-if not lines or lines[0].strip() != "---":
-    sys.stderr.write("no frontmatter in %s\n" % path); sys.exit(1)
-end = None
-for i in range(1, len(lines)):
-    if lines[i].strip() == "---":
-        end = i; break
-if end is None:
-    sys.stderr.write("unterminated frontmatter in %s\n" % path); sys.exit(1)
-found = False
-for i in range(1, end):
-    if re.match(r"^status:\s*", lines[i]):
-        lines[i] = "status: %s" % to; found = True
-if not found:
-    sys.stderr.write("no status: key in %s\n" % path); sys.exit(1)
-new = "\n".join(lines)
-d = os.path.dirname(os.path.abspath(path))
-fd, tmp = tempfile.mkstemp(dir=d, suffix=".tmp")
-try:
-    with os.fdopen(fd, "w", encoding="utf-8") as f:
-        f.write(new)
-    os.replace(tmp, path)
-except Exception:
-    try: os.unlink(tmp)
-    except OSError: pass
-    raise
-PY
-}
-
 walk_chain() {
-    bash "$TRANSITION" "$WP_DIR" spec --reason "smoke: draft to spec"
-    assert_status "$WP_OVERVIEW" spec "draft->spec"
-
     bash "$TRANSITION" "$WP_DIR" hardened --reason "smoke: spec to hardened"
     assert_status "$WP_OVERVIEW" hardened "spec->hardened"
 
     # MANDATORY before ->ready: the ready gate refuses while goal_approved_version
-    # is null or != the recomputed goal-block hash, and --override has no escape
+    # is null or != the recomputed goal hash, and --override has no escape
     # on that path. The fixture therefore ships no pre-computed hash.
     bash "$GOAL_HASH" --record "$WP_DIR" >/dev/null
     assert_status "$WP_OVERVIEW" hardened "goal-hash --record (status unchanged)"
 
     # The transition also auto-creates the missing findings.md here — expected.
     bash "$TRANSITION" "$WP_DIR" ready --mode auto \
-        --reason "signal-scoped auto-advance: complexity simple, severity LOW, task_type code"
+        --reason "signal-scoped auto-advance: severity LOW, human_required unset, task_type code"
     assert_status "$WP_OVERVIEW" ready "hardened->ready"
 
     bash "$TRANSITION" "$WP_DIR" executing --reason "smoke: ready to executing"
     assert_status "$WP_OVERVIEW" executing "ready->executing"
 
-    write_task_status "$TASK_FILE" verified
-    [[ "$(read_status "$TASK_FILE")" == "verified" ]] \
-        || fail "sanctioned task-status write did not land in $TASK_FILE"
-    echo "goalforge-smoke: ok task status -> verified (sanctioned atomic write)"
+    bash "$TRANSITION" "$WP_DIR" implemented --reason "smoke: executing to implemented"
+    assert_status "$WP_OVERVIEW" implemented "executing->implemented"
 
-    bash "$TRANSITION" "$WP_DIR" verified --reason "smoke: executing to verified"
-    assert_status "$WP_OVERVIEW" verified "executing->verified"
+    [[ -f "$FINDINGS" ]] || fail "findings.md missing before ->verified (should have been created at hardened->ready): $FINDINGS"
+
+    bash "$TRANSITION" "$WP_DIR" verified --reason "smoke: implemented to verified"
+    assert_status "$WP_OVERVIEW" verified "implemented->verified"
 
     # The feature edge table's one legal forward hop — also exercises
     # classify_target's `feature` branch.
@@ -310,11 +256,11 @@ walk_chain() {
 # ── 3. Assert the end state from an authority other than our own control flow ─
 
 PINNED_EDGES=(
-    '"from": "draft", "to": "spec"'
     '"from": "spec", "to": "hardened"'
     '"from": "hardened", "to": "ready"'
     '"from": "ready", "to": "executing"'
-    '"from": "executing", "to": "verified"'
+    '"from": "executing", "to": "implemented"'
+    '"from": "implemented", "to": "verified"'
     '"from": "draft", "to": "completed"'
 )
 

@@ -24,10 +24,7 @@
 #   2. appends a JSON row to `plans/<feature>/.sdd-transitions.jsonl`
 #      (git-tracked, append-only) — each row carries an auto-filled attribution
 #      stamp {mode,actor,session,model,provider,agent,decision_ref} sourced from
-#      goalforge-attribution.sh (degrade-not-block: any failure → "unknown"),
-#   3. invokes goalforge-stamp-tables.sh (WP/Tasks STATUS cells — the P5 autostamp)
-#      and goalforge-rollup.sh (feature todo.md).
-# It NEVER writes table cells directly — that is goalforge-stamp-tables.sh's job.
+#      goalforge-attribution.sh (degrade-not-block: any failure → "unknown").
 #
 # `--from` is an optimistic-lock assertion: when given it must equal the on-disk
 # status, else the transition is rejected (non-zero). The `.sdd-transitions.lock`
@@ -37,8 +34,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 STATE_MACHINE="$SCRIPT_DIR/../references/state-machine.md"
-STAMP="$SCRIPT_DIR/goalforge-stamp-tables.sh"
-ROLLUP="$SCRIPT_DIR/goalforge-rollup.sh"
 VALIDATE="$SCRIPT_DIR/goalforge-validate.sh"
 ATTRIB="$SCRIPT_DIR/goalforge-attribution.sh"
 # The validating trace emitter (wp-14). Overridable so the zero-breakage eval
@@ -492,14 +487,15 @@ transition() {
     fi
     [[ -z "$ACTOR" ]] && ACTOR="auto"
 
-    # Critical section: write → ledger → stamp → rollup, serialized per feature.
+    # Critical section: write → ledger, serialized per feature. (T6/C6: the
+    # rollup call this section used to make here is retired — goalforge-rollup.sh
+    # writes nothing, so calling it here discarded its only output. wp-01 round
+    # 2, gate B new finding.)
     exec 9>"$LOCKFILE"
     flock 9
     do_write "$OVERVIEW" "$TO" "$TODAY" "$LEDGER" "$WP_NAME" "$FROM" \
              "$REASON" "$ACTOR" "$OVERRIDE" "$COMMIT" "$TS" \
              "$SESSION" "$MODEL" "$PROVIDER" "$AGENT" "$MODE" "$DECISION_REF"
-    bash "$STAMP" "$FEATURE_DIR" >/dev/null
-    bash "$ROLLUP" "$FEATURE_DIR" >/dev/null
     flock -u 9
     exec 9>&-
 

@@ -9,36 +9,42 @@ is legal.
 
 ## Policy (FREE-REVERSE)
 
-WP states are linearly ordered:
+WP states are linearly ordered (C2, wp-01 T6/T10 — a WP is born `spec`, there
+is no WP-level `draft`; `implemented`/`abandoned` are new):
 
 | state | order |
 |---|---|
-| draft | 0 |
-| spec | 1 |
-| hardened | 2 |
-| ready | 3 |
-| executing | 4 |
+| spec | 0 |
+| hardened | 1 |
+| ready | 2 |
+| executing | 3 |
+| implemented | 4 |
 | verified | 5 |
+
+A schema-5 WP still carrying the legacy `draft` status is read-only
+compatible: it sorts before `spec` (order -1) for any script that must order
+it, but no goalforge script writes `draft` to a WP going forward.
 
 - **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no`.
 - **Reverse** edge (`order(to) < order(from)`, e.g. `verified→spec`,
-  `verified→draft`, `ready→spec`): legal, `reason_required: yes`. Every
+  `ready→spec`): legal, `reason_required: yes`. Every
   later→earlier edge is sanctioned — the `goalforge-validate.sh` integrity invariants
-  and the WP/task monotonicity check are the guardrails, not a hand-curated
+  and the WP monotonicity check are the guardrails, not a hand-curated
   reverse subset.
-- **Human-gated**: `draft→ready` (feature gate) and `hardened→ready` (WP gate)
-  carry `human_gated: yes`. The gate is enforced by the calling skill (it must
-  obtain human approval before invoking the mechanism); the mechanism only
-  records it. `human_gated` does not change edge legality or `reason_required`.
+- **Human-gated**: `hardened→ready` (WP gate) carries `human_gated: yes`. The
+  gate is enforced by the calling skill (it must obtain human approval before
+  invoking the mechanism); the mechanism only records it. `human_gated` does
+  not change edge legality or `reason_required`. A WP whose frontmatter sets
+  `human_required:` is never auto-advanced regardless of signal (C7).
 - **Signal-scoped auto-advance exception (`hardened→ready` only).** The calling
-  skill may advance `hardened→ready` WITHOUT human approval **iff** all three
-  hold: complexity verdict `simple` (zero S1–S5 tripped, per
-  `goalforge-wp-complexity.sh`), `severity ≤ MEDIUM`, and `task_type ≠ migration`.
-  The transition MUST be written with `--mode auto` and a `--reason` naming the
-  rule + signal evidence — the ledger row is the audit record. Any tripped
-  signal, HIGH/CRITICAL severity, or migration WP keeps the human gate. The
-  feature `draft→ready` gate has NO auto-advance exception. *(Deliberate
-  guardrail change — ADR: adaptive-chain-routing.)*
+  skill may advance `hardened→ready` WITHOUT human approval **iff** all hold:
+  `severity ≤ MEDIUM`, `human_required:` is unset, and — where a `task_type`
+  is declared — `task_type ≠ migration`. The transition MUST be written with
+  `--mode auto` and a `--reason` naming the rule + signal evidence — the
+  ledger row is the audit record. HIGH/CRITICAL severity, a set
+  `human_required:`, or a migration `task_type` keeps the human gate.
+  *(Deliberate guardrail change — ADR: adaptive-chain-routing; narrowed at
+  wp-01 T6 with the complexity-route removal.)*
 - **Evidence-gated revert exception (`ready→hardened` only).** This one reverse
   edge — re-opening a `ready` WP back to `hardened` to re-develop its goals — is
   NOT a bare FREE-REVERSE move. The edge row stays legal
@@ -58,49 +64,50 @@ WP states are linearly ordered:
   signal-scoped auto-advance) as before. *(Evidence MANDATORY on `ready→hardened`
   — ledgered decision; ADR: prototype-native-goalforge re-harden edge.)*
 
-For a WP, `archived` is a terminal state reached only by an explicit out-of-band
-edit: it is intentionally **not** an edge target here, so the transition mechanism
-never moves a WP to/from `archived`, and no goalforge script writes it either —
-`goalforge-archive` flips FEATURE overviews only (`set_field('status','archived')`
-is invoked on the feature overview and, under `--supersedes`, the superseded
-feature's overview; never on a `wp-*/overview.md`). It **is**
-dep-satisfying: `goalforge-frontier.sh` and `goalforge-validate.sh` treat an
-`archived` dep exactly as `verified` when resolving a sibling's `depends_on`.
+For a WP, `abandoned` and `archived` are terminal states reached only by an
+explicit out-of-band edit: they are intentionally **not** edge targets here,
+so the transition mechanism never moves a WP to/from either, and no goalforge
+script writes them either — `goalforge-archive` flips FEATURE overviews only
+(`set_field('status','archived')` is invoked on the feature overview and,
+under `--supersedes`, the superseded feature's overview; never on a
+`wp-*/overview.md`). Both **are** dep-satisfying: `goalforge-frontier.sh` and
+`goalforge-validate.sh` treat an `abandoned`/`archived` dep exactly as
+`verified` when resolving a sibling's `depends_on`.
 
 ## Edges
 
 | from | to | reason_required | human_gated |
 |---|---|---|---|
-| draft | spec | no | no |
-| draft | hardened | no | no |
-| draft | ready | no | yes |
-| draft | executing | no | no |
-| draft | verified | no | no |
-| spec | draft | yes | no |
 | spec | hardened | no | no |
 | spec | ready | no | no |
 | spec | executing | no | no |
+| spec | implemented | no | no |
 | spec | verified | no | no |
-| hardened | draft | yes | no |
 | hardened | spec | yes | no |
 | hardened | ready | no | yes |
 | hardened | executing | no | no |
+| hardened | implemented | no | no |
 | hardened | verified | no | no |
-| ready | draft | yes | no |
 | ready | spec | yes | no |
 | ready | hardened | yes | no |
 | ready | executing | no | no |
+| ready | implemented | no | no |
 | ready | verified | no | no |
-| executing | draft | yes | no |
 | executing | spec | yes | no |
 | executing | hardened | yes | no |
 | executing | ready | yes | no |
+| executing | implemented | no | no |
 | executing | verified | no | no |
-| verified | draft | yes | no |
+| implemented | spec | yes | no |
+| implemented | hardened | yes | no |
+| implemented | ready | yes | no |
+| implemented | executing | yes | no |
+| implemented | verified | no | no |
 | verified | spec | yes | no |
 | verified | hardened | yes | no |
 | verified | ready | yes | no |
 | verified | executing | yes | no |
+| verified | implemented | yes | no |
 
 ## Reverse-edge note
 

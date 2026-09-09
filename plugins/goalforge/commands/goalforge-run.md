@@ -1,15 +1,17 @@
 ---
-description: "Drive the whole goalforge SDD chain end-to-end via the goalforge-run orchestrator — route-aware over the canonical enum fast|standard|wave, resumes mid-chain from the current status:, and supports --dry-run. Use when the chain should run end-to-end rather than one stage at a time."
+description: "Drive the whole goalforge chain end-to-end via the goalforge-run driver — capture, spec, decompose, harden, execute, verify — entering the one step the target status admits, resuming mid-chain, with --dry-run support. Use when the chain should run end-to-end rather than one stage at a time."
 argument-hint: "[<feature-or-wp-slug>] [--dry-run]"
 ---
 
 # /goalforge-run
 
-> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
-> directory holding this command file. On a direct, non-plugin load the
-> variable is unset; resolve it that way.
+> `${CLAUDE_PLUGIN_ROOT}` is the installed plugin root (`plugins/goalforge/`),
+> where each child skill lives at `skills/<child>/SKILL.md`. The variable is
+> unset on a direct load from the source package — there read
+> `packages/goalforge/<child>/SKILL.md` (the source package has no `skills/`
+> directory; `scripts/goalforge-generate.sh` adds it when generating the plugin).
 
-The PUBLIC pin for `goalforge-run`. The orchestrator is a PRIVATE nested child:
+The PUBLIC pin for `goalforge-run`. The driver is a PRIVATE nested child:
 discovery is one level deep, so `Skill(skill: "goalforge-run")` answers "Unknown
 skill" — do not retry that call. This command is its only entry.
 

@@ -213,11 +213,9 @@ ceremony is skipped. After Step 5:
    The WP is born `status: spec`, `goal.outcome`/`goal.verification` from the
    capture intent. If either cannot be written measurably, the goal was not small
    — **re-route to `standard`** (flip `route:` with a note) and hand off to `goalforge-spec`.
-2. **Gate deterministically** (all three, typed DATA):
+2. **Gate deterministically** (both, typed DATA):
    - `goalforge-validate.sh` — WP goal-block integrity (fatal on malformed);
-   - `hooks/goalforge-open-questions-gate.sh --check <wp>/overview.md` — must print `0`;
-   - `goalforge-wp-complexity.sh <wp>` — verdict `simple`, AND `severity ≤ MEDIUM`, AND
-     `task_type ≠ migration` (the signal-scoped rule, state-machine.md §Policy).
+   - `hooks/goalforge-open-questions-gate.sh --check <wp>/overview.md` — must print `0`.
 3. **Record the goal hash** — BEFORE the `--mode auto` advance below. The fast WP
    is born `goal_approved_version: null` (`goalforge-decompose --add-wp`), and wp-01's
    `→ready` gate refuses any WP whose goal hash is unrecorded. The fast path's
@@ -231,12 +229,11 @@ ceremony is skipped. After Step 5:
    conditions are the policy guard on taking it autonomously):
    ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp> ready \
-     --mode auto --reason "fast-path: route=fast, verdict=simple, OQ=0, goal validates"
+     --mode auto --reason "fast-path: route=fast, OQ=0, goal validates"
    ```
-5. **Escalate on any trip.** A failed gate, `complex` verdict, HIGH/CRITICAL
-   severity, or migration `task_type` means fast was wrong: leave the WP at
-   `spec` and run full `goalforge-harden` (Tier-2 review + interview + human gate).
-   Never force a tripped WP through.
+5. **Escalate on any trip.** A failed gate, or HIGH/CRITICAL severity means fast
+   was wrong: leave the WP at `spec` and run full `goalforge-harden` (review +
+   human gate). Never force a tripped WP through.
 6. **Execute + verify unchanged:** `goalforge-execute` then `goalforge-verify` — every path
    ends at the single semantic gate; fast never skips verification.
 

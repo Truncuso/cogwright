@@ -34,22 +34,11 @@
 #   task-dep-pending-errors        Negative control for the TASK gate: a task at
 #                                  `in-progress` whose dep task is `pending`
 #                                  MUST still raise its task dep ERROR.
-#   commit-exempt-accepted         A verified task with an empty `commit:` and a
-#                                  prose `commit_exempt:` passes --require-commit
-#                                  (exit 0) AND the reason is printed as a WARN.
-#                                  Asserted POSITIVELY on both legs: an exit-0-only
-#                                  check would also pass if the exemption silently
-#                                  swallowed the line, which is the thing this
-#                                  mechanism must never do.
-#   commit-missing-still-errors    Negative control, the load-bearing one: the SAME
-#                                  fixture with the marker removed MUST still raise
-#                                  the missing-commit ERROR under --require-commit.
-#                                  The gate was given a channel, not removed.
-#   commit-exempt-empty-errors     Fail-closed control: `commit_exempt: ""` is not a
-#                                  reason — the ERROR stands.
-#   commit-exempt-with-hash-errors Contradiction control: a task carrying BOTH a real
-#                                  `commit:` and a `commit_exempt:` is an ERROR; the
-#                                  marker cannot be decoration on a committed task.
+#
+# wp-01 T10: the commit-gate exemption cases (commit-exempt-accepted,
+# commit-missing-still-errors, commit-exempt-empty-errors,
+# commit-exempt-with-hash-errors) are retired along with the validator's
+# `commit_exempt:` leg — schema-6 has no per-task `commit:` field.
 set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -190,85 +179,65 @@ else
     bad "task-dep-pending-errors: TASK gate still fires"
 fi
 
-# ── Commit-gate exemption fixtures ──────────────────────────────────────────
-# mktask() writes no commit-related keys, so these cases need their own writer.
-# The body carries a `checkpoint:` line to satisfy the unrelated executing-WP
-# evidence invariant, keeping each assertion specific to the commit gate.
-mkvtask() { # $1=plans-root $2=feature $3=wp-slug $4=task $5=commit $6=commit_exempt
-    {
-        echo "---"
-        echo "name: $4"
-        echo "title: $4"
-        echo "status: verified"
-        echo "depends_on: []"
-        echo "commit: \"$5\""
-        [ -n "${6:-}" ] && echo "commit_exempt: $6"
-        echo "---"
-        echo
-        echo "# $4"
-        echo
-        echo "checkpoint: 2026-08-08 fixture"
-    } > "$1/$2/$3/$4.md"
+# wp-01 T10: the commit-gate exemption fixtures (commit-exempt-accepted,
+# commit-missing-still-errors, commit-exempt-empty-errors,
+# commit-exempt-with-hash-errors) are retired along with goalforge-validate.sh's
+# `commit_exempt:`/missing-`commit:` enforcement — schema-6 has no per-task
+# `commit:` field to gate on (C1: no task-NN-*.md files).
+
+# ── ticket-74 sabotage pair: schema_version:6 verification.command gate ─────
+# known-bad: schema_version:6 WP with a goal: block but NO verification.command
+# -> ERROR, --strict exit non-zero. known-good: same WP WITH verification.command
+# -> --strict exit 0.
+mkschema6wp() { # $1=plans-root $2=feature $3=wp-slug $4=command-line (or "")
+    mkdir -p "$1/$2/$3"
+    cat > "$1/$2/$3/overview.md" <<EOF
+---
+name: $3
+title: $3
+status: hardened
+stage_updated: 2026-08-03
+severity: LOW
+parallel: false
+depends_on: []
+plan: $2
+schema_version: 6
+task_type: code
+goal:
+  outcome: "the thing is done"
+  verification:
+    strategy: deterministic
+    check: "true"
+$4
+  constraints: []
+  boundaries: []
+  iteration_policy: "retry until green"
+  blocked_stop: "halt after 3 tries"
+inherits_from: null
+goal_approved_version: null
+relationships: []
+sources: []
+---
+
+# $3
+EOF
 }
 
-mkcommitfixture() { # $1=root $2=commit $3=commit_exempt
-    mkfeature "$1" feat
-    mkwp "$1" feat wp-01-a executing "[]"
-    mkvtask "$1" feat wp-01-a task-01-x "$2" "${3:-}"
-}
-
-# assert on BOTH the emitted diagnostics and the real exit status.
-run_require_commit() { # $1=root → echoes --show output; sets RC
-    OUT="$(bash "$VALIDATE" --strict --require-commit --show "$1" 2>&1)"
-    bash "$VALIDATE" --strict --require-commit "$1" >/dev/null 2>&1; RC=$?
-}
-
-# ── Case: commit-exempt-accepted ────────────────────────────────────────────
-CE="$ROOT/commit-exempt"
-REASON='"deliverable is written outside this repo (base-system-map ticket-10)"'
-mkcommitfixture "$CE" "" "$REASON"
-run_require_commit "$CE"
-if [ "$RC" -eq 0 ] \
-   && echo "$OUT" | grep -q 'EXEMPT: deliverable is written outside this repo' \
-   && ! echo "$OUT" | grep -q '^ERROR'; then
-    ok "commit-exempt-accepted: --require-commit exits 0 and prints the reason"
+# known-bad: no verification.command on a schema_version:6 WP
+BAD6="$ROOT/schema6-missing-command"; mkfeature "$BAD6" feat
+mkschema6wp "$BAD6" feat wp-01-a ""
+OUT="$(bash "$VALIDATE" --strict --show "$BAD6" 2>&1)"; RC=$?
+if [ "$RC" -ne 0 ] && echo "$OUT" | grep -q 'goal.verification.command.*missing'; then
+    ok "schema6-missing-command: known-bad -- ERROR + --strict exit non-zero"
 else
-    bad "commit-exempt-accepted: --require-commit exits 0 and prints the reason (rc=$RC)"
-    echo "${OUT:-<no output — validator did not run>}" | sed 's/^/        /'
+    bad "schema6-missing-command: known-bad -- ERROR + --strict exit non-zero (rc=$RC)"
+    echo "${OUT:-<no output>}" | sed 's/^/        /'
 fi
 
-# ── Case: commit-missing-still-errors (negative control) ────────────────────
-CM="$ROOT/commit-missing"
-mkcommitfixture "$CM" "" ""
-run_require_commit "$CM"
-if [ "$RC" -ne 0 ] && echo "$OUT" | grep -q 'verified task missing `commit:`'; then
-    ok "commit-missing-still-errors: un-exempted missing hash still ERRORs"
-else
-    bad "commit-missing-still-errors: un-exempted missing hash still ERRORs (rc=$RC)"
-    echo "${OUT:-<no output — validator did not run>}" | sed 's/^/        /'
-fi
-
-# ── Case: commit-exempt-empty-errors (fail-closed control) ──────────────────
-CX="$ROOT/commit-exempt-empty"
-mkcommitfixture "$CX" "" '""'
-run_require_commit "$CX"
-if [ "$RC" -ne 0 ] && echo "$OUT" | grep -q '^ERROR'; then
-    ok "commit-exempt-empty-errors: an empty reason does not exempt"
-else
-    bad "commit-exempt-empty-errors: an empty reason does not exempt (rc=$RC)"
-    echo "${OUT:-<no output — validator did not run>}" | sed 's/^/        /'
-fi
-
-# ── Case: commit-exempt-with-hash-errors (contradiction control) ────────────
-CH="$ROOT/commit-exempt-hash"
-mkcommitfixture "$CH" "1f24c09b4aacc4cb81fd2546543da1694ace92a4" '"outside repo"'
-run_require_commit "$CH"
-if [ "$RC" -ne 0 ] && echo "$OUT" | grep -q 'AND carries a `commit:` hash'; then
-    ok "commit-exempt-with-hash-errors: marker + hash is a contradiction ERROR"
-else
-    bad "commit-exempt-with-hash-errors: marker + hash is a contradiction ERROR (rc=$RC)"
-    echo "${OUT:-<no output — validator did not run>}" | sed 's/^/        /'
-fi
+# known-good: verification.command present on a schema_version:6 WP
+GOOD6="$ROOT/schema6-with-command"; mkfeature "$GOOD6" feat
+mkschema6wp "$GOOD6" feat wp-01-a "    command: \"true\""
+assert_clean "schema6-with-command: known-good -- validates clean, --strict exit 0" "$GOOD6"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

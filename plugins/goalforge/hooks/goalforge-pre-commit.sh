@@ -146,8 +146,7 @@ _goalforge_pre_commit_main() {
             [[ -n "${first_err:-}" ]] && echo "  $first_err"
         done
         echo ""
-        echo "  Fix: goalforge-rollup.sh <feature-dir>          — regenerate status tables"
-        echo "       goalforge-validate.sh --strict <feature-dir>  — show all errors"
+        echo "  Fix: goalforge-validate.sh --strict <feature-dir>  — show all errors"
     } >&2
     exit 1
 }

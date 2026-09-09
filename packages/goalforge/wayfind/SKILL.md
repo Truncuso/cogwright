@@ -241,7 +241,7 @@ first: a row there replaces the **full row below** for that `ticket_type`.
 | ticket_type | mode | Machinery | Model / effort |
 |---|---|---|---|
 | research | AFK | dispatched `research-analyst` → web+docs sweep → `findings/` summary, consumed as DATA | opus / medium (pure scan legs → sonnet / low) |
-| grilling | HITL | `interview` plugin engine, `preset: wayfind-probe`, in the **main session** (`goalforge-interview` is harden-only) — **(default type)** | not dispatched |
+| grilling | HITL | `interview` plugin engine, `preset: wayfind-probe`, in the **main session** — **(default type)** | not dispatched |
 | prototype | HITL | `prototype` skill in a worktree (owns its own branches + dispatch) | opus / medium (delegated) |
 | task | AFK default | agent-driven `implement` dispatch (or human checklist) | mechanical → haiku / low; standard → opus / low |
 | learning | HITL | `interview` plugin `preset: teach-back` in the **main session** — optional dispatched material-gathering leg | main session (material legs: sonnet / low) |

@@ -80,15 +80,21 @@ else
   FAIL=$((FAIL+1))
 fi
 
-# chain.yaml: route awareness — routing keys present
-check_yaml "spec step is standard-route only (when_route: standard)" "when_route: standard"
-check_yaml "decompose declares the fast_route add-wp override" "mode: add-wp"
+# chain.yaml: goalforge/harden and goalforge/spec are human_gated (2 steps)
+HUMAN_GATED_COUNT=$(grep -c "human_gated: true" "$CHAIN_YAML" || true)
+if [ "$HUMAN_GATED_COUNT" -eq 2 ]; then
+  echo "  PASS [YAML-STRUCTURE]: exactly 2 human_gated: true steps (spec, harden)"
+  PASS=$((PASS+1))
+else
+  echo "  FAIL [YAML-STRUCTURE]: expected 2 human_gated: true steps, found $HUMAN_GATED_COUNT"
+  FAIL=$((FAIL+1))
+fi
 
-# chain.yaml: goalforge/harden is human_gated
-check_yaml "goalforge/harden step is human_gated: true" "human_gated: true"
+# chain.yaml: loop-back step to goalforge-redecompose is re-entrant, not linear
+check_yaml "redecompose step documented as re-entrant loop-back" "Loop-back (re-entrant)"
 
 # chain.yaml: precondition status values are valid schema stages
-VALID_STAGES="draft spec hardened ready executing verified archived"
+VALID_STAGES="draft spec hardened ready executing implemented verified archived"
 # Extract all status: values from chain preconditions
 PRECOND_STATUSES=$(grep -A2 "precondition:" "$CHAIN_YAML" | grep "status:" | awk '{print $2}')
 for status in $PRECOND_STATUSES; do
@@ -123,78 +129,21 @@ else
   echo "  FAIL [STATIC-CONTRACT]: SKILL.md documents --dry-run semantics"
   FAIL=$((FAIL+1))
 fi
-check_contract "SKILL.md documents status machine" "draft → spec → hardened → ready → executing → verified"
+check_contract "SKILL.md description documents the chain order" "capture → spec → decompose → harden → execute → verify"
 check_contract "SKILL.md name declared" "name: goalforge-run"
 
-# STATIC-CONTRACT: entry command routing documented
-check_contract "entry command /spec documented" "/spec"
-check_contract "entry command /plan documented" "/plan"
-check_contract "entry command /implement documented" "/implement"
-check_contract "entry command /verify documented" "/verify"
+# STATIC-CONTRACT: status-driven routing table documented (per-status entry)
+check_contract "routing table: draft feature enters spec" "| \`draft\` | feature | spec |"
+check_contract "routing table: spec WP enters harden" "| \`spec\` | WP | harden |"
+check_contract "routing table: implemented WP enters verify" "| \`implemented\` | WP | verify |"
+check_contract "hardened → ready gate documented as human" "human at \`hardened → ready\`"
 
-# ── ROUTE-ENUM: the documented enum is DERIVED from goalforge-route.sh ───────
-# goalforge-route.sh is the only thing that emits a route value, so it — not a
-# list typed into this harness — defines the enum. The probe set is lifted from
-# the classifier's own accepted-value alternation (canonical plus whatever
-# retired vocabulary it still normalizes on read); pinning each probe and
-# collecting what it echoes back yields the emitted set, which is strictly the
-# canonical enum.
+# ROUTE-ENUM (wp-01-slim-core): the slim run/SKILL.md dropped route-based
+# branching — chain.yaml is now one linear list and the routing table keys
+# entirely off on-disk `status:` (checked above). goalforge-route.sh may still
+# exist for other callers, but run/SKILL.md no longer documents a canonical
+# route enum, so there is nothing here for this harness to cross-check.
 PKG_ROOT="$(cd "$SKILL_DIR/.." && pwd)"
-ROUTE_SH="$PKG_ROOT/scripts/goalforge-route.sh"
-PROBE_VALUES="$(grep -E '\^route:' "$ROUTE_SH" | head -1 \
-  | grep -oE '\(([a-z-]+\|)+[a-z-]+\)' | tr -d '()' | tr '|' ' ' || true)"
-if [ -z "$PROBE_VALUES" ]; then
-  echo "  FAIL [ROUTE-ENUM]: could not lift the accepted-route alternation from $ROUTE_SH"
-  FAIL=$((FAIL+1))
-fi
-PROBE_DIR="$(mktemp -d)"
-trap 'rm -rf "$PROBE_DIR"' EXIT
-
-EMITTED=""
-for v in $PROBE_VALUES; do
-  printf -- '---\nroute: %s\n---\n## Goal\n\nenum probe\n' "$v" > "$PROBE_DIR/overview.md"
-  emitted_v="$(bash "$ROUTE_SH" "$PROBE_DIR/overview.md" 2>/dev/null \
-    | grep -o '"route": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
-  if [ -n "$emitted_v" ]; then
-    EMITTED="$(printf '%s\n%s' "$EMITTED" "$emitted_v")"
-  fi
-done
-EMITTED_SET="$(printf '%s\n' "$EMITTED" | grep -v '^$' | sort -u | tr '\n' ' ' | sed 's/ *$//')"
-
-# ROUTE-ENUM 1: run/SKILL.md's canonical-enum line lists exactly the emitted set
-DOC_SET="$(grep -o 'canonical enum `[^`]*`' "$SKILL_MD" | head -1 \
-  | sed 's/.*`\(.*\)`.*/\1/' | tr '|' '\n' | tr -d ' ' | grep -v '^$' \
-  | sort -u | tr '\n' ' ' | sed 's/ *$//')"
-if [ -n "$EMITTED_SET" ] && [ "$DOC_SET" = "$EMITTED_SET" ]; then
-  echo "  PASS [ROUTE-ENUM]: SKILL.md canonical enum == goalforge-route.sh emitted set ($EMITTED_SET)"
-  PASS=$((PASS+1))
-else
-  echo "  FAIL [ROUTE-ENUM]: SKILL.md canonical enum != goalforge-route.sh emitted set"
-  echo "        emitted:   '$EMITTED_SET'"
-  echo "        documented:'$DOC_SET'"
-  FAIL=$((FAIL+1))
-fi
-
-# ROUTE-ENUM 2: no retired route word (a probe value the classifier never emits)
-# survives as a standalone word on a route-bearing line in run/ or commands/.
-# The word boundary excludes '-' so an identifier like `captured-full-chain` is
-# a name, not a route value.
-STRAY_LINES=""
-for v in $PROBE_VALUES; do
-  case " $EMITTED_SET " in *" $v "*) continue ;; esac
-  hits="$(grep -rniE "route" "$SKILL_DIR" "$PKG_ROOT/commands" \
-    | grep -E "(^|[^A-Za-z0-9_-])${v}([^A-Za-z0-9_-]|$)" || true)"
-  [ -n "$hits" ] && STRAY_LINES="$(printf '%s\n%s' "$STRAY_LINES" "$hits")"
-done
-STRAY_LINES="$(printf '%s\n' "$STRAY_LINES" | grep -v '^$' || true)"
-if [ -z "$STRAY_LINES" ]; then
-  echo "  PASS [ROUTE-ENUM]: no retired route vocabulary in run/ or commands/"
-  PASS=$((PASS+1))
-else
-  echo "  FAIL [ROUTE-ENUM]: retired route vocabulary still present:"
-  printf '%s\n' "$STRAY_LINES" | sed 's/^/        /'
-  FAIL=$((FAIL+1))
-fi
 
 # ── WRAPPER: goalforge-run is PUBLIC-PINNED and its dry-run gate resolves ────
 # Doctrine item 7 (S28/S46): the orchestrator is named in every command and in

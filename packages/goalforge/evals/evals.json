@@ -19,7 +19,7 @@
       "id": 3,
       "should_trigger": true,
       "prompt": "plans/payments-refund/wp-02/overview.md exists and I can't tell whether goalforge-harden or goalforge-execute is the right call on it. Route me, and say what each one does to the WP status.",
-      "expected_output": "Routes by the WP's status field: goalforge-harden takes a WP at status spec, grills the goal block via goalforge-interview, and stops at the human-gated hardened→ready transition; goalforge-execute takes a WP already at status ready and runs the implementation sub-cycle. The answer must state the status precondition of each, which only this package declares.",
+      "expected_output": "Routes by the WP's status field: goalforge-harden takes a WP at status spec, reviews the goal block, and stops at the human-gated hardened→ready transition; goalforge-execute takes a WP already at status ready and runs the implementation sub-cycle. The answer must state the status precondition of each, which only this package declares.",
       "files": []
     },
     {

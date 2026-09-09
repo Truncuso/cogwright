@@ -1,79 +1,56 @@
-# goalforge-execute — Dispatch resolution detail (Step 4)
+# goalforge-execute — Dispatch resolution detail
 
-Full detail behind Step 4's `pick_agent` call. Consulted when a dispatch does
-not resolve cleanly or a non-code / writing WP needs its specialist route.
-
-## Injected callables
-
-- `discover`: a `general-purpose` Sonnet 4.6 subagent. Prompt: "Which specialist
-  fits this task? Return one of {known_list} or `none`. Also estimate complexity
-  low|medium|high." Pass the task spec and touched-file list as context.
-- `ollama_health`: the `ollama-dispatch` health check — returns `True` when
-  `http://localhost:11434` is reachable.
+Behind the `goalforge-pick-agent.py --task <wp>/overview.md --role implement`
+call in `SKILL.md` §3. Consulted when a dispatch does not resolve cleanly, or
+when a non-code WP needs its specialist route.
 
 ## Resolution order (enforced by the module)
 
-1. `by_tag` match on task `tags` → specialist from `specialist-map.yaml`.
-2. `by_task_type` match on the WP/task `task_type` → specialist (non-code
-   routes: `research → research-analyst`, `ops → devops-engineer`, …). Pass the
-   WP's `task_type` to `pick_agent` so a non-code WP dispatches to its
-   specialist. A `code` WP has no `by_task_type` entry and falls through to
-   `by_extension` — the code path is unchanged. **`writing` is kind-dependent:**
-   it resolves via a second-level `by_writing_kind` map keyed on the WP's
-   `writing_kind` tag (`scientific → scientific-literature-researcher`,
-   `research → research-analyst`, `docs → doc-updater`); an untagged writing WP
-   falls through to discovery/escalation so a human (or the dispatching agent)
-   picks the kind. Some targets are skills rather than subagents — dispatch a
-   skill-invoking agent (general-purpose / other-model per the work-packages
-   plan) for those.
-3. `by_extension` match on touched file extensions → specialist.
-4. `discover` callable → specialist or `"none"`.
-5. If `"none"` → `EscalationRequired`; surface via `AskUserQuestion`.
-   **No silent hard default.**
+1. `by_tag` on the WP's `tags:` → specialist from `references/specialist-map.yaml`.
+2. `by_task_type` on `task_type:` (`research → research-analyst`,
+   `ops → devops-engineer`, `docs → doc-updater`). A `code` WP has no entry and
+   falls through to `by_extension`.
+3. `by_extension` on the extensions in `owned_files:`.
+4. The `discover` callable — a `general-purpose` sonnet subagent that names the
+   fitting specialist from the known list, or `none`.
+5. `none` → `EscalationRequired`, surfaced via `AskUserQuestion`. **No silent
+   hard default.**
 
-The evaluator **strategy** is resolved separately by the WP-02 router
-(`default_strategy_for(task_type)` in `goalforge-goal-eval.py`) — `pick_agent` selects
-the *specialist*, never the strategy. There is one task_type→strategy map and it
-lives in the router.
+`pick_agent` selects the *specialist*. The verification strategy comes from the
+WP's own `goal.verification.strategy` and is never inferred here.
 
-## Model tier + effort
+## Model + effort
 
-Resolved from the **canonical role→tier map** (single source of truth —
-`goalforge/scripts/goalforge-pick-agent.py`, `resolve_role_tier`). The `implement` role is
-**complexity-driven**, so the discovery callable supplies the `complexity`
-estimate when frontmatter omits it; **blast radius**
-(auth/schema/migration/exported-API/3+ files) deterministically forces the high
-tier. **No silent fallback** — missing complexity with no estimate, or an unknown
-role/profile, raises `EscalationRequired`. Other dispatched roles (`wp-verify`,
-`simplify`, `judge`, `feature-audit`, …) resolve their tier from the same map
-under the active autonomy profile (`autonomous-minimal` | `semi-autonomous`).
+Resolved from the canonical role→tier map (`ROLE_TIER` in
+`scripts/goalforge-pick-agent.py`; human-readable projection in
+`references/tier-map.md`), then instantiated: `low → sonnet@low`,
+`medium → opus@low`, `high → opus@high`. Blast radius (auth, schema, migration,
+exported symbol, owned_files > 8) deterministically forces the `high` tier for
+every role EXCEPT `implement` — a sensitive change is never silently
+downgraded. `implement` is register-driven, not complexity-driven (wp-01/T17
+dropped the per-task `complexity` input entirely): `register: spike` →
+`low`; `register: production` → `sonnet@medium`, escalating to `opus@low`
+(never `opus@high`) on `severity: HIGH` or blast radius, matching the Dispatch
+Routing Matrix's "build ... blast radius → opus/low". An unknown role or
+profile raises `EscalationRequired`; there is no silent fallback. Every brief
+states model AND effort explicitly, never the agent `.md` frontmatter default.
 
-Every dispatch brief states **model + effort explicitly** — resolve the tier,
-then instantiate it via `tier_to_dispatch` (or `resolve_dispatch` role-side):
-`low → sonnet@low`, `medium → opus@low`, `high → opus@high`. Never leave model or
-effort to the agent's `.md` frontmatter defaults. Pure-mechanical routes (`by_tag
-mechanical → __ollama__`) stay on haiku/ollama and never reach this map; blast
-radius forces `high` (→ opus@high).
+## Dispatch surface
 
-## Dispatch surface (Anthropic in-session)
-
-Pick the surface by which knobs it exposes (Dispatch Routing Matrix,
+Pick by which knobs the surface exposes (Dispatch Routing Matrix,
 `references/rules/performance.md`):
 
-- **Agent tool** — the default for a single subagent or a small wave. Sets
-  `model` per agent; **effort inherits the session**, so it is correct only when
-  the resolved effort equals the session effort (`/effort`) — otherwise switch
-  surface, don't dispatch at the wrong effort.
-- **Workflow tool** — the only surface with a **per-agent effort knob**
-  (`opts.model` + `opts.effort`). Prefer it when a wave mixes efforts (e.g.
-  grouped `opus@low` implementers + an `opus@high` verify stage) or for a
-  pipeline-shaped fan-out over many tasks/groups.
-- **Headless CLI / leaf** — cross-provider routes only (`ollama`, DeepSeek):
-  `--model` + settings per the leaf contract.
+- **Agent tool** — one subagent or a small batch. Sets `model` per agent;
+  **effort inherits the session**, so it is correct only when the resolved
+  effort equals the session effort.
+- **Workflow tool** — the only surface with a per-agent effort knob
+  (`opts.model` + `opts.effort`). Use it when a batch mixes efforts.
+- **Headless CLI** — cross-provider routes only; `--model` plus settings per the
+  provider leaf contract. Foreign and local providers are propose-only.
 
 ## Route + map proposals
 
-- **Route:** `api` (default) or `ollama`. Ollama requires a passing health
-  check; failure raises `EscalationRequired` — no silent API fallback.
-- If `proposed_map_entry` is present in the result, append it to `findings.md`
-  for human review (do not auto-merge into `specialist-map.yaml`).
+The dispatch route is `api` (default) or `ollama`; `ollama` requires a passing
+health check and a failure raises `EscalationRequired` — no silent API fallback. A
+`proposed_map_entry` in the result is appended to `<wp>/findings.md` for human
+review, never auto-merged into `specialist-map.yaml`.

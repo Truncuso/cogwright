@@ -1,0 +1,2 @@
+{"seq":0,"ts":"2026-09-09T09:00:00Z","type":"gate.result","schema_version":1,"wp":"wp-01-slim-core","gate":"example-gate","result":"fail","reason":"first"}
+{"seq":1,"ts":"2026-09-09T09:00:05Z","type":"gate.result","schema_version":1,"wp":"wp-01-slim-core","gate":"example-gate","result":"fail","reason":"second"}

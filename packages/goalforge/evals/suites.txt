@@ -53,13 +53,10 @@ verify          evals/selection/verify.json     commands        run
 wayfind         -                               commands        pending
 
 # --- private children: census only, never scored alone ----------------------
-arbiter         arbiter/evals/evals.json        -               nested
 archive         archive/evals/evals.json        -               nested
 capture         capture/evals/evals.json        -               nested
 decompose       decompose/evals/evals.json      -               nested
 execute         execute/evals/evals.json        -               nested
 harden          harden/evals/evals.json         -               nested
 onboard         onboard/evals/evals.json        -               nested
-recap           recap/evals/evals.json          -               nested
 run             run/evals/evals.json            -               nested
-watchdog        watchdog/evals/evals.json       -               nested

@@ -2,13 +2,20 @@
 # Eval harness for the wp-07 wave route (planning-fan-out choreography).
 # Deterministic, no model, no network. Exit 0 = all pass, non-zero = failures.
 #
-# Covers WP goal.verification checks (a)–(d):
+# Covers WP goal.verification checks (a)–(c2):
 #   (a) a wave-route fixture execution_plan lists the ACTIVE four wave-stage
 #       sequence (explore, parallel-spec, cross-spec-judge, fixer) in order;
 #   (b) a 2-feature fixture's owned-set declarations are disjoint;
 #   (c) an overlapping-owned-set fixture is flagged by the ownership check;
-#   (d) run/SKILL.md wave section carries the inline worked 2-feature example
-#       and cross-references dispatch-template.md by path (no duplicated text).
+#   (c2) a nested-glob owned-set collision is flagged by containment, not
+#        literal-string overlap.
+#
+# (d) — run/SKILL.md carrying an inline wave worked-example + a
+# dispatch-template.md cross-ref — is DELETED (wp-01 round 2, gate B new
+# finding): T21 cut run/SKILL.md to a 52-line chain-driver skill that owns
+# none of that content any more (`references/dispatch-template.md` is the
+# sole home for the wave-orchestration text now). The assertion tested
+# machinery this WP removed.
 
 set -euo pipefail
 
@@ -16,7 +23,6 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 GOALFORGE_DIR="$(cd "$HERE/../.." && pwd)"
 FIXTURES="$HERE/fixtures"
 DISJOINT_CHECK="$HERE/owned-set-disjoint.py"
-RUN_SKILL="$GOALFORGE_DIR/run/SKILL.md"
 PASS=0
 FAIL=0
 
@@ -115,28 +121,6 @@ else
   NESTED_OK="fail"
 fi
 check "nested-glob owned-set collision is flagged (exit 1/OVERLAP)" "$NESTED_OK"
-
-echo ""
-
-# ── (d) run/SKILL.md carries inline example + cross-ref by path ──────────────
-echo "[ (d) run/SKILL.md wave section: inline example + dispatch-template cross-ref ]"
-
-DOC_OK="pass"
-if [ -f "$RUN_SKILL" ]; then
-  # Wave-orchestration section present and owned by run/SKILL.md.
-  grep -q "Wave route — planning-fan-out choreography (OWNER)" "$RUN_SKILL" || DOC_OK="fail"
-  # Inline worked 2-feature example present.
-  grep -q "Worked example — a 2-feature wave" "$RUN_SKILL" || DOC_OK="fail"
-  grep -q "feature-a" "$RUN_SKILL" || DOC_OK="fail"
-  grep -q "feature-b" "$RUN_SKILL" || DOC_OK="fail"
-  # Cross-references dispatch-template.md BY PATH (portable ${CLAUDE_*}-rooted form).
-  grep -qE '\$\{CLAUDE_(SKILL_DIR|PLUGIN_ROOT)\}[^`]*references/dispatch-template\.md' "$RUN_SKILL" || DOC_OK="fail"
-  # All four active stages named in the section.
-  grep -q "cross-spec judge" "$RUN_SKILL" || DOC_OK="fail"
-else
-  DOC_OK="fail"
-fi
-check "run/SKILL.md wave section carries inline example + dispatch-template cross-ref" "$DOC_OK"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

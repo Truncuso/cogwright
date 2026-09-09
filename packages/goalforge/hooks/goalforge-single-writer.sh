@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # goalforge-single-writer.sh — PreToolUse hard guard: block direct tool-surface
-# mutation of the `status:`/`goal_approved_version:` frontmatter fields on
-# plan/WP files. Single-writer enforcement for those two fields.
+# mutation of the `status:`/`goal_approved_version:`/`human_required:`
+# frontmatter fields (C2) on plan/WP files. Single-writer enforcement for
+# those three fields.
 #
 # DISCRIMINATOR (why this hook only ever sees Edit/Write/MultiEdit): a
 # PreToolUse payload carries only the tool call (tool_name + tool_input) — it
@@ -26,9 +27,9 @@
 # else ~/.claude/plans/** (resolution owned by the sourced
 # goalforge-plans-root.sh; never re-implemented here, and never hardcoded to
 # $HOME/.claude/plans alone — that was the precedent bug
-# in goalforge-frontmatter-touch.sh), basename overview.md, spec.md,
-# task-*.md, or brief-task-*.md (briefs are write-once — see BRIEF
-# IMMUTABILITY in decide()).
+# in goalforge-frontmatter-touch.sh), basename overview.md or spec.md
+# (wp-01/C1 retired task-*.md and brief-*.md — no basename for either is
+# scoped here any more).
 #
 # SCAFFOLDING EXEMPTION (uniform across Write/Edit/MultiEdit): if the target
 # file does NOT exist on disk at check time, ALLOW regardless of tool or
@@ -86,8 +87,7 @@
 #   op=create on a nonexistent path -> the scaffolding exemption above.
 #   op=delete, or any op WITHOUT a reconstructable old (set_line,
 #     replace_lines, insert_after, replace_symbol, ...) -> UN-SIMULATABLE: the
-#     real post-write content cannot be derived from the payload. Brief
-#     immutability still applies (it is content-independent). Otherwise the
+#     real post-write content cannot be derived from the payload, so the
 #     fallback is a CONSERVATIVE scan of the op's new text for a protected
 #     `<field>:` key ($FIELDS — the same list, not a new one): a set_line
 #     carrying `status: ready` blocks; an op carrying no protected key allows.
@@ -116,7 +116,7 @@ SELF="$HOOK_DIR/$(basename "${BASH_SOURCE[0]}")"
     exit 0
 }
 
-FIELDS="status goal_approved_version"
+FIELDS="status goal_approved_version human_required"
 
 # ── path scoping ─────────────────────────────────────────────────────────────
 
@@ -127,7 +127,7 @@ is_scoped() {
     [ -n "$fp" ] || return 1
     bn="$(basename -- "$fp")"
     case "$bn" in
-        overview.md|spec.md|task-*.md|brief-task-*.md) : ;;
+        overview.md|spec.md) : ;;
         *) return 1 ;;
     esac
     goalforge_under_plans_root "$fp"
@@ -169,13 +169,38 @@ extract_value() {
     printf '%s' "$val"
 }
 
+# True (empty string or the literal unquoted "null") iff $1 is human_required's
+# unset state.
+hr_is_null() {
+    local v="$1"
+    [ -z "$v" ] || [ "$v" = "null" ]
+}
+
+# Exit 0 (true) iff old->new for human_required is the ONE sanctioned
+# transition (ticket-72): null -> "<reason>". human_required is monotonic —
+# an agent may SET it, never clear or weaken it. Any other change (removal,
+# reset to null, editing an already-set reason) is a violation.
+human_required_violates_monotonicity() {
+    local oldval="$1" newval="$2"
+    hr_is_null "$oldval" || return 0     # old was already set -> any change violates
+    hr_is_null "$newval" && return 0     # new is still null (or field removed) -> not a SET
+    return 1                              # null -> "<reason>" -> allowed
+}
+
 # Exit 0 (true) iff $field appears in $old with a value, and its value in
-# $new differs (including "absent in new" = differs).
+# $new differs (including "absent in new" = differs). human_required gets
+# monotonic-set semantics instead of a plain diff (see
+# human_required_violates_monotonicity).
 field_changed() {
     local old="$1" new="$2" field="$3" oldval newval
     oldval="$(extract_value "$old" "$field")"
-    [ -z "$oldval" ] && return 1        # field not present in old -> N/A
     newval="$(extract_value "$new" "$field")"
+    if [ "$field" = "human_required" ]; then
+        [ "$oldval" = "$newval" ] && return 1
+        human_required_violates_monotonicity "$oldval" "$newval"
+        return $?
+    fi
+    [ -z "$oldval" ] && return 1        # field not present in old -> N/A
     [ "$oldval" != "$newval" ]
 }
 
@@ -261,12 +286,6 @@ decide_ctx_patch() {
         # not exist yet is authoring (this is also where op=create lands).
         [ -f "$path" ] || continue
 
-        # BRIEF IMMUTABILITY is content-independent, so it applies to every
-        # ctx_patch op class — including the un-simulatable ones.
-        case "$(basename -- "$path")" in
-            brief-task-*.md) printf '%s|%s' "brief-immutable" "$path"; return 0 ;;
-        esac
-
         op="$(printf '%s' "$entry" | command jq -r '.op // empty' 2>/dev/null)" || return 0
         old="$(printf '%s' "$entry" | command jq -r '.old // empty' 2>/dev/null)" || return 0
         new="$(printf '%s' "$entry" | command jq -r '.new // empty' 2>/dev/null)" || return 0
@@ -330,16 +349,6 @@ decide() {
     # SCAFFOLDING EXEMPTION: target does not exist yet -> initial authoring,
     # nothing to protect. Uniform for Write, Edit, and MultiEdit (see header).
     [ -f "$file" ] || return 0
-
-    # BRIEF IMMUTABILITY (wp-06 follow-up, wp-08 scope): brief-task-*.md is
-    # write-once — delta-only immutable once authored. ANY Edit/Write/
-    # MultiEdit on an existing brief blocks regardless of which lines it
-    # touches (briefs carry no status: field, so field-diffing would never
-    # fire). Re-authoring a stale brief goes through goalforge-execute's
-    # sanctioned Bash-path staleness flow; creation stays exempt above.
-    case "$(basename -- "$file")" in
-        brief-task-*.md) printf '%s|%s' "brief-immutable" "$file"; return 0 ;;
-    esac
 
     case "$tool_name" in
         Edit)
@@ -430,12 +439,12 @@ self_test() {
     git init -q "$d/repo" 2>/dev/null
     mkdir -p "$d/repo/plans/feat/wp-01"
     local plans_file="$d/repo/plans/feat/wp-01/overview.md"
-    local new_plans_file="$d/repo/plans/feat/wp-02/task-01-fresh.md"
+    local new_plans_file="$d/repo/plans/feat/wp-02/overview.md"
     mkdir -p "$d/repo/plans/feat/wp-02"
     printf -- '---\ntitle: Old Title\nstatus: hardened\ngoal_approved_version: 1\n---\nbody\n' > "$plans_file"
     local nonplans_file="$d/overview.md"
     printf -- '---\nstatus: hardened\n---\n' > "$nonplans_file"
-    local body_status_file="$d/repo/plans/feat/wp-01/task-99-body.md"
+    local body_status_file="$d/repo/plans/feat/wp-01/spec.md"
     printf -- '---\ntitle: Body Test\nstatus: hardened\n---\nCheckpoint notes:\nstatus: something\n' > "$body_status_file"
 
     # 1) Edit mutating existing status: in a plans path -> exit 2
@@ -608,6 +617,40 @@ self_test() {
     leg "leg 3: \$HOME/.claude/plans/** -> exit 2"                 "$hs/.claude/plans/f/overview.md"   block
     leg "leg 3 negative: \$HOME/.claude outside plans/ -> silent"  "$hs/.claude/notplans/overview.md"  silent
 
+    # 12) human_required (ticket-72 monotonicity): null -> "<reason>" ALLOWED.
+    mkdir -p "$d/repo/plans/feat/wp-hr"
+    local hr_file="$d/repo/plans/feat/wp-hr/overview.md"
+    printf -- '---\ntitle: HR Test\nhuman_required: null\n---\nbody\n' > "$hr_file"
+    payload="$(command jq -n --arg fp "$hr_file" \
+        '{tool_name:"Edit", tool_input:{file_path:$fp, old_string:"human_required: null\n", new_string:"human_required: \"schema migration\"\n"}}')"
+    out="$(printf '%s' "$payload" | decide)"
+    [ -z "$out" ] && ok "human_required null -> \"<reason>\" (SET) -> allowed" \
+        || no "human_required null -> reason should be allowed, got '$out'"
+
+    # 12b) human_required: an already-set reason -> a DIFFERENT reason -> BLOCKED.
+    printf -- '---\ntitle: HR Test 2\nhuman_required: "old reason"\n---\nbody\n' > "$hr_file"
+    payload="$(command jq -n --arg fp "$hr_file" \
+        '{tool_name:"Edit", tool_input:{file_path:$fp, old_string:"human_required: \"old reason\"\n", new_string:"human_required: \"new reason\"\n"}}')"
+    out="$(printf '%s' "$payload" | decide)"
+    [ -n "$out" ] && [[ "$out" == human_required\|* ]] && ok "human_required set -> different reason (weaken) -> blocked" \
+        || no "human_required set -> different reason should block, got '$out'"
+
+    # 12c) human_required: set -> null (CLEAR) -> BLOCKED.
+    printf -- '---\ntitle: HR Test 3\nhuman_required: "some reason"\n---\nbody\n' > "$hr_file"
+    payload="$(command jq -n --arg fp "$hr_file" \
+        '{tool_name:"Edit", tool_input:{file_path:$fp, old_string:"human_required: \"some reason\"\n", new_string:"human_required: null\n"}}')"
+    out="$(printf '%s' "$payload" | decide)"
+    [ -n "$out" ] && [[ "$out" == human_required\|* ]] && ok "human_required set -> null (clear) -> blocked" \
+        || no "human_required set -> null should block, got '$out'"
+
+    # 12d) human_required: field REMOVED entirely -> BLOCKED.
+    printf -- '---\ntitle: HR Test 4\nhuman_required: "some reason"\nother: x\n---\nbody\n' > "$hr_file"
+    payload="$(command jq -n --arg fp "$hr_file" \
+        '{tool_name:"Edit", tool_input:{file_path:$fp, old_string:"human_required: \"some reason\"\nother: x\n", new_string:"other: x\n"}}')"
+    out="$(printf '%s' "$payload" | decide)"
+    [ -n "$out" ] && [[ "$out" == human_required\|* ]] && ok "human_required field removed -> blocked" \
+        || no "human_required field removal should block, got '$out'"
+
     echo ""
     echo "Results: $p passed, $f failed"
     [ "$f" -eq 0 ]
@@ -629,11 +672,12 @@ main() {
 
     field="${result%%|*}"
     file="${result#*|}"
-    if [ "$field" = "brief-immutable" ]; then
-        echo "goalforge-single-writer: ${file} is an immutable brief (write-once) — never Edit/Write an existing brief-task-*.md; a stale brief is re-authored via goalforge-execute's sanctioned Bash-path staleness flow." >&2
-        exit 2
+    if [ "$field" = "human_required" ]; then
+        echo "goalforge-single-writer: mutation of 'human_required:' in ${file} is blocked — human_required is monotonic (ticket-72): an agent may SET it once (null -> \"<reason>\") and may never clear or weaken it." >&2
+    else
+        echo "goalforge-single-writer: direct mutation of '${field}:' in ${file} is blocked — use the sanctioned writers goalforge-transition.sh / goalforge-goal-hash.sh (Bash path)." >&2
     fi
-    echo "goalforge-single-writer: direct mutation of '${field}:' in ${file} is blocked — use the sanctioned writers goalforge-transition.sh / goalforge-goal-hash.sh (Bash path)." >&2
+    goalforge_emit_gate_result "single-writer" "fail" "direct mutation of '${field}:'" "$file"
     exit 2
 }
 

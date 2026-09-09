@@ -1,22 +1,31 @@
 #!/usr/bin/env bash
-# goalforge-goal-hash.sh — the SINGLE hash authority for a WP goal block.
+# goalforge-goal-hash.sh — the SINGLE hash authority for a WP goal.
 #
 # Usage:
-#   goalforge-goal-hash.sh <wp-path>            print sha256[:12] of the goal: block
+#   goalforge-goal-hash.sh <wp-path>            print sha256[:12] of outcome+verification
 #   goalforge-goal-hash.sh --record <wp-path>   compute it + write goal_approved_version:
 #   goalforge-goal-hash.sh --self-test
 #
+# wp-01 T10 (narrow hash): the hash covers ONLY the goal block's `outcome:` and
+# `verification:` sub-keys — NOT `constraints:`, `boundaries:`,
+# `iteration_policy:`, or `blocked_stop:`, and not any other WP prose. An edit
+# to those facets, or to any body section outside the goal block (e.g.
+# `## Decisions`), never changes this hash and never requires re-approval.
+#
 # Goal block = the lines from the top-level `goal:` key up to (not including) the
 # next top-level frontmatter key (`^[a-z_][a-z0-9_]*:`, no leading whitespace),
-# within the `---` fence. Normalized before hashing: per-line TRAILING whitespace
-# stripped, line endings normalized to `\n`; leading indentation is significant
-# and preserved.
+# within the `---` fence. Within it, only the `outcome:` and `verification:`
+# sub-keys (each running to the next sibling key at the same indentation, or
+# the block's end) are extracted, in that order. Normalized before hashing:
+# per-line TRAILING whitespace stripped, line endings normalized to `\n`;
+# leading indentation is significant and preserved.
 #
-# This is the ONE place the goal-block hash is defined. goalforge-harden (--record) and
+# This is the ONE place the goal hash is defined. goalforge-harden (--record) and
 # goalforge-validate (recompute-and-compare) BOTH shell out to it — the hash is NEVER
 # reimplemented elsewhere, so the record and recompute paths can never diverge.
 #
-# Exit: 0 success. 3 when <wp-path> has no goal: block (prints nothing to stdout).
+# Exit: 0 success. 3 when <wp-path> has no goal: block, or the block has
+#       neither outcome: nor verification: (prints nothing to stdout).
 #       1 on usage / IO error.
 set -euo pipefail
 
@@ -24,7 +33,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 
 usage() {
-    sed -n '2,17p' "$SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,29p' "$SELF" | sed 's/^# \{0,1\}//'
 }
 
 # ── Resolve a WP path (dir or overview.md) to its overview.md ────────────────
@@ -73,9 +82,40 @@ for i in range(start + 1, end):
     if re.match(r"^[a-z_][a-z0-9_]*:", lines[i]):
         stop = i; break
 
-# Normalize: strip per-line trailing whitespace; keep leading indentation.
-block = "\n".join(ln.rstrip() for ln in lines[start:stop])
-print(hashlib.sha256(block.encode("utf-8")).hexdigest()[:12])
+# Narrow to outcome:/verification: sub-keys only (T10). Sub-keys sit one
+# indentation level under `goal:`; find that level from the first child line,
+# then slice each named sub-key to the next sibling at the same indentation
+# (or the block's end).
+body = lines[start + 1:stop]
+indent = None
+for ln in body:
+    if ln.strip():
+        indent = len(ln) - len(ln.lstrip(" "))
+        break
+
+wanted = {}
+if indent is not None:
+    key_re = re.compile(r"^ {%d}([a-z_][a-z0-9_]*):" % indent)
+    cur, cur_start = None, None
+    for i, ln in enumerate(body):
+        m = key_re.match(ln)
+        if m:
+            if cur is not None:
+                wanted[cur] = body[cur_start:i]
+            cur, cur_start = m.group(1), i
+    if cur is not None:
+        wanted[cur] = body[cur_start:len(body)]
+
+parts = []
+for key in ("outcome", "verification"):
+    if key in wanted:
+        parts.append("\n".join(ln.rstrip() for ln in wanted[key]))
+
+if not parts:
+    sys.exit(3)   # goal: block has neither outcome: nor verification:
+
+canonical = "\n\x1e\n".join(parts)
+print(hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12])
 PY
 }
 
@@ -196,6 +236,31 @@ EOF
         ok "record-roundtrip"
     else
         no "record-roundtrip"
+    fi
+
+    # (d) T10 narrow hash: a constraints:/boundaries:/iteration_policy:/
+    # blocked_stop: edit (outcome+verification unchanged) does NOT change the
+    # hash — b4.
+    _fixture "$d/wp-01-a/overview.md" "the thing is done"
+    h_a="$(bash "$SELF" "$d/wp-01-a")"
+    sed -i 's/constraints: \[\]/constraints: ["no regressions"]/' "$d/wp-01-a/overview.md"
+    sed -i 's/blocked_stop: "halt after 3 tries"/blocked_stop: "halt after 5 tries"/' "$d/wp-01-a/overview.md"
+    local h_a3
+    h_a3="$(bash "$SELF" "$d/wp-01-a")"
+    if [[ "$h_a3" == "$h_a" ]]; then
+        ok "constraints/blocked_stop edit does not change the narrow hash"
+    else
+        no "constraints/blocked_stop edit changed the narrow hash ($h_a vs $h_a3)"
+    fi
+
+    # (e) a verification: edit (outcome unchanged) DOES change the hash.
+    sed -i 's/check: "true"/check: "false"/' "$d/wp-01-a/overview.md"
+    local h_a4
+    h_a4="$(bash "$SELF" "$d/wp-01-a")"
+    if [[ "$h_a4" != "$h_a" ]]; then
+        ok "verification edit changes the narrow hash"
+    else
+        no "verification edit did not change the narrow hash"
     fi
 
     echo ""

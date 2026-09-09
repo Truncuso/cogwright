@@ -17,14 +17,16 @@ bare (`low`/`medium`/`high`/`xhigh`/`max`). No pinned vendor model IDs.
   (`low → low`, `medium → low`, `high → high`).
 
 Blast radius (auth / schema / migration / exported API / 3+ files) is detected
-deterministically and forces the `high` tier (→ `opus` @ `high`) regardless of
-role or profile — a sensitive change is never silently downgraded.
+deterministically and forces the `high` tier (→ `opus` @ `high`) for every role
+EXCEPT `implement`, which caps at `medium` (→ `opus` @ `low` — see
+Register-conditioned rows below) — a sensitive change is never silently
+downgraded.
 
 ## Roles
 
 | role | autonomous-minimal (tier / model / effort) | semi-autonomous (tier / model / effort) |
 |------|---------------------------------------------|------------------------------------------|
-| implement | by_complexity | by_complexity |
+| implement | by_register | by_register |
 | discovery | low / sonnet / low | low / sonnet / low |
 | feature-audit | medium / opus / low | medium / opus / low |
 | wp-harden-delta | low / sonnet / low | medium / opus / low |
@@ -32,16 +34,17 @@ role or profile — a sensitive change is never silently downgraded.
 | simplify | medium / opus / low | medium / opus / low |
 | judge | medium / opus / low | medium / opus / low |
 | panel | high / opus / high | high / opus / high |
-| arbiter-grid | low / sonnet / low | medium / opus / low |
 | integration-review | medium / opus / low | high / opus / high |
 
-## Complexity-conditioned rows
+## Register-conditioned rows
 
-The `implement` role carries the `by_complexity` sentinel in both autonomy
-profiles: it does not fix a tier, it defers to the task's own `complexity`
-(`low`/`medium`/`high`), which then resolves to a tier × effort through the same
-`tier_to_dispatch` mapping. This preserves per-task tiering for the code-writing
-role while every other role reads its fixed band from `ROLE_TIER`.
+The `implement` role carries the `by_register` sentinel in both autonomy
+profiles: it does not fix a tier, it defers to the WP's own C2 `register`/
+`severity` fields — `register: spike` → `low`; `register: production` →
+`sonnet-medium`, escalating to `medium` (opus@low, never opus@high) when
+`severity: HIGH` or blast radius fires. This preserves per-WP tiering for the
+code-writing role while every other role reads its fixed band from
+`ROLE_TIER`.
 
 ## Autonomy profiles
 

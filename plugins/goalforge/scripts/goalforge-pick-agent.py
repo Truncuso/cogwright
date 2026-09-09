@@ -15,21 +15,45 @@ Public API:
     pick_agent(task_frontmatter, touched_files, specialist_map,
                *, discover=None, ollama_health=None) -> dict
 
-    Returns: {specialist, model, route, discovered_by}
+    Returns: {specialist, route, discovered_by}
     May include: proposed_map_entry (when discovery names an unknown specialist).
+    Model/effort are resolved separately via resolve_dispatch() — wp-01/T17
+    removed the `complexity` input entirely; the `implement` role's tier comes
+    from the WP's own `register`/`severity` C2 fields instead.
 
     tier_to_dispatch(tier) / resolve_dispatch(role, profile, …) -> {model, effort}
         Effort-aware dispatch instantiation for a subagent brief (states BOTH
         model and effort explicitly). resolve_role_tier() still returns the bare
         tier string for callers that only need the tier.
 
+    dispatch_launched_event(pick_result, dispatch_result, *, wp=None, task=None)
+        Builds a `dispatch.launched` trace-event payload (C6/T20; schema:
+        references/trace-events.md) from a pick_agent()+resolve_dispatch() pair.
+        Pure — this module never writes to a trace itself (no --feature-dir):
+        the CALLER pipes the printed JSON through goalforge-trace-emit.
+
+Role key (wp-01/T17): the canonical role key is ``"implement"`` (matches
+``ROLE_TIER``). ``"implement-code"`` — the pre-wp-01 skill name still used by
+some callers being migrated — is accepted as an ALIAS: ``resolve_role_tier()``
+normalizes it to ``"implement"`` and warns once to stderr. No other alias
+exists; an unrecognized role still escalates (no silent default).
+
 CLI:
+    python3 goalforge-pick-agent.py --task <wp>/overview.md --role implement
+        Resolves the dispatch (specialist + model + effort) for a WP overview.md
+        and prints ONE JSON object to stdout — the canonical execute/SKILL.md §3
+        invocation. Tier comes from `register`/`severity` (C2), never
+        `complexity` (removed, wp-01/T17). Missing `register` → exit 2.
     python3 goalforge-pick-agent.py --task <yaml-file> [--route ollama] [--self-test]
+    python3 goalforge-pick-agent.py --task <yaml-file> --emit-dispatch [--wp <id>]
+        Resolves specialist + model/effort for the task and prints ONE
+        `dispatch.launched` event JSON line to stdout (see
+        dispatch_launched_event() above) — never writes to a trace itself.
 """
 from __future__ import annotations
 
 import argparse
-import os
+import json
 import re
 import sys
 from pathlib import Path
@@ -79,6 +103,10 @@ TIER_DISPATCH: dict[str, dict[str, str]] = {
     "low":    {"model": "sonnet", "effort": "low"},
     "medium": {"model": "opus",   "effort": "low"},
     "high":   {"model": "opus",   "effort": "high"},
+    # wp-01/T17: the `implement` role's "production, not escalated" band —
+    # sonnet@medium, distinct from the shared `medium` (opus@low) band other
+    # roles read. See resolve_role_tier()'s "by_register" branch.
+    "sonnet-medium": {"model": "sonnet", "effort": "medium"},
 }
 
 # Model-only view of TIER_DISPATCH, derived — never a second table (a manually
@@ -93,6 +121,7 @@ OLLAMA_MODELS: dict[str, str] = {
     "low": "nemotron-3-nano",
     "medium": "deepseek-v4-pro",
     "high": "deepseek-v3.2",
+    "sonnet-medium": "deepseek-v4-pro",  # same local class as "medium"
 }
 
 OLLAMA_SENTINEL = "__ollama__"
@@ -107,10 +136,13 @@ TIER_MAP_PATH = Path(__file__).parent.parent / "references" / "tier-map.md"
 # ---------------------------------------------------------------------------
 # Canonical role → model-tier map (single source of truth)
 # ---------------------------------------------------------------------------
-# Every goalforge dispatcher (goalforge-execute, goalforge-verify, goalforge-harden, goalforge-arbiter)
+# Every goalforge dispatcher (goalforge-execute, goalforge-verify, goalforge-harden)
 # resolves the model tier for a dispatched ROLE here — none of them restates the
 # table. A "tier" is one of low|medium|high and maps to a concrete model via
-# COMPLEXITY_MODEL (api) / OLLAMA_MODELS (ollama).
+# COMPLEXITY_MODEL (api) / OLLAMA_MODELS (ollama). (wp-01/T1 deleted the
+# standalone `arbiter/` skill and its `goalforge-arbiter` dispatcher name, and
+# wp-01/T17 dropped the `arbiter-grid` role below with it — no dispatcher
+# resolves through it any more.)
 #
 # Two autonomy profiles:
 #   - "autonomous-minimal": cost-lean — the cheapest tier that still does the
@@ -124,11 +156,12 @@ TIER_MAP_PATH = Path(__file__).parent.parent / "references" / "tier-map.md"
 
 ROLE_TIER_PROFILES = ("autonomous-minimal", "semi-autonomous")
 
-# tier ∈ {low, medium, high}; the sentinel "by_complexity" defers to the task's
-# own `complexity` (preserves per-task tiering for the `implement` role).
+# tier ∈ {low, medium, high}; the sentinel "by_register" defers to the WP's own
+# C2 `register`/`severity` fields (preserves per-WP tiering for the `implement`
+# role — wp-01/T17 dropped the pre-wp-01 `complexity`-keyed sentinel).
 ROLE_TIER: dict[str, dict[str, str]] = {
     #  role                  autonomous-minimal   semi-autonomous
-    "implement":          {"autonomous-minimal": "by_complexity", "semi-autonomous": "by_complexity"},
+    "implement":          {"autonomous-minimal": "by_register",   "semi-autonomous": "by_register"},
     "discovery":          {"autonomous-minimal": "low",           "semi-autonomous": "low"},
     "feature-audit":      {"autonomous-minimal": "medium",        "semi-autonomous": "medium"},  # Tier-1 cold whole-feature review
     "wp-harden-delta":    {"autonomous-minimal": "low",           "semi-autonomous": "medium"},  # Tier-2 WP-scoped delta
@@ -136,9 +169,35 @@ ROLE_TIER: dict[str, dict[str, str]] = {
     "simplify":           {"autonomous-minimal": "medium",        "semi-autonomous": "medium"},
     "judge":              {"autonomous-minimal": "medium",        "semi-autonomous": "medium"},
     "panel":              {"autonomous-minimal": "high",          "semi-autonomous": "high"},    # convened only for complex+irreversible
-    "arbiter-grid":       {"autonomous-minimal": "low",           "semi-autonomous": "medium"},  # mechanical N×axis normalization
     "integration-review": {"autonomous-minimal": "medium",        "semi-autonomous": "high"},    # last-WP cross-WP review
 }
+
+# wp-01/T17: the canonical role key is "implement" (matches ROLE_TIER above).
+# "implement-code" is the pre-wp-01 skill/dispatcher name some callers being
+# migrated this WP still pass — accepted as a ONE-WAY alias so a caller in
+# transition never hard-fails; the warning nudges it to migrate rather than
+# hiding the mismatch permanently. No other alias exists.
+ROLE_ALIASES: dict[str, str] = {
+    "implement-code": "implement",
+}
+
+
+def _resolve_role_alias(role: str) -> str:
+    """Normalize a role key through ROLE_ALIASES, warning once on a hit.
+
+    Pure except for the stderr warning (no state, no I/O side effect beyond
+    the warning) — every call with an aliased role warns; callers that already
+    pass the canonical key never see output."""
+    canonical = ROLE_ALIASES.get(role)
+    if canonical is not None:
+        print(
+            f"goalforge-pick-agent: WARN role {role!r} is a deprecated alias "
+            f"for {canonical!r} — pass {canonical!r} directly.",
+            file=sys.stderr,
+        )
+        return canonical
+    return role
+
 
 BLAST_RADIUS_TIER = "high"
 # Deterministic blast-radius signals, matched as whole word segments on touched
@@ -184,16 +243,29 @@ def resolve_role_tier(
     role: str,
     profile: str = "semi-autonomous",
     *,
-    complexity: str | None = None,
+    register: str | None = None,
+    severity: str | None = None,
     blast_radius_hit: bool = False,
 ) -> str:
-    """Resolve the model tier (low|medium|high) for a dispatched role.
+    """Resolve the model tier (low|medium|sonnet-medium|high) for a dispatched role.
 
     The single source of truth every SDD dispatcher calls. Blast radius forces
-    ``high``. The ``implement`` role stays complexity-driven (preserving per-task
-    tiering); every other role reads ``ROLE_TIER``. An unknown role or profile
-    escalates rather than silently defaulting (mirrors the no-silent-fallback
-    contract of this module)."""
+    ``high`` for every role EXCEPT ``implement``, which reads the WP's own C2
+    ``register``/``severity`` fields instead (wp-01/T17 dropped the
+    per-task ``complexity`` sentinel entirely): ``register: spike`` → ``low``;
+    ``register: production`` → ``sonnet-medium``, escalating to ``medium``
+    (opus@low) when ``severity: HIGH`` or blast radius fires (matches the
+    Dispatch Routing Matrix's "build at complexity high or blast radius →
+    opus/low", never opus@high, for this role). ``register: spike`` returns
+    ``low`` UNCONDITIONALLY, ahead of the blast-radius/severity check — a
+    spike register deliberately overrides blast radius for this role: the
+    register is the explicit statement that this WP is exploratory, and that
+    verdict outranks a mechanical file-count/path heuristic. Every other role reads
+    ``ROLE_TIER`` directly. An unknown role or profile escalates rather than
+    silently defaulting (mirrors the no-silent-fallback contract of this
+    module). ``role`` is alias-normalized first (T17: ``"implement-code"`` →
+    ``"implement"``, warns once)."""
+    role = _resolve_role_alias(role)
     if profile not in ROLE_TIER_PROFILES:
         raise EscalationRequired(
             f"Unknown autonomy profile {profile!r}. Expected one of: "
@@ -206,18 +278,24 @@ def resolve_role_tier(
             "(the canonical role→tier map) — no silent default.",
             {"known_roles": sorted(ROLE_TIER)},
         )
-    if blast_radius_hit:
-        return BLAST_RADIUS_TIER
     tier = ROLE_TIER[role][profile]
-    if tier == "by_complexity":
-        if complexity is None:
+    if tier == "by_register":
+        if register is None:
             raise EscalationRequired(
-                f"Role {role!r} is complexity-driven but no complexity was given.",
+                f"Role {role!r} is register-driven but no register was given.",
                 {"role": role},
             )
-        if complexity not in COMPLEXITY_MODEL:
-            raise ValueError(f"Unknown complexity {complexity!r}.")
-        return complexity
+        if register not in ("spike", "production"):
+            raise ValueError(
+                f"Unknown register {register!r}. Expected 'spike' or 'production'."
+            )
+        if register == "spike":
+            return "low"
+        if blast_radius_hit or severity == "HIGH":
+            return "medium"
+        return "sonnet-medium"
+    if blast_radius_hit:
+        return BLAST_RADIUS_TIER
     return tier
 
 
@@ -225,13 +303,15 @@ def role_model(
     role: str,
     profile: str = "semi-autonomous",
     *,
-    complexity: str | None = None,
+    register: str | None = None,
+    severity: str | None = None,
     blast_radius_hit: bool = False,
     route: str = "api",
 ) -> str:
     """Resolve the concrete model id for a role via the canonical tier map."""
     tier = resolve_role_tier(
-        role, profile, complexity=complexity, blast_radius_hit=blast_radius_hit
+        role, profile, register=register, severity=severity,
+        blast_radius_hit=blast_radius_hit,
     )
     table = OLLAMA_MODELS if route == "ollama" else COMPLEXITY_MODEL
     return table[tier]
@@ -258,7 +338,8 @@ def resolve_dispatch(
     role: str,
     profile: str = "semi-autonomous",
     *,
-    complexity: str | None = None,
+    register: str | None = None,
+    severity: str | None = None,
     blast_radius_hit: bool = False,
 ) -> dict[str, str]:
     """Resolve a role to an explicit ``{model, effort}`` dispatch.
@@ -266,11 +347,54 @@ def resolve_dispatch(
     Composes the canonical role→tier map (``resolve_role_tier``) with
     ``tier_to_dispatch`` — the one call an SDD dispatcher makes to state both
     knobs on a brief. Blast radius forces the high tier (→ opus@high) exactly as
-    ``resolve_role_tier`` decides it; unknown role/profile/tier escalates."""
+    ``resolve_role_tier`` decides it, EXCEPT for ``implement`` (register/severity
+    driven, caps at opus@low); unknown role/profile/tier escalates."""
     tier = resolve_role_tier(
-        role, profile, complexity=complexity, blast_radius_hit=blast_radius_hit
+        role, profile, register=register, severity=severity,
+        blast_radius_hit=blast_radius_hit,
     )
     return tier_to_dispatch(tier)
+
+
+# ---------------------------------------------------------------------------
+# dispatch.launched event (C6/T20) — pure payload builder, no trace I/O here
+# ---------------------------------------------------------------------------
+# This module resolves WHO/WHAT to dispatch; it never has a --feature-dir and
+# never writes to a trace (matches its existing pure/offline contract — see
+# blast_radius()/tier_to_dispatch() above). The CALLER pipes this payload
+# through goalforge-trace-emit --feature-dir <dir>.
+
+def dispatch_launched_event(
+    pick_result: dict,
+    dispatch_result: dict,
+    *,
+    wp: str | None = None,
+    task: str | None = None,
+) -> dict:
+    """Build a `dispatch.launched` trace-event payload (schema:
+    references/trace-events.md) from a pick_agent()/resolve_dispatch() pair.
+
+    Only non-empty fields are included — the schema marks every field on this
+    event type optional, so an unresolved wp/task/provider is omitted rather
+    than sent as an empty string."""
+    event: dict = {"type": "dispatch.launched"}
+    if wp:
+        event["wp"] = wp
+    if task:
+        event["task"] = task
+    agent = pick_result.get("specialist")
+    if agent:
+        event["agent"] = agent
+    model = dispatch_result.get("model")
+    if model:
+        event["model"] = model
+    effort = dispatch_result.get("effort")
+    if effort:
+        event["effort"] = effort
+    provider = pick_result.get("route")
+    if provider:
+        event["provider"] = provider
+    return event
 
 
 # ---------------------------------------------------------------------------
@@ -300,8 +424,10 @@ bare (`low`/`medium`/`high`/`xhigh`/`max`). No pinned vendor model IDs.
   (`low → low`, `medium → low`, `high → high`).
 
 Blast radius (auth / schema / migration / exported API / 3+ files) is detected
-deterministically and forces the `high` tier (→ `opus` @ `high`) regardless of
-role or profile — a sensitive change is never silently downgraded.
+deterministically and forces the `high` tier (→ `opus` @ `high`) for every role
+EXCEPT `implement`, which caps at `medium` (→ `opus` @ `low` — see
+Register-conditioned rows below) — a sensitive change is never silently
+downgraded.
 
 ## Roles
 
@@ -310,13 +436,15 @@ role or profile — a sensitive change is never silently downgraded.
 """
 
 _TIER_MAP_FOOTER = """
-## Complexity-conditioned rows
+## Register-conditioned rows
 
-The `implement` role carries the `by_complexity` sentinel in both autonomy
-profiles: it does not fix a tier, it defers to the task's own `complexity`
-(`low`/`medium`/`high`), which then resolves to a tier × effort through the same
-`tier_to_dispatch` mapping. This preserves per-task tiering for the code-writing
-role while every other role reads its fixed band from `ROLE_TIER`.
+The `implement` role carries the `by_register` sentinel in both autonomy
+profiles: it does not fix a tier, it defers to the WP's own C2 `register`/
+`severity` fields — `register: spike` → `low`; `register: production` →
+`sonnet-medium`, escalating to `medium` (opus@low, never opus@high) when
+`severity: HIGH` or blast radius fires. This preserves per-WP tiering for the
+code-writing role while every other role reads its fixed band from
+`ROLE_TIER`.
 
 ## Autonomy profiles
 
@@ -330,8 +458,8 @@ role while every other role reads its fixed band from `ROLE_TIER`.
 
 def _tier_cell(value: str) -> str:
     """Render one ROLE_TIER cell as `tier / model / effort` (or the sentinel)."""
-    if value == "by_complexity":
-        return "by_complexity"
+    if value == "by_register":
+        return "by_register"
     return f"{value} / {COMPLEXITY_MODEL[value]} / {TIER_DISPATCH[value]['effort']}"
 
 
@@ -357,20 +485,24 @@ def pick_agent(
     touched_files: list[str],
     specialist_map: dict,
     *,
-    discover: Optional[Callable[[dict, list[str], list[str]], dict]] = None,
+    discover: Optional[Callable[[dict, list[str], list[str]], object]] = None,
     ollama_health: Optional[Callable[[], bool]] = None,
 ) -> dict:
-    """Resolve specialist, model, and route for a single SDD task.
+    """Resolve specialist and route for a single SDD task.
+
+    Model/effort are NOT resolved here (wp-01/T17 removed the `complexity`
+    input entirely) — pair this with `resolve_dispatch()`, which reads the
+    WP's own `register`/`severity` C2 fields instead.
 
     Args:
         task_frontmatter: Parsed YAML frontmatter from the task file.
         touched_files: List of file paths the task will touch.
         specialist_map: Parsed specialist-map.yaml dict (by_tag, by_extension, …).
         discover: Callable(frontmatter, touched_files, known_specialists) → dict
-            with keys ``specialist`` (str or "none") and ``complexity``
-            (low|medium|high|None). Invoked only when tag+extension lookup fails.
-            Defaults to None, meaning no discovery fallback — EscalationRequired
-            is raised immediately when map lookup fails and discover is None.
+            with key ``specialist`` (str or "none"). Invoked only when
+            tag+extension lookup fails. Defaults to None, meaning no discovery
+            fallback — EscalationRequired is raised immediately when map lookup
+            fails and discover is None.
         ollama_health: Callable() → bool. Returns True if the local Ollama
             endpoint is healthy. Required (not optional) when route is ollama;
             if None and route is ollama, EscalationRequired is raised.
@@ -378,7 +510,6 @@ def pick_agent(
     Returns:
         dict with keys:
             specialist (str): agent name
-            model (str): model id
             route (str): "api" or "ollama"
             discovered_by (str): "map" or "discovery-agent"
         Optionally also:
@@ -386,7 +517,7 @@ def pick_agent(
 
     Raises:
         EscalationRequired: when no specialist can be resolved, or ollama is down.
-        ValueError: when specialist_map is malformed or complexity is unrecognised.
+        ValueError: when specialist_map is malformed.
     """
     by_tag: dict[str, str] = specialist_map.get("by_tag", {})
     by_task_type: dict[str, str] = specialist_map.get("by_task_type", {})
@@ -396,7 +527,6 @@ def pick_agent(
     task_tags: list[str] = task_frontmatter.get("tags", []) or []
     task_type: str | None = task_frontmatter.get("task_type")
     writing_kind: str | None = task_frontmatter.get("writing_kind")
-    complexity: str | None = task_frontmatter.get("complexity")
     route_hint: str = task_frontmatter.get("route", "api")
 
     # ------------------------------------------------------------------
@@ -461,16 +591,15 @@ def pick_agent(
                 {"tags": task_tags, "extensions": list(extensions)},
             )
         known_specialists = _known_specialists(specialist_map)
-        result = discover(task_frontmatter, touched_files, known_specialists)
-        if not isinstance(result, dict):
+        discover_result = discover(task_frontmatter, touched_files, known_specialists)
+        if not isinstance(discover_result, dict):
             raise EscalationRequired(
                 "Discovery callable returned a non-dict result "
-                f"({type(result).__name__}); cannot resolve a specialist. "
+                f"({type(discover_result).__name__}); cannot resolve a specialist. "
                 "Human assignment required (AskUserQuestion).",
                 {"task": task_frontmatter.get("name"), "touched_files": touched_files},
             )
-        discovered_name = result.get("specialist") or "none"
-        discovered_complexity: str | None = result.get("complexity")
+        discovered_name = discover_result.get("specialist") or "none"
 
         if discovered_name == "none":
             raise EscalationRequired(
@@ -489,10 +618,6 @@ def pick_agent(
                 "Human assignment required (AskUserQuestion).",
                 {"task": task_frontmatter.get("name"), "touched_files": touched_files},
             )
-
-        # Use discovery's complexity estimate when frontmatter omits it
-        if complexity is None and discovered_complexity:
-            complexity = discovered_complexity
 
         if discovered_name not in known_specialists:
             proposed_map_entry = _build_proposed_entry(discovered_name, task_tags, touched_files)
@@ -518,41 +643,20 @@ def pick_agent(
 
     if route_hint == "ollama":
         route = "ollama"
-    else:
-        route = "api"
-
-    # ------------------------------------------------------------------
-    # Step 3 — model tier
-    # ------------------------------------------------------------------
-    if complexity is None:
-        raise EscalationRequired(
-            "Cannot determine model tier: 'complexity' absent from frontmatter and "
-            "discovery agent did not return an estimate.",
-            {"task": task_frontmatter.get("name")},
-        )
-    if complexity not in COMPLEXITY_MODEL:
-        raise ValueError(
-            f"Unknown complexity '{complexity}'. Expected one of: "
-            + ", ".join(COMPLEXITY_MODEL)
-        )
-
-    if route == "ollama":
-        model = OLLAMA_MODELS[complexity]
         if ollama_health is None or not ollama_health():
             raise EscalationRequired(
                 "Ollama route requested but health check failed (endpoint down or "
                 "ollama_health callable not provided). No silent API fallback.",
-                {"route": "ollama", "model": model},
+                {"route": "ollama"},
             )
     else:
-        model = COMPLEXITY_MODEL[complexity]
+        route = "api"
 
     # ------------------------------------------------------------------
     # Result
     # ------------------------------------------------------------------
     result: dict = {
         "specialist": specialist,
-        "model": model,
         "route": route,
         "discovered_by": discovered_by,
     }
@@ -600,13 +704,13 @@ def load_specialist_map(path: Path | None = None) -> dict:
 # ---------------------------------------------------------------------------
 
 def _cli_discover_stub(
-    frontmatter: dict, touched: list[str], known: list[str]
+    _frontmatter: dict, _touched: list[str], known: list[str]
 ) -> dict:
     """Minimal discovery stub for --self-test mode (no network)."""
-    # Simulate returning the first known specialist with low complexity
+    # Simulate returning the first known specialist
     if known:
-        return {"specialist": known[0], "complexity": "low"}
-    return {"specialist": "none", "complexity": None}
+        return {"specialist": known[0]}
+    return {"specialist": "none"}
 
 
 def _cli_ollama_stub() -> bool:
@@ -633,13 +737,40 @@ def _test_tiers() -> int:
     expect("feature-audit", resolve_role_tier("feature-audit", "autonomous-minimal"), "medium")
     # Panel is opus-tier (convened only for complex+irreversible).
     expect("panel", resolve_role_tier("panel", "semi-autonomous"), "high")
-    # implement stays complexity-driven.
-    expect("implement/low", resolve_role_tier("implement", "semi-autonomous", complexity="low"), "low")
-    expect("implement/high", resolve_role_tier("implement", "autonomous-minimal", complexity="high"), "high")
-    # Blast radius forces high regardless of role/profile/complexity.
+    # implement is register-driven (wp-01/T17): spike → low.
+    expect("implement/spike", resolve_role_tier("implement", "semi-autonomous", register="spike"), "low")
+    # production, no escalation → sonnet-medium.
     expect(
-        "blast-radius override",
-        resolve_role_tier("implement", "autonomous-minimal", complexity="low", blast_radius_hit=True),
+        "implement/production",
+        resolve_role_tier("implement", "autonomous-minimal", register="production"),
+        "sonnet-medium",
+    )
+    # production + severity HIGH → medium (opus@low, never opus@high — matches
+    # the Dispatch Routing Matrix's "build ... blast radius → opus/low").
+    expect(
+        "implement/production-high-severity",
+        resolve_role_tier("implement", "semi-autonomous", register="production", severity="HIGH"),
+        "medium",
+    )
+    # production + blast radius → medium too, capped below the generic `high`
+    # every other role gets from blast radius.
+    expect(
+        "implement/production-blast-radius",
+        resolve_role_tier(
+            "implement", "autonomous-minimal", register="production", blast_radius_hit=True,
+        ),
+        "medium",
+    )
+    # Missing register on a register-driven role escalates (no silent default).
+    try:
+        resolve_role_tier("implement", "semi-autonomous")
+        failures.append("missing register did not escalate")
+    except EscalationRequired:
+        pass
+    # Blast radius still forces the generic `high` for every OTHER role.
+    expect(
+        "blast-radius override (non-implement)",
+        resolve_role_tier("wp-verify", "autonomous-minimal", blast_radius_hit=True),
         "high",
     )
     # Deterministic blast-radius detection.
@@ -670,13 +801,16 @@ def _test_tiers() -> int:
         resolve_dispatch("wp-verify", "semi-autonomous"),
         {"model": "opus", "effort": "high"},
     )
-    # Blast radius forces high → opus@high through the dispatch path too.
+    # implement's blast-radius escalation caps at opus@low through the
+    # dispatch path too (never opus@high — see resolve_role_tier).
     expect(
-        "resolve_dispatch/blast",
-        resolve_dispatch("implement", "autonomous-minimal", complexity="low", blast_radius_hit=True),
-        {"model": "opus", "effort": "high"},
+        "resolve_dispatch/implement-blast",
+        resolve_dispatch(
+            "implement", "autonomous-minimal", register="production", blast_radius_hit=True,
+        ),
+        {"model": "opus", "effort": "low"},
     )
-    # Pins the doc-level claim in goalforge-harden/references/pre-harden-review.md.
+    # Pins the wp-harden-delta dispatch tier (opus@low).
     expect(
         "resolve_dispatch/wp-harden-delta/semi",
         resolve_dispatch("wp-harden-delta", "semi-autonomous"),
@@ -707,6 +841,36 @@ def _test_tiers() -> int:
         failures.append("unknown profile did not escalate")
     except EscalationRequired:
         pass
+
+    # Role alias (T17): "implement-code" resolves exactly like "implement".
+    expect(
+        "role-alias/implement-code",
+        resolve_role_tier("implement-code", "semi-autonomous", register="spike"),
+        resolve_role_tier("implement", "semi-autonomous", register="spike"),
+    )
+    expect(
+        "role-alias/resolve_dispatch",
+        resolve_dispatch("implement-code", "autonomous-minimal", register="production"),
+        resolve_dispatch("implement", "autonomous-minimal", register="production"),
+    )
+    # dispatch_launched_event: only non-empty fields present, matches trace-events.md.
+    expect(
+        "dispatch_launched_event/full",
+        dispatch_launched_event(
+            {"specialist": "python-pro", "route": "api"},
+            {"model": "opus", "effort": "high"},
+            wp="wp-01-slim-core", task="T19",
+        ),
+        {"type": "dispatch.launched", "wp": "wp-01-slim-core", "task": "T19",
+         "agent": "python-pro", "model": "opus", "effort": "high", "provider": "api"},
+    )
+    expect(
+        "dispatch_launched_event/omits-empty",
+        dispatch_launched_event({"specialist": "python-pro", "route": "api"},
+                                 {"model": "opus", "effort": "high"}),
+        {"type": "dispatch.launched", "agent": "python-pro", "model": "opus",
+         "effort": "high", "provider": "api"},
+    )
 
     # Generation-drift gate: the on-disk tier-map.md must equal render_tier_map()
     # (ROLE_TIER is authoritative; the md is a generated projection, never parsed).
@@ -761,6 +925,32 @@ def _build_cli() -> argparse.ArgumentParser:
         default=None,
         help="Path to specialist-map.yaml (default: references/specialist-map.yaml)",
     )
+    p.add_argument(
+        "--emit-dispatch",
+        action="store_true",
+        help="After resolving --task, print ONE `dispatch.launched` event JSON "
+             "line to stdout instead of the specialist/model/route YAML. This "
+             "module never writes to a trace (no --feature-dir) — pipe the "
+             "printed line through goalforge-trace-emit.",
+    )
+    p.add_argument(
+        "--role",
+        default="implement",
+        help="Role for tier resolution — used both by --emit-dispatch and by "
+             "the plain --task invocation (default: implement; 'implement-code' "
+             "accepted as a warned alias).",
+    )
+    p.add_argument(
+        "--profile",
+        choices=ROLE_TIER_PROFILES,
+        default="semi-autonomous",
+        help="Autonomy profile for tier resolution.",
+    )
+    p.add_argument(
+        "--wp",
+        default=None,
+        help="WP id to stamp on the --emit-dispatch event (optional).",
+    )
     return p
 
 
@@ -808,23 +998,88 @@ def main(argv: list[str] | None = None) -> int:
     discover_fn = _cli_discover_stub if args.self_test else None
     health_fn = _cli_ollama_stub if args.self_test else None
 
-    touched: list[str] = frontmatter.get("_touched_files", []) or []
+    touched: list[str] = frontmatter.get("_touched_files") or frontmatter.get("owned_files") or []
+    register: str | None = frontmatter.get("register")
+    # `prototype` (schema-5 spelling) normalizes to `spike` on READ ONLY —
+    # never written back. Mirrors goalforge-validate.sh's normalize_register()
+    # (wp-01 round 2, gate B new finding) so the two scripts agree on the
+    # same field instead of diverging (validate.sh accepts it, this script
+    # used to raise ValueError).
+    if register is not None and str(register).strip() == "prototype":
+        register = "spike"
+    severity: str | None = frontmatter.get("severity")
+    blast_hit = blast_radius(touched, file_threshold=8)
 
+    if args.emit_dispatch:
+        try:
+            result = pick_agent(
+                frontmatter, touched, specialist_map,
+                discover=discover_fn, ollama_health=health_fn,
+            )
+        except EscalationRequired as exc:
+            print(f"ESCALATION REQUIRED: {exc.reason}", file=sys.stderr)
+            if exc.context:
+                print(f"  context: {exc.context}", file=sys.stderr)
+            return 1
+        try:
+            dispatch = resolve_dispatch(
+                args.role, args.profile,
+                register=register, severity=severity, blast_radius_hit=blast_hit,
+            )
+        except EscalationRequired as exc:
+            print(f"ESCALATION REQUIRED: {exc.reason}", file=sys.stderr)
+            if exc.context:
+                print(f"  context: {exc.context}", file=sys.stderr)
+            return 1
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+        event = dispatch_launched_event(
+            result, dispatch,
+            wp=args.wp, task=frontmatter.get("name") or task_path.stem,
+        )
+        print(json.dumps(event, sort_keys=True))
+        return 0
+
+    # Plain `--task <wp>/overview.md --role implement` (default role, no
+    # --emit-dispatch) — execute/SKILL.md §3's canonical invocation. Prints
+    # ONE JSON object with model + effort (wp-01/T17: no `complexity` input
+    # anywhere in this path — the tier comes from the WP's own C2
+    # `register`/`severity`). Specialist resolution is best-effort here: a WP
+    # `overview.md` carries no `tags:` (C2), so an unmatched task_type/
+    # extension is not fatal — model+effort is the contract this call makes.
+    if register is None:
+        print(
+            f"ERROR: {task_path} has no 'register:' (required, C2 WP frontmatter)",
+            file=sys.stderr,
+        )
+        return 2
     try:
-        result = pick_agent(
-            frontmatter,
-            touched,
-            specialist_map,
-            discover=discover_fn,
-            ollama_health=health_fn,
+        dispatch = resolve_dispatch(
+            args.role, args.profile,
+            register=register, severity=severity, blast_radius_hit=blast_hit,
         )
     except EscalationRequired as exc:
         print(f"ESCALATION REQUIRED: {exc.reason}", file=sys.stderr)
         if exc.context:
             print(f"  context: {exc.context}", file=sys.stderr)
         return 1
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
-    print(yaml.dump(result, sort_keys=True, default_flow_style=False), end="")
+    output: dict = {"role": args.role, **dispatch}
+    try:
+        picked = pick_agent(
+            frontmatter, touched, specialist_map,
+            discover=discover_fn, ollama_health=health_fn,
+        )
+        if picked.get("specialist"):
+            output["specialist"] = picked["specialist"]
+    except EscalationRequired:
+        pass  # specialist is best-effort in this path
+
+    print(json.dumps(output, sort_keys=True))
     return 0
 
 

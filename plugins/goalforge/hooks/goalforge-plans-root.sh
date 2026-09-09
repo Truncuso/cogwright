@@ -85,3 +85,91 @@ goalforge_under_plans_root() {
     done < <(goalforge_plans_roots "$file")
     return 1
 }
+
+# Prints <root>/<feature-slug> for $1 (a path under a resolved plans root), or
+# nothing if $1 does not resolve under any root. Used only to locate the
+# feature dir's trace-events.jsonl for gate.result emission — never for
+# scoping decisions (goalforge_under_plans_root owns that).
+goalforge_feature_dir_for() {
+    local file="${1:-}" root norm rest slug
+    [ -n "$file" ] || return 1
+    case "$file" in
+        /*) ;;
+        "~/"*) file="${HOME:-}/${file#\~/}" ;;
+        *) return 1 ;;
+    esac
+    norm="$(goalforge_normpath "$file")"
+    while IFS= read -r root; do
+        [ -n "$root" ] || continue
+        root="$(goalforge_normpath "$root")"
+        case "$norm" in
+            "$root"/*)
+                rest="${norm#"$root"/}"
+                slug="${rest%%/*}"
+                [ -n "$slug" ] && printf '%s/%s\n' "$root" "$slug" && return 0
+                ;;
+        esac
+    done < <(goalforge_plans_roots "$norm")
+    return 1
+}
+
+# Prints the `wp` field value (trace-events.md schema) for $1, a file already
+# known to resolve under a plans root via goalforge_feature_dir_for. `wp` names
+# whichever directory OWNS the file: the first path segment under the feature
+# dir (a WP dir basename, e.g. `wp-01`) when the file lives inside one, else
+# the feature slug itself (basename of the feature dir) for a feature-level
+# file (the feature's own overview.md/spec.md) — mirroring how
+# goalforge-transition.sh derives `wp` (WP_DIR basename, or FEATURE_DIR
+# basename for a feature-kind transition). Prints nothing on any doubt; the
+# caller treats an empty wp as "cannot attribute" and skips emission.
+goalforge_wp_for() {
+    local file="${1:-}" feat_dir norm rest first
+    [ -n "$file" ] || return 1
+    feat_dir="$(goalforge_feature_dir_for "$file" 2>/dev/null)" || return 1
+    [ -n "$feat_dir" ] || return 1
+    norm="$(goalforge_normpath "$file")"
+    feat_dir="$(goalforge_normpath "$feat_dir")"
+    case "$norm" in
+        "$feat_dir"/*) rest="${norm#"$feat_dir"/}" ;;
+        *) return 1 ;;
+    esac
+    first="${rest%%/*}"
+    if [ "$first" = "$rest" ]; then
+        # File sits directly in the feature dir (e.g. overview.md, spec.md) ->
+        # no owning WP subdirectory -> attribute to the feature itself.
+        printf '%s' "$(basename -- "$feat_dir")"
+    else
+        printf '%s' "$first"
+    fi
+}
+
+# Best-effort gate.result emission — NEVER affects the caller's exit code.
+# $1 gate name, $2 result (pass|fail|warn — trace-events.md enum), $3 reason,
+# $4 the file the hook judged. `wp` is derived here (never passed in) via
+# goalforge_wp_for, per trace-events.md's `gate.result` contract (wp/gate/
+# result/reason all required). Degrades silently: an unresolved feature dir,
+# an undeterminable wp, a missing goalforge-trace-emit, or a rejected event
+# (e.g. an event type this trace-events.md revision does not yet declare) is
+# swallowed — this is a side-effect log call, not the hook's own guard
+# decision.
+goalforge_emit_gate_result() {
+    local gate="$1" result="$2" reason="$3" file="${4:-}" feat_dir wp emit
+    feat_dir="$(goalforge_feature_dir_for "$file" 2>/dev/null)" || return 0
+    [ -n "$feat_dir" ] || return 0
+    wp="$(goalforge_wp_for "$file" 2>/dev/null)" || return 0
+    [ -n "$wp" ] || return 0
+    emit="$HOOK_DIR/../scripts/goalforge-trace-emit"
+    [ -x "$emit" ] || return 0
+    command -v python3 >/dev/null 2>&1 || return 0
+    GF_WP="$wp" GF_GATE="$gate" GF_RESULT="$result" GF_REASON="$reason" python3 -c '
+import json, os, sys
+sys.stdout.write(json.dumps({
+    "type": "gate.result",
+    "wp": os.environ["GF_WP"],
+    "gate": os.environ["GF_GATE"],
+    "result": os.environ["GF_RESULT"],
+    "reason": os.environ["GF_REASON"],
+}))
+' 2>/dev/null | "$emit" --feature-dir "$feat_dir" >/dev/null 2>&1 || true
+    return 0
+}

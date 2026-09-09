@@ -13,7 +13,7 @@ requires:
     kind: skill
     version: "^1.0.0"
     source: interview@cogwright
-    used-by: wayfind, goalforge-interview
+    used-by: wayfind
     degrade: one-question-at-a-time AskUserQuestion loop in the main session
 
 recommends:

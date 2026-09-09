@@ -27,11 +27,11 @@ with the unrelated `run` skill.
 | `sdd-verify` | `goalforge-verify` | `skills/verify/` |
 | `sdd-redecompose` | `goalforge-redecompose` | `skills/redecompose/` |
 | `sdd-archive` | `goalforge-archive` | `skills/archive/` |
-| `sdd-recap` | `goalforge-recap` | `skills/recap/` |
+| `sdd-recap` | `goalforge-recap` *(retired)* | — |
 | `sdd-onboard` | `goalforge-onboard` | `skills/onboard/` |
-| `sdd-watchdog` | `goalforge-watchdog` | `skills/watchdog/` |
+| `sdd-watchdog` | `goalforge-watchdog` *(retired)* | — |
 | `sdd-plan-index` | `goalforge-plan-index` | `skills/plan-index/` |
-| `sdd-arbiter` | `goalforge-arbiter` | `skills/arbiter/` |
+| `sdd-arbiter` | `goalforge-arbiter` *(retired)* | — |
 | `sdd-run` (runner) | `goalforge-run` | `skills/run/` |
 
 ### Children with no legacy name
@@ -43,8 +43,8 @@ under bare names, without the `goalforge-` prefix the chain children carry.
 
 | Old skill | New bare name | Location |
 |-----------|---------------|----------|
-| *(none)* | `goalforge-brief` | `skills/brief/` |
-| *(none)* | `goalforge-interview` | `skills/interview/` |
+| *(none)* | `goalforge-brief` *(retired)* | — |
+| *(none)* | `goalforge-interview` *(retired)* | — |
 | *(none)* | `prototype` | `skills/prototype/` |
 | *(none)* | `wayfind` | `skills/wayfind/` |
 
@@ -61,7 +61,7 @@ name — the old names simply do not exist.
 | `sdd-archive.sh` | `goalforge-archive.sh` |
 | `sdd-assumption-recheck.sh` | `goalforge-assumption-recheck.sh` |
 | `sdd-attribution.sh` | `goalforge-attribution.sh` |
-| `sdd-completed.sh` | `goalforge-completed.sh` |
+| `sdd-completed.sh` | `goalforge-completed.sh` *(retired)* |
 | `sdd-ensure-committed.sh` | `goalforge-ensure-committed.sh` |
 | `sdd-feature-hash.sh` | `goalforge-feature-hash.sh` |
 | `sdd-frontier.sh` | `goalforge-frontier.sh` |
@@ -69,7 +69,7 @@ name — the old names simply do not exist.
 | `sdd-goal-eval.sh` | `goalforge-goal-eval.sh` |
 | `sdd-goal-hash.sh` | `goalforge-goal-hash.sh` |
 | `sdd-goal-route.sh` | `goalforge-route.sh` *(rename)* |
-| `sdd-harden-route.sh` | `goalforge-harden-route.sh` |
+| `sdd-harden-route.sh` | `goalforge-harden-route.sh` *(retired)* |
 | `sdd-harden-surface.sh` | `goalforge-harden-surface.sh` |
 | `sdd-hygiene.sh` | `goalforge-hygiene.sh` |
 | `sdd-install-hooks.sh` | `goalforge-install-hooks.sh` |
@@ -77,11 +77,11 @@ name — the old names simply do not exist.
 | `sdd-reconcile-diff.sh` | `goalforge-reconcile-diff.sh` |
 | `sdd-rewire-impact.sh` | `goalforge-rewire-impact.sh` |
 | `sdd-rollup.sh` | `goalforge-rollup.sh` |
-| `sdd-stamp-tables.sh` | `goalforge-stamp-tables.sh` |
+| `sdd-stamp-tables.sh` | `goalforge-stamp-tables.sh` *(retired)* |
 | `sdd-status.sh` | `goalforge-status.sh` |
 | `sdd-transition.sh` | `goalforge-transition.sh` |
 | `sdd-validate.sh` | `goalforge-validate.sh` |
-| `sdd-wp-complexity.sh` | `goalforge-wp-complexity.sh` |
+| `sdd-wp-complexity.sh` | `goalforge-wp-complexity.sh` *(retired)* |
 
 ## Scripts (.py — plain renames)
 

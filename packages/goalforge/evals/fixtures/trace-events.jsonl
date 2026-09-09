@@ -1,0 +1,113 @@
+{"seq":0,"ts":"2026-09-09T06:45:35Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":1,"ts":"2026-09-09T06:45:35Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":2,"ts":"2026-09-09T06:45:35Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":3,"ts":"2026-09-09T06:49:56Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":4,"ts":"2026-09-09T06:49:56Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":5,"ts":"2026-09-09T06:49:56Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":6,"ts":"2026-09-09T06:59:08Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":7,"ts":"2026-09-09T06:59:09Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":8,"ts":"2026-09-09T06:59:09Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":9,"ts":"2026-09-09T06:59:50Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":10,"ts":"2026-09-09T06:59:50Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":11,"ts":"2026-09-09T06:59:50Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":12,"ts":"2026-09-09T07:04:51Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":13,"ts":"2026-09-09T07:04:51Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":14,"ts":"2026-09-09T07:04:51Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":15,"ts":"2026-09-09T07:05:10Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":16,"ts":"2026-09-09T07:05:10Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":17,"ts":"2026-09-09T07:05:10Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":18,"ts":"2026-09-09T07:14:43Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":19,"ts":"2026-09-09T07:14:43Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":20,"ts":"2026-09-09T07:14:43Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":21,"ts":"2026-09-09T07:15:06Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":22,"ts":"2026-09-09T07:15:06Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":23,"ts":"2026-09-09T07:15:06Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":24,"ts":"2026-09-09T07:15:59Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":25,"ts":"2026-09-09T07:15:59Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":26,"ts":"2026-09-09T07:15:59Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":27,"ts":"2026-09-09T08:06:39Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":28,"ts":"2026-09-09T08:06:39Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":29,"ts":"2026-09-09T08:06:39Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":30,"ts":"2026-09-09T08:13:56Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":31,"ts":"2026-09-09T08:13:56Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":32,"ts":"2026-09-09T08:13:56Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":33,"ts":"2026-09-09T08:31:59Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":34,"ts":"2026-09-09T08:31:59Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":35,"ts":"2026-09-09T08:31:59Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":36,"ts":"2026-09-09T08:31:59Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":37,"ts":"2026-09-09T08:32:01Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":38,"ts":"2026-09-09T08:32:01Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":39,"ts":"2026-09-09T08:32:01Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":40,"ts":"2026-09-09T08:32:01Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":41,"ts":"2026-09-09T08:32:17Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":42,"ts":"2026-09-09T08:32:18Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":43,"ts":"2026-09-09T08:32:18Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":44,"ts":"2026-09-09T08:32:18Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":45,"ts":"2026-09-09T08:32:19Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":46,"ts":"2026-09-09T08:32:19Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":47,"ts":"2026-09-09T08:32:20Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":48,"ts":"2026-09-09T08:32:20Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":49,"ts":"2026-09-09T08:32:57Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":50,"ts":"2026-09-09T08:32:57Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":51,"ts":"2026-09-09T08:32:57Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":52,"ts":"2026-09-09T08:32:57Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":53,"ts":"2026-09-09T08:33:11Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":54,"ts":"2026-09-09T08:33:11Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":55,"ts":"2026-09-09T08:33:11Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":56,"ts":"2026-09-09T08:33:11Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":57,"ts":"2026-09-09T08:33:30Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":58,"ts":"2026-09-09T08:33:30Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":59,"ts":"2026-09-09T08:33:30Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":60,"ts":"2026-09-09T08:33:30Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":61,"ts":"2026-09-09T08:34:32Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":62,"ts":"2026-09-09T08:34:32Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":63,"ts":"2026-09-09T08:34:32Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":64,"ts":"2026-09-09T08:34:32Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":65,"ts":"2026-09-09T08:34:50Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":66,"ts":"2026-09-09T08:34:50Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":67,"ts":"2026-09-09T08:34:50Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":68,"ts":"2026-09-09T08:34:50Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":69,"ts":"2026-09-09T08:36:40Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":70,"ts":"2026-09-09T08:36:40Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":71,"ts":"2026-09-09T08:36:40Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":72,"ts":"2026-09-09T08:36:40Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":73,"ts":"2026-09-09T08:36:45Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":74,"ts":"2026-09-09T08:36:45Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":75,"ts":"2026-09-09T08:36:45Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":76,"ts":"2026-09-09T08:36:45Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":77,"ts":"2026-09-09T08:37:06Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":78,"ts":"2026-09-09T08:37:06Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":79,"ts":"2026-09-09T08:37:06Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":80,"ts":"2026-09-09T08:37:06Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":81,"ts":"2026-09-09T08:37:07Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":82,"ts":"2026-09-09T08:37:07Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":83,"ts":"2026-09-09T08:37:07Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":84,"ts":"2026-09-09T08:37:07Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":85,"ts":"2026-09-09T08:37:36Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":86,"ts":"2026-09-09T08:37:36Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":87,"ts":"2026-09-09T08:37:36Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":88,"ts":"2026-09-09T08:37:36Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":89,"ts":"2026-09-09T08:38:35Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":90,"ts":"2026-09-09T08:38:35Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":91,"ts":"2026-09-09T08:38:35Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":92,"ts":"2026-09-09T08:38:35Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":93,"ts":"2026-09-09T08:39:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":94,"ts":"2026-09-09T08:39:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":95,"ts":"2026-09-09T08:39:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":96,"ts":"2026-09-09T08:39:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":97,"ts":"2026-09-09T08:40:16Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":98,"ts":"2026-09-09T08:40:16Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":99,"ts":"2026-09-09T08:40:16Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":100,"ts":"2026-09-09T08:40:16Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":101,"ts":"2026-09-09T08:43:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":102,"ts":"2026-09-09T08:43:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":103,"ts":"2026-09-09T08:43:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":104,"ts":"2026-09-09T08:43:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":105,"ts":"2026-09-09T08:56:03Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":106,"ts":"2026-09-09T08:56:03Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":107,"ts":"2026-09-09T08:56:03Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":108,"ts":"2026-09-09T08:56:03Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}
+{"seq":109,"ts":"2026-09-09T08:56:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-good","gate":"section-lint","result":"pass","reason":"8/8 C1 sections in order"}
+{"seq":110,"ts":"2026-09-09T08:56:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-extra","gate":"section-lint","result":"fail","reason":"disallowed H2 section(s): Notes"}
+{"seq":111,"ts":"2026-09-09T08:56:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-missing","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Changelog"}
+{"seq":112,"ts":"2026-09-09T08:56:53Z","type":"gate.result","schema_version":1,"wp":"wp-01-bad-zero","gate":"section-lint","result":"fail","reason":"missing C1 H2 section(s): Goal Verification Owned Files Depends On Checklist Open Questions Decisions Goal Changelog"}

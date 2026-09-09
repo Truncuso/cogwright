@@ -5,44 +5,43 @@
       "id": 1,
       "should_trigger": true,
       "prompt": "Decompose the notification-service feature into work packages",
-      "expected_output": "Creates wp-01-api-scaffold/ and wp-02-delivery-adapters/ each with overview.md (status: spec), todo.md, and at least one task-*.md (status: pending). Updates feature overview.md work packages table.",
+      "expected_output": "Creates wp-01-api-scaffold/ and wp-02-delivery-adapters/ each with overview.md ONLY (status: spec), C1 eight-section shape, C2 frontmatter (owned_files, contract_slice, goal_approved_version: null, schema_version: 6), and a checklist of `- [ ] Tn <outcome> {files: a, b} [b1,b2]` lines. No per-item files, no todo.md. Updates the feature overview.md work packages table.",
       "files": [
         "evals/fixtures/spec.md",
         "evals/fixtures/overview.md"
       ],
       "expectations": [
         "SKILL.md declares name: goalforge-decompose",
-        "SKILL.md input is spec.md (must exist)",
-        "SKILL.md output wp overview.md initial status is spec",
-        "SKILL.md output task-*.md initial status is pending",
-        "SKILL.md output todo.md is stamped from wp-todo.md template",
-        "SKILL.md idempotency: folder present means skip without modifying",
-        "SKILL.md WP ID format is wp-NN-<slug>",
-        "SKILL.md forbids creating files not in the Outputs table",
-        "Fixture spec.md has a 2-WP table with wp-01-api-scaffold and wp-02-delivery-adapters",
-        "Fixture spec.md has status: spec"
+        "SKILL.md reads plans/<feature>/spec.md as input",
+        "SKILL.md preconditions the feature overview.md is status: ready",
+        "SKILL.md writes only overview.md — no per-item files, no todo.md",
+        "SKILL.md WP overview.md is born status: spec, never another status",
+        "SKILL.md checklist item shape is `{files: a, b} [b1,b2]`, never a status/complexity/verify/depends_on/commit field",
+        "SKILL.md goal.outcome and goal.verification are always WP-authored, never inherited",
+        "Fixture spec.md has an Interface Contract section and a Work Packages table",
+        "Fixture overview.md has status: ready"
       ]
     },
     {
       "id": 2,
       "should_trigger": true,
-      "prompt": "Break the payment-gateway feature down into work packages and tasks",
-      "expected_output": "Reads plans/payment-gateway/spec.md, creates wp-NN-* folders with overview.md (status: spec), todo.md, task files (status: pending), and updates feature overview.md WP table",
+      "prompt": "Break the payment-gateway feature down into work packages",
+      "expected_output": "Reads plans/payment-gateway/spec.md, creates wp-NN-* folders each with one overview.md (status: spec, C1/C2 shape), and updates the feature overview.md WP table.",
       "files": [],
       "expectations": [
-        "SKILL.md triggers on user asking to break down or plan work packages for a feature with an approved spec.md",
-        "SKILL.md reads spec.md as the primary input",
-        "SKILL.md output overview.md initial status is spec for all newly created WPs"
+        "SKILL.md triggers on user asking to decompose or break down work packages for a feature with an approved spec.md",
+        "SKILL.md derives depends_on from the spec WP table, backward-pointing only",
+        "SKILL.md self-check enforces facet coverage and one-owner/backward-deps invariants"
       ]
     },
     {
       "id": 3,
       "should_trigger": false,
       "prompt": "Approve the spec for the search-indexing-pipeline feature.",
-      "expected_output": "goalforge-decompose should NOT trigger — approving a spec is a goalforge-spec human-gate action, not a decompose action. The skill is not applicable here.",
+      "expected_output": "goalforge-decompose should NOT trigger — approving a spec is a goalforge-spec human-gate action, not a decompose action.",
       "files": [],
       "expectations": [
-        "SKILL.md trigger requires user asking to decompose or break down a feature that has an approved spec.md",
+        "SKILL.md trigger requires an approved spec.md, not the approval step itself",
         "A spec-approval request is outside the trigger surface of goalforge-decompose"
       ]
     },
@@ -50,14 +49,13 @@
       "id": 4,
       "should_trigger": true,
       "prompt": "Decompose the notification-service spec; wp-01-api-scaffold/ already exists",
-      "expected_output": "Skips wp-01-api-scaffold entirely (idempotent). Creates wp-02-delivery-adapters/ normally if absent. Logs that wp-01-api-scaffold was already present.",
+      "expected_output": "Skips wp-01-api-scaffold entirely (folder-level idempotency). Creates wp-02-delivery-adapters/ normally if absent.",
       "files": [
         "evals/fixtures/spec.md",
         "evals/fixtures/overview.md"
       ],
       "expectations": [
-        "SKILL.md idempotency: folder present means skip without modifying",
-        "SKILL.md logs that an already-present WP was skipped",
+        "SKILL.md idempotency is folder-level: an existing WP folder is skipped without modification",
         "SKILL.md does not clobber existing WP content"
       ]
     },
@@ -65,12 +63,23 @@
       "id": 5,
       "should_trigger": true,
       "prompt": "Decompose the notification-service feature but spec.md does not exist",
-      "expected_output": "Skill fails: spec.md is a required input. Emits an error stating spec.md must exist before decompose can run. Does not create any WP folders.",
+      "expected_output": "Skill fails: spec.md is a required precondition. Does not create any WP folders.",
       "files": [],
       "expectations": [
-        "SKILL.md input spec.md must exist (precondition)",
-        "SKILL.md does not proceed if the required spec.md input is absent",
+        "SKILL.md preconditions <PLANS_ROOT>/<feature>/spec.md exists with an ## Interface Contract",
         "SKILL.md never creates WP folders without a valid spec.md input"
+      ]
+    },
+    {
+      "id": "sel-neg-add-wp-vs-full-redecompose",
+      "should_trigger": true,
+      "prompt": "Append one new WP to the notification-service feature for a rate-limiter, without re-decomposing.",
+      "expected_output": "Add-WP mode: Steps 2-6 for the one new WP alone, numbered with the next free NN, touching no existing WP.",
+      "files": [],
+      "expectations": [
+        "SKILL.md Add-WP mode documented with --add-wp <slug> --goal flags",
+        "SKILL.md Add-WP supports --derived-from and --source re-entry flags",
+        "SKILL.md routes a learning that changes or drops an existing WP to goalforge-redecompose instead"
       ]
     }
   ]

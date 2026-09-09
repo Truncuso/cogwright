@@ -18,22 +18,18 @@ aliases were retired 2026-07-21.
 |---|---|
 | `goalforge-capture` | Free-text intent → feature `overview.md` (status: draft) + route |
 | `goalforge-spec` | Write `spec.md`; define measurable goal + verification criteria (draft → ready) |
-| `goalforge-decompose` | Break the spec into WP `overview.md` files with task stubs; `--add-wp` mode |
-| `goalforge-harden` | Grill each WP via `goalforge-interview`; resolve open questions; advance to `ready` |
-| `goalforge-interview` | Fidelity-aware goal-hardening grilling (wraps the `interview` plugin engine) |
-| `goalforge-execute` | Run the execute sub-cycle per task (pick-agent → dispatch → checkpoint → verify) |
-| `goalforge-verify` | Single semantic gate; executing → `verified` |
+| `goalforge-decompose` | Break the spec into WP `overview.md` files — WP overview + checklist, no task stubs; `--add-wp` mode |
+| `goalforge-harden` | Resolve open questions; advance to `ready` |
+| `goalforge-execute` | Dispatch one owner for the whole WP; one commit, no per-task checkpoint; `ready`/`executing` → `implemented` |
+| `goalforge-verify` | Three gates (A deterministic, B fresh-context review, C goal judge) over the WP's single commit; `implemented → verified` |
 | `goalforge-redecompose` | Reconcile a re-decomposition on a learning event |
 | `goalforge-archive` | completed → archived (supersede edges) |
-| `goalforge-recap` | Feature/WP status recap |
 | `goalforge-onboard` | Onboard an existing repo into the chain |
-| `goalforge-watchdog` | Drift/health monitoring |
 | `goalforge-plan-index` | Plan index generation |
-| `goalforge-arbiter` | Adjudication support |
 | `goalforge-run` | Chain orchestrator (route-aware); wires the chain via `chain.yaml` |
 
 `prototype/` and `wayfind/` are non-chain tenants co-located in this package
-(not chain stages); `brief/` is a chain-support asset. Details: `SKILL.md`.
+(not chain stages). Details: `SKILL.md`.
 
 ## Shared References
 
@@ -56,7 +52,6 @@ terminal, reached only via explicit user action. Details:
 
 | Skill | Relationship |
 |---|---|
-| `interview` (plugin) | Engine driven by `goalforge-interview`, the Step-1 delegate of `goalforge-harden` |
 | `implement` | Reused inside `goalforge-execute` sub-cycle |
 | `verify-and-simplify` | Reused inside `goalforge-execute` sub-cycle |
 | `wayfind` | Optional pre-capture on-ramp; graduates a converged decision map into `goalforge-capture` |

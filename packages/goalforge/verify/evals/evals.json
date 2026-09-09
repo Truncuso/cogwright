@@ -4,115 +4,60 @@
     {
       "id": 1,
       "should_trigger": true,
-      "prompt": "Verify wp-01-api-scaffold (all tasks verified, findings.md present)",
-      "expected_output": "Delegates to superpowers:verification-before-completion; on pass advances executing → verified and updates overview.md frontmatter.",
-      "files": [
-        "evals/fixtures/wp-executing/overview.md",
-        "evals/fixtures/wp-executing/task-01-router-setup.md",
-        "evals/fixtures/wp-executing/findings.md"
-      ],
+      "prompt": "Verify wp-02-delivery-adapters, which is at status: implemented.",
+      "expected_output": "Computes the cumulative WP diff once, runs gate A (repo lint/typecheck, goal.verification.command, owned_files boundary check), gate B (one fresh-context review on a different model), gate C (goal judge binary rubric + one foreign second opinion). Any BLOCK stops B/C. On all-pass, transitions implemented → verified and emits wp.verified.",
+      "files": [],
       "expectations": [
         "SKILL.md declares name: goalforge-verify",
-        "SKILL.md precondition: all task-*.md files have status: verified",
-        "SKILL.md precondition: findings.md must exist",
-        "SKILL.md delegates to superpowers:verification-before-completion",
-        "SKILL.md state transition is executing → verified",
-        "SKILL.md refusal template lists unverified tasks by name",
-        "SKILL.md refusal template states whether findings.md is present or absent",
-        "Fixture overview.md has status: executing",
-        "Fixture task has status: verified",
-        "Fixture findings.md exists"
+        "SKILL.md three gates over the WP's single commit, sole implemented → verified authority",
+        "SKILL.md gate A boundary check: every diff path inside owned_files, else BLOCK",
+        "SKILL.md gate B runs in a fresh context on a model different from the executor's",
+        "SKILL.md gate C judges outcome/behaviors/no-shim/scope, any FAIL BLOCKs",
+        "SKILL.md gate C takes one foreign second opinion via headless_dispatch"
       ]
     },
     {
       "id": 2,
       "should_trigger": true,
-      "prompt": "Verify wp when tasks are not yet verified — expect refusal",
-      "expected_output": "Skill REFUSES: prints task names not yet verified and findings.md presence, does not advance status.",
+      "prompt": "Gate A's boundary check finds a file outside owned_files in the diff.",
+      "expected_output": "Gate A BLOCKs: record it in findings.md and send the WP back to executing with a --reason. Gates B and C do not run on a red gate A.",
       "files": [],
       "expectations": [
-        "SKILL.md refusal template includes 'goalforge-verify REFUSED'",
-        "SKILL.md says skill must list tasks not yet verified by name",
-        "SKILL.md says skill must report whether findings.md is present or absent"
+        "SKILL.md any gate A failure BLOCKs and sends the WP back to executing",
+        "SKILL.md B and C do not run on a red gate A"
       ]
     },
     {
       "id": 3,
       "should_trigger": true,
-      "prompt": "Confirm that wp-02-delivery-adapters is complete and mark it verified",
-      "expected_output": "goalforge-verify runs precondition checks: all task-*.md must be status: verified AND findings.md must exist. On both passing, delegates to superpowers:verification-before-completion and advances status to verified.",
+      "prompt": "The gate C judge says the diff is fine, but the foreign second opinion disagrees.",
+      "expected_output": "Judge/second-opinion disagreement escalates to the human (unattended: park with both verdicts in findings.md); the skill never breaks the tie itself.",
       "files": [],
       "expectations": [
-        "SKILL.md triggers when user asks to verify, confirm completion, or advance a WP at status: executing",
-        "SKILL.md hard gate: both preconditions must pass before any verification work begins",
-        "SKILL.md advances executing → verified only after superpowers:verification-before-completion returns passing"
+        "SKILL.md judge/second-opinion disagreement escalates to the human, never broken by the skill itself",
+        "SKILL.md the second opinion checks the judge's verdict, not the code directly"
       ]
     },
     {
       "id": 4,
-      "should_trigger": false,
-      "prompt": "Check my implementation for code quality issues.",
-      "expected_output": "goalforge-verify should NOT trigger — a generic code quality check is not a WP verification request. The skill is not applicable; a code-reviewer agent or verify-and-simplify would be appropriate instead.",
+      "should_trigger": true,
+      "prompt": "wp-02 is the last WP in the feature and just passed all three gates.",
+      "expected_output": "If every sibling wp-*/overview.md is now verified, run one integration review over the whole-feature diff with the repo build/tests green; a blocking finding holds the feature at active, otherwise the feature is set to status: completed. Unattended this parks, never silently no-ops.",
       "files": [],
       "expectations": [
-        "SKILL.md trigger requires a WP at status executing with the user asking to verify or advance it",
-        "A generic code quality request is outside the trigger surface of goalforge-verify"
+        "SKILL.md last-WP check runs one integration review over the whole-feature diff",
+        "SKILL.md unattended last-WP completion parks rather than silently no-opping"
       ]
     },
     {
       "id": 5,
-      "should_trigger": true,
-      "prompt": "Verify wp-01-api-scaffold: all tasks are verified but findings.md is missing",
-      "expected_output": "Skill REFUSES: findings.md is a required precondition. Prints that findings.md is MISSING and lists zero unverified tasks. Does not advance status. Suggests creating findings.md before retrying.",
+      "should_trigger": false,
+      "prompt": "The WP is still at status: executing — check whether the diff is any good.",
+      "expected_output": "goalforge-verify should refuse and name the current status — a WP still at executing was built outside the chain and must be re-run through /implement first; never a partial verify.",
       "files": [],
       "expectations": [
-        "SKILL.md precondition: findings.md must exist — its absence causes refusal even when all tasks are verified",
-        "SKILL.md refusal template reports findings.md as MISSING",
-        "SKILL.md suggests the remediation: create findings.md before retrying"
-      ]
-    },
-    {
-      "id": 6,
-      "should_trigger": true,
-      "prompt": "After verifying the last WP and advancing the feature to completed, finalize and confirm a clean tree.",
-      "expected_output": "Completion step 5 stages+commits only the feature plan artifacts (docs(goalforge): finalize <wp> verification) on the current branch, then runs goalforge-ensure-committed.sh on the feature path; on non-zero it reports dirty paths and HALTS instead of declaring done.",
-      "files": [],
-      "expectations": [
-        "SKILL.md completion step 5 commits only the feature plan artifacts (git add <PLANS_ROOT>/<feature>)",
-        "SKILL.md references goalforge-ensure-committed.sh as the clean-tree gate",
-        "SKILL.md states the commit gate is path-scoped and branch-agnostic (passes on master under the dotfiles exception)",
-        "SKILL.md HALTs on a non-zero ensure-committed result instead of declaring the WP done"
-      ]
-    },
-    {
-      "id": 7,
-      "should_trigger": true,
-      "prompt": "The last WP is verified and the feature is now completed — should goalforge-verify archive it?",
-      "expected_output": "No. Completion step 6 only PRINTS a gated offer to run goalforge-archive; archival is an explicit user action. goalforge-verify never sets status: archived on a feature.",
-      "files": [],
-      "expectations": [
-        "SKILL.md completion step 6 prints a gated archive offer only when the feature reached completed",
-        "SKILL.md archive offer points the user at goalforge-archive <feature> [--supersedes <old>]",
-        "SKILL.md never sets status: archived — archival is explicit user action only, performed by goalforge-archive",
-        "SKILL.md state transition adds feature: completed → archived (via goalforge-archive)"
-      ]
-    },
-    {
-      "id": 8,
-      "should_trigger": true,
-      "prompt": "Verify wp-09-hard-dependency. Two of its tasks completed correctly but have no commit: task-01 wrote its deliverable into a file outside this repo, and task-03 wrote only to plans/, which this repo gitignores by design. Both carry checkpoint.commit_sha: \"\".",
-      "expected_output": "goalforge-verify does NOT fabricate a hash and does NOT force-add a gitignored file. It recognises the un-committable-deliverable case: each such task declares commit_exempt: <prose reason> in its own frontmatter, is promoted to verified with commit: left empty, and goalforge-validate --strict --require-commit exits 0 while printing a WARN naming the reason for each exempted task. A task with no commit and no valid commit_exempt: still blocks finalization.",
-      "files": [],
-      "expectations": [
-        "SKILL.md Completion Step A names commit_exempt: <prose reason> as the ONLY exemption from the missing-hash error",
-        "SKILL.md still forbids fabricating a commit hash",
-        "SKILL.md states the exemption is opt-in and per-task (one line in that task's frontmatter)",
-        "SKILL.md states the exemption fails closed on an absent, empty, or boolean-ish value",
-        "SKILL.md states an honoured exemption is a standing WARN naming the reason, never a suppression",
-        "SKILL.md states a commit_exempt: on a task that DOES carry a hash is itself an ERROR",
-        "SKILL.md states goalforge-verify READS commit_exempt: and never writes it",
-        "scripts/tests/goalforge-validate.test.sh commit-exempt-accepted asserts --require-commit exits 0 AND the reason is printed",
-        "scripts/tests/goalforge-validate.test.sh commit-missing-still-errors asserts an un-exempted missing hash still ERRORs under --require-commit"
+        "SKILL.md refuses anything but status: implemented (or verified for idempotent re-run)",
+        "SKILL.md never partially verifies a WP still at executing"
       ]
     }
   ]

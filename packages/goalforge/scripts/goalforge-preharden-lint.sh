@@ -14,14 +14,30 @@
 #       words exist, not the work.
 #   V3  no executable check — verify: block contains only echo/printf/comments.
 #   V4  sole `--help` probe — the only command is a `--help` invocation.
+#   V5  WP-altitude `goal.verification.command` not command-shaped (prose, a
+#       bare boolean, echo-only, a sole `--help` probe, or an em-dash
+#       narrative clause) — ticket-73/spec.md C3 G2. ERROR (exit 2) on
+#       `schema_version: 6` (the C1/C2 slim shape); WARN-only on
+#       `schema_version: 5` (ratchet: baseline compat, never promoted to
+#       ERROR — migrated when a WP is next touched); absent schema_version
+#       (pre-v4 legacy) is exempt entirely. A schema-6 WP's overview.md is
+#       also run through `goalforge-section-lint.sh` (C1 8-section shape)
+#       here — a failure there is a V5 ERROR too.
 #
 # Usage: goalforge-preharden-lint.sh <wp-dir> | --self-test
-# Exit: 0 clean; 1 findings (WARN lines on stdout, gate-consumable); 2 usage.
+# Exit: 0 clean; 1 findings (WARN lines on stdout, gate-consumable);
+#       2 usage/internal error, OR a V5 ERROR (schema-6 command-shape or
+#       section-lint failure — fail-closed, distinct from the WARN channel).
 # Offline, deterministic, no LLM. sdd-* diagnostic prefix per CLI-surface freeze.
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 warn_count=0
 warn() { echo "WARN [$1] $2"; warn_count=$((warn_count+1)); }
+
+err_count=0
+err() { echo "ERROR [$1] $2"; err_count=$((err_count+1)); }
 
 # Print the verify: block scalar body of a task file (indented lines after
 # `verify: |`), stripped of the two-space indent.
@@ -32,6 +48,150 @@ verify_block() {
         grab && /^---$/ { grab=0 }
         grab { sub(/^  /, ""); print }
     ' "$1"
+}
+
+# V5 helper — extracts the WP's top-level `schema_version:` and the nested
+# `goal.verification.command` scalar (fixed 0/2/4-space frontmatter indent
+# per schema.md's `goal:` block). Prints SCHEMA:/PRESENT:/COMMAND: lines.
+# Exit 1 on unreadable file or missing/unterminated frontmatter.
+extract_verification() {
+    python3 - "$1" <<'PY'
+import sys, re
+path = sys.argv[1]
+try:
+    text = open(path, encoding='utf-8').read()
+except OSError:
+    sys.exit(1)
+lines = text.split('\n')
+if not lines or lines[0].strip() != '---':
+    sys.exit(1)
+end = None
+for i in range(1, len(lines)):
+    if lines[i].strip() == '---':
+        end = i
+        break
+if end is None:
+    sys.exit(1)
+fm = lines[1:end]
+
+def top_value(key):
+    pat = re.compile(r'^' + re.escape(key) + r':\s*(.*)$')
+    for ln in fm:
+        m = pat.match(ln)
+        if m:
+            return m.group(1).strip()
+    return None
+
+schema = top_value('schema_version') or ''
+
+command = None
+present = False
+in_goal = in_ver = False
+for ln in fm:
+    if re.match(r'^goal:\s*$', ln):
+        in_goal, in_ver = True, False
+        continue
+    if in_goal and re.match(r'^[A-Za-z_]', ln):
+        in_goal = in_ver = False
+    if in_goal and re.match(r'^  verification:\s*$', ln):
+        in_ver = True
+        continue
+    if in_goal and in_ver and re.match(r'^  [A-Za-z_]', ln) and not re.match(r'^  verification:', ln):
+        in_ver = False
+    if in_goal and in_ver:
+        m = re.match(r'^    command:\s*(.*)$', ln)
+        if m:
+            present = True
+            val = m.group(1).strip()
+            if len(val) >= 2 and val[0] == val[-1] == '"':
+                val = val[1:-1]
+            command = val
+            break
+
+print(f"SCHEMA:{schema}")
+print(f"PRESENT:{1 if present else 0}")
+print(f"COMMAND:{command if command is not None else ''}")
+PY
+}
+
+# V5 helper — is `$1` command-shaped (one aggregate entrypoint, no smuggled
+# prose)? Sets CMDLINT_REASON and returns 1 on: empty, a bare boolean
+# literal, an em-dash narrative clause, a first token that is neither a
+# known executable nor path-like, echo/printf-only, or a sole `--help` probe.
+CMDLINT_REASON=""
+command_shaped() {
+    local s first
+    CMDLINT_REASON=""
+    s="$(printf '%s' "$1" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+    if [ -z "$s" ]; then CMDLINT_REASON="empty command"; return 1; fi
+    case "$s" in
+        true|false) CMDLINT_REASON="boolean literal '$s', not an executable command"; return 1 ;;
+    esac
+    if printf '%s' "$s" | grep -q '—'; then
+        CMDLINT_REASON="em-dash narrative clause, not a command"
+        return 1
+    fi
+    first="$(printf '%s' "$s" | awk '{print $1}')"
+    case "$first" in
+        bash|sh|zsh|python|python3|node|bun|npm|npx|yarn|make|pytest|go|cargo|deno|tsc|jest|vitest|uv|poetry|cmake|ctest|./*|../*|/*) ;;
+        *)
+            if ! printf '%s' "$first" | grep -q '/'; then
+                CMDLINT_REASON="first token '$first' is not command-shaped (prose?)"
+                return 1
+            fi
+            ;;
+    esac
+    local echo_only=1 seg
+    IFS='&;' read -ra _segs <<< "$s"
+    for seg in "${_segs[@]:-}"; do
+        seg="$(printf '%s' "$seg" | sed 's/^[[:space:]]*//')"
+        [ -z "$seg" ] && continue
+        printf '%s' "$seg" | grep -qE '^(echo|printf)\b' || { echo_only=0; break; }
+    done
+    if [ "$echo_only" -eq 1 ]; then
+        CMDLINT_REASON="echo/printf only — no executable check"
+        return 1
+    fi
+    if printf '%s' "$s" | grep -qE -- '--help' && [ "$(printf '%s' "$s" | wc -w)" -le 3 ]; then
+        CMDLINT_REASON="bare --help probe"
+        return 1
+    fi
+    return 0
+}
+
+# V5 — WP-altitude verification.command shape + C1 section lint.
+lint_wp_verification() {
+    local wp="$1" ov="$wp/overview.md" base info schema present command
+    [ -f "$ov" ] || return 0
+    base="$(basename -- "$wp")"
+
+    info="$(extract_verification "$ov")" || {
+        err V5 "$base: overview.md unreadable or missing/unterminated frontmatter"
+        return 0
+    }
+    schema="$(printf '%s\n' "$info" | sed -n 's/^SCHEMA://p')"
+    present="$(printf '%s\n' "$info" | sed -n 's/^PRESENT://p')"
+    command="$(printf '%s\n' "$info" | sed -n 's/^COMMAND://p')"
+
+    case "$schema" in
+        6)
+            if [ "$present" != "1" ]; then
+                err V5 "$base: schema_version 6 requires goal.verification.command"
+            elif ! command_shaped "$command"; then
+                err V5 "$base: goal.verification.command not command-shaped — $CMDLINT_REASON"
+            fi
+            local sl_out
+            if ! sl_out="$("$SCRIPT_DIR/goalforge-section-lint.sh" "$ov" 2>&1)"; then
+                err V5 "$base: section-lint — ${sl_out##*: }"
+            fi
+            ;;
+        5)
+            if [ "$present" = "1" ] && ! command_shaped "$command"; then
+                warn V5 "$base: schema_version 5 baseline — goal.verification.command not command-shaped — $CMDLINT_REASON"
+            fi
+            ;;
+        *) : ;;   # absent schema_version — pre-v4 legacy, exempt
+    esac
 }
 
 lint_wp() {
@@ -84,6 +244,13 @@ EOF
         fi
     done
 
+    # V5 — WP-altitude command-shape + section-lint (ERROR channel, distinct
+    # from the WARN channel above).
+    lint_wp_verification "$wp"
+
+    if [ "$err_count" -gt 0 ]; then
+        return 2
+    fi
     [ "$warn_count" -eq 0 ]
 }
 

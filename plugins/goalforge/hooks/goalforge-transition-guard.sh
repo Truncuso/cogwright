@@ -140,7 +140,7 @@ if not fp.endswith("overview.md"):
     sys.exit(0)
 old = str(ti.get("old_string") or "")
 new = str(ti.get("new_string") or "")
-enum = r"(draft|spec|hardened|ready|executing|verified|archived)"
+enum = r"(spec|hardened|ready|executing|implemented|verified|abandoned|archived)"
 mo = re.search(r"^\s*status:\s*['\"]?" + enum, old, re.MULTILINE)
 mn = re.search(r"^\s*status:\s*['\"]?" + enum, new, re.MULTILINE)
 if not (mo and mn) or mo.group(1) == mn.group(1):
@@ -310,12 +310,15 @@ fi
 goalforge_under_plans_root "${FILE:-}" || exit 0
 if feature_frozen "$FILE"; then
     echo "goalforge-transition-guard: BLOCK — $FILE: owning feature is 'status: paused' (WIP freeze, base-system-map ticket-13). Unfreeze the feature's overview.md first." >&2
+    goalforge_emit_gate_result "transition-guard" "fail" "feature frozen (status: paused)" "$FILE"
     exit 2
 fi
 do_check "$FROM" "$TO"
 rc=$?
 if [[ "$rc" -eq 2 ]]; then
     echo "goalforge-transition-guard: BLOCK — $FILE: '$FROM -> $TO' is not an edge in references/state-machine.md; use goalforge-transition.sh." >&2
+    goalforge_emit_gate_result "transition-guard" "fail" "'$FROM -> $TO' is not a legal edge" "$FILE"
     exit 2
 fi
+goalforge_emit_gate_result "transition-guard" "pass" "'$FROM -> $TO' is a legal edge" "$FILE"
 exit 0

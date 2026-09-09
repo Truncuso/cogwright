@@ -13,8 +13,9 @@
 #   (d) dangling optional_depends_on target → non-fatal WARN, exit 0
 #   (e) v5-marked WP WITH complete goal at ready → accepted, AND a
 #       present-target optional_depends_on emits no WARN (positive direction)
-#   (f) templates/wp-overview.md + templates/feature-overview.md carry
-#       schema_version: 5
+#   (f) templates/wp-overview.md carries schema_version: 6 (C1/schema-6, wp-01)
+#       and templates/feature-overview.md keeps schema_version: 5 (the
+#       feature-level opt-in marker this WP did not touch)
 #   (g) goalforge-goal-hash.sh --self-test and goalforge-validate.sh --self-test both exit 0
 
 set -uo pipefail
@@ -88,12 +89,12 @@ else
   check "(e) v5 WP with complete goal accepted AND present-target optional_depends_on emits no WARN" "fail"
 fi
 
-# ── (f) templates carry schema_version: 5 ───────────────────────────────────
-if grep -q "^schema_version: 5" "$TEMPLATES_DIR/wp-overview.md" \
+# ── (f) wp-overview.md is schema 6 (C1); feature-overview.md stays schema 5 ─
+if grep -q "^schema_version: 6" "$TEMPLATES_DIR/wp-overview.md" \
    && grep -q "^schema_version: 5" "$TEMPLATES_DIR/feature-overview.md"; then
-  check "(f) templates/wp-overview.md + templates/feature-overview.md carry schema_version: 5" "pass"
+  check "(f) templates/wp-overview.md carries schema_version: 6, templates/feature-overview.md keeps schema_version: 5" "pass"
 else
-  check "(f) templates/wp-overview.md + templates/feature-overview.md carry schema_version: 5" "fail"
+  check "(f) templates/wp-overview.md carries schema_version: 6, templates/feature-overview.md keeps schema_version: 5" "fail"
 fi
 
 # ── (g) both scripts' --self-test exit 0 ────────────────────────────────────

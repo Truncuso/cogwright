@@ -65,19 +65,33 @@ Degrade-not-block: any attribution lookup failure resolves to `"unknown"`/`""`;
 it never blocks the emit, and the emitter warns to stderr + exits 0 on emission
 failure so it never blocks the underlying chain operation.
 
-## Event types (11)
+## Event types (17)
 
-All eleven are schema-defined here (single schema home). Producer coverage this WP:
-`wp.status_changed`, `feature.status_changed`, `commit.linked`, `gate.result`
-have live producers (transition wiring + legacy derivation). `issue.recorded`'s
-producer is wp-15. `task.status_changed`, `finding.recorded`,
-`dispatch.launched`, `dispatch.completed` are **schema-only** this lap (no
-producer) — consumers treat those streams as **best-effort-empty** (D-OQ1).
+All seventeen are schema-defined here (single schema home). Producer coverage
+this WP: `wp.status_changed`, `feature.status_changed`, `commit.linked`,
+`gate.result` have live producers (transition wiring + legacy derivation).
+`issue.recorded`'s producer is wp-15. `dispatch.launched` gains a producer
+this WP (`goalforge-pick-agent.py`, C6/T20); `dispatch.completed` and
+`finding.recorded` gain theirs too (`execute/SKILL.md` §3 and §5 — see
+`finding.recorded` below, which requires `wp`). `task.status_changed` is
+**schema-only** this lap (no producer and no ledger derivation source) —
+consumers treat that stream as **best-effort-empty** (D-OQ1).
 `reharden.proposed`/`reharden.accepted` are added by the prototype-native
 re-harden edge (this feature): their designated producer is the re-harden
 transition (`goalforge-transition.sh` on the evidence-gated `ready→hardened`
 edge), described here per the pinned contract even where that producer lands in a
 sibling task — they are NOT schema-only.
+
+Six event types are added by wp-01 (C6/D13): `gate.disabled` (producer:
+`goalforge-gate-budget.sh`, T19), `harden.parked`/`harden.round` (producer:
+`goalforge-harden-stop.sh`, T14), `wp.verified` (producer: `verify/SKILL.md`
+Gate C completion, T18), `second_opinion.ok`/`second_opinion.skipped`
+(producer: `verify/SKILL.md` Gate C second-opinion slot, T18). `gate.result`
+gains a `warn` value on its existing `result` enum this WP
+(`pass`\|`fail`\|`warn`) — no new field, no schema-shape change; `wp`/`gate`/
+`result` stay all-required, unchanged from the pre-wp-01 contract. `warn` is
+non-blocking (never counted toward the C4 self-disable budget); `fail` is the
+strike `goalforge-gate-budget.sh` (T19) counts.
 
 ### `wp.status_changed`
 
@@ -136,23 +150,120 @@ Plus attribution fields (as above).
 
 ### `gate.result`
 
-A machine-readable gate outcome (verification/review/hash gate, etc.).
+A machine-readable gate outcome (verification/review/hash gate, etc.). This is
+the ticket-74 firing counter: every retained gate emits through this type, and
+`goalforge-gate-budget.sh` (T19) reads it as the sole source of truth for a
+gate's fire count — never the hook's own state.
 
 | Field | Type | Required | Semantics |
 |---|---|---|---|
 | `wp` | string | yes | WP the gate ran against. |
-| `gate` | string | yes | Gate name (e.g. `ready-hash`, `verify`, `review`). |
-| `result` | string (`pass`\|`fail`) | yes | Outcome. |
+| `gate` | string | yes | Gate name (e.g. `ready-hash`, `verify`, `open-questions`). |
+| `result` | string (`pass`\|`fail`\|`warn`) | yes | Outcome. `fail` is the noise-budget signal: `goalforge-gate-budget.sh` (T19) counts a `fail` row for a gate as one of its two self-disable strikes (C4). `warn` runs the gate's warning branch (the row is informational, never counted toward self-disable). |
 | `reason` | string | no | Detail. |
 
 Plus attribution fields. A gate-FAIL (rejected transition) writes NO ledger row,
 so `gate.result` is only recoverable via the live emitter — one of the reasons
 the emitter must exist regardless of derivation (D-OQ3).
 
+### `gate.disabled`
+
+The ticket-74 / C4 self-disable record: a gate whose `gate.result` has fired
+`result: fail` twice in one session with no `commit.linked` row after them is
+skipped for the rest of the session, and this row is written instead of a third
+firing. Producer: `goalforge-gate-budget.sh` (T19), called by any dispatcher
+before invoking a budget-gated gate. Session-local only — the row persists in
+the trace as the audit record, but re-arming is the commit that fixes the gate
+(D9), not a persisted disable flag.
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `gate` | string | yes | The disabled gate's name (matches `gate.result.gate`). |
+| `wp` | string | no | WP in scope when the budget tripped, if known. |
+| `reason` | string | no | Free text, e.g. `"2 fail results, no commit"`. |
+| `session` | string | no | The session the budget is scoped to (see T19 session-id fallback). |
+
+Plus attribution fields.
+
+### `harden.parked`
+
+A harden round that breached the C4 stop rule (max 2 rounds, or the 60k-token
+ceiling) and parked to a human. Producer: `goalforge-harden-stop.sh` (T14),
+exit code 3 — the shape below is exactly what that script's header documents
+it emits (`{type, wp, reason, rounds}`, best-effort; a rejected/unavailable
+emit never changes the exit code).
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | yes | WP whose harden loop parked. |
+| `reason` | string | yes | e.g. `"ceiling-breached"`. |
+| `rounds` | integer | yes | Rounds completed at park time (max 2). |
+
+Plus attribution fields.
+
+### `harden.round`
+
+One harden review round's token/round counters, recorded regardless of
+outcome (pass or park) — the substrate `goalforge-harden-stop.sh` (T14) reads
+to enforce the C4 ceiling and that `goalforge-rollup.sh` sums for a WP's
+harden cost.
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | yes | WP under harden review. |
+| `round` | integer | yes | Round number (1 or 2 — round 2 is diff-only per C4). |
+| `tokens` | integer | yes | Tokens spent in this round. |
+
+Plus attribution fields.
+
+### `wp.verified`
+
+A WP's verify pass completed (Gates A/B/C green, or the register/severity
+path that substitutes for Gate C's second opinion). Producer: `verify/SKILL.md`
+(T18). This is the row `goalforge-rollup.sh`'s shipping-metric line ("WPs
+verified this session: N") counts.
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | yes | WP that verified. |
+| `reason` | string | no | Detail (e.g. which gates ran). |
+
+Plus attribution fields.
+
+### `second_opinion.ok`
+
+Gate C's second-opinion slot (`verify/SKILL.md`, T18) ran an external model
+review and it returned a usable verdict.
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | no | WP under review, if known. |
+| `provider` | string | no | Second-opinion provider (e.g. `ollama`). |
+| `model` | string | no | Second-opinion model id. |
+| `reason` | string | no | Detail. |
+
+Plus attribution fields.
+
+### `second_opinion.skipped`
+
+Gate C's second-opinion slot was legally skipped — no `agent-dispatch`/ollama
+`headless_dispatch` available. Legal in wp-01 (no shipping-gate blast radius
+from a skip); consumers must not treat a skip as a failure.
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | no | WP under review, if known. |
+| `provider` | string | no | Provider that was unavailable, if known. |
+| `model` | string | no | Model that would have run, if known. |
+| `reason` | string | no | Why it was skipped (e.g. `"headless_dispatch not present"`). |
+
+Plus attribution fields.
+
 ### `finding.recorded`
 
-A structured review/verify finding. **Schema-only** this WP — no viable owner
-until a structured findings-capture helper exists (D-OQ1).
+A structured review/verify finding. Gains a producer this WP: `execute/SKILL.md`
+§5 emits it on every stop except "goal met", alongside the `<wp>/findings.md`
+append. `wp` is required.
 
 | Field | Type | Required | Semantics |
 |---|---|---|---|
@@ -163,8 +274,12 @@ until a structured findings-capture helper exists (D-OQ1).
 
 ### `dispatch.launched`
 
-A subagent/workflow dispatch start. **Schema-only** this WP — deferred to wp-08
-(needs feature-context resolver, Workflow-tool interception, registry fan-out).
+A subagent/workflow dispatch start. Gains a producer this WP:
+`goalforge-pick-agent.py --emit-dispatch` (T19/C6) prints this event's payload
+to stdout after resolving specialist/model/effort — the CALLER (execute/verify
+dispatcher) pipes it through `goalforge-trace-emit`; `goalforge-pick-agent.py`
+itself never writes to the trace (it has no `--feature-dir`, matching its
+existing pure/offline contract).
 
 | Field | Type | Required | Semantics |
 |---|---|---|---|
@@ -177,7 +292,8 @@ A subagent/workflow dispatch start. **Schema-only** this WP — deferred to wp-0
 
 ### `dispatch.completed`
 
-A dispatch completion. **Schema-only** this WP (wp-08, as above).
+A dispatch completion. Gains a producer this WP: `execute/SKILL.md` §3 emits
+it on return from the dispatched agent/batch.
 
 | Field | Type | Required | Semantics |
 |---|---|---|---|
@@ -330,7 +446,13 @@ these; validators select the branch set by the row's `schema_version`.
         "dispatch.completed",
         "issue.recorded",
         "reharden.proposed",
-        "reharden.accepted"
+        "reharden.accepted",
+        "gate.disabled",
+        "harden.parked",
+        "harden.round",
+        "wp.verified",
+        "second_opinion.ok",
+        "second_opinion.skipped"
       ]
     },
     "schema_version": { "type": "integer", "minimum": 1 }
@@ -426,7 +548,7 @@ these; validators select the branch set by the row's `schema_version`.
         "seq": {}, "ts": {}, "schema_version": {},
         "wp": { "type": "string" },
         "gate": { "type": "string" },
-        "result": { "type": "string", "enum": ["pass", "fail"] },
+        "result": { "type": "string", "enum": ["pass", "fail", "warn"] },
         "reason": { "type": "string" },
         "actor": { "type": "string" },
         "mode": { "type": "string" },
@@ -438,6 +560,105 @@ these; validators select the branch set by the row's `schema_version`.
         "decision_ref": { "type": "string" }
       },
       "required": ["type", "wp", "gate", "result"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "gate.disabled" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "gate": { "type": "string" },
+        "wp": { "type": "string" },
+        "reason": { "type": "string" },
+        "session": { "type": "string" },
+        "actor": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type", "gate"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "harden.parked" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "rounds": { "type": "integer" },
+        "reason": { "type": "string" },
+        "actor": { "type": "string" },
+        "session": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type", "wp", "reason", "rounds"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "harden.round" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "round": { "type": "integer" },
+        "tokens": { "type": "integer" },
+        "actor": { "type": "string" },
+        "session": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type", "wp", "round", "tokens"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "wp.verified" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "reason": { "type": "string" },
+        "actor": { "type": "string" },
+        "session": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type", "wp"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "second_opinion.ok" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "reason": { "type": "string" },
+        "actor": { "type": "string" },
+        "session": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "second_opinion.skipped" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "reason": { "type": "string" },
+        "actor": { "type": "string" },
+        "session": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type"],
       "additionalProperties": false
     },
     {
@@ -555,4 +776,12 @@ these; validators select the branch set by the row's `schema_version`.
 {"seq":1,"ts":"2026-07-19T09:05:00Z","type":"feature.status_changed","schema_version":1,"wp":"goalforge","from":"ready","to":"executing","reason":"execute lap","actor":"goalforge-execute","override":false,"commit":"016ac03","mode":"auto","session":"80ec009c","model":"opus","provider":"anthropic","agent":"","decision_ref":""}
 {"seq":2,"ts":"2026-07-19T09:10:00Z","type":"commit.linked","schema_version":1,"wp":"wp-14-trace-substrate","commit":"deadbee","task":"task-01-event-schema","actor":"goalforge-execute","override":false,"session":"80ec009c","model":"opus","provider":"anthropic","agent":"","decision_ref":"","mode":"auto"}
 {"seq":3,"ts":"2026-07-19T09:12:00Z","type":"gate.result","schema_version":1,"wp":"wp-14-trace-substrate","gate":"verify","result":"pass","reason":"all tasks verified","actor":"goalforge-verify","override":false,"session":"80ec009c","model":"opus","provider":"anthropic","agent":"","decision_ref":"","mode":"auto"}
+{"seq":4,"ts":"2026-09-09T09:00:00Z","type":"gate.result","schema_version":1,"wp":"wp-01-slim-core","gate":"open-questions","result":"fail","reason":"2 unresolved open question(s)"}
+{"seq":5,"ts":"2026-09-09T09:01:00Z","type":"gate.result","schema_version":1,"wp":"wp-01-slim-core","gate":"open-questions","result":"fail","reason":"2 unresolved open question(s)"}
+{"seq":6,"ts":"2026-09-09T09:01:05Z","type":"gate.disabled","schema_version":1,"gate":"open-questions","reason":"2 fail results, no commit","session":"80ec009c"}
+{"seq":7,"ts":"2026-09-09T09:10:00Z","type":"harden.round","schema_version":1,"wp":"wp-01-slim-core","round":1,"tokens":18000}
+{"seq":8,"ts":"2026-09-09T09:20:00Z","type":"harden.parked","schema_version":1,"wp":"wp-01-slim-core","reason":"ceiling-breached","rounds":2}
+{"seq":9,"ts":"2026-09-09T10:00:00Z","type":"dispatch.launched","schema_version":1,"wp":"wp-01-slim-core","task":"T19","agent":"implement","model":"sonnet","provider":"anthropic","effort":"medium"}
+{"seq":10,"ts":"2026-09-09T11:00:00Z","type":"second_opinion.skipped","schema_version":1,"wp":"wp-01-slim-core","reason":"headless_dispatch not present"}
+{"seq":11,"ts":"2026-09-09T11:05:00Z","type":"wp.verified","schema_version":1,"wp":"wp-01-slim-core","reason":"Gates A/B/C green"}
 ```

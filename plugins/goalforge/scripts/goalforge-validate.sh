@@ -8,26 +8,29 @@
 # frontmatter. For each file: checks required fields, enum values, then
 # enforces the SDD integrity invariants from spec §6 / schema.md:
 #
-#   1. status:verified  ⇒ every sibling task-*.md is verified
-#                         AND findings.md exists in the same folder.
-#   2. status:executing ⇒ ≥1 sibling task-*.md has a `checkpoint:` block.
-#   3. depends_on: [x]  ⇒ x exists (by name: field) and is dep-satisfying: `ready`+
+#   1. status:verified  ⇒ findings.md exists in the same folder.
+#   2. depends_on: [x]  ⇒ x exists (by name: field) and is dep-satisfying: `ready`+
 #                         for a WP dep, plus `archived` (WP_DEP_SATISFIED); the TASK
 #                         dep gate keeps its own set (`ready`+ ∪ implemented/verified).
-#   4. stage_updated older than N days on non-terminal status → WARN (staleness).
+#   3. stage_updated older than N days on non-terminal status → WARN (staleness).
+#
+# wp-01 T10: the task-file layer (task-NN-*.md siblings, `checkpoint:` blocks,
+# `commit_exempt:`) is retired under schema-6 (C1: no task-NN-*.md files) —
+# the "every sibling task-*.md is verified" invariant and the `checkpoint:`/
+# `commit_exempt:` enforcement are dropped. A schema-5 archived WP may still
+# carry task-*.md siblings, and TWO checks still consume them read-only:
+# check_status_monotonicity() (a WP not at `verified` but whose task-*.md
+# siblings are all verified is a zombie-state ERROR) and the "## Tasks"
+# table drift check (a table cell that disagrees with its named task-*.md,
+# or names no task file at all, is an ERROR) — both gate under --strict
+# (wp-01 round 2, gate C new finding).
 #
 # Flags:
 #   --strict           Exit non-zero if any ERROR (not just WARN) is found.
-#                      Enforces stale-rollup as ERROR; does NOT enforce missing commit.
-#   --require-commit   Also exit non-zero when any verified task is missing its
-#                      `commit:` hash. Use only at verify-time (goalforge-verify gate),
-#                      NOT in the pre-commit hook (which would false-block the very
-#                      commit that records the hash).
-#                      A task whose deliverable is intentionally un-committable opts
-#                      out with `commit_exempt: <prose reason>` in its own frontmatter:
-#                      the missing hash becomes a WARN that prints the reason on every
-#                      run. Empty / boolean-ish values, and a commit_exempt: alongside a
-#                      real `commit:`, are ERRORs — the gate fails closed.
+#                      Enforces stale-rollup as ERROR.
+#   --require-commit   Retained for CLI compatibility; a no-op under schema-6
+#                      (there is no more per-task `commit:`/`commit_exempt:`
+#                      to enforce — see wp-01 T10 above).
 #   --quiet            Print one-line summary only; always exits 0.
 #   --stale-days N     Override staleness threshold (default 30).
 #
@@ -932,20 +935,6 @@ def err(filepath, msg, suggest=""):
 def warn(filepath, msg):
     warnings.append((str(filepath), msg))
 
-def commit_err(filepath, msg, suggest=""):
-    """Missing commit-hash on a verified task.
-    Under --require-commit: treated as an ERROR that forces non-zero exit.
-    Otherwise: advisory WARN (exit 0) — the pre-commit hook must NOT use
-    --require-commit, because commit: is recorded AFTER the task commit.
-    NOT reached for a task carrying a valid `commit_exempt: <reason>` — that
-    task's missing hash is a standing WARN naming the reason instead (see the
-    verified-task block below). The exemption never silences the line."""
-    if require_commit:
-        errors.append((str(filepath), msg, suggest))
-        commit_missing.append(str(filepath))
-    else:
-        warnings.append((str(filepath), msg))
-
 def goal_err(filepath, msg, suggest=""):
     """A malformed goal block is a fatal schema violation (non-zero exit always)."""
     errors.append((str(filepath), msg, suggest))
@@ -964,7 +953,11 @@ FEATURE_STATUS_ENUM = {'draft','spec','ready','active','executing','completed','
 FEATURE_REQUIRED    = {'name','title','status','created'}
 
 # WP overview.md
-WP_STATUS_ENUM   = {'draft','spec','hardened','ready','executing','verified','archived'}
+# wp-01 T10 (C2): the slim-chain enum drops `draft` (a WP is born `spec`) and
+# adds `implemented`/`abandoned`. A schema-5 WP still carrying `draft` in the
+# wild is legacy — WP_STATUS_ENUM_LEGACY keeps it parseable read-only.
+WP_STATUS_ENUM        = {'spec','hardened','ready','executing','implemented','verified','abandoned','archived'}
+WP_STATUS_ENUM_LEGACY = WP_STATUS_ENUM | {'draft'}
 WP_REQUIRED      = {'name','title','status','stage_updated'}
 
 # task-NN-*.md
@@ -972,12 +965,6 @@ WP_REQUIRED      = {'name','title','status','stage_updated'}
 # goalforge-verify promotes implemented → verified at the WP gate.
 TASK_STATUS_ENUM = {'pending','briefed','in-progress','implemented','verified'}
 TASK_REQUIRED    = {'name','title','status'}
-
-# `commit_exempt:` must carry a PROSE reason naming why no commit can exist.
-# These values normalize to a bare assertion rather than a reason and are
-# rejected, so the marker cannot degrade into a blanket opt-out flag.
-NON_REASONS      = {'true','false','yes','no','y','n','1','0',
-                    'none','null','n/a','na','-'}
 
 READY_PLUS = {'ready','executing','verified','completed','active'}  # "ready+" — dep satisfied
 # WP-level only: `archived` is a second WP terminal set by an out-of-band edit — no
@@ -991,10 +978,16 @@ WP_DEP_SATISFIED = READY_PLUS | {'archived'}
 TERMINAL   = {'verified','archived','completed'}
 
 # Goal layer (schema v4). The goal block is OPTIONAL; checked only when present.
-STRATEGY_ENUM  = {'deterministic','numeric','judge','human'}
-# WP rigor register (schema §WP frontmatter). Absent ⇒ production, always valid.
-REGISTER_ENUM  = {'production','prototype'}
-TASK_TYPE_ENUM = {'code','research','ops','writing','optimization','analysis','migration'}
+# wp-01 T6: `numeric` retired (verification.command is command-only, C2).
+STRATEGY_ENUM  = {'deterministic','judge','human'}
+STRATEGY_ENUM_LEGACY = STRATEGY_ENUM | {'numeric'}   # schema-5 read-only compat
+# WP rigor register (schema §WP frontmatter, C2). Absent ⇒ production, always
+# valid. `prototype` (schema-5 spelling) normalizes to `spike` on READ ONLY —
+# never written; see normalize_register() below.
+REGISTER_ENUM  = {'production','spike'}
+# wp-01 T7 (C2) narrows task_type to {code, docs, research, ops}; the wider
+# set below stays accepted for schema-5 read-only compatibility.
+TASK_TYPE_ENUM = {'code','docs','research','ops','writing','optimization','analysis','migration'}
 NUMERIC_OPS    = {'<','<=','>','>=','==','!='}
 SEVERITY_ENUM  = {'CRITICAL','HIGH','MEDIUM','LOW'}
 
@@ -1129,9 +1122,9 @@ SCAFFOLD_DIRS = {'evals', 'workspace', 'results'}
 # the full tree (they predate current schema and would yield noise that blocks
 # commits touching plans/_archived/*). Pass an archived plan dir AS the root to
 # validate it explicitly: parts[:-1] won't contain the marker when it's the root.
-# ARCHIVE-DIRS: same set as goalforge-validate.sh / goalforge-stamp-tables.sh /
-#   goalforge-status.sh / goalforge-plan-index.py -- keep in sync (no shared
-#   constant: three of the four sites are quoted python heredocs with no importable module).
+# ARCHIVE-DIRS: same set as goalforge-status.sh / goalforge-plan-index.py --
+#   keep in sync (no shared constant: both sites are quoted python heredocs
+#   with no importable module).
 ARCHIVE_DIRS = {'_archived', '_archive'}
 SKIP_DIRS = SCAFFOLD_DIRS | ARCHIVE_DIRS
 
@@ -1186,7 +1179,7 @@ for _arch_name in ARCHIVE_DIRS:
 # Emit feature-level slugs whose feature status == <enum>, one per line, exit 0.
 # Pure projection: no validation, no integrity output. _archived/ is already
 # excluded by the walk (SKIP_DIRS). Gated to kind == 'feature' so WP/task
-# statuses never surface. This is the engine the goalforge-completed.sh detector wraps.
+# statuses never surface.
 if list_status:
     for _p, _kind, _fm, _h in all_files:
         if _kind == 'feature' and str(_fm.get('status', '')) == list_status:
@@ -1302,10 +1295,33 @@ def check_goal_block(path, fm, kind):
         return
 
     strat = ver.get('strategy')
-    if strat not in STRATEGY_ENUM:
+    if strat not in STRATEGY_ENUM_LEGACY:
         goal_err(path, f"`goal.verification.strategy: {strat}` is not valid",
-                 f"Use one of: {', '.join(sorted(STRATEGY_ENUM))}")
+                 f"Use one of: {', '.join(sorted(STRATEGY_ENUM_LEGACY))}")
         return                      # downstream check-shape depends on a valid strategy
+
+    # wp-01 T7/T10 (C2, ticket-73): `verification.command` — a plain,
+    # command-shaped string, no prose — is REQUIRED on a schema-6 WP (ERROR
+    # under --strict); a schema-5 WP without it (using the legacy `check:`
+    # field instead) only WARNs. schema_version < 6 (or absent) never ERRORs
+    # on a missing command:.
+    sv = fm.get('schema_version')
+    try:
+        sv_int = int(sv) if sv is not None else None
+    except (TypeError, ValueError):
+        sv_int = None
+    command = ver.get('command')
+    command_ok = isinstance(command, str) and command.strip() and '\n' not in command
+    if sv_int is not None and sv_int >= 6:
+        if not command_ok:
+            err(path, "`goal.verification.command` is missing or not a "
+                      "command-shaped string (schema_version >= 6)",
+                "Set verification.command to the exact reproducible command")
+    elif not command_ok:
+        warn(path, "`goal.verification.command` is absent — schema-5 baseline "
+                    "uses the legacy `check:` field (WARN only; ERROR at "
+                    "schema_version: 6). Add verification.command when "
+                    "migrating to schema_version: 6.")
 
     check = ver.get('check')
     if strat in ('deterministic', 'human'):
@@ -1415,32 +1431,38 @@ def check_goal_mandatory(path, fm, kind, status):
             "Add a complete goal: block (outcome/verification/constraints/"
             "boundaries/iteration_policy/blocked_stop) — see schema.md Goal object")
 
-def check_register(path, fm, status, n_task_files):
+def normalize_register(reg):
+    """`prototype` (schema-5 spelling) normalizes to `spike` on READ ONLY —
+    never written back. wp-01 T6/T10 (ticket-61)."""
+    reg_s = str(reg).strip()
+    return 'spike' if reg_s == 'prototype' else reg_s
+
+def check_register(path, fm, status):
     """`register:` integrity gate (adversarial-review M3). The field is
-    execution-load-bearing — goalforge-execute Step 0 collapses a prototype WP to its
-    single task's findings-doc commit — but sits OUTSIDE the goal hash (schema
-    NB) and outside WP_REQUIRED (required-subset check passes unknown fields
+    execution-load-bearing — goalforge-execute Step 0 collapses a spike WP to
+    its findings-doc commit — but sits OUTSIDE the goal hash (schema NB) and
+    outside WP_REQUIRED (required-subset check passes unknown fields
     silently). This explicit check is the only mechanical gate on it.
     Absent ⇒ production, always valid (backward compatibility is the schema's
     own contract). All findings are plain ERRORs (gate under --strict), NOT
     fatal — same tier as evolved-goal/monotonicity.
-      (a) value ∈ {production, prototype};
-      (b) prototype ⇒ goal.verification.strategy ∈ {judge, human} — the spike
+      (a) value ∈ {production, spike} (schema-5 `prototype` accepted and
+          normalized to `spike` before this check runs);
+      (b) spike ⇒ goal.verification.strategy ∈ {judge, human} — the spike
           verdict routes through the findings doc, never deterministic-on-
           spike-code (checked at any status: decompose stamps goal + register
-          together, so a mismatch is malformed from birth);
-      (c) prototype ⇒ exactly ONE task-*.md — checked at ready+ only, where the
-          Step 0 collapse consumes it (a mid-authoring draft with 0 tasks must
-          not false-block the pre-commit hook, which runs --strict)."""
+          together, so a mismatch is malformed from birth).
+    wp-01 T10: the "exactly ONE task-*.md" leg is retired with the task-file
+    format — a schema-6 WP has no task files at all (C1)."""
     reg = fm.get('register')
     if reg is None:
         return
-    reg_s = str(reg).strip()
+    reg_s = normalize_register(reg)
     if reg_s not in REGISTER_ENUM:
-        err(path, f"`register: {reg_s}` is not valid",
-            f"Use one of: {', '.join(sorted(REGISTER_ENUM))} (absent = production)")
+        err(path, f"`register: {reg}` is not valid",
+            f"Use one of: production, prototype (normalizes to spike) — absent = production")
         return
-    if reg_s != 'prototype':
+    if reg_s != 'spike':
         return
     strat = None
     goal = fm.get('goal')
@@ -1450,18 +1472,11 @@ def check_register(path, fm, status, n_task_files):
             strat = ver.get('strategy')
     if strat not in ('judge', 'human'):
         err(path,
-            f"register-prototype: goal strategy `{strat}` — a prototype WP's "
+            f"register-spike: goal strategy `{strat}` — a spike WP's "
             f"verdict must be judge|human (findings doc), never "
             f"deterministic-on-spike-code",
             "Set goal.verification.strategy to judge or human — see schema.md "
             "§WP frontmatter register NB")
-    if status in ('ready', 'executing', 'verified') and n_task_files != 1:
-        err(path,
-            f"register-prototype: {n_task_files} task file(s) — a prototype WP "
-            f"carries exactly ONE task (goalforge-execute Step 0 collapses the spike "
-            f"to that task's findings-doc commit)",
-            "Merge the spike into a single task-01-*.md, or split the extra "
-            "work into a separate production WP")
 
 def check_status_monotonicity(path, status, child_task_statuses):
     """WP/task status-monotonicity coherence — the deterministic backstop for the
@@ -1756,38 +1771,6 @@ for path, kind, fm, has_ckpt in all_files:
                           f"WP table Status `{cell}` for `{row_id}` != its overview status `{w_status}`",
                           "status: frontmatter is the source of truth — fix the table cell")
 
-        # ── WARN-B: stale auto-generated feature rollup ──────────────────────
-        # When todo.md has generated: true, its ## Status Rollup table MUST mirror
-        # current WP status: values.  WARN-only; never changes exit code.
-        _ftodo = feature_dir / 'todo.md'
-        if _ftodo.exists():
-            _ftodo_fm, _ = parse_frontmatter(_ftodo)
-            if _ftodo_fm:
-                _gen = _ftodo_fm.get('generated', False)
-                if _gen is True or str(_gen).lower() == 'true':
-                    _ftodo_body = read_body(_ftodo)
-                    for _wp_id, _cell in parse_status_table(_ftodo_body, {'wp'}):
-                        if not _cell:
-                            continue
-                        _wp_ov = feature_dir / _wp_id / 'overview.md'
-                        if not _wp_ov.exists():
-                            _m = re.match(r'(wp-\d+)', _wp_id)
-                            if _m:
-                                _cand = [d for d in feature_dir.glob('wp-*')
-                                         if d.is_dir() and d.name.startswith(_m.group(1))]
-                                if _cand:
-                                    _wp_ov = _cand[0] / 'overview.md'
-                        if not _wp_ov.exists():
-                            continue
-                        _wfm, _ = parse_frontmatter(_wp_ov)
-                        if _wfm:
-                            _ws = str(_wfm.get('status', ''))
-                            if _cell.lower() != _ws.lower():
-                                err(_ftodo,
-                                    f"feature rollup todo.md Status Rollup cell '{_cell}' "
-                                    f"for {_wp_id} != WP status '{_ws}' — stale; "
-                                    f"regenerate with: goalforge-rollup.sh {feature_dir}")
-
     elif kind == 'spec':
         # Feature-altitude goal block (schema v4). Integrity-checked when present;
         # no required-field/enum checks (specs predate this and may omit them).
@@ -1795,7 +1778,7 @@ for path, kind, fm, has_ckpt in all_files:
 
     elif kind == 'wp':
         check_required(path, fm, WP_REQUIRED)
-        check_enum(path, fm, 'status', WP_STATUS_ENUM)
+        check_enum(path, fm, 'status', WP_STATUS_ENUM_LEGACY)
         status = fm.get('status', '')
         check_staleness(path, fm, status)
         check_goal_block(path, fm, kind)
@@ -1813,7 +1796,7 @@ for path, kind, fm, has_ckpt in all_files:
                 continue
             _child_task_statuses.append(str(_tfm.get('status', '')))
         check_status_monotonicity(path, status, _child_task_statuses)
-        check_register(path, fm, status, len(sorted(wp_dir.glob('task-*.md'))))
+        check_register(path, fm, status)
 
         # ── Drift: WP "## Tasks" table Status cell == the named task's status: ──
         for row_id, cell in parse_status_table(read_body(path), {'task'}):
@@ -1845,74 +1828,18 @@ for path, kind, fm, has_ckpt in all_files:
                 warn(todo, "todo.md has `[ ] task-NN` status-mirror lines — per-WP todo is an "
                            "open-items scratchpad, not a status tracker (status: frontmatter is truth)")
 
-            # ── WARN-A: verified WP whose todo.md still lists unresolved open-items ──
-            # Fires on: unchecked checkbox (- [ ]) under ## Open Items or ## Blocked On,
-            # OR any content bullet under ## Blocked On.  WARN-only; never changes exit code.
-            if status == 'verified':
-                _in_open   = False
-                _in_block  = False
-                _in_mlcmt  = False
-                _warn_a    = False
-                for _ln in ttext.split('\n'):
-                    _s = _ln.strip()
-                    if _in_mlcmt:
-                        if '-->' in _s: _in_mlcmt = False
-                        continue
-                    if _s.startswith('<!--'):
-                        if '-->' not in _s: _in_mlcmt = True
-                        continue
-                    if re.match(r'^#{1,6}\s+Open\s+Items\s*$', _s, re.IGNORECASE):
-                        _in_open = True;  _in_block = False; continue
-                    if re.match(r'^#{1,6}\s+Blocked\s+On\s*$', _s, re.IGNORECASE):
-                        _in_open = False; _in_block = True;  continue
-                    if re.match(r'^#{1,6}\s+', _s):
-                        _in_open = False; _in_block = False; continue
-                    if not (_in_open or _in_block) or not _s:
-                        continue
-                    if re.match(r'^-\s*<[^>]+>', _s):   # template placeholder bullet
-                        continue
-                    if re.match(r'^-\s*\[ \]', _s):     # unchecked checkbox — either section
-                        _warn_a = True; break
-                    if _in_block and re.match(r'^-\s+\S', _s):  # content bullet under Blocked On
-                        _warn_a = True; break
-                if _warn_a:
-                    warn(todo, "WP is verified but todo.md still lists unresolved "
-                               "open-items/blockers — reconcile (a verified WP has no "
-                               "outstanding work) or regenerate")
-
-        # ── Invariant 1: verified ⇒ all child tasks verified + findings.md ──
+        # ── Invariant 1: verified ⇒ findings.md exists ───────────────────────
+        # wp-01 T10: the "every sibling task-*.md is verified" leg is retired
+        # with the task-file layer (C1: no task-NN-*.md files under schema-6).
+        # A schema-5 archived WP may still carry task-*.md siblings; they are
+        # read-only compat and are never enforced here.
         if status == 'verified':
             wp_dir = path.parent
-            task_files = sorted(wp_dir.glob('task-*.md'))
-            for t in task_files:
-                t_fm, _ = parse_frontmatter(t)
-                if t_fm is None:
-                    continue
-                t_status = t_fm.get('status', '')
-                if t_status != 'verified':
-                    err(path,
-                        f"WP is `verified` but task `{t.name}` has status `{t_status}`",
-                        f"Either verify {t.name} first, or revert this WP's status")
             findings = wp_dir / 'findings.md'
             if not findings.exists():
                 err(path,
                     f"WP is `verified` but `findings.md` is missing in {wp_dir.name}/",
                     f"Create `{findings}` with the verification evidence")
-
-        # ── Invariant 2: executing ⇒ ≥1 task has checkpoint block ───────────
-        elif status == 'executing':
-            wp_dir = path.parent
-            task_files = sorted(wp_dir.glob('task-*.md'))
-            has_any_ckpt = False
-            for t in task_files:
-                _, t_ckpt = parse_frontmatter(t)
-                if t_ckpt:
-                    has_any_ckpt = True
-                    break
-            if task_files and not has_any_ckpt:
-                err(path,
-                    f"WP is `executing` but no task file contains a `checkpoint:` block",
-                    f"Either set status back to `ready`, or run goalforge-execute to begin execution")
 
         # ── Invariant 3: depends_on resolution ──────────────────────────────
         raw_deps = fm.get('depends_on', []) or []
@@ -1971,30 +1898,9 @@ for path, kind, fm, has_ckpt in all_files:
         status = fm.get('status', '')
         check_staleness(path, fm, status)
 
-        # ── STATIC brief-skip invariant (wp-06) ──────────────────────────
-        # A complexity-gated (medium/high) task that reached implemented/
-        # verified WITHOUT a sibling brief-task-NN.md skipped the brief stage.
-        # Static current-file-state check: complexity is read DIRECTLY from
-        # this task's frontmatter (NOT goalforge-wp-complexity.sh), and no
-        # transition/state-machine is observed. WARN (exit 0) — the brief
-        # stage is new; this surfaces the skip without blocking --strict.
-        task_complexity = str(fm.get('complexity', '') or '').strip().lower()
-        if task_complexity in ('medium', 'high') and status in ('implemented', 'verified'):
-            m = re.match(r'(task-\d+)', os.path.basename(str(path)))
-            if m:
-                # Canonical sibling is brief-<full-task-slug>.md (the name
-                # execute/brief-staleness.sh resolves); the short
-                # brief-task-NN.md form is accepted as legacy.
-                task_slug = os.path.basename(str(path))[:-3]
-                wp_dir = os.path.dirname(str(path))
-                candidates = ('brief-%s.md' % task_slug,
-                              'brief-%s.md' % m.group(1))
-                if not any(os.path.exists(os.path.join(wp_dir, c))
-                           for c in candidates):
-                    warn(path,
-                         'gated task (complexity=%s) at status `%s` has no '
-                         'sibling brief-%s.md — brief stage was skipped'
-                         % (task_complexity, status, task_slug))
+        # wp-01 T1/T3: the brief-skip invariant (wp-06) is retired with the
+        # brief/ skill and the task-file/brief-*.md format (C1: no brief-*.md
+        # files) — a schema-6 WP carries no task files at all.
 
         # Task-level depends_on within same WP
         raw_deps = fm.get('depends_on', []) or []
@@ -2022,50 +1928,10 @@ for path, kind, fm, has_ckpt in all_files:
                         f"`depends_on: {dep_slug}` task has status `{dep_status}`",
                         f"Complete task {dep_slug} first")
 
-        # ── Verified task must record its completing commit hash ─────────────────
-        # WARN in plain run and under --strict alone (exit 0 unless other errors).
-        # ERROR (non-zero exit) only under --require-commit.
-        # Rationale: commit: is recorded AFTER the task commit, so the pre-commit
-        # hook (which runs --strict) must NOT gate on it — that would false-block
-        # the very commit that writes the hash.  goalforge-verify uses --strict
-        # --require-commit to enforce the hash at verify-time only.
-        #
-        # ONE sanctioned exemption: a task whose deliverable is intentionally
-        # un-committable (it writes only outside the repo, or only to a path the
-        # repo gitignores by design) declares `commit_exempt: <prose reason>`.
-        # The exemption is opt-in, per-task, reason-bearing, and never silent —
-        # it downgrades the ERROR to a WARN that prints the reason every run.
-        # goalforge-verify READS this key; it must never write it.
-        if status == 'verified':
-            commit_val = fm.get('commit', None)
-            has_commit = bool(commit_val and str(commit_val).strip())
-            exempt_raw = fm.get('commit_exempt', None)
-            exempt     = '' if exempt_raw is None else str(exempt_raw).strip()
-            exempt_ok  = bool(exempt) and exempt.lower() not in NON_REASONS
-
-            if has_commit and exempt:
-                err(path,
-                    "task declares `commit_exempt:` AND carries a `commit:` hash — "
-                    "the exemption asserts no commit can exist, the hash says one does",
-                    "Drop commit_exempt: (the task WAS committed)")
-            elif has_commit:
-                pass
-            elif exempt_ok:
-                # Honoured exemption — downgraded, never suppressed.
-                warn(path,
-                     "verified task has no `commit:` — EXEMPT: " + exempt)
-            elif exempt:
-                commit_err(path,
-                    "`commit_exempt:` is not a reason (got `" + exempt + "`) — the "
-                    "exemption requires prose naming why no commit can exist",
-                    "Replace with commit_exempt: <why this deliverable cannot be committed>")
-            else:
-                commit_err(path,
-                    "verified task missing `commit:` (the completing commit hash) — "
-                    "goalforge-execute records it after the task commit",
-                    "Add commit: <sha>, re-run goalforge-execute, or — only if the "
-                    "deliverable is intentionally un-committable — declare "
-                    "commit_exempt: <reason>")
+        # wp-01 T10: `commit_exempt:`/missing-`commit:` enforcement is retired
+        # with the task-file layer — schema-6 has no per-task `commit:` field
+        # to gate on (see header). A schema-5 archived task's `commit_exempt:`
+        # is read-only compat and is never enforced here.
 
 # ── Output ──────────────────────────────────────────────────────────────────
 

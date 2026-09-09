@@ -42,4 +42,3 @@ sources: []
 ## Links
 
 - Spec: [spec.md](spec.md)
-- Open items: [todo.md](todo.md)

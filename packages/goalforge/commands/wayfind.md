@@ -5,9 +5,11 @@ argument-hint: "[<effort-slug>] [chart]"
 
 # /wayfind
 
-> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
-> directory holding this command file. On a direct, non-plugin load the
-> variable is unset; resolve it that way.
+> `${CLAUDE_PLUGIN_ROOT}` is the installed plugin root (`plugins/goalforge/`),
+> where each child skill lives at `skills/<child>/SKILL.md`. The variable is
+> unset on a direct load from the source package — there read
+> `packages/goalforge/<child>/SKILL.md` (the source package has no `skills/`
+> directory; `scripts/goalforge-generate.sh` adds it when generating the plugin).
 
 <!-- AUTHORITATIVE SOURCE: the six command files in `packages/goalforge/commands/`
      are the single source for every route — the plugin copies under
