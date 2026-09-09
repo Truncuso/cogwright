@@ -189,8 +189,9 @@ fi
 # known-bad: schema_version:6 WP with a goal: block but NO verification.command
 # -> ERROR, --strict exit non-zero. known-good: same WP WITH verification.command
 # -> --strict exit 0.
-mkschema6wp() { # $1=plans-root $2=feature $3=wp-slug $4=command-line (or "")
+mkschema6wp() { # $1=plans-root $2=feature $3=wp-slug $4=command-line (or "") $5=check-line (default: legacy check: "true"; "" = none)
     mkdir -p "$1/$2/$3"
+    local check_line="${5-    check: \"true\"}"
     cat > "$1/$2/$3/overview.md" <<EOF
 ---
 name: $3
@@ -207,7 +208,7 @@ goal:
   outcome: "the thing is done"
   verification:
     strategy: deterministic
-    check: "true"
+$check_line
 $4
   constraints: []
   boundaries: []
@@ -238,6 +239,13 @@ fi
 GOOD6="$ROOT/schema6-with-command"; mkfeature "$GOOD6" feat
 mkschema6wp "$GOOD6" feat wp-01-a "    command: \"true\""
 assert_clean "schema6-with-command: known-good -- validates clean, --strict exit 0" "$GOOD6"
+
+# known-good (C2): schema_version:6 WP with verification.command and NO legacy
+# check: alias -- command is the check; must validate clean (found 2026-09-09
+# decomposing goalforge-overhaul wp-02..05).
+GOOD6NC="$ROOT/schema6-command-no-check"; mkfeature "$GOOD6NC" feat
+mkschema6wp "$GOOD6NC" feat wp-01-a "    command: \"true\"" ""
+assert_clean "schema6-command-no-check: known-good -- command without check: alias validates clean" "$GOOD6NC"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

@@ -1324,6 +1324,10 @@ def check_goal_block(path, fm, kind):
                     "migrating to schema_version: 6.")
 
     check = ver.get('check')
+    # schema 6: `verification.command` IS the check; the legacy `check:` alias
+    # is optional there (C2). Fall back so a command-only WP does not ERROR.
+    if check is None and sv_int is not None and sv_int >= 6 and command_ok:
+        check = command
     if strat in ('deterministic', 'human'):
         if not (isinstance(check, str) and check.strip()):
             goal_err(path, f"`{strat}` goal needs a non-empty string `check`",
