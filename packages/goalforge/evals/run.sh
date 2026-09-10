@@ -25,6 +25,16 @@ check() {
 echo "=== goalforge package eval harness ==="
 echo ""
 
+# ── b4: fixture immutability manifest (taken first, compared last) ──────────
+# No test may write into the checked-in evals/fixtures/ tree; the lint tests
+# emit gate.result rows and must copy their fixtures to a temp dir first.
+FIXTURE_DIR="$SKILL_DIR/evals/fixtures"
+FIXTURE_MANIFEST_BEFORE="$(mktemp)"
+fixture_manifest() {
+  ( cd "$FIXTURE_DIR" 2>/dev/null && find . -type f | sort | xargs -r sha256sum ) 2>/dev/null
+}
+fixture_manifest > "$FIXTURE_MANIFEST_BEFORE"
+
 # ── Trigger tests ────────────────────────────────────────────────────────────
 echo "[ Trigger tests ]"
 
@@ -201,6 +211,23 @@ for STAGE in decompose harden execute verify; do
     || check "$STAGE/SKILL.md <= 120 lines (got $LC)" "fail"
 done
 
+# b5: name: equals the directory basename (ticket-79 option 1) for the three
+# stage children wp-02 renames. wp-04 lands the remainder.
+for STAGE in harden verify capture; do
+  if grep -q "^name: ${STAGE}$" "$SKILL_DIR/$STAGE/SKILL.md" 2>/dev/null; then
+    check "$STAGE/SKILL.md name: == directory basename" "pass"
+  else
+    check "$STAGE/SKILL.md name: == directory basename (got $(grep -m1 '^name:' "$SKILL_DIR/$STAGE/SKILL.md" 2>/dev/null))" "fail"
+  fi
+done
+
+# b5: C6 retired the feature todo.md rollup — capture may not cite it anywhere,
+# frontmatter description included.
+TODO_HITS="$(grep -c 'todo\.md' "$SKILL_DIR/capture/SKILL.md" 2>/dev/null || true)"
+[ "${TODO_HITS:-1}" -eq 0 ] \
+  && check "capture/SKILL.md carries zero todo.md citations" "pass" \
+  || check "capture/SKILL.md carries zero todo.md citations (got $TODO_HITS)" "fail"
+
 echo ""
 
 # ── stage child eval suites (decompose/harden/execute/verify/run) ──────────
@@ -208,7 +235,7 @@ echo ""
 # checks; a red child suite must turn this top-level harness red too.
 echo "[ stage child eval suites ]"
 
-for stage in decompose harden execute verify run; do
+for stage in capture decompose harden execute verify run; do
   f="$SKILL_DIR/$stage/evals/run.sh"
   [ -f "$f" ] || continue
   if bash "$f" >/tmp/goalforge-run-sh-$$.out 2>&1; then
@@ -418,6 +445,21 @@ else
   check "no task-*.md under the live (non-archived) plans tree" "fail"
   printf '%s\n' "$LIVE_TASK_FILES" | sed 's/^/        /'
 fi
+
+echo ""
+
+# ── b4: fixture manifest comparison ────────────────────────────────────────
+echo "[ b4: evals/fixtures/ immutability ]"
+FIXTURE_MANIFEST_AFTER="$(mktemp)"
+fixture_manifest > "$FIXTURE_MANIFEST_AFTER"
+if diff -u "$FIXTURE_MANIFEST_BEFORE" "$FIXTURE_MANIFEST_AFTER" > /tmp/goalforge-fixture-diff-$$.out 2>&1; then
+  check "evals/fixtures/ unchanged across the run (sha256 manifest)" "pass"
+else
+  check "evals/fixtures/ unchanged across the run (sha256 manifest)" "fail"
+  echo "        a fixture file changed, appeared, or vanished:"
+  sed 's/^/        /' /tmp/goalforge-fixture-diff-$$.out
+fi
+rm -f "$FIXTURE_MANIFEST_BEFORE" "$FIXTURE_MANIFEST_AFTER" "/tmp/goalforge-fixture-diff-$$.out"
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

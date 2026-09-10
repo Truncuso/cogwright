@@ -1,0 +1,13 @@
+# Known-good expertise map — the deterministic PASS case for the resolution
+# lane. Every value resolves under the SHIPPED fixture corpus root
+# (evals/fixtures/expertise-map/corpus/), so this lane is hermetic: it does
+# not depend on what the machine has in ${CLAUDE_CONFIG_DIR:-$HOME/.claude}.
+
+by_extension:
+  .ts: [agents/typescript-pro.md, rules/common/coding-style.md, skills/bun]
+
+by_tag:
+  security: [rules/common/security.md]
+
+by_task_type:
+  code: [rules/common/coding-style.md, rules/common/testing.md]

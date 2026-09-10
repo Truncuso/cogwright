@@ -7,7 +7,17 @@ set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LINT="$SD/../goalforge-preharden-lint.sh"
-FIX="$SD/../../evals/fixtures/preharden-lint"
+# The lint writes a gate.result row into <feature-dir>/trace-events.jsonl, so it
+# must never run against the checked-in fixture tree (evals/run.sh asserts the
+# fixture sha256 manifest is unchanged). Copy to a temp dir and run there.
+FIX_SRC="$SD/../../evals/fixtures/preharden-lint"
+FIX_TMP_ROOT="$(mktemp -d)"
+FIX="$FIX_TMP_ROOT/preharden-lint"
+mkdir -p "$FIX"
+cp -R "$FIX_SRC/." "$FIX/"
+# Clean up the temp root by its own name — never a path derived from $FIX, so a
+# later edit to FIX can never turn this into an rm -rf of the fixture tree.
+trap 'rm -rf "$FIX_TMP_ROOT"' EXIT
 PASS=0; FAIL=0
 
 ok()  { echo "  PASS: $1"; PASS=$((PASS+1)); }

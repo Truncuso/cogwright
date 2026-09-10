@@ -1,0 +1,14 @@
+# Known-bad expertise map — a well-shaped corpus-relative path that does
+# not resolve under ${CLAUDE_CONFIG_DIR:-$HOME/.claude}.
+#
+# Shape is admissible (rules/, contains a `/`, no `..`, not absolute); only
+# resolution fails. Requires the corpus root to be present on the machine.
+
+by_extension:
+  .ts: [rules/common/no-such-rule-known-bad-fixture.md]
+
+by_tag:
+  security: [rules/common/security.md]
+
+by_task_type:
+  code: [rules/common/coding-style.md]

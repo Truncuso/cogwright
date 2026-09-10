@@ -38,6 +38,14 @@
       "path": "scripts/goalforge-trace-emit"
     },
     {
+      "from": "agents/implementer.md",
+      "path": "references/expertise-map.yaml"
+    },
+    {
+      "from": "agents/reviewer.md",
+      "path": "references/expertise-map.yaml"
+    },
+    {
       "from": "commands/goalforge-run.md",
       "path": "references/schema.md"
     },
@@ -283,6 +291,14 @@
     },
     {
       "from": "skills/harden/SKILL.md",
+      "path": "agents/reviewer.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
+      "path": "references/expertise-map.yaml"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
       "path": "references/schema.md"
     },
     {
@@ -328,6 +344,18 @@
     {
       "from": "skills/spec/SKILL.md",
       "path": "references/schema.md"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "agents/evaluation-expert.md"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "agents/reviewer.md"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "references/expertise-map.yaml"
     },
     {
       "from": "skills/verify/SKILL.md",

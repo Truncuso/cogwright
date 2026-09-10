@@ -6,7 +6,18 @@ set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LINT="$SD/../goalforge-section-lint.sh"
-FIX="$SD/../../evals/fixtures/section-lint"
+# The lint writes a gate.result row into <feature-dir>/trace-events.jsonl, and
+# for a fixture at evals/fixtures/section-lint/*.md that feature dir is the
+# checked-in evals/fixtures/ tree. Copy to a temp dir and run there so the
+# harness fixture sha256 manifest stays clean.
+FIX_SRC="$SD/../../evals/fixtures/section-lint"
+FIX_TMP_ROOT="$(mktemp -d)"
+FIX="$FIX_TMP_ROOT/section-lint"
+mkdir -p "$FIX"
+cp -R "$FIX_SRC/." "$FIX/"
+# Clean up the temp root by its own name — never a path derived from $FIX, so a
+# later edit to FIX can never turn this into an rm -rf of the fixture tree.
+trap 'rm -rf "$FIX_TMP_ROOT"' EXIT
 PASS=0; FAIL=0
 
 ok()  { echo "  PASS: $1"; PASS=$((PASS+1)); }

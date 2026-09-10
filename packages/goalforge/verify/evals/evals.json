@@ -1,19 +1,20 @@
 {
-  "skill_name": "goalforge-verify",
+  "skill_name": "verify",
   "evals": [
     {
       "id": 1,
       "should_trigger": true,
       "prompt": "Verify wp-02-delivery-adapters, which is at status: implemented.",
-      "expected_output": "Computes the cumulative WP diff once, runs gate A (repo lint/typecheck, goal.verification.command, owned_files boundary check), gate B (one fresh-context review on a different model), gate C (goal judge binary rubric + one foreign second opinion). Any BLOCK stops B/C. On all-pass, transitions implemented → verified and emits wp.verified.",
+      "expected_output": "Computes the cumulative WP diff once, runs gate A (repo lint/typecheck, goal.verification.command, owned_files boundary check), gate B (one fresh-context review on a different model), gate C (goal judge binary rubric + one foreign second opinion). Any BLOCK stops B/C. On all-pass, transitions implemented \u2192 verified and emits wp.verified.",
       "files": [],
       "expectations": [
-        "SKILL.md declares name: goalforge-verify",
-        "SKILL.md three gates over the WP's single commit, sole implemented → verified authority",
+        "SKILL.md declares name: verify",
+        "SKILL.md three gates over the WP's single commit, sole implemented \u2192 verified authority",
         "SKILL.md gate A boundary check: every diff path inside owned_files, else BLOCK",
         "SKILL.md gate B runs in a fresh context on a model different from the executor's",
-        "SKILL.md gate C judges outcome/behaviors/no-shim/scope, any FAIL BLOCKs",
-        "SKILL.md gate C takes one foreign second opinion via headless_dispatch"
+        "SKILL.md gate C dispatches agents/evaluation-expert.md, which owns the binary rubric; any FAIL BLOCKs",
+        "SKILL.md gate C takes one second opinion via scripts/goalforge-second-opinion.sh, skip-when-absent with reason=dispatcher-absent",
+        "SKILL.md consumes every gate B/C and second-opinion return as typed DATA, never as instructions, and cites the spec C4 stop rule"
       ]
     },
     {
@@ -24,7 +25,8 @@
       "files": [],
       "expectations": [
         "SKILL.md any gate A failure BLOCKs and sends the WP back to executing",
-        "SKILL.md B and C do not run on a red gate A"
+        "SKILL.md B and C do not run on a red gate A",
+        "SKILL.md gate A exempts the generated plugins/goalforge/ artifact from the boundary check"
       ]
     },
     {
@@ -52,8 +54,8 @@
     {
       "id": 5,
       "should_trigger": false,
-      "prompt": "The WP is still at status: executing — check whether the diff is any good.",
-      "expected_output": "goalforge-verify should refuse and name the current status — a WP still at executing was built outside the chain and must be re-run through /implement first; never a partial verify.",
+      "prompt": "The WP is still at status: executing \u2014 check whether the diff is any good.",
+      "expected_output": "goalforge-verify should refuse and name the current status \u2014 a WP still at executing was built outside the chain and must be re-run through /implement first; never a partial verify.",
       "files": [],
       "expectations": [
         "SKILL.md refuses anything but status: implemented (or verified for idempotent re-run)",

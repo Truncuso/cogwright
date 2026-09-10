@@ -59,14 +59,13 @@ check_re() {
 echo "=== goalforge-capture: static-contract checks ==="
 
 # Identity
-check "skill name declared" "name: goalforge-capture"
+check "skill name declared" "name: capture"
 
 # Output contract
 check "overview.md output declared" "plans/<feature>/overview.md"
+check "overview.md is the whole output contract (no todo.md rollup)" "Write only \`overview.md\`"
 check "overview.md initial status is draft" "status: draft"
-check "todo.md output declared" "plans/<feature>/todo.md"
 check "feature-overview template referenced" "feature-overview.md"
-check "feature-todo template referenced" "feature-todo.md"
 
 # Template marker
 check "template marker present" "<!-- Template: feature-overview v4 (frontmatter-first, flat layout) -->"

@@ -1,26 +1,28 @@
 {
-  "skill_name": "goalforge-harden",
+  "skill_name": "harden",
   "evals": [
     {
       "id": 1,
       "should_trigger": true,
       "prompt": "Harden wp-02-delivery-adapters until its open questions are driven to zero.",
-      "expected_output": "Drives the WP through G1 (dependency frontier), G2 (preharden lint + section lint + open-questions gate), G3 (one review pass, 3x panel only if severity HIGH and register production), G4 (goal validate + changelog append + narrow-hash record + transition). One gate.result row emitted per gate. Advances spec → hardened.",
+      "expected_output": "Drives the WP through G1 (dependency frontier), G2 (preharden lint + section lint + open-questions gate), G3 (one review pass, 3x panel only if severity HIGH and register production), G4 (goal validate + changelog append + narrow-hash record + transition). One gate.result row emitted per gate. Advances spec \u2192 hardened.",
       "files": [],
       "expectations": [
-        "SKILL.md declares name: goalforge-harden",
+        "SKILL.md declares name: harden",
         "SKILL.md preconditions the WP overview.md exists at status: spec",
         "SKILL.md G1 runs goalforge-frontier.sh and only hardens a WP listed in hardenable[]",
         "SKILL.md G2 runs goalforge-preharden-lint.sh and goalforge-open-questions-gate.sh --check",
         "SKILL.md G3 is bounded by the two-round 60k-token stop rule (goalforge-harden-stop.sh)",
-        "SKILL.md G4 runs goalforge-validate.sh --strict, goal-changelog append, goal-hash --record, then transition"
+        "SKILL.md G4 runs goalforge-validate.sh --strict, goal-changelog append, goal-hash --record, then transition",
+        "SKILL.md G3 dispatches agents/reviewer.md with an expertise bundle from references/expertise-map.yaml; the 3x panel is three reviewers with distinct bundles",
+        "SKILL.md G1 routes --override --reason to goalforge-transition.sh at G4, never to goalforge-frontier.sh"
       ]
     },
     {
       "id": 2,
       "should_trigger": true,
-      "prompt": "The WP has two unresolved open questions and no human available — resolve them as far as possible.",
-      "expected_output": "An agent respondent answers from spec.md and findings.md, stamping answered_by: agent on both the findings.md resolution row and the ## Open Questions bullet. The goal facets goal.outcome and goal.verification are never agent-answered — an incomplete or vague facet parks unconditionally.",
+      "prompt": "The WP has two unresolved open questions and no human available \u2014 resolve them as far as possible.",
+      "expected_output": "An agent respondent answers from spec.md and findings.md, stamping answered_by: agent on both the findings.md resolution row and the ## Open Questions bullet. The goal facets goal.outcome and goal.verification are never agent-answered \u2014 an incomplete or vague facet parks unconditionally.",
       "files": [],
       "expectations": [
         "SKILL.md unattended respondent stamps answered_by: agent",
@@ -31,7 +33,7 @@
     {
       "id": 3,
       "should_trigger": true,
-      "prompt": "G3's review round has run twice and is still BLOCKing — what happens?",
+      "prompt": "G3's review round has run twice and is still BLOCKing \u2014 what happens?",
       "expected_output": "The stop rule exits 3 (park): the script writes the harden.parked row, findings.md gets 'harden: ceiling-breached, rounds=2' appended, and the run reports and stops. A BLOCK surviving round 2 is a human touchpoint, never a third review call.",
       "files": [],
       "expectations": [
@@ -43,8 +45,8 @@
     {
       "id": 4,
       "should_trigger": true,
-      "prompt": "All G1-G4 gates pass for a LOW-severity WP with no human_required set — advance it.",
-      "expected_output": "Advance hardened → ready autonomously with the signal evidence (OQ=0, G1-G4 pass, human_required unset, severity=LOW) recorded in the ledger via goalforge-transition.sh --mode auto.",
+      "prompt": "All G1-G4 gates pass for a LOW-severity WP with no human_required set \u2014 advance it.",
+      "expected_output": "Advance hardened \u2192 ready autonomously with the signal evidence (OQ=0, G1-G4 pass, human_required unset, severity=LOW) recorded in the ledger via goalforge-transition.sh --mode auto.",
       "files": [],
       "expectations": [
         "SKILL.md a human decides iff human_required set, or register production + severity HIGH, or a park, or an irreversible action",
@@ -56,10 +58,10 @@
       "id": 5,
       "should_trigger": false,
       "prompt": "Run the WP's checklist and land the commit.",
-      "expected_output": "goalforge-harden should NOT trigger — dispatching the checklist and landing a commit is goalforge-execute's job (ready → executing → implemented), not harden's (spec → hardened → ready).",
+      "expected_output": "goalforge-harden should NOT trigger \u2014 dispatching the checklist and landing a commit is goalforge-execute's job (ready \u2192 executing \u2192 implemented), not harden's (spec \u2192 hardened \u2192 ready).",
       "files": [],
       "expectations": [
-        "SKILL.md scope is spec → hardened → ready only, never checklist execution or commits",
+        "SKILL.md scope is spec \u2192 hardened \u2192 ready only, never checklist execution or commits",
         "Checklist execution is outside the trigger surface of goalforge-harden"
       ]
     }
