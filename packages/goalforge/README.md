@@ -38,7 +38,7 @@ aliases were retired 2026-07-21.
 | `references/schema.md` | v3 frontmatter schemas, edge vocabulary |
 | `references/state-machine.md` | Status machine + transition rules |
 | `references/templates/` | Canonical file templates (frontmatter-first, placeholder tokens) |
-| `references/specialist-map.yaml` | extension + tag → specialist agent routing seed |
+| `references/dispatch.yaml` | per-stage model, effort, provider, endpoint, egress class |
 
 ## Status Machine (WP)
 

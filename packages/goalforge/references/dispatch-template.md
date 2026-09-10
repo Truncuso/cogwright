@@ -18,6 +18,9 @@ role:        <role from ROLE_TIER — e.g. implement | wp-verify | simplify | ju
 model:       <bare tier resolved to model — sonnet | opus>   # explicit, never a frontmatter default
 effort:      <bare — low | medium | high | xhigh | max>      # explicit, per dispatch-resolution.md
 autonomy:    <autonomous-minimal | semi-autonomous>
+provider:    <providers[].name from references/dispatch.yaml>  # configured, never named in a SKILL.md
+endpoint:    <session | leaf>          # the dispatch sense formerly spelled `route` (ticket-62)
+egress:      <none | diff-only | overview | full>  # what may leave to that endpoint; narrow-only override
 
 owned:                                 # files this worker MAY create/edit
   - <path>
@@ -35,6 +38,17 @@ Everything not in `owned` is off-limits by default; the explicit `off-limits`
 list names the paths the worker might otherwise be tempted to reach for (sibling
 WP files, `plans/**`, shared config). A worker that needs a file outside `owned`
 does not edit it — it returns `EscalationRequired` (see below).
+
+## Provider fall-through
+
+`provider`, `endpoint`, and `egress` are resolved from `references/dispatch.yaml`
+— the stage row names the first-choice provider, and the ordered `providers`
+list decides what happens when its leaf fails. Fall-through on leaf exit `1`,
+`2`, and `4` with reason `plan_quota_exhausted`/`metered_rate_limited`; a leaf
+exit `4` with `budget_exceeded`/`budget_check_failed` keeps its completed
+result and WARNs; `EscalationRequired` when the list is exhausted. Egress
+classes, the narrow-only feature override, and every key are documented in
+`references/schema.md` §dispatch.yaml — not restated here.
 
 ## Return-as-DATA contract
 

@@ -43,7 +43,7 @@ file_check() {
 echo "=== goalforge-decompose: contract + fixture checks ==="
 
 # STATIC-CONTRACT: identity
-check STATIC-CONTRACT "skill name declared" "name: goalforge-decompose"
+check STATIC-CONTRACT "skill name declared" "name: decompose"
 
 # STATIC-CONTRACT: input spec.md, feature must be status: ready
 check STATIC-CONTRACT "input spec.md declared" "plans/<feature>/spec.md"

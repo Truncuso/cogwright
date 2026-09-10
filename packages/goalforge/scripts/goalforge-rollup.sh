@@ -5,7 +5,7 @@
 # blocks, or a todo.md rollup — all three are RETIRED by wp-01/C6).
 #
 # Usage:
-#   goalforge-rollup.sh <feature-dir> [--session <id>]
+#   goalforge-rollup.sh <feature-dir> [--session <id>] [--dispatch <path>]
 #
 # Reads (NEVER writes to these):
 #   <feature-dir>/trace-events.jsonl   — the sole input (via goalforge-trace-read)
@@ -17,7 +17,11 @@
 # Per-WP section (only WPs that appear in the trace are listed, in the order
 # their first event appears): dispatches (dispatch.launched, task/agent/model/
 # effort), gate results (gate.result, gate=result pairs in trace order), harden
-# rounds (harden.round/harden.parked, if any), the linked commit
+# rounds (harden.round/harden.parked, if any), completed dispatches
+# (dispatch.completed, with the `tokens`/`tool_uses` sizing sensors wp-03
+# made required — a row whose `tokens` exceeds `rollup.token_warn` from
+# references/dispatch.yaml, overridable with `--dispatch <path>`, prints a
+# WARN line; a WARN never changes the exit code), the linked commit
 # (commit.linked, most recent by seq), and whether the WP verified
 # (wp.verified).
 #
@@ -40,16 +44,18 @@ set -uo pipefail
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [[ $# -lt 1 ]]; then
-    echo "Usage: goalforge-rollup.sh <feature-dir> [--session <id>]" >&2
+    echo "Usage: goalforge-rollup.sh <feature-dir> [--session <id>] [--dispatch <path>]" >&2
     exit 1
 fi
 
 FEATURE_DIR_ARG="$1"; shift
 SESSION_OPT=""
+DISPATCH_PATH="$SD/../references/dispatch.yaml"
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --session) SESSION_OPT="${2:-}"; shift 2 ;;
-        *)         echo "goalforge-rollup.sh: unexpected argument '$1'" >&2; exit 1 ;;
+        --session)  SESSION_OPT="${2:-}"; shift 2 ;;
+        --dispatch) DISPATCH_PATH="${2:-}"; shift 2 ;;
+        *)          echo "goalforge-rollup.sh: unexpected argument '$1'" >&2; exit 1 ;;
     esac
 done
 
@@ -62,13 +68,29 @@ fi
 SESSION="${SESSION_OPT:-${CLAUDE_SESSION_ID:-unknown}}"
 TRACE_READ="$SD/goalforge-trace-read"
 
-python3 - "$FEATURE_DIR" "$SESSION" "$TRACE_READ" <<'PYEOF'
+python3 - "$FEATURE_DIR" "$SESSION" "$TRACE_READ" "$DISPATCH_PATH" <<'PYEOF'
 import importlib.machinery
 import importlib.util
 import sys
 from pathlib import Path
 
-feature_dir, session, trace_read_path = sys.argv[1:4]
+import yaml
+
+feature_dir, session, trace_read_path, dispatch_path = sys.argv[1:5]
+
+
+def load_token_warn(path: str) -> int | None:
+    """`rollup.token_warn` from dispatch.yaml; None when unreadable (no WARNs)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    warn = (data.get("rollup") or {}).get("token_warn")
+    return warn if isinstance(warn, int) else None
+
+
+token_warn = load_token_warn(dispatch_path)
 
 loader = importlib.machinery.SourceFileLoader("goalforge_trace_read", trace_read_path)
 spec = importlib.util.spec_from_loader("goalforge_trace_read", loader)
@@ -97,7 +119,7 @@ wps: dict[str, dict] = {}
 def wp_bucket(wp: str) -> dict:
     if wp not in wps:
         wp_order.append(wp)
-        wps[wp] = {"dispatches": [], "gates": [], "harden_rounds": [],
+        wps[wp] = {"dispatches": [], "completed": [], "gates": [], "harden_rounds": [],
                     "harden_parked": None, "commit": None, "verified": False,
                     "verified_reason": None}
     return wps[wp]
@@ -113,6 +135,12 @@ for ev in events:
         b["dispatches"].append({
             "task": ev.get("task", ""), "agent": ev.get("agent", ""),
             "model": ev.get("model", ""), "effort": ev.get("effort", ""),
+        })
+    elif et == "dispatch.completed" and wp:
+        b = wp_bucket(wp)
+        b["completed"].append({
+            "task": ev.get("task", ""), "agent": ev.get("agent", ""),
+            "tokens": ev.get("tokens"), "tool_uses": ev.get("tool_uses"),
         })
     elif et == "gate.result" and wp:
         b = wp_bucket(wp)
@@ -157,6 +185,22 @@ else:
             lines.append(f"- Dispatches: {len(b['dispatches'])} ({', '.join(parts)})")
         else:
             lines.append("- Dispatches: none")
+        if b["completed"]:
+            done_parts = [
+                f'{c["task"] or "?"}:{c["agent"] or "?"} '
+                f'tokens={c["tokens"]} tool_uses={c["tool_uses"]}'
+                for c in b["completed"]
+            ]
+            lines.append(f"- Completed: {len(b['completed'])} ({', '.join(done_parts)})")
+            if token_warn is not None:
+                for c in b["completed"]:
+                    tokens = c["tokens"]
+                    if isinstance(tokens, int) and tokens > token_warn:
+                        name = c["task"] or c["agent"] or "?"
+                        lines.append(
+                            f"  WARN: dispatch {name} tokens={tokens} "
+                            f"exceeds token_warn={token_warn}"
+                        )
         if b["gates"]:
             gate_parts = [f"{g}={r}" for g, r in b["gates"]]
             lines.append(f"- Gate results: {', '.join(gate_parts)}")

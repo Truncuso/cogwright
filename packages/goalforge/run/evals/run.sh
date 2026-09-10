@@ -130,7 +130,7 @@ else
   FAIL=$((FAIL+1))
 fi
 check_contract "SKILL.md description documents the chain order" "capture → spec → decompose → harden → execute → verify"
-check_contract "SKILL.md name declared" "name: goalforge-run"
+check_contract "SKILL.md name declared" "name: run"
 
 # STATIC-CONTRACT: status-driven routing table documented (per-status entry)
 check_contract "routing table: draft feature enters spec" "| \`draft\` | feature | spec |"

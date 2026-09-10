@@ -92,7 +92,8 @@ REFS_OK="pass"
 for ref in \
   "$SKILL_DIR/references/schema.md" \
   "$SKILL_DIR/references/templates" \
-  "$SKILL_DIR/references/specialist-map.yaml" \
+  "$SKILL_DIR/references/dispatch.yaml" \
+  "$SKILL_DIR/references/expertise-map.yaml" \
   "$SKILL_DIR/scripts/goalforge-validate.sh" \
   "$SKILL_DIR/scripts/goalforge-goal-eval.py" \
   "$SKILL_DIR/scripts/goalforge-pick-agent.py"
@@ -384,7 +385,7 @@ EOF
   export HOOK_DIR="$SKILL_DIR/hooks"
   emit() { python3 "$SKILL_DIR/scripts/goalforge-trace-emit" --feature-dir "$B_FEATURE_DIR" --event "$1" >/dev/null; }
   emit '{"type":"dispatch.launched","wp":"wp-01-example","model":"sonnet","provider":"anthropic","agent":"implement","effort":"medium"}'
-  emit '{"type":"dispatch.completed","wp":"wp-01-example","agent":"implement","outcome":"ok","exit_code":0,"session":"test"}'
+  emit '{"type":"dispatch.completed","wp":"wp-01-example","agent":"implement","outcome":"ok","exit_code":0,"tokens":1234,"tool_uses":5,"session":"test"}'
   ( source "$SKILL_DIR/hooks/goalforge-plans-root.sh"; goalforge_emit_gate_result A pass "deterministic gate green" "$B_WP_DIR/overview.md" )
   ( source "$SKILL_DIR/hooks/goalforge-plans-root.sh"; goalforge_emit_gate_result B pass "review clean" "$B_WP_DIR/overview.md" )
   ( source "$SKILL_DIR/hooks/goalforge-plans-root.sh"; goalforge_emit_gate_result C pass "goal judge: all facets met, no shim" "$B_WP_DIR/overview.md" )

@@ -27,7 +27,7 @@ check() {
 
 echo "=== goalforge-execute: contract checks ==="
 
-check "skill name declared" "name: goalforge-execute"
+check "skill name declared" "name: execute"
 check "drives ready -> executing -> implemented" "\`ready → executing →"
 check "verified is written only by goalforge-verify, never here" "written only by"
 check "re-entry: already executing skips the transition, resumes at step 2" "Already \`executing\` ⇒ re-entry"

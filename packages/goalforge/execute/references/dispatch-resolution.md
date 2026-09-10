@@ -1,56 +1,80 @@
 # goalforge-execute — Dispatch resolution detail
 
 Behind the `goalforge-pick-agent.py --task <wp>/overview.md --role implement`
-call in `SKILL.md` §3. Consulted when a dispatch does not resolve cleanly, or
-when a non-code WP needs its specialist route.
+call in `SKILL.md` §3. `references/dispatch.yaml` is the single configuration
+file; `--dispatch <path>` overrides it (tests pass a fixture). No provider is ever named in a SKILL.md.
 
-## Resolution order (enforced by the module)
+## Resolution order
 
-1. `by_tag` on the WP's `tags:` → specialist from `references/specialist-map.yaml`.
-2. `by_task_type` on `task_type:` (`research → research-analyst`,
-   `ops → devops-engineer`, `docs → doc-updater`). A `code` WP has no entry and
-   falls through to `by_extension`.
-3. `by_extension` on the extensions in `owned_files:`.
-4. The `discover` callable — a `general-purpose` sonnet subagent that names the
-   fitting specialist from the known list, or `none`.
-5. `none` → `EscalationRequired`, surfaced via `AskUserQuestion`. **No silent
-   hard default.**
+1. **Stage row** — `dispatch.yaml` `stages:<role>` gives `model`, `effort`,
+   `provider`, `endpoint`, `egress`. The stage keys are exactly the `ROLE_TIER`
+   keys; an unknown role raises `EscalationRequired`, never a silent default.
+2. **Agent + expertise** — the role maps to one roster agent under `agents/`;
+   `references/expertise-map.yaml` resolves the reading list (`by_tag` →
+   `by_task_type` → `by_extension`, order-preserving union) into the brief's
+   `Expertise refs:` slot. The map never names a dispatch target.
+3. **Provider preference** — `providers:` is an ordered list, first entry the
+   default. Resolution starts at the stage row's `provider` and walks the list
+   from there. No budget accounting.
+4. **Leaf seam** — a non-native provider is reached through its
+   `headless_dispatch` leaf (`leaf-interface.md` v1) named by `providers[].leaf`.
+5. **Fall-through** — leaf exit `1` (unreachable), `2` (model not found), or `4`
+   with reason `plan_quota_exhausted` / `metered_rate_limited` (no result
+   envelope) advances to the next provider. Exit `4` with `budget_exceeded` /
+   `budget_check_failed` is **not** a fall-through: the turn completed, its
+   result is kept and a WARN row names the overspend. An exhausted list raises
+   `EscalationRequired`.
+6. **Propose-only ledger** — every resolution whose provider `kind` is not
+   `native` is propose-only and appends one row at `GOALFORGE_DISPATCH_LEDGER`
+   (default `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/data/dispatch-decisions.jsonl`).
+   Ledger I/O degrades, never blocks.
+7. **Admission seam** — `admission.resolve(role, task_class, provider)` runs for
+   role `implement` before propose-only marking; today it admits only the native provider, and `--admitted <path>` is parsed and reserved (wp-06 fills both).
 
-`pick_agent` selects the *specialist*. The verification strategy comes from the
-WP's own `goal.verification.strategy` and is never inferred here.
+The verification strategy comes from the WP's own `goal.verification.strategy`
+and is never inferred here.
 
 ## Model + effort
 
-Resolved from the canonical role→tier map (`ROLE_TIER` in
-`scripts/goalforge-pick-agent.py`; human-readable projection in
-`references/tier-map.md`), then instantiated: `low → sonnet@low`,
-`medium → opus@low`, `high → opus@high`. Blast radius (auth, schema, migration,
-exported symbol, owned_files > 8) deterministically forces the `high` tier for
-every role EXCEPT `implement` — a sensitive change is never silently
-downgraded. `implement` is register-driven, not complexity-driven (wp-01/T17
-dropped the per-task `complexity` input entirely): `register: spike` →
-`low`; `register: production` → `sonnet@medium`, escalating to `opus@low`
-(never `opus@high`) on `severity: HIGH` or blast radius, matching the Dispatch
-Routing Matrix's "build ... blast radius → opus/low". An unknown role or
-profile raises `EscalationRequired`; there is no silent fallback. Every brief
-states model AND effort explicitly, never the agent `.md` frontmatter default.
+Both come from the stage row verbatim; the human-readable projection of the
+role bands is `references/tier-map.md` (generated — do not hand-edit). The
+`implement` row is `by_register`: resolved from the WP's `register:` (and
+`severity:` / blast radius), which is why a WP with no `register:` is a usage
+error rather than a guess. Graders (`judge`, `wp-verify`) are pinned to
+`opus`@`high` on every profile so a grader is never the executor's twin
+(ticket-48). Every brief states model AND effort explicitly, never the agent default.
 
-## Dispatch surface
+## Endpoint (ticket-62)
 
-Pick by which knobs the surface exposes (Dispatch Routing Matrix,
-`references/rules/performance.md`):
+`endpoint:` is the dispatch sense of the retired `route:` field — WP frontmatter
+`route:` is gone from the schema and ignored where legacy plans still carry it.
 
-- **Agent tool** — one subagent or a small batch. Sets `model` per agent;
-  **effort inherits the session**, so it is correct only when the resolved
-  effort equals the session effort.
-- **Workflow tool** — the only surface with a per-agent effort knob
-  (`opts.model` + `opts.effort`). Use it when a batch mixes efforts.
-- **Headless CLI** — cross-provider routes only; `--model` plus settings per the
-  provider leaf contract. Foreign and local providers are propose-only.
+- `session` — runs in-session on the native provider. The **Agent tool** sets
+  `model` per agent but inherits session effort; the **Workflow tool** is the
+  only surface with a per-agent effort knob, so a batch mixing efforts uses it.
+- `leaf` — the headless `headless_dispatch` CLI of a non-native provider, with
+  `--max-budget-usd` from the provider row. Always propose-only.
 
-## Route + map proposals
+## Egress classes
 
-The dispatch route is `api` (default) or `ollama`; `ollama` requires a passing
-health check and a failure raises `EscalationRequired` — no silent API fallback. A
-`proposed_map_entry` in the result is appended to `<wp>/findings.md` for human
-review, never auto-merged into `specialist-map.yaml`.
+`egress:` on a stage row bounds what leaves the session for that dispatch:
+`none` < `diff-only` < `overview` < `full`.
+
+| class | payload |
+|-------|---------|
+| `none` | nothing — skip with reason `egress-none`, no leaf call |
+| `diff-only` | the diff |
+| `overview` | diff + `overview.md` (shipped default on every egressing row) |
+| `full` | diff + `overview.md` + `spec.md` + `findings.md` |
+
+A feature `spec.md` frontmatter `egress:` may only **narrow** a stage row; a
+widening value is ignored with a WARN row. No content is redacted in any class.
+
+## Workflow compile surface
+
+When C5 batching applies, `scripts/goalforge-workflow-compile.py <wp>/overview.md
+--dispatch <path>` turns the `## Checklist` into `run/workflows/<wp>.js`:
+disjoint `{files:}` sets become `parallel` nodes of 3-5 items, an overlap forces
+a `pipeline` edge, and gates A/B/C plus the second opinion are nodes carrying
+`{model, effort}` from their own stage rows. The emitted script is launched
+through the Workflow tool — a session surface.

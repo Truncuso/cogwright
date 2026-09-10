@@ -3,11 +3,11 @@
   "refs": [
     {
       "from": "README.md",
-      "path": "references/schema.md"
+      "path": "references/dispatch.yaml"
     },
     {
       "from": "README.md",
-      "path": "references/specialist-map.yaml"
+      "path": "references/schema.md"
     },
     {
       "from": "README.md",
@@ -175,6 +175,14 @@
     },
     {
       "from": "references/dispatch-template.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "references/dispatch-template.md",
+      "path": "references/schema.md"
+    },
+    {
+      "from": "references/dispatch-template.md",
       "path": "references/tier-map.md"
     },
     {
@@ -199,11 +207,23 @@
     },
     {
       "from": "references/schema.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "references/schema.md",
       "path": "references/templates/reharden-evidence.md"
     },
     {
       "from": "references/schema.md",
+      "path": "references/tier-map.md"
+    },
+    {
+      "from": "references/schema.md",
       "path": "references/trace-events.md"
+    },
+    {
+      "from": "references/schema.md",
+      "path": "scripts/goalforge-pick-agent.py"
     },
     {
       "from": "references/state-machine.md",
@@ -222,8 +242,24 @@
       "path": "scripts/goalforge-transition.sh"
     },
     {
+      "from": "references/tier-map.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
       "from": "references/trace-events.md",
       "path": "references/state-machine.md"
+    },
+    {
+      "from": "scripts/tests/fixtures/dispatch/README.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "scripts/tests/fixtures/dispatch/wp-compile.md",
+      "path": "scripts/tests/goalforge-workflow-compile.test.sh"
+    },
+    {
+      "from": "scripts/tests/fixtures/dispatch/wp-harden-high/overview.md",
+      "path": "scripts/tests/goalforge-harden-stop.test.sh"
     },
     {
       "from": "skills/archive/SKILL.md",
@@ -271,7 +307,15 @@
     },
     {
       "from": "skills/execute/SKILL.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
       "path": "references/schema.md"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
+      "path": "scripts/goalforge-generate.sh"
     },
     {
       "from": "skills/execute/SKILL.md",
@@ -279,15 +323,15 @@
     },
     {
       "from": "skills/execute/references/dispatch-resolution.md",
-      "path": "references/specialist-map.yaml"
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/expertise-map.yaml"
     },
     {
       "from": "skills/execute/references/dispatch-resolution.md",
       "path": "references/tier-map.md"
-    },
-    {
-      "from": "skills/execute/references/dispatch-resolution.md",
-      "path": "scripts/goalforge-pick-agent.py"
     },
     {
       "from": "skills/harden/SKILL.md",
@@ -335,7 +379,15 @@
     },
     {
       "from": "skills/run/SKILL.md",
+      "path": "scripts/goalforge-workflow-compile.py"
+    },
+    {
+      "from": "skills/run/SKILL.md",
       "path": "skills/<child>/SKILL.md"
+    },
+    {
+      "from": "skills/run/workflows/README.md",
+      "path": "scripts/goalforge-workflow-compile.py"
     },
     {
       "from": "skills/spec/SKILL.md",

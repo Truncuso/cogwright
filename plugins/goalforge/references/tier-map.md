@@ -7,8 +7,11 @@
 # Dispatch Tier Map (role → tier × effort)
 
 Projection of `ROLE_TIER` (scripts/goalforge-pick-agent.py) — the single
-authoritative source. Tiers are bare (`haiku`/`sonnet`/`opus`/`fable`); effort is
-bare (`low`/`medium`/`high`/`xhigh`/`max`). No pinned vendor model IDs.
+authoritative source for the BAND. Tiers are bare (`haiku`/`sonnet`/`opus`/
+`fable`); effort is bare (`low`/`medium`/`high`/`xhigh`/`max`). No pinned
+vendor model IDs. The per-stage `model`/`effort`/`provider`/`endpoint`/
+`egress` actually dispatched are configured in `references/dispatch.yaml`,
+whose stage keys equal the roles below.
 
 - **tier** — the `low`/`medium`/`high` band from `ROLE_TIER[role][profile]`.
 - **model** — the concrete model class via `COMPLEXITY_MODEL`
@@ -22,6 +25,10 @@ EXCEPT `implement`, which caps at `medium` (→ `opus` @ `low` — see
 Register-conditioned rows below) — a sensitive change is never silently
 downgraded.
 
+`judge` and `wp-verify` are graders: ticket-48 re-bands both to `high`
+(opus@high) on BOTH profiles, so every grader resolution differs from every
+`implement` resolution in persona AND in model or effort.
+
 ## Roles
 
 | role | autonomous-minimal (tier / model / effort) | semi-autonomous (tier / model / effort) |
@@ -29,12 +36,13 @@ downgraded.
 | implement | by_register | by_register |
 | discovery | low / sonnet / low | low / sonnet / low |
 | feature-audit | medium / opus / low | medium / opus / low |
-| wp-harden-delta | low / sonnet / low | medium / opus / low |
-| wp-verify | medium / opus / low | high / opus / high |
+| harden-review | low / sonnet / low | medium / opus / low |
+| wp-verify | high / opus / high | high / opus / high |
 | simplify | medium / opus / low | medium / opus / low |
-| judge | medium / opus / low | medium / opus / low |
+| judge | high / opus / high | high / opus / high |
 | panel | high / opus / high | high / opus / high |
 | integration-review | medium / opus / low | high / opus / high |
+| second_opinion | low / sonnet / low | low / sonnet / low |
 
 ## Register-conditioned rows
 
@@ -49,7 +57,7 @@ code-writing role while every other role reads its fixed band from
 ## Autonomy profiles
 
 - **autonomous-minimal** — cost-lean: the cheapest tier that still does the job,
-  escalating only on blast radius. Default for fully-autonomous runs.
+  escalating only on blast radius.
 - **semi-autonomous** — a human reviews the output, so spend for quality at the
-  gates feeding that review (the WP `wp-verify` pass, the `panel`, the
-  last-WP `integration-review`).
+  gates feeding that review (the `panel`, the last-WP `integration-review`).
+  The resolver and CLI default.

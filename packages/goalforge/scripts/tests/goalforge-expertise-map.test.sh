@@ -142,12 +142,12 @@ else
     bad "map carries at least one agents/<name>.md path (OQ1 shape exercised)"
 fi
 
-# specialist-map.yaml is wp-03's to retire — untouched here, but it must
-# still exist, or this WP silently took over its retirement.
-if [[ -f "$PKG/references/specialist-map.yaml" ]]; then
-    ok "references/specialist-map.yaml left in place (wp-03 retires it)"
+# specialist-map.yaml was retired by wp-03: expertise-map.yaml + dispatch.yaml
+# replaced it. Its return would mean a second, competing resolution table.
+if [[ ! -f "$PKG/references/specialist-map.yaml" ]]; then
+    ok "references/specialist-map.yaml is gone (retired by wp-03)"
 else
-    bad "references/specialist-map.yaml left in place (wp-03 retires it)"
+    bad "references/specialist-map.yaml is gone (retired by wp-03) — still at $PKG/references/specialist-map.yaml"
 fi
 
 # known-bad ---------------------------------------------------------------

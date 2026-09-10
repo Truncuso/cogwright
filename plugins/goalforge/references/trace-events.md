@@ -65,9 +65,10 @@ Degrade-not-block: any attribution lookup failure resolves to `"unknown"`/`""`;
 it never blocks the emit, and the emitter warns to stderr + exits 0 on emission
 failure so it never blocks the underlying chain operation.
 
-## Event types (17)
+## Event types (18)
 
-All seventeen are schema-defined here (single schema home). Producer coverage
+All eighteen are schema-defined here (single schema home). `harden.warn` is
+added by wp-03 (producer: `goalforge-harden-stop.sh`, exit 0). Producer coverage
 this WP: `wp.status_changed`, `feature.status_changed`, `commit.linked`,
 `gate.result` have live producers (transition wiring + legacy derivation).
 `issue.recorded`'s producer is wp-15. `dispatch.launched` gains a producer
@@ -201,6 +202,23 @@ emit never changes the exit code).
 
 Plus attribution fields.
 
+### `harden.warn`
+
+A harden round whose token spend crossed the SOFT threshold without parking
+(wp-03/C4: with `SDD_HARDEN_TOKEN_CEILING` unset and `dispatch.yaml`
+`harden.token_ceiling: null`, tokens are a sensor, not a gate — the round cap
+stays the only default hard park). Producer: `goalforge-harden-stop.sh`, exit
+code **0** (WARN and continue).
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | yes | WP whose harden loop crossed the soft threshold. |
+| `reason` | string | yes | e.g. `"soft-token-threshold"`. |
+| `tokens` | integer | yes | Tokens spent across the WP's harden rounds. |
+| `threshold` | integer | yes | The soft threshold crossed (60k single-pass, 300k panel). |
+
+Plus attribution fields.
+
 ### `harden.round`
 
 One harden review round's token/round counters, recorded regardless of
@@ -301,6 +319,8 @@ it on return from the dispatched agent/batch.
 | `agent` | string | no | Agent id. |
 | `outcome` | string | no | e.g. `success`\|`failure`\|`parked`. |
 | `exit_code` | integer | no | Process exit code, if applicable. |
+| `tokens` | integer | **yes** | Tokens the dispatch spent (wp-03/C4 sizing sensor; `goalforge-rollup.sh` WARNs above `rollup.token_warn`). |
+| `tool_uses` | integer | **yes** | Tool calls the dispatch made (wp-03 sizing sensor). |
 
 ### `issue.recorded`
 
@@ -449,6 +469,7 @@ these; validators select the branch set by the row's `schema_version`.
         "reharden.accepted",
         "gate.disabled",
         "harden.parked",
+        "harden.warn",
         "harden.round",
         "wp.verified",
         "second_opinion.ok",
@@ -598,6 +619,24 @@ these; validators select the branch set by the row's `schema_version`.
     },
     {
       "properties": {
+        "type": { "const": "harden.warn" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "reason": { "type": "string" },
+        "tokens": { "type": "integer" },
+        "threshold": { "type": "integer" },
+        "actor": { "type": "string" },
+        "session": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type", "wp", "reason", "tokens", "threshold"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
         "type": { "const": "harden.round" },
         "seq": {}, "ts": {}, "schema_version": {},
         "wp": { "type": "string" },
@@ -703,10 +742,12 @@ these; validators select the branch set by the row's `schema_version`.
         "agent": { "type": "string" },
         "outcome": { "type": "string" },
         "exit_code": { "type": "integer" },
+        "tokens": { "type": "integer" },
+        "tool_uses": { "type": "integer" },
         "session": { "type": "string" },
         "decision_ref": { "type": "string" }
       },
-      "required": ["type"],
+      "required": ["type", "tokens", "tool_uses"],
       "additionalProperties": false
     },
     {

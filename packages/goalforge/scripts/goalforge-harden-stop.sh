@@ -2,8 +2,11 @@
 # goalforge-harden-stop.sh — C4 harden stop rule: round counter + token
 # ceiling, read from the feature's trace.
 #
-# spec.md C4: "Harden: max 2 rounds, round 2 diff-only; token ceiling 60k per
-# WP; breach parks." b6: "a harden run on a WP with a BLOCK that survives
+# spec.md C4 (as amended): tokens are a SOFT sensor — over the threshold the
+# run WARNs and continues; the ROUND CAP is hard (max 2 rounds, round 2
+# diff-only; a third round parks); a token ceiling set in the environment
+# (SDD_HARDEN_TOKEN_CEILING) or in dispatch.yaml (`harden.token_ceiling`) is a
+# HARD ceiling and parks on breach. b6: "a harden run on a WP with a BLOCK that survives
 # round 2 ... round 3 would start ... harden parks with
 # `harden: ceiling-breached, rounds=2` and a findings.md row; no third review
 # call."
@@ -21,32 +24,48 @@
 # other event carries. The harden skill (T13) is the intended producer, one
 # row per completed round.
 #
-# Usage: goalforge-harden-stop.sh <wp-dir>
-# Exit 0: round N+1 may run (rounds-so-far < ceiling AND tokens <= ceiling).
-# Exit 3: PARK — rounds-so-far >= 2, OR cumulative tokens > ceiling. Appends
-#         a `harden: ceiling-breached, rounds=<N>` row to <wp-dir>/findings.md
-#         and emits `harden.parked` (best-effort; not yet schema-registered,
-#         see T20 — a rejected/unavailable emit never changes this exit code).
+# Usage: goalforge-harden-stop.sh <wp-dir> [--dispatch <path>]
+# Exit 0: round N+1 may run. Also the SOFT-token path: with no hard ceiling
+#         configured, tokens above the soft threshold emit one `harden.warn`
+#         row and still exit 0 (C4: tokens are a sensor, the round cap is the
+#         only default hard park).
+# Exit 3: PARK — rounds-so-far >= 2, OR cumulative tokens > a CONFIGURED hard
+#         ceiling. Appends a `harden: ceiling-breached, rounds=<N>` row to
+#         <wp-dir>/findings.md and emits `harden.parked` (best-effort — a
+#         rejected/unavailable emit never changes this exit code).
 # Exit 2: internal error (bad usage, wp-dir missing, overview.md unreadable,
 #         corrupt trace line count fails to parse) — fail-closed, never a
 #         silent pass.
 #
-# Ceiling knobs: max rounds is fixed at 2 (C4). Token ceiling defaults to
-# 60000 (C4's "60k per WP"), overridable via SDD_HARDEN_TOKEN_CEILING.
+# Ceiling knobs: max rounds is fixed at 2 (C4). The token ceiling is HARD only
+# when configured: `SDD_HARDEN_TOKEN_CEILING=<N>` (wins) or `harden.token_ceiling:
+# <N>` in the dispatch file (`--dispatch <path>`, default the package
+# references/dispatch.yaml). With neither set (the shipped `null`), the token
+# budget is a soft threshold picked from the WP's `severity`/`register`:
+# 300000 for a `severity: HIGH` + `register: production` panel WP, else 60000.
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly MAX_ROUNDS=2
-TOKEN_CEILING="${SDD_HARDEN_TOKEN_CEILING:-60000}"
+readonly SOFT_PANEL=300000
+readonly SOFT_SINGLE=60000
+DISPATCH_PATH="$SCRIPT_DIR/../references/dispatch.yaml"
 
-# Best-effort event emit — never affects this script's exit code.
-emit_event() {
-    local type="$1" wp="$2" feat_dir="$3" reason="$4" rounds="$5" emit
+# Best-effort event emit — never affects this script's exit code. $1 is a JSON
+# object on stdin's behalf, already rendered by the caller.
+emit_json() {
+    local feat_dir="$1" payload="$2" emit
     emit="$SCRIPT_DIR/goalforge-trace-emit"
     [ -x "$emit" ] || return 0
     [ -n "$feat_dir" ] || return 0
+    printf '%s' "$payload" | "$emit" --feature-dir "$feat_dir" >/dev/null 2>&1 || true
+    return 0
+}
+
+emit_event() {
+    local type="$1" wp="$2" feat_dir="$3" reason="$4" rounds="$5" payload
     command -v python3 >/dev/null 2>&1 || return 0
-    TYPE="$type" WP="$wp" REASON="$reason" ROUNDS="$rounds" python3 -c '
+    payload="$(TYPE="$type" WP="$wp" REASON="$reason" ROUNDS="$rounds" python3 -c '
 import json, os, sys
 sys.stdout.write(json.dumps({
     "type": os.environ["TYPE"],
@@ -54,8 +73,58 @@ sys.stdout.write(json.dumps({
     "reason": os.environ["REASON"],
     "rounds": int(os.environ["ROUNDS"]),
 }))
-' 2>/dev/null | "$emit" --feature-dir "$feat_dir" >/dev/null 2>&1 || true
-    return 0
+' 2>/dev/null)" || return 0
+    emit_json "$feat_dir" "$payload"
+}
+
+emit_warn() {
+    local wp="$1" feat_dir="$2" tokens="$3" threshold="$4" payload
+    command -v python3 >/dev/null 2>&1 || return 0
+    payload="$(WP="$wp" TOKENS="$tokens" THRESHOLD="$threshold" python3 -c '
+import json, os, sys
+sys.stdout.write(json.dumps({
+    "type": "harden.warn",
+    "wp": os.environ["WP"],
+    "reason": "tokens-above-soft-threshold",
+    "tokens": int(os.environ["TOKENS"]),
+    "threshold": int(os.environ["THRESHOLD"]),
+}))
+' 2>/dev/null)" || return 0
+    emit_json "$feat_dir" "$payload"
+}
+
+# `harden.token_ceiling` from the dispatch file. Prints the integer when the
+# key is an int; prints nothing (no hard ceiling) when the file is absent,
+# unreadable, invalid, or the key is null/non-integer.
+config_ceiling() {
+    local path="$1"
+    [ -f "$path" ] || return 0
+    command -v python3 >/dev/null 2>&1 || return 0
+    python3 - "$path" <<'PY' 2>/dev/null || true
+import sys
+import yaml
+try:
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        data = yaml.safe_load(fh) or {}
+except (OSError, yaml.YAMLError):
+    sys.exit(0)
+ceiling = (data.get("harden") or {}).get("token_ceiling")
+if isinstance(ceiling, int) and not isinstance(ceiling, bool):
+    print(ceiling)
+PY
+}
+
+# Soft threshold from the WP overview.md frontmatter: the panel band (300k)
+# only for severity HIGH + register production, else the single-pass 60k.
+soft_threshold() {
+    local ov="$1" sev reg
+    sev="$(awk 'NR==1 && $0=="---"{infm=1;next} infm && $0=="---"{exit} infm && /^severity:[ \t]*/ {sub(/^severity:[ \t]*/,""); gsub(/["'"'"']/,""); print; exit}' "$ov" 2>/dev/null)"
+    reg="$(awk 'NR==1 && $0=="---"{infm=1;next} infm && $0=="---"{exit} infm && /^register:[ \t]*/ {sub(/^register:[ \t]*/,""); gsub(/["'"'"']/,""); print; exit}' "$ov" 2>/dev/null)"
+    if [ "$sev" = "HIGH" ] && [ "$reg" = "production" ]; then
+        printf '%s' "$SOFT_PANEL"
+    else
+        printf '%s' "$SOFT_SINGLE"
+    fi
 }
 
 wp_name() {
@@ -126,21 +195,52 @@ run() {
     tokens="${out##* }"
     case "$rounds$tokens" in *[!0-9]*) echo "goalforge-harden-stop: internal error — bad trace read" >&2; return 2 ;; esac
 
-    if [ "$rounds" -ge "$MAX_ROUNDS" ] || [ "$tokens" -gt "$TOKEN_CEILING" ]; then
+    # Hard ceiling only when configured: env wins over the dispatch file.
+    local hard=""
+    if [ -n "${SDD_HARDEN_TOKEN_CEILING:-}" ]; then
+        hard="$SDD_HARDEN_TOKEN_CEILING"
+    else
+        hard="$(config_ceiling "$DISPATCH_PATH")"
+    fi
+    case "$hard" in *[!0-9]*) hard="" ;; esac
+
+    if [ "$rounds" -ge "$MAX_ROUNDS" ] || { [ -n "$hard" ] && [ "$tokens" -gt "$hard" ]; }; then
         local reason="harden: ceiling-breached, rounds=$rounds"
         {
             [ -f "$wp_dir/findings.md" ] || printf '# findings\n\n## Harden Stop\n\n' > "$wp_dir/findings.md"
-            printf -- '- %s (tokens=%s, ceiling=%s)\n' "$reason" "$tokens" "$TOKEN_CEILING" >> "$wp_dir/findings.md"
+            printf -- '- %s (tokens=%s, ceiling=%s)\n' "$reason" "$tokens" "${hard:-none}" >> "$wp_dir/findings.md"
         }
-        echo "goalforge-harden-stop: PARK — $wp: $reason (tokens=$tokens, ceiling=$TOKEN_CEILING)" >&2
+        echo "goalforge-harden-stop: PARK — $wp: $reason (tokens=$tokens, ceiling=${hard:-none})" >&2
         emit_event "harden.parked" "$wp" "$feat_dir" "$reason" "$rounds"
         return 3
+    fi
+
+    # No hard ceiling: tokens are a soft sensor — WARN and continue.
+    if [ -z "$hard" ]; then
+        local threshold
+        threshold="$(soft_threshold "$ov")"
+        if [ "$tokens" -gt "$threshold" ]; then
+            echo "goalforge-harden-stop: WARN — $wp: tokens=$tokens above soft threshold $threshold" >&2
+            emit_warn "$wp" "$feat_dir" "$tokens" "$threshold"
+        fi
     fi
 
     return 0
 }
 
-case "${1:-}" in
-    "") echo "usage: goalforge-harden-stop.sh <wp-dir>" >&2; exit 2 ;;
-    *)  run "$1"; exit $? ;;
-esac
+usage() { echo "usage: goalforge-harden-stop.sh <wp-dir> [--dispatch <path>]" >&2; }
+
+WP_DIR=""
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        --dispatch)
+            [ "$#" -ge 2 ] || { usage; exit 2; }
+            DISPATCH_PATH="$2"; shift 2 ;;
+        -*) usage; exit 2 ;;
+        *)
+            [ -z "$WP_DIR" ] || { usage; exit 2; }
+            WP_DIR="$1"; shift ;;
+    esac
+done
+[ -n "$WP_DIR" ] || { usage; exit 2; }
+run "$WP_DIR"; exit $?

@@ -43,6 +43,7 @@ steps:
     precondition:
       target: wp
       status: ready
+    workflow_script: run/workflows/<wp>.js   # compiled by scripts/goalforge-workflow-compile.py; launched via the Workflow tool
 
   - skill: goalforge/verify
     purpose: "Gates A (deterministic + owned-files boundary), B (fresh-context diff review), C (goal judge + one foreign second opinion); implemented → verified"

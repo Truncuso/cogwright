@@ -125,6 +125,17 @@ created: YYYY-MM-DD
 feature: <feature>
 # route:, confidence:, execution_plan: RETIRED (T6) — no longer stamped or
 # read; old plans may still carry `route:` in frontmatter, ignored.
+# ticket-62: the DISPATCH sense of "route" is now `endpoint:` and lives in
+#     references/dispatch.yaml (`endpoint: session | leaf`), never in
+#     frontmatter. The chain sense of `route` (fast|standard|wave) is unrelated.
+#     The frontmatter key `route:` stays RETIRED under both readings.
+egress: overview                  # optional; read from the feature's `spec.md`
+                                  # frontmatter (mirrored here when authored on
+                                  # the overview). NARROW-ONLY override of the
+                                  # stage's egress class in dispatch.yaml. Enum
+                                  # none < diff-only < overview < full; a value
+                                  # WIDER than the stage row is ignored with a
+                                  # WARN row. See "dispatch.yaml" below.
 work_packages: [wp-01-x, wp-02-y]
 relationships:                    # optional typed edges
   - depends_on: [[other-feature]]   # cross-feature ordering (validated: target must be ready+; recorded, NOT auto-orchestrated)
@@ -600,3 +611,83 @@ transition emits `reharden.proposed` / `reharden.accepted` trace events whose
 payloads mirror `kind`/`locator`/`summary` plus the evidence path (see
 `references/trace-events.md`). The reverse `hardened→ready` re-promotion keeps
 its human gate unchanged.
+
+---
+
+## dispatch.yaml (per-stage dispatch config)
+
+`references/dispatch.yaml` is the configured source for model, effort,
+provider, endpoint, and egress class per dispatch stage. Every consumer
+(`goalforge-pick-agent.py`, `goalforge-rollup.sh`, `goalforge-workflow-compile.py`,
+`goalforge-second-opinion.sh`, `goalforge-harden-stop.sh`) reads it through a
+`--dispatch <path>` flag defaulting to this package file. No provider name
+appears in any `SKILL.md`; provider names are data in this file only.
+
+### Top level
+
+| Key | Type | Required | Semantics |
+|---|---|---|---|
+| `schema_version` | integer | yes | This file's shape. Currently `1`. |
+| `providers` | list | yes | Preference order, first entry = default. No budget accounting: preference order alone decides fall-through. |
+| `stages` | map | yes | One row per dispatch stage; keys equal the `ROLE_TIER` keys in `scripts/goalforge-pick-agent.py` — `implement`, `discovery`, `feature-audit`, `harden-review`, `wp-verify`, `simplify`, `judge`, `panel`, `integration-review`, `second_opinion`. |
+| `rollup.token_warn` | integer | yes | Per-dispatch soft token threshold; `goalforge-rollup.sh` writes a WARN line above it and does not change its exit code. Shipped value `250000`. |
+| `harden.token_ceiling` | integer \| null | yes | `null` ⇒ tokens are a **soft sensor**: above the threshold `goalforge-harden-stop.sh` writes a `harden.warn` row and exits 0, the round cap staying the only default hard park (C4). An integer ⇒ a **hard ceiling**: park above it, the same meaning `SDD_HARDEN_TOKEN_CEILING` carries when set. Shipped value `null`. |
+
+### `providers[]`
+
+| Key | Type | Required | Semantics |
+|---|---|---|---|
+| `name` | string | yes | Provider id referenced by a stage row's `provider`. |
+| `kind` | enum | yes | `native` \| `foreign` \| `local`. `native` runs in-session (Agent/Workflow tool); the others run through an agent-dispatch leaf. |
+| `leaf` | path \| null | yes | The `headless_dispatch` leaf (leaf-interface.md v1), written relative to `${CLAUDE_CONFIG_DIR:-$HOME/.claude}` — never an absolute home path. `null` for `kind: native`. |
+| `max_budget_usd` | float | no | Passed to the leaf as `--max-budget-usd`. Leaf default `0.10`. Omitted for `native`. |
+| `propose_only` | bool | no | Informative echo of a **derived** rule: `kind != native` is ALWAYS propose-only — its output is a proposal row in the ledger and in `findings.md`, never a gate decision. |
+
+### `stages.<stage>`
+
+| Key | Type | Required | Semantics |
+|---|---|---|---|
+| `model` | enum \| string | yes | On a row whose provider `kind` is `native`: `sonnet` \| `opus` \| `fable` \| `haiku` \| `by_register` — `by_register` only legal on `implement`, resolved from the WP's `register`/`severity` by the pick-agent register logic. On a row whose provider `kind` is NOT `native`, it is that provider's own model id (e.g. `glm-5.3:cloud` on the ollama leaf); a Claude tier there makes the leaf exit 2 and the leg is silently skipped. |
+| `effort` | enum | yes | `low` \| `medium` \| `high` \| `xhigh` \| `max` \| `by_register`. |
+| `provider` | string | yes | First-choice `providers[].name`; fall-through continues down `providers` **from that entry onward**. |
+| `endpoint` | enum | yes | `session` \| `leaf`. The dispatch sense formerly spelled `route` (ticket-62). `kind: native` ⇒ `session`; a leaf provider ⇒ `leaf`. |
+| `egress` | enum | yes | `none` \| `diff-only` \| `overview` \| `full` — what may leave to that endpoint. |
+
+Model/effort mirror the `semi-autonomous` `ROLE_TIER` projection
+(`references/tier-map.md`) except `judge` and `wp-verify`, re-banded to
+`opus`/`high` on every profile by ticket-48 (a grader must differ from the
+implementer in persona AND in model or effort). `goalforge-pick-agent.py
+--test-tiers` enforces that projection on every other row, comparing `model`
+and `effort` on native rows and `effort` alone on a non-native row (whose
+`model` is a provider id); the `by_register` sentinel is exempt.
+
+### Egress classes (ticket-45)
+
+Ordered, narrowest first: `none` < `diff-only` < `overview` < `full`.
+
+| Class | Payload |
+|---|---|
+| `none` | Nothing leaves; the call is skipped with reason `egress-none`. |
+| `diff-only` | The diff. |
+| `overview` | The diff + the WP `overview.md`. **Shipped default on every row whose provider `kind != native`.** |
+| `full` | The diff + `overview.md` + `spec.md` + `findings.md`. In the enum, used by no shipped row; enabled only by a reviewed config edit. |
+
+`none` is legal on any row. **No content is redacted in any class** (operator's
+explicit choice). A feature `spec.md` frontmatter `egress:` may only **narrow**
+the stage row: a value at or below the row's class is applied; a **wider** value
+is ignored with a WARN row and the stage row's class stands.
+
+### Provider fall-through (leaf exit codes, leaf-interface.md §5/§6)
+
+Resolved at dispatch time against the leaf's exit code:
+
+| Leaf exit | Reason | Effect |
+|---|---|---|
+| `1` | backend unreachable | fall through to the next configured provider |
+| `2` | model not found | fall through to the next configured provider |
+| `4` | `plan_quota_exhausted` \| `metered_rate_limited` | no inner envelope, the turn was refused → fall through |
+| `4` | `budget_exceeded` \| `budget_check_failed` | **not** a fall-through: the turn completed, the result is **kept**, and a WARN row names the overspend |
+| `0` | — | result kept |
+
+When the ordered list is exhausted with no result, `EscalationRequired` is
+raised (exit 1, `ESCALATION REQUIRED: …` on stderr) — never a silent fallback.

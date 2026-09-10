@@ -1,5 +1,5 @@
 ---
-name: goalforge-decompose
+name: decompose
 description: "Decompose an approved feature spec into work packages. Reads plans/<feature>/spec.md and emits one wp-NN-<slug>/ folder per work package, each containing overview.md ONLY (status: spec) in the C1 eight-section shape with C2 frontmatter, a checklist of `- [ ] Tn <outcome> {files: a, b} [b1,b2]` lines, and a per-WP contract_slice. No per-item files, no todo.md. Also owns --add-wp: append ONE new WP to an existing feature without a re-decomposition. Trigger: the user asks to decompose, break down, or plan the work packages for a feature with an approved spec.md, or to add a single WP mid-flight."
 metadata:
   skill-kind: preference

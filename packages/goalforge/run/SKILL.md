@@ -1,5 +1,5 @@
 ---
-name: goalforge-run
+name: run
 description: "Chain driver for the goalforge stages: capture → spec → decompose → harden → execute → verify. Reads the target's on-disk `status:` and enters the one step that status admits; supports --dry-run. Use it to drive a feature end-to-end; for a single stage, use the entry command for that stage."
 metadata:
   skill-kind: preference
@@ -42,6 +42,14 @@ Sibling `chain.yaml` declares the step sequence; never reorder or extend it here
    ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/skills/run/scripts/goalforge-router.sh --dry-run <feature>
    ```
+
+## Workflows
+
+`run/workflows/` holds the compiled Workflow scripts — the output of
+`scripts/goalforge-workflow-compile.py`, one `run/workflows/<wp>.js` per work
+package. `goalforge-execute` compiles the WP checklist into that file and
+launches it through the Workflow tool; nothing in this directory is
+hand-edited.
 
 ## Gotchas
 

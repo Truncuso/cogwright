@@ -56,6 +56,32 @@ else
     echo "$OUT3" | sed 's/^/        /'
 fi
 
+# ── known-bad: dispatch.completed without tokens/tool_uses (wp-03 b4) ───────
+FD4="$T/dispatch-completed-no-sizing"; mkdir -p "$FD4"
+OUT4="$("$EMIT" --feature-dir "$FD4" \
+    --event '{"type":"dispatch.completed","wp":"wp-01-x","agent":"goalforge-implementer","outcome":"success","exit_code":0}' 2>&1)"
+RC4=$?
+if [[ "$RC4" -eq 2 ]] && [[ ! -f "$FD4/trace-events.jsonl" ]]; then
+    ok "known-bad: dispatch.completed without tokens/tool_uses -> exit 2, no log bytes"
+else
+    bad "known-bad: dispatch.completed without tokens/tool_uses -> exit 2, no log bytes (rc=$RC4)"
+    echo "$OUT4" | sed 's/^/        /'
+fi
+
+# ── known-good: dispatch.completed with both sizing fields (wp-03 b4) ───────
+FD5="$T/dispatch-completed-sized"; mkdir -p "$FD5"
+OUT5="$("$EMIT" --feature-dir "$FD5" \
+    --event '{"type":"dispatch.completed","wp":"wp-01-x","agent":"goalforge-implementer","outcome":"success","exit_code":0,"tokens":1234,"tool_uses":5}' 2>&1)"
+RC5=$?
+if [[ "$RC5" -eq 0 ]] \
+   && grep -q '"tokens":1234' "$FD5/trace-events.jsonl" \
+   && grep -q '"tool_uses":5' "$FD5/trace-events.jsonl"; then
+    ok "known-good: dispatch.completed with tokens+tool_uses -> exit 0, appended"
+else
+    bad "known-good: dispatch.completed with tokens+tool_uses -> exit 0, appended (rc=$RC5)"
+    echo "$OUT5" | sed 's/^/        /'
+fi
+
 echo
 echo "goalforge-trace-emit.test.sh: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

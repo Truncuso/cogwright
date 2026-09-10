@@ -82,12 +82,14 @@ Any FAIL is a not-met verdict and BLOCKs.
 Then take ONE second opinion on that verdict:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-second-opinion.sh <wp> --feature-dir <feature>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-second-opinion.sh <wp> --feature-dir <feature> --verdict <gate-C-verdict-file> --diff <wp-diff-file>
 ```
 
-The call is **skip-when-absent**: while the script does not exist (wp-03 ships
-it), record `second_opinion.skipped reason=dispatcher-absent` in the trace and
-continue. Otherwise record `second_opinion.ok` with the verdict quoted; a skip
+`--verdict` (gate C verdict text) and `--diff` (the WP diff) are FILES, so the
+payload is deterministic input, not derived from the working tree; with neither
+present the script records `second_opinion.skipped reason=no-payload` and calls
+no provider. The call is otherwise **skip-when-absent**: while the script does
+not exist, record `second_opinion.skipped reason=dispatcher-absent` and continue. Otherwise record `second_opinion.ok` with the verdict quoted; a skip
 is legal, a silent omission is not. **Judge/second-opinion disagreement
 escalates to the human** (unattended: park with both verdicts in `findings.md`);
 never break the tie yourself.
