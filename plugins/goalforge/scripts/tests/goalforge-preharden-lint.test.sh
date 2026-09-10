@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# goalforge-preharden-lint.test.sh — sabotage pair for V5 (WP-altitude
+# goalforge-preharden-lint.test.sh — sabotage pairs for V5 (WP-altitude
 # command-shape lint + section-lint call, ticket-73/spec C3 G2) added on top
 # of goalforge-preharden-lint.sh's existing P1/V1-V4 family. Fixtures live
 # under packages/goalforge/evals/fixtures/preharden-lint/ — never inline.
@@ -56,6 +56,39 @@ if [ "$rc" -ne 2 ]; then
     ok "schema5-baseline-wp -> ratchet WARN, never ERROR (rc=$rc, not 2)"
 else
     bad "schema5-baseline-wp -> ratchet WARN, never ERROR (rc=$rc)"
+    printf '%s\n' "$OUT" | sed 's/^/        /'
+fi
+
+# ── known-bad: schema-6 behavior pinned to a live corpus root ──────────────
+# b2's wording is taken from the wp-02-agent-roster expertise-map behavior that
+# shipped red on a fresh clone: it resolves against ${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+# and names no shipped fixture root.
+OUT="$(bash "$LINT" "$FIX/v6-live-root-wp" 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] \
+   && printf '%s' "$OUT" | grep -q 'WARN \[V6\] v6-live-root-wp: b2: oracle resolves against a live corpus root with no shipped fixture root'; then
+    ok "v6-live-root-wp -> WARN V6 (heuristic, never ERROR)"
+else
+    bad "v6-live-root-wp -> WARN V6 (rc=$rc)"
+    printf '%s\n' "$OUT" | sed 's/^/        /'
+fi
+
+# ── known-good: the SAME live-root literal, but a shipped fixture root is named.
+# Exercises the exemption conjunct: deleting `&& ! grep fixture-tokens` from the
+# lint must turn this case red.
+OUT="$(bash "$LINT" "$FIX/v6-live-root-exempt-wp" 2>&1)"; rc=$?
+if [ "$rc" -eq 0 ] && ! printf '%s' "$OUT" | grep -q '\[V6\]'; then
+    ok "v6-live-root-exempt-wp -> no V6 line (fixture-root exemption applies)"
+else
+    bad "v6-live-root-exempt-wp -> no V6 line (rc=$rc)"
+    printf '%s\n' "$OUT" | sed 's/^/        /'
+fi
+
+# ── good-wp emits no V6 line (behaviors[] empty -> skipped silently) ───────
+OUT="$(bash "$LINT" "$FIX/good-wp" 2>&1)"
+if ! printf '%s' "$OUT" | grep -q '\[V6\]'; then
+    ok "good-wp emits no V6 line"
+else
+    bad "good-wp emits no V6 line"
     printf '%s\n' "$OUT" | sed 's/^/        /'
 fi
 

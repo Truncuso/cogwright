@@ -23,6 +23,23 @@
 #       (pre-v4 legacy) is exempt entirely. A schema-6 WP's overview.md is
 #       also run through `goalforge-section-lint.sh` (C1 8-section shape)
 #       here — a failure there is a V5 ERROR too.
+#   V6  a schema-6 `goal.verification.behaviors[]` row whose
+#       `given:`/`when:`/`then:`/`oracle:` text pins the check to a live corpus
+#       root (`$HOME`, `~/.claude`, `~/`, `CLAUDE_CONFIG_DIR`, `/home/`) while
+#       naming no shipped fixture root. Exemption tokens (case-insensitive):
+#       `fixtures/`, the bare word `fixtures`, `hermetic`, `fixture root`.
+#       HEURISTIC, WARN-only, never ERROR. A WP with no behaviors[] (schema 5,
+#       pre-v4) is skipped.
+#
+#       Parser limits: behavior values are read as plain inline scalars only.
+#       A block-scalar (`>` / `|`) or flow-style value is NOT parsed — its
+#       continuation lines are invisible to V6, so such a row degrades to a
+#       MISSED check (no WARN), never a spurious one.
+#
+#       (A prior keyword check — "oracle names no known-bad case", grepping for
+#       `known-bad`/`exit 2`/`sabotage`/… — was removed: a keyword grep on prose
+#       is not evidence a known-bad input exists. Measured on the live corpus it
+#       flagged 7 of 11 rows, several of them compliant.)
 #
 # Usage: goalforge-preharden-lint.sh <wp-dir> | --self-test
 # Exit: 0 clean; 1 findings (WARN lines on stdout, gate-consumable);
@@ -159,6 +176,108 @@ command_shaped() {
     return 0
 }
 
+# V6 helper — emits one TAB-separated row per
+# `goal.verification.behaviors[]` entry of a WP overview.md:
+#   <id> TAB <given+when+then+oracle text>
+# Same frontmatter/indent assumptions as extract_verification (schema.md's
+# `goal:` block); reuses the python3 path that helper already depends on, so
+# no new interpreter dependency is introduced. Prints nothing when the WP has
+# no behaviors[] (schema-5 and pre-v4 WPs).
+extract_behaviors() {
+    python3 - "$1" <<'PY'
+import sys, re
+try:
+    text = open(sys.argv[1], encoding='utf-8').read()
+except OSError:
+    sys.exit(0)
+lines = text.split('\n')
+if not lines or lines[0].strip() != '---':
+    sys.exit(0)
+end = None
+for i in range(1, len(lines)):
+    if lines[i].strip() == '---':
+        end = i
+        break
+if end is None:
+    sys.exit(0)
+fm = lines[1:end]
+
+def unquote(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
+        v = v[1:-1]
+    return v
+
+rows, cur = [], None
+in_goal = in_ver = in_beh = False
+for ln in fm:
+    if re.match(r'^goal:\s*$', ln):
+        in_goal, in_ver, in_beh = True, False, False
+        continue
+    if in_goal and re.match(r'^[A-Za-z_]', ln):
+        in_goal = in_ver = in_beh = False
+    if not in_goal:
+        continue
+    if re.match(r'^  verification:\s*$', ln):
+        in_ver, in_beh = True, False
+        continue
+    if in_ver and re.match(r'^  [A-Za-z_]', ln):
+        in_ver = in_beh = False
+        continue
+    if not in_ver:
+        continue
+    if re.match(r'^    behaviors:\s*(\[\s*\])?\s*$', ln):
+        in_beh = True
+        continue
+    if in_beh and re.match(r'^    [A-Za-z_]', ln):
+        in_beh = False
+        continue
+    if not in_beh:
+        continue
+    m = re.match(r'^      - (\w+):\s*(.*)$', ln)
+    if m:
+        cur = {'id': '', 'given': '', 'when': '', 'then': '', 'oracle': ''}
+        rows.append(cur)
+        cur[m.group(1)] = unquote(m.group(2))
+        continue
+    m = re.match(r'^        (\w+):\s*(.*)$', ln)
+    if m and cur is not None:
+        cur[m.group(1)] = unquote(m.group(2))
+
+def flat(*parts):
+    return re.sub(r'\s+', ' ', ' '.join(parts)).strip()
+
+for r in rows:
+    bid = r.get('id') or '<unnamed>'
+    print('\t'.join([
+        bid,
+        flat(r.get('given', ''), r.get('when', ''), r.get('then', ''), r.get('oracle', '')),
+    ]))
+PY
+}
+
+# V6 token lists — literal, case-insensitive, heuristic (see header).
+V6_LIVE_ROOTS='[$]HOME|~/[.]claude|~/|CLAUDE_CONFIG_DIR|/home/'
+V6_FIXTURE_TOKENS='fixtures/|\bfixtures\b|hermetic|fixture root'
+
+# V6 — heuristic live-corpus-root lint. WARN channel only, never ERROR.
+lint_wp_behaviors() {
+    local wp="$1" ov="$wp/overview.md" base rows bid atext
+    [ -f "$ov" ] || return 0
+    base="$(basename -- "$wp")"
+    rows="$(extract_behaviors "$ov")"
+    [ -n "$rows" ] || return 0
+    while IFS="$(printf '\t')" read -r bid atext; do
+        [ -n "${bid:-}" ] || continue
+        if printf '%s' "$atext" | grep -qE "$V6_LIVE_ROOTS" \
+           && ! printf '%s' "$atext" | grep -qiE "$V6_FIXTURE_TOKENS"; then
+            warn V6 "$base: $bid: oracle resolves against a live corpus root with no shipped fixture root"
+        fi
+    done <<EOF
+$rows
+EOF
+}
+
 # V5 — WP-altitude verification.command shape + C1 section lint.
 lint_wp_verification() {
     local wp="$1" ov="$wp/overview.md" base info schema present command
@@ -247,6 +366,9 @@ EOF
     # V5 — WP-altitude command-shape + section-lint (ERROR channel, distinct
     # from the WARN channel above).
     lint_wp_verification "$wp"
+
+    # V6 — heuristic live-corpus-root lint (WARN channel).
+    lint_wp_behaviors "$wp"
 
     if [ "$err_count" -gt 0 ]; then
         return 2

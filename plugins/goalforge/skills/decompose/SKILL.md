@@ -33,18 +33,18 @@ signal. Confirm the list when a WP is large or the decomposition is non-obvious.
 
 ## Step 2 — Derive the WP frontmatter (C2) and goal block
 
-Per WP: `name: wp-NN-<slug>` (zero-padded number, kebab slug), `severity`,
-`task_type`, `register` from the spec, `depends_on` (backward-pointing slugs
-only), `parallel`, `owned_files` (the file boundary), `contract_slice` (the
-`### C…` ids of the Interface Contract this WP depends on — schema.md
-§Contract-slice hash), `human_required: null` or a reason string (C7),
-`schema_version: 6`, `plan: <feature>`, `goal_approved_version: null`.
+Per WP: `name: wp-NN-<slug>`, `severity`, `task_type`, `register` from the spec,
+`depends_on` (backward-pointing slugs only), `parallel`,
+`owned_files` (the file boundary), `contract_slice` (the `### C…` ids of the
+Interface Contract this WP depends on — schema.md §Contract-slice hash),
+`human_required: null` or a reason string (C7), `schema_version: 6`,
+`plan: <feature>`, `goal_approved_version: null`.
 
-`goal.outcome` and `goal.verification` are always WP-authored, never inherited:
-one measurable outcome sentence, one `strategy`, one command-only
-`verification.command`, and the `behaviors[]` rows (id, given/when/then, oracle)
-this WP's checklist cites. `constraints`/`boundaries` union with the feature's;
-`iteration_policy`/`blocked_stop` inherit when unset via `inherits_from:`.
+`goal.outcome`/`goal.verification` are always WP-authored, never inherited: one
+measurable outcome sentence, one `strategy`, one command-only
+`verification.command`, and the `behaviors[]` rows this WP's checklist cites.
+`constraints`/`boundaries` union with the feature's; `iteration_policy`/
+`blocked_stop` inherit via `inherits_from:`.
 
 ## Step 3 — Author the checklist
 
@@ -52,8 +52,7 @@ this WP's checklist cites. `constraints`/`boundaries` union with the feature's;
 - [ ] T1 <imperative outcome> {files: a, b} [b1,b2]
 ```
 
-One line per work item, in execution order. `{files: …}` is a subset of the WP's
-`owned_files`; `[b1,b2]` names the `goal.verification.behaviors[]` ids it
+One line per work item, in execution order; `[b1,b2]` names the behavior ids it
 satisfies. An item carries no status, complexity, verify, depends_on, or commit
 field — the WP ships as one commit (C5).
 
@@ -67,17 +66,18 @@ other H2. Double-quote free-text frontmatter that may carry a colon (`title:`,
 `goal.outcome:`) — an unquoted colon-space breaks the block. `status: spec` is a
 birth state, not a transition: never call `goalforge-transition.sh` here.
 
-## Step 5 — Self-check (three rules, fixed in place)
+## Step 5 — Self-check (four rules, fixed in place)
 
-1. **Deterministic gate.** Every `verification.command` is command-only and
-   runs offline — no live run, network call, or manual step (those are a body
-   note, never part of the gate).
+1. **Deterministic gate.** Every `verification.command` is command-only and runs
+   offline — no live run, network call, or manual step.
 2. **Facet coverage.** Every facet of `goal.outcome` is covered by
-   `goal.verification` or one of its `behaviors[]`, and every checklist item
-   cites at least one behavior id.
+   `goal.verification` or a `behaviors[]` row, and every item cites a behavior id.
 3. **One owner, backward deps.** `owned_files` sets are pairwise disjoint
    across WPs, every `{files: …}` is a subset of its own WP's `owned_files`,
    and no `depends_on` points at a later WP.
+4. **Hermetic oracle.** Every `behaviors[]` entry names the input its check runs
+   against, and that input ships as a fixture under the WP's `owned_files` —
+   never a live corpus root (`$HOME`, `$CLAUDE_CONFIG_DIR`); lint V6 WARNs.
 
 A rule that needs a spec change surfaces to the user; never encode a guess.
 

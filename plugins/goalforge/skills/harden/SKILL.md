@@ -39,11 +39,11 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-preharden-lint.sh <wp-dir>
 bash ${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-open-questions-gate.sh --check <wp-dir>/overview.md
 ```
 
-The lint runs V1-V5 (V5: `verification.command` is command-shaped) and calls
-`goalforge-section-lint.sh`; exit 1 = findings, fixed before any model is spent.
-The gate counts unresolved `## Open Questions` bullets — one not marked
-`[resolved]`, `[assumption]`, `[deferred]`, or `[risk-accepted: <id>]` with a
-resolving `## Risks` row. Non-zero is a hard stop: resolve, re-run to `0`.
+The lint runs V1-V6 and `goalforge-section-lint.sh`; V1-V5 (V5: `verification.command` is
+command-shaped) are fixed before any model is spent, while V6 advisory-WARNs a behavior
+oracle pinned to a live corpus root and never blocks G2. The gate counts unresolved
+`## Open Questions` bullets — one not marked `[resolved]`, `[assumption]`, `[deferred]`,
+or `[risk-accepted: <id>]` with a resolving `## Risks` row. Non-zero: resolve, re-run to `0`.
 
 **Respondent (C7).** Attended, the human answers. Unattended, an agent
 respondent answers from `spec.md` and `findings.md`, stamping `answered_by:
