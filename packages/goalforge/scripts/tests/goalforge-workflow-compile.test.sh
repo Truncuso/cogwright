@@ -39,7 +39,6 @@ FIXTURES="$SD/fixtures/dispatch"
 WP_FIXTURE="$FIXTURES/wp-compile.md"
 DISPATCH="$FIXTURES/dispatch-default.yaml"
 EXPERTISE="$FIXTURES/expertise-compile.yaml"
-REAL_WP="$SD/../../../../plans/goalforge-overhaul/wp-03-dispatch-routing/overview.md"
 PASS=0; FAIL=0
 
 ok()  { echo "  PASS: $1"; PASS=$((PASS+1)); }
@@ -151,9 +150,11 @@ assert_claude_models "$SCRIPT" "fixture dispatch"
 # --- the SHIPPED references/dispatch.yaml — present in EVERY clone (R3-2) -----
 # The hermetic fixture's rows are all native, so the assertion above cannot
 # fail on it. The production config is where a real provider model id lives
-# (the second_opinion row), and unlike the plans/ smoke case at the bottom of
-# this file, references/dispatch.yaml ships inside the package — so this run
-# happens in a tree with no plans/ too.
+# (the second_opinion row), and references/dispatch.yaml ships inside the
+# package — so this run happens in a tree with no plans/ too. It is the one
+# case here whose input is a live file rather than a fixture; that file is
+# wp-03-owned package config, not the plans/ tree, so it changes only when this
+# WP changes it.
 SHIPPED_DISPATCH="$SD/../../references/dispatch.yaml"
 if python3 "$COMPILE" "$WP_FIXTURE" --dispatch "$SHIPPED_DISPATCH" \
         --expertise "$EXPERTISE" --out "$T/shipped" >/dev/null 2>"$T/shipped.err"; then
@@ -275,24 +276,17 @@ else
     bad "a forbidden call is caught by the allowed-call assertion"
 fi
 
-# --- smoke: the real wp-03 overview compiles (never into run/workflows/) ------
-if [ -f "$REAL_WP" ]; then
-    if python3 "$COMPILE" "$REAL_WP" --out "$T/real" >/dev/null 2>&1; then
-        ok "real wp-03 overview compiles into a temp dir"
-    else
-        bad "real wp-03 overview compiles into a temp dir"
-    fi
-    parse_check "$T/real/wp-03-dispatch-routing.js" \
-        && ok "real wp-03 compiled script parses as ESM" \
-        || bad "real wp-03 compiled script parses as ESM"
-    # The SHIPPED dispatch.yaml is where a real provider model id lives (the
-    # second_opinion row). This is the run that would catch N2 in production —
-    # the hermetic fixture's stub row cannot, its model being a Claude tier.
-    assert_claude_models "$T/real/wp-03-dispatch-routing.js" "shipped references/dispatch.yaml"
-else
-    # Not a pass: the oracle did not run. Counted as neither pass nor fail.
-    echo "  SKIP: real wp-03 overview absent ($REAL_WP) — smoke case not run"
-fi
+# No case here reads the live plans/ tree. The former "real wp-03 overview"
+# smoke did, with no --dispatch and no --expertise, so its three inputs were
+# all mutable live state: one run in eleven reported 84/1 while a fix lap was
+# rewriting overview.md and commit 5922eb7 was editing references/dispatch.yaml
+# (verify round 3, 2026-09-13). A suite whose declared strategy is
+# `deterministic` cannot read files another process is writing.
+# Its two distinct coverages both survive hermetically above: a real-shaped WP
+# compiles (wp-compile.md, 11 items in three {files:} groups) and the SHIPPED
+# references/dispatch.yaml is asserted to emit only Claude model ids (the
+# in-package compile + assert_claude_models pair). A snapshot fixture is NOT
+# the fix: packages/goalforge/ ships publicly and plans/ prose is private.
 
 # --- known-bad 4 (N4): the expertise map is a SEAM, not live sibling data -----
 # An EMPTY --expertise map must change the emitted "Expertise refs:" line. If
