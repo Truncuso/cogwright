@@ -53,7 +53,15 @@ error rather than a guess. Graders (`judge`, `wp-verify`) are pinned to
   `model` per agent but inherits session effort; the **Workflow tool** is the
   only surface with a per-agent effort knob, so a batch mixing efforts uses it.
 - `leaf` — the headless `headless_dispatch` CLI of a non-native provider, with
-  `--max-budget-usd` from the provider row. Always propose-only.
+  `--max-budget-usd` from the provider row. Always propose-only. The payload
+  goes as a `--prompt` **argv value** under the configured
+  `second_opinion.max_payload_bytes` cap (clamped to the reviewed ceiling
+  `102400` with a WARN — one argv string must stay inside `MAX_ARG_STRLEN`).
+  `--prompt-file` is NOT used because the configured leaves ollama, zai and
+  deepseek route it through `_core/prompt_file.py` as a structured handoff
+  brief (raw payload → leaf-exit-3); the codex leaf reads it raw and would
+  accept one, so this is a property of the configured row, not of
+  leaf-interface v1 (verified 2026-09-13).
 
 ## Egress classes
 

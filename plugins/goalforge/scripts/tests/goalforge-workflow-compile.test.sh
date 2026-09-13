@@ -148,6 +148,41 @@ assert_claude_models() { # $1 = script  $2 = label
 }
 assert_claude_models "$SCRIPT" "fixture dispatch"
 
+# --- the SHIPPED references/dispatch.yaml — present in EVERY clone (R3-2) -----
+# The hermetic fixture's rows are all native, so the assertion above cannot
+# fail on it. The production config is where a real provider model id lives
+# (the second_opinion row), and unlike the plans/ smoke case at the bottom of
+# this file, references/dispatch.yaml ships inside the package — so this run
+# happens in a tree with no plans/ too.
+SHIPPED_DISPATCH="$SD/../../references/dispatch.yaml"
+if python3 "$COMPILE" "$WP_FIXTURE" --dispatch "$SHIPPED_DISPATCH" \
+        --expertise "$EXPERTISE" --out "$T/shipped" >/dev/null 2>"$T/shipped.err"; then
+    ok "the fixture WP compiles against the shipped references/dispatch.yaml"
+    assert_claude_models "$T/shipped/wp-fixture-compile.js" "shipped references/dispatch.yaml"
+else
+    bad "the fixture WP compiles against the shipped references/dispatch.yaml"
+    cat "$T/shipped.err"
+fi
+
+# --- known-bad 5 (R3-1): an agent-node role on a NON-NATIVE row -> exit 2 -----
+# dispatch-nonnative-implement.yaml puts the `implement` row (which the
+# compiler emits as agent() nodes) on the local stub provider with the
+# provider-shaped model id `glm-5.3:cloud`. Before the provider-kind check the
+# compiler exited 0 and emitted three agent({model: "glm-5.3:cloud"}) nodes.
+NONNATIVE="$FIXTURES/dispatch-nonnative-implement.yaml"
+python3 "$COMPILE" "$WP_FIXTURE" --dispatch "$NONNATIVE" --expertise "$EXPERTISE" \
+    --out "$T/nonnative" >/dev/null 2>"$T/nonnative.err"
+NN_EXIT=$?
+NN_SCRIPT="$T/nonnative/wp-fixture-compile.js"
+if [ "$NN_EXIT" -eq 2 ] && [ ! -f "$NN_SCRIPT" ] && grep -q "not 'native'" "$T/nonnative.err"; then
+    ok "an agent-node role on a non-native provider row -> exit 2, nothing emitted"
+else
+    bad "an agent-node role on a non-native provider row -> exit 2, nothing emitted (exit $NN_EXIT)"
+    cat "$T/nonnative.err"
+    # If it DID compile, name the undispatchable model ids it emitted.
+    [ -f "$NN_SCRIPT" ] && assert_claude_models "$NN_SCRIPT" "non-native implement row"
+fi
+
 BATCHES=$(grep -c 'label: "batch-' "$SCRIPT")
 [ "$BATCHES" -eq 3 ] && ok "3 batch nodes (A, B, C)" || bad "3 batch nodes (got $BATCHES)"
 

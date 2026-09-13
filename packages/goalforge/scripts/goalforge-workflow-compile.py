@@ -239,6 +239,34 @@ def agent_call(
     )
 
 
+def assert_native_agent_row(module, dispatch: dict, role: str, model: str) -> None:
+    """An `agent()` node may only carry a NATIVE row and a Claude tier model.
+
+    `agent({model: ...})` dispatches Claude tiers in-session and nothing else, so
+    a stage row on a non-native provider (or a native row carrying a provider's
+    own model id) is undispatchable. Checked HERE, per emitted node, for every
+    role the compiler turns into an `agent()` call — the `--test-tiers` row check
+    skips the `implement` row entirely (its tier is the `by_register` sentinel),
+    so the oracle alone cannot hold this invariant.
+
+    Raises ``ValueError`` (main() → exit 2)."""
+    row = module.stage_row(dispatch, role)
+    provider = row.get("provider")
+    kind = module.provider_row(dispatch, provider).get("kind")
+    if kind != "native":
+        raise ValueError(
+            f"dispatch stage row {role!r} is emitted as an agent() node but its "
+            f"provider {provider!r} has kind {kind!r}, not 'native' — "
+            f"agent({{model: {model!r}}}) cannot dispatch a non-native provider"
+        )
+    if model not in module.CLAUDE_TIER_MODELS:
+        raise ValueError(
+            f"dispatch stage row {role!r} is emitted as an agent() node but its "
+            f"model {model!r} is not a Claude tier "
+            f"({sorted(module.CLAUDE_TIER_MODELS)})"
+        )
+
+
 def row_dispatch(module, dispatch: dict, role: str, frontmatter: dict,
                  touched: list[str], expertise_map: dict) -> dict:
     """Resolve one stage row through pick-agent (by_register + expertise aware).
@@ -281,6 +309,7 @@ def compile_script(
 
     batch = row_dispatch(module, dispatch, "implement", frontmatter, touched,
                          expertise_map)
+    assert_native_agent_row(module, dispatch, "implement", str(batch["model"]))
     persona = roster_agent_path(module, batch["agent"])
     expertise = list(batch["expertise"])
     grouped = stages(items)
@@ -331,6 +360,7 @@ def compile_script(
         model, effort = row.get("model"), row.get("effort")
         if not model or not effort:
             raise ValueError(f"dispatch stage row {role!r} is missing model and/or effort")
+        assert_native_agent_row(module, dispatch, role, str(model))
         calls.append(
             agent_call(
                 label=label,

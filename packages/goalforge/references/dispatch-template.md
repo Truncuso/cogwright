@@ -52,12 +52,22 @@ classes, the narrow-only feature override, and every key are documented in
 
 ## Payload size (leaf legs)
 
-A leaf leg's payload travels as a `--prompt` **argv value**: that is the only
-payload flag in leaf-interface v1, and `--prompt-file` on a configured leaf is a
-*structured handoff-brief* path (base-dir allowlist + frontmatter contract, exit
-2/3), never a raw payload. The cap is configured, not hardcoded —
-`second_opinion.max_payload_bytes` in `references/dispatch.yaml` (shipped
-`102400`). Above it `goalforge-second-opinion.sh` truncates the DIFF section
+A leaf leg's payload travels as a `--prompt` **argv value**, not
+`--prompt-file`. Which flag works depends on the CONFIGURED provider, not on
+leaf-interface v1 (verified 2026-09-13 by reading the leaves): the ollama, zai
+and deepseek leaves route `--prompt-file` through `_core/prompt_file.py`, a
+*structured handoff-brief* parser (base-dir allowlist + frontmatter contract,
+exit 2/3) that kills a raw payload file with leaf-exit-3, while the codex leaf
+reads the file raw and would accept one. The shipped `second_opinion` row runs
+on ollama, hence `--prompt` and hence a size cap.
+
+The cap is configured, not hardcoded — `second_opinion.max_payload_bytes` in
+`references/dispatch.yaml` (shipped `102400`, which is also the reviewed
+MAXIMUM: one argv string must stay inside `MAX_ARG_STRLEN`, 131072 on a
+4 KiB-page host, and the leaf re-passes the value through
+`_core/intent_gate.sh` and `claude -p`). A larger value is clamped to the
+ceiling with a WARN; a non-integer or non-positive value falls back to the
+default with a WARN. Above the effective cap `goalforge-second-opinion.sh` truncates the DIFF section
 head-first and names it in the reason (`; diff-truncated N/M`); a payload still
 over the cap with the diff gone calls no leaf and emits
 `second_opinion.skipped` with reason `payload-oversize <actual>/<cap>`, exit 0.

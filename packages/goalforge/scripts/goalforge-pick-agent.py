@@ -1024,6 +1024,19 @@ def _test_tiers() -> int:
             p.get("name"): p.get("kind")
             for p in (shipped.get("providers") or []) if isinstance(p, dict)
         }
+        # Every role the compiler emits as an `agent()` node must sit on a
+        # NATIVE provider row. Checked BEFORE the projection loop below, which
+        # `continue`s past the `implement` row (its tier is the `by_register`
+        # sentinel) and so could never see this class.
+        for agent_role in ("implement", *(role for _, role in _compiler_gates())):
+            row = stages.get(agent_role) or {}
+            kind = kinds.get(row.get("provider"))
+            if kind != "native":
+                failures.append(
+                    f"dispatch.yaml stage {agent_role!r} is emitted as an "
+                    f"agent() node but its provider {row.get('provider')!r} "
+                    f"has kind {kind!r}, not 'native'"
+                )
         for name, row in stages.items():
             if name in ("judge", "wp-verify") or name not in ROLE_TIER:
                 continue

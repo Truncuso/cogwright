@@ -37,12 +37,26 @@
 #                            `leaf-exit-<n>`
 #
 # The payload is handed to the leaf as a `--prompt` argv VALUE — the only
-# payload flag inside leaf-interface v1. (`--prompt-file` is a *structured
-# handoff-brief* path on every configured leaf: base-dir allowlist, frontmatter
-# contract, exit 2/3 — a raw payload file there dies leaf-exit-3.)
+# payload flag inside leaf-interface v1.
+#
+# NOT `--prompt-file`, because of what the CONFIGURED provider's leaf does with
+# it (verified 2026-09-13 by reading the leaves, not the interface doc):
+#   ollama, zai, deepseek -> `_core/prompt_file.py`, a *structured handoff-brief*
+#       parser (base-dir allowlist, frontmatter contract, exit 2/3) — a raw
+#       payload file handed to it dies leaf-exit-3
+#       (e.g. ollama/scripts/headless_dispatch:68-72)
+#   codex                 -> reads the file RAW (`PROMPT="$(cat ...)"`,
+#       codex/scripts/headless_dispatch:313-315), so a payload file WOULD work
+#       there
+# leaf-interface v1 therefore does admit a payload file on SOME leaf; the cap
+# exists because the shipped `second_opinion` row runs on `ollama`, one of the
+# three that route the flag through prompt_file.py. Re-point that row at codex
+# and `--prompt-file` becomes available — a config-dependent fact, not a
+# property of the interface.
 #
 # The size cap is CONFIGURED, not hardcoded: `second_opinion.max_payload_bytes`
-# in the dispatch file (default 102400, well inside MAX_ARG_STRLEN). Above it
+# in the dispatch file (default and reviewed MAXIMUM 102400, inside
+# MAX_ARG_STRLEN with headroom — see MAX_PAYLOAD_CEILING below). Above it
 # the DIFF section is truncated head-first, marked in the payload and named in
 # the emitted reason (`; diff-truncated N/M`). If the payload is STILL over the
 # cap with the diff gone (an `egress: full` WP whose own documents exceed it),
@@ -93,7 +107,18 @@ WP_NAME="$(basename "$WP_ARG")"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-MAX_PAYLOAD_BYTES=$((100 * 1024))   # fallback only; the dispatch file is the source
+MAX_PAYLOAD_DEFAULT=$((100 * 1024))  # fallback only; the dispatch file is the source
+MAX_PAYLOAD_BYTES="$MAX_PAYLOAD_DEFAULT"
+
+# UPPER CLAMP on the configured cap. The payload travels as ONE argv string, so
+# it is bounded by MAX_ARG_STRLEN = PAGESIZE * 32 — measured on a 4 KiB-page
+# host: 131072, where 131000 bytes exec'd and 131100 exited 126. The leaf
+# re-passes the same value through `_core/intent_gate.sh` and then `claude -p`,
+# each another single argv string, so the cap is held well below that limit:
+# 102400 leaves ~28 KiB for flag names, the leaf's own additions, and a host
+# with the same page size. A configured value above this ceiling is CLAMPED with
+# a WARN rather than honoured into an exec failure (exit 126).
+MAX_PAYLOAD_CEILING=$((100 * 1024))
 
 emit() { # $1=event type  $2=reason  ($PROVIDER/$MODEL when resolved)
     local emitter="$SD/goalforge-trace-emit"
@@ -128,7 +153,9 @@ fi
 # Prints 7 lines: model, provider, leaf (may be empty), max_budget_usd,
 # effective egress class, widening-warn flag (1|0), max_payload_bytes.
 # Empty output = unreadable.
-CFG="$(DISPATCH_PATH="$DISPATCH_PATH" SPEC_PATH="$FEATURE_DIR/spec.md" python3 -c '
+CFG="$(DISPATCH_PATH="$DISPATCH_PATH" SPEC_PATH="$FEATURE_DIR/spec.md" \
+    MAX_PAYLOAD_DEFAULT="$MAX_PAYLOAD_DEFAULT" MAX_PAYLOAD_CEILING="$MAX_PAYLOAD_CEILING" \
+    python3 -c '
 import os, sys
 
 import yaml
@@ -170,12 +197,28 @@ print(prov.get("max_budget_usd", 0.10))
 print(egress)
 print(warn)
 
-cap = (data.get("second_opinion") or {}).get("max_payload_bytes", 102400)
-try:
-    cap = int(cap)
-except (TypeError, ValueError):
-    cap = 102400
-print(cap if cap > 0 else 102400)
+# Line 7: "<cap> <status>", status in ok|clamped|invalid|absent. The key is
+# OPTIONAL: absent means the default. A non-integer or non-positive value is
+# `invalid` (default + WARN, never silence); a value above the ceiling is
+# `clamped` (ceiling + WARN), because the payload is one argv string.
+DEFAULT = int(os.environ["MAX_PAYLOAD_DEFAULT"])
+CEILING = int(os.environ["MAX_PAYLOAD_CEILING"])
+raw = (data.get("second_opinion") or {}).get("max_payload_bytes")
+if raw is None:
+    cap, status = DEFAULT, "absent"
+elif isinstance(raw, bool):
+    cap, status = DEFAULT, "invalid"
+else:
+    try:
+        cap, status = int(raw), "ok"
+    except (TypeError, ValueError):
+        cap, status = DEFAULT, "invalid"
+    else:
+        if cap <= 0:
+            cap, status = DEFAULT, "invalid"
+        elif cap > CEILING:
+            cap, status = CEILING, "clamped"
+print(f"{cap} {status}")
 ' 2>/dev/null)"
 
 if [[ -z "$CFG" ]]; then
@@ -184,8 +227,19 @@ if [[ -z "$CFG" ]]; then
     exit 0
 fi
 
-{ read -r MODEL; read -r PROVIDER; read -r LEAF_REL; read -r BUDGET; read -r EGRESS; read -r WIDEN; read -r CFG_CAP; } <<< "$CFG"
+{ read -r MODEL; read -r PROVIDER; read -r LEAF_REL; read -r BUDGET; read -r EGRESS; read -r WIDEN; read -r CAP_LINE; } <<< "$CFG"
+read -r CFG_CAP CAP_STATUS <<< "$CAP_LINE"
 [[ "$CFG_CAP" =~ ^[0-9]+$ ]] && MAX_PAYLOAD_BYTES="$CFG_CAP"
+case "${CAP_STATUS:-}" in
+    clamped)
+        echo "WARN: goalforge-second-opinion.sh: second_opinion.max_payload_bytes in" \
+             "$DISPATCH_PATH exceeds the reviewed ceiling $MAX_PAYLOAD_CEILING (one argv" \
+             "string must stay inside MAX_ARG_STRLEN) — clamped to $MAX_PAYLOAD_BYTES" >&2 ;;
+    invalid)
+        echo "WARN: goalforge-second-opinion.sh: second_opinion.max_payload_bytes in" \
+             "$DISPATCH_PATH is not a positive integer — using the default" \
+             "$MAX_PAYLOAD_BYTES" >&2 ;;
+esac
 
 REASON_SUFFIX=""
 if [[ "$WIDEN" == "1" ]]; then
@@ -277,10 +331,13 @@ fi
 
 # --- call the leaf -----------------------------------------------------------
 # `--prompt` (an argv VALUE), the only payload flag in leaf-interface.md v1.
-# NOT `--prompt-file`: on every configured leaf that flag is a structured
-# handoff-brief path (base-dir allowlist + frontmatter contract, exit 2/3), so a
-# raw payload file handed to it dies leaf-exit-3. The cap above keeps the argv
-# value inside MAX_ARG_STRLEN.
+# NOT `--prompt-file`: on the leaves the shipped row can select (ollama, zai,
+# deepseek — verified 2026-09-13) that flag is a structured handoff-brief path
+# through `_core/prompt_file.py` (base-dir allowlist + frontmatter contract,
+# exit 2/3), so a raw payload file handed to it dies leaf-exit-3. The codex leaf
+# reads it raw (codex/scripts/headless_dispatch:313-315) and would accept one —
+# which is why the cap is keyed to the CONFIGURED provider, not to the
+# interface. The cap above keeps the argv value inside MAX_ARG_STRLEN.
 OUT="$TMP/out.json"
 "$LEAF" --model "$MODEL" --prompt "$(cat "$PAYLOAD")" --output "$OUT" --max-budget-usd "$BUDGET"
 LEAF_EXIT=$?

@@ -10,8 +10,11 @@
 #                the class never adds a wider section — a widening value is
 #                ignored with a WARN; a call with neither `--verdict` nor
 #                `--diff` (the pre-lap pinned call) skips with reason
-#                `no-payload` instead of sending an empty payload; and a diff
-#                over 100 KiB is truncated in the payload and in the reason.
+#                `no-payload` instead of sending an empty payload; a diff
+#                over 100 KiB is truncated in the payload and in the reason; a
+#                cap ABOVE the argv ceiling is clamped with a WARN (honouring
+#                200000 killed the exec itself: "Argument list too long"); and a
+#                non-integer cap WARNs instead of defaulting in silence.
 #
 # Everything runs under one mktemp -d root: the stub leaf, CLAUDE_CONFIG_DIR,
 # the feature dir, and GOALFORGE_DISPATCH_LEDGER. Nothing touches the live
@@ -45,11 +48,13 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --prompt) PROMPT="${2:-}"; SAW="--prompt"; shift 2 ;;
         --prompt-file)
-            # leaf-interface v1 has NO raw --prompt-file: on every configured
-            # leaf the flag is a STRUCTURED handoff-brief path (base-dir
-            # allowlist + frontmatter contract) and a raw payload file exits 3.
-            # The stub reproduces that exit so the script can never regress to
-            # it behind a faked flag.
+            # The stub models the leaves the SHIPPED row can select — ollama,
+            # zai, deepseek — where the flag is a STRUCTURED handoff-brief path
+            # through _core/prompt_file.py (base-dir allowlist + frontmatter
+            # contract) and a raw payload file exits 3 (verified 2026-09-13).
+            # The codex leaf reads it raw and would accept one; the script must
+            # not depend on which, so the stub reproduces the exit-3 leaf and
+            # the script can never regress to the flag behind a faked stub.
             echo "--prompt-file" > "$STUB_FLAG"
             echo "stub leaf: --prompt-file is a structured handoff brief, not a payload" >&2
             exit 3 ;;
@@ -254,23 +259,58 @@ else
     cat "$FEATURE/trace-events.jsonl" 2>/dev/null
 fi
 
-# --- case 12: the cap is CONFIGURED, not hardcoded ---------------------------
-# Same 150-byte cap, same inputs, but the default fixture's 102400 cap lets the
-# very same payload through: the behavior tracks the dispatch file's value.
-run_so_pinned dispatch-default.yaml spec-no-egress.md
-if [[ "$(calls)" == "1" ]] && trace_has 'second_opinion.ok'; then
-    ok "the same payload passes under the default fixture's 102400 cap (cap is configured)"
+# --- case 12 (R3-7): the cap is CONFIGURED, not hardcoded --------------------
+# dispatch-midcap.yaml sets the cap to 8000 — a value that is NEITHER the
+# script's default (102400) nor the smallcap 150. The same oversized diff as
+# case 10 must therefore come out truncated to 8000, not to 102400. A script
+# that ignored the dispatch file would send ~102400 bytes and fail here; the
+# old version of this case re-used dispatch-default.yaml, whose cap equals the
+# default, and so could not fail at all.
+run_so_pinned dispatch-midcap.yaml spec-no-egress.md "$BIG"
+MID_BYTES="$(wc -c < "$CAPTURE")"
+if [[ "$(calls)" == "1" ]] && trace_has 'second_opinion.ok' \
+   && [[ "$MID_BYTES" -le 8000 ]] && [[ "$MID_BYTES" -gt 150 ]] \
+   && trace_has 'diff-truncated'; then
+    ok "a configured cap of 8000 bounds the payload at 8000 (cap is configured: $MID_BYTES bytes)"
 else
-    bad "the same payload passes under the default fixture's 102400 cap (cap is configured)"
+    bad "a configured cap of 8000 bounds the payload at 8000 (got $MID_BYTES bytes)"
     cat "$FEATURE/trace-events.jsonl" 2>/dev/null
 fi
 
-# ledger accumulated exactly one row per leaf call (cases 2,3,4,6,7,8,10,12 = 8;
-# cases 1, 5, 9 and 11 never reach the leaf)
-if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "8" ]]; then
-    ok "ledger row count equals leaf-call count (8)"
+# --- case 13 (R3-3): a cap above the argv ceiling is CLAMPED with a WARN -----
+# dispatch-overcap.yaml sets 200000, the value the schema's prose invited.
+# Pre-clamp, the script honoured it and the exec itself died: measured on this
+# host "Argument list too long", payload 0 bytes, second_opinion.skipped —
+# the B4 failure, reintroduced by a config edit. MAX_ARG_STRLEN here is
+# PAGESIZE * 32 = 131072.
+run_so_pinned dispatch-overcap.yaml spec-no-egress.md "$BIG"
+OVER_BYTES="$(wc -c < "$CAPTURE")"
+if [[ "$(calls)" == "1" ]] && trace_has 'second_opinion.ok' \
+   && [[ "$OVER_BYTES" -le 102400 ]] \
+   && grep -q 'exceeds the reviewed ceiling' "$T/stderr.txt" \
+   && ! grep -qi 'argument list too long' "$T/stderr.txt"; then
+    ok "a cap above the ceiling is clamped with a WARN, and the leaf still runs ($OVER_BYTES bytes)"
 else
-    bad "ledger row count equals leaf-call count (8): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
+    bad "a cap above the ceiling is clamped with a WARN, and the leaf still runs ($OVER_BYTES bytes)"
+    cat "$T/stderr.txt"
+fi
+
+# --- case 14 (R3-3): a non-integer cap WARNs, never silently defaults --------
+run_so_pinned dispatch-badcap.yaml spec-no-egress.md
+if [[ "$(calls)" == "1" ]] && trace_has 'second_opinion.ok' \
+   && grep -q 'is not a positive integer' "$T/stderr.txt"; then
+    ok "a non-integer cap falls back to the default WITH a WARN"
+else
+    bad "a non-integer cap falls back to the default WITH a WARN"
+    cat "$T/stderr.txt"
+fi
+
+# ledger accumulated exactly one row per leaf call (cases 2,3,4,6,7,8,10,12,13,
+# 14 = 10; cases 1, 5, 9 and 11 never reach the leaf)
+if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "10" ]]; then
+    ok "ledger row count equals leaf-call count (10)"
+else
+    bad "ledger row count equals leaf-call count (10): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
 fi
 
 echo

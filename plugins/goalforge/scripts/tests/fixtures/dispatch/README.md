@@ -12,6 +12,10 @@ writable copy `cp -r`s it into its own `mktemp -d` root.
 | `dispatch-egress-none.yaml` | b6 | `second_opinion` row at `egress: none` — skip with reason `egress-none`, no leaf call |
 | `dispatch-egress-full.yaml` | b6 | `second_opinion` row at `egress: full` — diff + overview.md + spec.md + findings.md |
 | `dispatch-smallcap.yaml` | b6 | `second_opinion.max_payload_bytes: 150` — a cap the WP's own documents blow, driving the `payload-oversize <actual>/<cap>` skip (the cap is configured, not hardcoded) |
+| `dispatch-midcap.yaml` | b6 | `second_opinion.max_payload_bytes: 8000` — neither the default (102400) nor the smallcap 150, so the payload size it produces is proof the CONFIGURED value is the one in force (R3-7) |
+| `dispatch-overcap.yaml` | b6 | `second_opinion.max_payload_bytes: 200000` — above `MAX_ARG_STRLEN` (131072 at 4 KiB pages); must be clamped to the reviewed ceiling with a WARN instead of killing the exec with "Argument list too long" (R3-3) |
+| `dispatch-badcap.yaml` | b6 | `second_opinion.max_payload_bytes: not-a-number` — must fall back to the default WITH a WARN (R3-3) |
+| `dispatch-nonnative-implement.yaml` | b3 | the `implement` row moved onto a non-native provider with a provider-shaped model id — the compiler must exit 2 rather than emit `agent({model: "glm-5.3:cloud"})` (R3-1) |
 | `expertise-compile.yaml` | b3 | hermetic `expertise-map.yaml` for the compiler's `--expertise` seam (the live map is sibling-owned data) |
 | `wp-compile.md` | b3 | WP overview with 11 checklist items in three `{files:}` groups (A 4, B 4 disjoint from A, C 3 overlapping A), `parallel: true` |
 | `spec-no-egress.md` | b6 | feature spec with no `egress:` — the stage row's class stands |
@@ -22,9 +26,10 @@ writable copy `cp -r`s it into its own `mktemp -d` root.
 | `trace-b7-rounds2.jsonl` | b7 | two `harden.round` rows at `tokens: 1000` — the round cap, not the token sensor |
 | `wp-harden-high/overview.md` | b7 | WP at `severity: HIGH`, `register: production` (selects the 300k panel soft threshold) |
 
-The three `dispatch-*.yaml` variants are generated from `dispatch-default.yaml`
-by mutating one key; edit the default and regenerate rather than hand-patching
-a variant.
+Every `dispatch-*.yaml` variant is generated from `dispatch-default.yaml` by
+mutating ONE key; edit the default and regenerate rather than hand-patching a
+variant. `dispatch-default.yaml` itself is pinned by b1/b5/b6/b7 and is never
+mutated to serve a new case — a new case gets a new variant.
 
 The stub `leaf:` paths are corpus-relative placeholders. `goalforge-pick-agent.py`
 never invokes a leaf — it replays terminations through `--simulate-leaf
