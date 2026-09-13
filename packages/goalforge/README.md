@@ -86,7 +86,7 @@ adapter the launch gate calls) are deliberately NOT hook registrations.
 | `GOALFORGE_SESSION_START` | `1` | `0` suppresses the SessionStart orientation block. |
 | `GOALFORGE_HANDOFFS_DIR` | `<git root>/docs/handoffs` | Where the orientation block looks for handoffs at `status: ready`. |
 | `GOALFORGE_CONTEXT_BUDGET_BYTES` | `800000` | Denominator of the context-fill estimate (~200k tokens at ~4 bytes/token). |
-| `SDD_PLANS_DIR` | *(resolution order)* | Explicit plans root; otherwise `<git root>/plans`, then `$HOME/.claude/plans`. |
+| `SDD_PLANS_DIR` | *(resolution order)* | Explicit plans root; otherwise `<git root>/plans`, then `$HOME/.claude/plans`. When it is set but names no directory, the session-start hook prints nothing rather than falling back to another root. |
 
 The `goalforge-<child>` names in the tables above are the **historical bare
 names**; each child's `SKILL.md` now carries `name:` equal to its directory

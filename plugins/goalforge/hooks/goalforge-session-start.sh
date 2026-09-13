@@ -50,8 +50,19 @@ fm_value() {
 }
 
 # Print the first existing resolved plans root, or nothing.
+#
+# An explicitly-set SDD_PLANS_DIR is AUTHORITATIVE: when it names something
+# that is not a directory this function prints nothing and the hook falls
+# silent. It must never fall through to the git-root or $HOME candidate — a
+# harness (or a user) that points the hook at a root which does not exist
+# would otherwise get a block built from the live plans tree it was trying to
+# stay out of (verify round 1, V1).
 resolve_root() {
     local root
+    if [ -n "${SDD_PLANS_DIR:-}" ]; then
+        [ -d "$SDD_PLANS_DIR" ] && printf '%s' "$SDD_PLANS_DIR"
+        return 0
+    fi
     while IFS= read -r root; do
         [ -n "$root" ] && [ -d "$root" ] && { printf '%s' "$root"; return 0; }
     done < <(goalforge_plans_roots "$PWD/plans/.")
@@ -89,6 +100,12 @@ feature_lines() {
         [ -d "$feat" ] || continue
         base="$(basename "$feat")"
         case "$base" in _*|.*) continue ;; esac
+        # The header says ACTIVE features: a finished one must not occupy one
+        # of the MAX_FEATURES slots and evict an active feature later in the
+        # alphabet (verify round 1, V4).
+        case "$(fm_value "$feat/overview.md" status)" in
+            completed|archived) continue ;;
+        esac
         line="$(frontier_wp "$feat")"
         [ -n "$line" ] || continue
         printf '  %s: %s\n' "$base" "$line"

@@ -84,6 +84,33 @@ rc="$(rc_of "$R")"; out="$(out_of "$R")"
     && ok "GOALFORGE_LAUNCH_GATE=0 under threshold -> exit 0, silent" \
     || bad "kill switch did not disable the gate (rc=$rc out='$out')"
 
+# ── V5: the stderr a PreToolUse hook emits reaches the MODEL, so the gate must
+#    not name its own kill switch there. README documents it; stderr does not.
+R="$(run_hook "$HOOK" "$WORK/low.json" "$WORK/m6")"
+case "$(out_of "$R")" in *GOALFORGE_LAUNCH_GATE*)
+        bad "the block/WARN stderr names the kill switch (a guardrail printing its own bypass)" ;;
+    *)  ok "stderr never names GOALFORGE_LAUNCH_GATE" ;; esac
+
+# ── V7: a session_id of `..` must not escape the marker directory. The marker
+#    root is derived from TMPDIR here precisely because GOALFORGE_LAUNCH_MARKER_DIR
+#    would short-circuit the session-id path this case exists to exercise.
+TROOT="$WORK/tmproot"
+mkdir -p "$TROOT"
+DOTDOT='{"session_id":"..","tool_name":"Agent","tool_input":{"description":"x"}}'
+rc=0
+printf '%s' "$DOTDOT" | env -u GOALFORGE_LAUNCH_MARKER_DIR \
+    GOALFORGE_QUOTA_FIXTURE="$WORK/low.json" TMPDIR="$TROOT" \
+    bash "$HOOK" >/dev/null 2>&1 || rc=$?
+[ "$rc" = 2 ] && ok "session_id '..' still blocks (exit 2)" || bad "session_id '..' -> exit $rc"
+[ -f "$TROOT/goalforge-launch-gate/default/warned" ] \
+    && ok "session_id '..' -> marker under the marker dir (default/)" \
+    || bad "session_id '..' -> no marker at <tmproot>/goalforge-launch-gate/default/warned"
+if [ -e "$TROOT/goalforge-launch-gate/warned" ] || [ -e "$TROOT/warned" ]; then
+    bad "session_id '..' escaped the marker dir"
+else
+    ok "session_id '..' wrote nothing above the marker dir"
+fi
+
 # ── b2: the WARN prints once per session ───────────────────────────────────
 M="$WORK/session-marker"
 R1="$(run_hook "$HOOK" "$WORK/low.json" "$M")"

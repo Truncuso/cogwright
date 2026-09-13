@@ -27,7 +27,10 @@
 #               print nothing, whatever the quota says. A guardrail that can
 #               refuse the user's OWN dispatch must be switchable off without
 #               editing hooks.json (spatiotemporal-composability: teardown of
-#               granted authority is an invariant, not a nicety).
+#               granted authority is an invariant, not a nicety). It is
+#               documented in README §Install and NEVER named on stderr: a
+#               PreToolUse hook's stderr reaches the model, and a guardrail
+#               that prints its own bypass is not a guardrail (V5).
 #
 # SCOPE: hooks.json PreToolUse, matcher `Agent|Workflow`.
 #
@@ -64,7 +67,10 @@ session_id_from() {
     rest="${rest#"${rest%%[![:space:]]*}"}"
     case "$rest" in \"*) rest="${rest#\"}"; id="${rest%%\"*}" ;; *) printf 'default'; return 0 ;; esac
     id="$(printf '%s' "$id" | tr -c 'A-Za-z0-9._-' '_')"
-    [ -n "$id" ] || id=default
+    # `.` and `..` survive the character filter but are not leaf names: they
+    # would place the marker in, or one level ABOVE, the marker dir and make
+    # the once-per-session marker collide across sessions (verify round 1, V7).
+    case "$id" in ''|.|..) id=default ;; esac
     printf '%s' "$id"
 }
 
@@ -112,6 +118,10 @@ self_test() {
     [ "$out" = "ab_cd" ] && ok "session id sanitised to one leaf segment" || no "session id got '$out'"
     out="$(session_id_from '{"tool_name":"Agent"}')"
     [ "$out" = "default" ] && ok "absent session id -> default" || no "absent session id got '$out'"
+    out="$(session_id_from '{"session_id":"..","tool_name":"Agent"}')"
+    [ "$out" = "default" ] && ok "session id '..' -> default" || no "session id '..' got '$out'"
+    out="$(session_id_from '{"session_id":".","tool_name":"Agent"}')"
+    [ "$out" = "default" ] && ok "session id '.' -> default" || no "session id '.' got '$out'"
 
     printf '{"five_h_remaining_pct": 3}\n' > "$d/low.json"
     rc=0
@@ -151,7 +161,7 @@ if [ ! -f "$MARKER" ]; then
     echo "goalforge-launch-gate: WARN — this session has ${PCT}% of the 5h window left (threshold ${THRESHOLD}%)." >&2
     echo "  A dispatch launched below the threshold typically dies mid-run on the rate limit and loses its work." >&2
     echo "  Finish in-session, park a handoff, or wait for the window to reset." >&2
-    echo "  Disable this gate for the session with GOALFORGE_LAUNCH_GATE=0; raise or lower the bar with GOALFORGE_LAUNCH_THRESHOLD_PCT." >&2
+    echo "  Raise or lower the bar with GOALFORGE_LAUNCH_THRESHOLD_PCT." >&2
     mkdir -p "$MARKER_DIR" 2>/dev/null && : > "$MARKER" 2>/dev/null || true
 fi
 
