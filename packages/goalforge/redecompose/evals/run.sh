@@ -51,7 +51,7 @@ file_check() {
 echo "=== goalforge-redecompose: static-contract checks ==="
 
 # Identity
-check "skill name declared" "name: goalforge-redecompose"
+check "skill name declared" "name: redecompose"
 
 # Core script interface
 check "documents calling goalforge-reconcile-diff.sh" "goalforge-reconcile-diff.sh"

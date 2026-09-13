@@ -10,7 +10,7 @@
         "evals/fixtures/overview.md"
       ],
       "expectations": [
-        "SKILL.md declares name: goalforge-spec",
+        "SKILL.md declares name: spec",
         "SKILL.md input is overview.md with status: draft",
         "SKILL.md output is spec.md with its own status: spec",
         "SKILL.md output updates overview.md status to ready",

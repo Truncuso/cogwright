@@ -34,6 +34,34 @@ with the unrelated `run` skill.
 | `sdd-arbiter` | `goalforge-arbiter` *(retired)* | — |
 | `sdd-run` (runner) | `goalforge-run` | `skills/run/` |
 
+### Third identity: the nested `name:` key (ticket-79 option 1)
+
+The middle column above is the **historical** bare name. Since ticket-79, every
+nested child's `SKILL.md` carries `name:` equal to its **directory basename** —
+the rule `validate-skill.py` enforces, and the reason the name column of the
+front door's Children table reads `spec` rather than `goalforge-spec`. The
+`goalforge-` prefix is redundant inside the plugin namespace, and these children
+are private (discovery is one level deep), so the bare key costs no
+selectability.
+
+| Directory | `name:` in its SKILL.md | Historical bare name |
+|-----------|-------------------------|----------------------|
+| `capture/` | `capture` | `goalforge-capture` |
+| `spec/` | `spec` | `goalforge-spec` |
+| `decompose/` | `decompose` | `goalforge-decompose` |
+| `harden/` | `harden` | `goalforge-harden` |
+| `execute/` | `execute` | `goalforge-execute` |
+| `verify/` | `verify` | `goalforge-verify` |
+| `redecompose/` | `redecompose` | `goalforge-redecompose` |
+| `archive/` | `archive` | `goalforge-archive` |
+| `onboard/` | `onboard` | `goalforge-onboard` |
+| `plan-index/` | `plan-index` | `goalforge-plan-index` |
+| `run/` | `run` | `goalforge-run` (still the command and `chain.yaml` name) |
+
+`run/` is the one place the two diverge on purpose: `chain.yaml` and the
+`/goalforge-run` command keep the prefixed name, because a bare `run` on the
+command surface would collide with the unrelated `run` skill.
+
 ### Children with no legacy name
 
 These four were added after the rename and never had an `sdd-*` predecessor —

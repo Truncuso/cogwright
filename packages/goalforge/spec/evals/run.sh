@@ -24,7 +24,7 @@ check() {
 echo "=== goalforge-spec: static-contract checks ==="
 
 # Identity
-check "skill name declared" "name: goalforge-spec"
+check "skill name declared" "name: spec"
 
 # Input contract
 check "input is overview.md with status draft" "status: draft"

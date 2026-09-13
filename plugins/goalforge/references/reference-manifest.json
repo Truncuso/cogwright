@@ -3,6 +3,22 @@
   "refs": [
     {
       "from": "README.md",
+      "path": "hooks/goalforge-quota-read.sh"
+    },
+    {
+      "from": "README.md",
+      "path": "hooks/hooks.json"
+    },
+    {
+      "from": "README.md",
+      "path": "hooks/tests/goalforge-hooks-json.test.sh"
+    },
+    {
+      "from": "README.md",
+      "path": "references/alias-map.md"
+    },
+    {
+      "from": "README.md",
       "path": "references/dispatch.yaml"
     },
     {
@@ -12,6 +28,10 @@
     {
       "from": "README.md",
       "path": "references/state-machine.md"
+    },
+    {
+      "from": "README.md",
+      "path": "scripts/goalforge-install-hooks.sh"
     },
     {
       "from": "SKILL.md",
