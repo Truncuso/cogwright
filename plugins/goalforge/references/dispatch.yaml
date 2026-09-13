@@ -29,7 +29,7 @@ providers:                        # preference order; first = default. No budget
   - name: ollama                  # local models (incl. cloud-hosted ids) via the ollama leaf.
     kind: local
     leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
-    max_budget_usd: 0.10
+    max_budget_usd: 2.00           # measured: a 4-item review batch cost 0.69 USD (2026-09-12); 0.10 killed 3 of 4 legs
     propose_only: true            # kind != native is ALWAYS propose-only (derived; key is informative)
   - name: zai                     # GLM family, Anthropic-compatible transport.
     kind: foreign
