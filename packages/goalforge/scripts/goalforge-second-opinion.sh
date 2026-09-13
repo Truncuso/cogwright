@@ -32,13 +32,22 @@
 #   second_opinion.skipped — reason `no-payload` (neither --verdict nor --diff
 #                            resolves to a non-empty file: there is nothing to
 #                            take an opinion ON), `dispatcher-absent` (leaf
-#                            missing or not executable), `egress-none`, or
+#                            missing or not executable), `egress-none`,
+#                            `payload-oversize <actual>/<cap>`, or
 #                            `leaf-exit-<n>`
 #
-# The payload is handed to the leaf as `--prompt-file` (never `--prompt`: this
-# WP's own diff is 205 KB, well past the ~128 KiB argv limit). Above
-# MAX_PAYLOAD_BYTES the DIFF section is truncated head-first, marked in the
-# payload and named in the emitted reason (`; diff-truncated N/M`).
+# The payload is handed to the leaf as a `--prompt` argv VALUE — the only
+# payload flag inside leaf-interface v1. (`--prompt-file` is a *structured
+# handoff-brief* path on every configured leaf: base-dir allowlist, frontmatter
+# contract, exit 2/3 — a raw payload file there dies leaf-exit-3.)
+#
+# The size cap is CONFIGURED, not hardcoded: `second_opinion.max_payload_bytes`
+# in the dispatch file (default 102400, well inside MAX_ARG_STRLEN). Above it
+# the DIFF section is truncated head-first, marked in the payload and named in
+# the emitted reason (`; diff-truncated N/M`). If the payload is STILL over the
+# cap with the diff gone (an `egress: full` WP whose own documents exceed it),
+# no leaf is called: `second_opinion.skipped` with reason
+# `payload-oversize <actual>/<cap>`, exit 0.
 #
 # Every leaf call appends one propose-only ledger row to
 # $GOALFORGE_DISPATCH_LEDGER (default
@@ -84,7 +93,7 @@ WP_NAME="$(basename "$WP_ARG")"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-MAX_PAYLOAD_BYTES=$((100 * 1024))
+MAX_PAYLOAD_BYTES=$((100 * 1024))   # fallback only; the dispatch file is the source
 
 emit() { # $1=event type  $2=reason  ($PROVIDER/$MODEL when resolved)
     local emitter="$SD/goalforge-trace-emit"
@@ -116,8 +125,9 @@ if [[ "$HAVE_VERDICT" -eq 0 && "$HAVE_DIFF" -eq 0 ]]; then
 fi
 
 # --- resolve the second_opinion stage row + the effective egress class -------
-# Prints 6 lines: model, provider, leaf (may be empty), max_budget_usd,
-# effective egress class, widening-warn flag (1|0). Empty output = unreadable.
+# Prints 7 lines: model, provider, leaf (may be empty), max_budget_usd,
+# effective egress class, widening-warn flag (1|0), max_payload_bytes.
+# Empty output = unreadable.
 CFG="$(DISPATCH_PATH="$DISPATCH_PATH" SPEC_PATH="$FEATURE_DIR/spec.md" python3 -c '
 import os, sys
 
@@ -159,6 +169,13 @@ print(prov.get("leaf") or "")
 print(prov.get("max_budget_usd", 0.10))
 print(egress)
 print(warn)
+
+cap = (data.get("second_opinion") or {}).get("max_payload_bytes", 102400)
+try:
+    cap = int(cap)
+except (TypeError, ValueError):
+    cap = 102400
+print(cap if cap > 0 else 102400)
 ' 2>/dev/null)"
 
 if [[ -z "$CFG" ]]; then
@@ -167,7 +184,8 @@ if [[ -z "$CFG" ]]; then
     exit 0
 fi
 
-{ read -r MODEL; read -r PROVIDER; read -r LEAF_REL; read -r BUDGET; read -r EGRESS; read -r WIDEN; } <<< "$CFG"
+{ read -r MODEL; read -r PROVIDER; read -r LEAF_REL; read -r BUDGET; read -r EGRESS; read -r WIDEN; read -r CFG_CAP; } <<< "$CFG"
+[[ "$CFG_CAP" =~ ^[0-9]+$ ]] && MAX_PAYLOAD_BYTES="$CFG_CAP"
 
 REASON_SUFFIX=""
 if [[ "$WIDEN" == "1" ]]; then
@@ -245,15 +263,26 @@ if [[ "$PAYLOAD_BYTES" -gt "$MAX_PAYLOAD_BYTES" ]]; then
     head -c "$KEEP" "$DIFF_BODY" > "$TRUNCATED"
     printf '\n[diff truncated: %s of %s bytes]\n' "$KEEP" "$DIFF_BYTES" >> "$TRUNCATED"
     build_payload "$TRUNCATED"
+    # The diff is not the only section: an `egress: full` WP whose own documents
+    # exceed the cap cannot be made to fit by truncating the diff at all. Say so
+    # instead of reporting a misleading `diff-truncated 0/N` and sending it.
+    NOW_BYTES="$(wc -c < "$PAYLOAD")"
+    if [[ "$NOW_BYTES" -gt "$MAX_PAYLOAD_BYTES" ]]; then
+        emit second_opinion.skipped \
+            "payload-oversize ${NOW_BYTES}/${MAX_PAYLOAD_BYTES}${REASON_SUFFIX}"
+        exit 0
+    fi
     REASON_SUFFIX="${REASON_SUFFIX}; diff-truncated ${KEEP}/${DIFF_BYTES}"
 fi
 
 # --- call the leaf -----------------------------------------------------------
-# `--prompt-file` (not `--prompt`): a large diff blows the argv limit. The flag
-# is NOT in leaf-interface.md v1 — the ollama leaf implements it (:45); noted
-# for agent-dispatch to lift into the interface.
+# `--prompt` (an argv VALUE), the only payload flag in leaf-interface.md v1.
+# NOT `--prompt-file`: on every configured leaf that flag is a structured
+# handoff-brief path (base-dir allowlist + frontmatter contract, exit 2/3), so a
+# raw payload file handed to it dies leaf-exit-3. The cap above keeps the argv
+# value inside MAX_ARG_STRLEN.
 OUT="$TMP/out.json"
-"$LEAF" --model "$MODEL" --prompt-file "$PAYLOAD" --output "$OUT" --max-budget-usd "$BUDGET"
+"$LEAF" --model "$MODEL" --prompt "$(cat "$PAYLOAD")" --output "$OUT" --max-budget-usd "$BUDGET"
 LEAF_EXIT=$?
 
 # leaf-interface.md §6 hazard 1: the EXIT_CODE trailer is not valid JSON.

@@ -40,15 +40,24 @@ mkdir -p "$(dirname "$STUB")"
 cat > "$STUB" <<'STUBEOF'
 #!/usr/bin/env bash
 set -uo pipefail
-PROMPT=""; OUTPUT=""
+PROMPT=""; OUTPUT=""; SAW=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --prompt) PROMPT="${2:-}"; shift 2 ;;
-        --prompt-file) PROMPT="$(cat "${2:-}")"; shift 2 ;;
+        --prompt) PROMPT="${2:-}"; SAW="--prompt"; shift 2 ;;
+        --prompt-file)
+            # leaf-interface v1 has NO raw --prompt-file: on every configured
+            # leaf the flag is a STRUCTURED handoff-brief path (base-dir
+            # allowlist + frontmatter contract) and a raw payload file exits 3.
+            # The stub reproduces that exit so the script can never regress to
+            # it behind a faked flag.
+            echo "--prompt-file" > "$STUB_FLAG"
+            echo "stub leaf: --prompt-file is a structured handoff brief, not a payload" >&2
+            exit 3 ;;
         --output) OUTPUT="${2:-}"; shift 2 ;;
         *) shift 2 ;;
     esac
 done
+echo "$SAW" > "$STUB_FLAG"
 printf '%s' "$PROMPT" > "$STUB_CAPTURE"
 echo "call" >> "$STUB_CALLS"
 STUB_EXIT="${STUB_EXIT:-0}"
@@ -58,7 +67,8 @@ echo "EXIT_CODE=$STUB_EXIT" >> "$OUTPUT"
 exit "$STUB_EXIT"
 STUBEOF
 chmod +x "$STUB"
-export STUB_CAPTURE="$CAPTURE" STUB_CALLS="$CALLS"
+FLAG="$T/payload-flag.txt"
+export STUB_CAPTURE="$CAPTURE" STUB_CALLS="$CALLS" STUB_FLAG="$FLAG"
 
 # --- feature fixture ---------------------------------------------------------
 FEATURE="$T/feature"
@@ -71,7 +81,7 @@ printf 'DIFF-MARKER +one changed line\n' > "$T/wp.diff"
 
 run_so() { # $1=dispatch fixture  $2=spec fixture (or "")  $3..=extra argv
     local dispatch="$1" spec="$2"; shift 2
-    : > "$CALLS"; : > "$CAPTURE"
+    : > "$CALLS"; : > "$CAPTURE"; : > "$FLAG"
     if [[ -n "$spec" ]]; then cp "$FIXTURES/$spec" "$FEATURE/spec.md"; else rm -f "$FEATURE/spec.md"; fi
     rm -f "$FEATURE/trace-events.jsonl"
     bash "$SECOND_OPINION" "$WP" --feature-dir "$FEATURE" \
@@ -107,6 +117,16 @@ else
     bad "overview row -> leaf called once, second_opinion.ok"
     cat "$T/stderr.txt"
 fi
+# N1: the payload reaches the leaf as a `--prompt` argv VALUE. `--prompt-file`
+# on a configured leaf is a structured handoff-brief path (exit 3), so this
+# assertion FAILS if the script ever passes --prompt-file again.
+if [[ "$(cat "$FLAG")" == "--prompt" ]]; then
+    ok "payload handed to the leaf as --prompt (never --prompt-file)"
+else
+    bad "payload handed to the leaf as --prompt (never --prompt-file): got '$(cat "$FLAG")'"
+    cat "$T/stderr.txt"
+fi
+
 if grep -q 'VERDICT-MARKER' "$CAPTURE" && grep -q 'DIFF-MARKER' "$CAPTURE" \
    && grep -q 'OVERVIEW-MARKER' "$CAPTURE" && ! grep -q 'FINDINGS-MARKER' "$CAPTURE"; then
     ok "overview payload = verdict + diff + overview.md, verbatim"
@@ -219,12 +239,38 @@ else
     cat "$FEATURE/trace-events.jsonl" 2>/dev/null
 fi
 
-# ledger accumulated exactly one row per leaf call (cases 2,3,4,6,7,8,10 = 7;
-# cases 1, 5 and 9 never reach the leaf)
-if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "7" ]]; then
-    ok "ledger row count equals leaf-call count (7)"
+# --- case 11 (N6): a cap the WP's own documents blow -> payload-oversize -----
+# dispatch-smallcap.yaml sets second_opinion.max_payload_bytes: 150, which the
+# section headers + verdict + overview.md exceed on their own. Truncating the
+# diff cannot help, so the reason must be `payload-oversize <actual>/<cap>`
+# — never a misleading `diff-truncated 0/N` on a payload still over the cap.
+run_so_pinned dispatch-smallcap.yaml spec-no-egress.md
+if [[ "$(cat "$T/exit.txt")" == "0" ]] && [[ "$(calls)" == "0" ]] \
+   && grep -q 'payload-oversize [0-9]*/150' "$FEATURE/trace-events.jsonl" 2>/dev/null \
+   && ! trace_has 'diff-truncated'; then
+    ok "configured cap the documents blow -> skipped reason payload-oversize N/150, no leaf call, exit 0"
 else
-    bad "ledger row count equals leaf-call count (7): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
+    bad "configured cap the documents blow -> skipped reason payload-oversize N/150, no leaf call, exit 0"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 12: the cap is CONFIGURED, not hardcoded ---------------------------
+# Same 150-byte cap, same inputs, but the default fixture's 102400 cap lets the
+# very same payload through: the behavior tracks the dispatch file's value.
+run_so_pinned dispatch-default.yaml spec-no-egress.md
+if [[ "$(calls)" == "1" ]] && trace_has 'second_opinion.ok'; then
+    ok "the same payload passes under the default fixture's 102400 cap (cap is configured)"
+else
+    bad "the same payload passes under the default fixture's 102400 cap (cap is configured)"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# ledger accumulated exactly one row per leaf call (cases 2,3,4,6,7,8,10,12 = 8;
+# cases 1, 5, 9 and 11 never reach the leaf)
+if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "8" ]]; then
+    ok "ledger row count equals leaf-call count (8)"
+else
+    bad "ledger row count equals leaf-call count (8): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
 fi
 
 echo

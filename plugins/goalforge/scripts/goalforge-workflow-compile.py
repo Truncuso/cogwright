@@ -27,25 +27,30 @@ Emission — stage `k` is layer `k`'s nodes:
   * `parallel: false`: one `pipeline(...)` over every node in checklist order,
     no `parallel([...])` call at all.
 
-After the checklist nodes come THREE gate nodes, each an `agent()` call whose
+After the checklist nodes come TWO gate nodes, each an `agent()` call whose
 `{model, effort}` come verbatim from a dispatch stage row:
 
   gate B → `wp-verify`   gate C → `judge`
-  second opinion → `second_opinion`
 
 Gate A is DETERMINISTIC (lint, typecheck, the WP `goal.verification.command`,
 diff ⊆ owned files) — no model decides it, so it gets no `agent()` node at all.
 It is emitted as one `log()` line naming that verification command.
 
+The SECOND OPINION likewise gets no `agent()` node: its dispatch row runs on a
+non-native provider, so its `model` is a PROVIDER model id that
+`agent({model: ...})` cannot dispatch. It is emitted as one `log()` line naming
+`scripts/goalforge-second-opinion.sh`. No agent node the compiler emits ever
+carries a non-Claude model id.
+
 The emitted script calls exactly five functions — `agent`, `parallel`,
 `pipeline`, `phase`, `log` — and opens with `export const meta = {`. It
 contains no `Date`, no `Math.random`, no `fs`, no imports, and no control
-flow: the body is two `phase()` declarations, two `log()` calls, and one returned
-expression, so it is deterministic to read and to diff.
+flow: the body is two `phase()` declarations, three `log()` calls, and one
+returned expression, so it is deterministic to read and to diff.
 
 CLI:
     python3 goalforge-workflow-compile.py <wp-overview.md>
-        [--dispatch <yaml>] [--out <dir>]
+        [--dispatch <yaml>] [--expertise <yaml>] [--out <dir>]
 
 Exit codes: 0 compiled (the script path plus a one-line invocation hint on
 stdout); 2 usage, unreadable input, no or malformed frontmatter, no checklist item, or an
@@ -78,8 +83,13 @@ MAX_NODE = 5
 GATES: tuple[tuple[str, str], ...] = (
     ("gate B", "wp-verify"),
     ("gate C", "judge"),
-    ("second opinion", "second_opinion"),
 )
+
+# The second opinion is NOT a gate node: its dispatch row runs on a non-native
+# provider, so its `model` is that PROVIDER's id (e.g. an ollama model), which
+# `agent({model: ...})` cannot dispatch natively. Like gate A it is emitted as a
+# log() line naming the deterministic script that owns the leg.
+SECOND_OPINION_SCRIPT = "scripts/goalforge-second-opinion.sh"
 
 ITEM_RE = re.compile(
     r"^-\s*\[[ xX]\]\s*(?P<id>\S+)\s+(?P<text>.*?)\s*\{files:\s*(?P<files>[^}]*)\}"
@@ -230,15 +240,16 @@ def agent_call(
 
 
 def row_dispatch(module, dispatch: dict, role: str, frontmatter: dict,
-                 touched: list[str]) -> dict:
+                 touched: list[str], expertise_map: dict) -> dict:
     """Resolve one stage row through pick-agent (by_register + expertise aware).
 
-    The real `references/expertise-map.yaml` is read (as DATA) so the emitted
-    prompt can name the roster persona and the expertise bundle the WP resolves
-    to — an empty map would silently drop both."""
+    The expertise map is passed IN (`--expertise <yaml>`, default the package
+    file): it is sibling-owned data, so an oracle running against a `--dispatch`
+    fixture must be able to pin it too rather than read whatever the live map
+    happens to say."""
     return module.resolve_stage(
         role, frontmatter, touched, dispatch,
-        module.load_expertise_map(), profile="semi-autonomous",
+        expertise_map, profile="semi-autonomous",
     )
 
 
@@ -261,13 +272,15 @@ def verification_command(frontmatter: dict) -> str:
 
 
 def compile_script(
-    frontmatter: dict, items: list[ChecklistItem], dispatch: dict, module
+    frontmatter: dict, items: list[ChecklistItem], dispatch: dict, module,
+    expertise_map: dict,
 ) -> str:
     wp_name = str(frontmatter.get("name") or "unnamed-wp")
     is_parallel = bool(frontmatter.get("parallel"))
     touched = sorted({f for item in items for f in item.files})
 
-    batch = row_dispatch(module, dispatch, "implement", frontmatter, touched)
+    batch = row_dispatch(module, dispatch, "implement", frontmatter, touched,
+                         expertise_map)
     persona = roster_agent_path(module, batch["agent"])
     expertise = list(batch["expertise"])
     grouped = stages(items)
@@ -337,10 +350,16 @@ def compile_script(
              "goal.verification.command"
     )
 
+    second_opinion = (
+        "the second opinion is a leaf leg — no agent node; run: "
+        f"{SECOND_OPINION_SCRIPT} <wp> --feature-dir <feature> "
+        "--verdict <gate-C verdict> --diff <wp diff>"
+    )
+
     description = (
         f"Compiled from the {wp_name} checklist: {len(items)} items in "
         f"{len(nodes)} batch nodes over {len(grouped)} stages, then gates B/C "
-        "and one second opinion (gate A is deterministic)."
+        "(gate A and the second opinion are deterministic legs)."
     )
     body = ",\n".join(calls)
     return (
@@ -349,7 +368,7 @@ def compile_script(
         f"  description: {js(description)},\n"
         "  phases: [\n"
         f"    {{ title: \"batches\", detail: {js('Checklist items, batched by {files:} disjointness.')} }},\n"
-        f"    {{ title: \"gates\", detail: {js('Gate B, gate C, one second opinion (gate A is deterministic).')} }}\n"
+        f"    {{ title: \"gates\", detail: {js('Gate B and gate C (gate A and the second opinion are deterministic legs).')} }}\n"
         "  ]\n"
         "};\n"
         "\n"
@@ -359,6 +378,7 @@ def compile_script(
         "  phase(\"gates\");\n"
         f"  log({js(description)});\n"
         f"  log({js(gate_a)});\n"
+        f"  log({js(second_opinion)});\n"
         "  return pipeline(\n"
         f"{body}\n"
         "  );\n"
@@ -377,6 +397,8 @@ def _build_cli() -> argparse.ArgumentParser:
     )
     parser.add_argument("overview", help="path to the WP overview.md")
     parser.add_argument("--dispatch", default=None, help="dispatch.yaml (default: the package file)")
+    parser.add_argument("--expertise", default=None,
+                        help="expertise-map.yaml (default: the package file)")
     parser.add_argument("--out", default=None, help="output directory (default: run/workflows/)")
     return parser
 
@@ -415,8 +437,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: unreadable dispatch file: {exc}", file=sys.stderr)
         return 2
 
+    expertise_path = Path(args.expertise) if args.expertise else None
+    if expertise_path is not None and not expertise_path.is_file():
+        print(f"ERROR: expertise map not found: {expertise_path}", file=sys.stderr)
+        return 2
+    expertise_map = pick_agent.load_expertise_map(expertise_path)
+
     try:
-        script = compile_script(frontmatter, items, dispatch, pick_agent)
+        script = compile_script(frontmatter, items, dispatch, pick_agent,
+                                expertise_map)
     except (ValueError, pick_agent.EscalationRequired) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

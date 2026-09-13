@@ -11,6 +11,8 @@ writable copy `cp -r`s it into its own `mktemp -d` root.
 | `dispatch-ceiling-300k.yaml` | b7 | `harden.token_ceiling: 300000` — a CONFIGURED hard ceiling (park above it) |
 | `dispatch-egress-none.yaml` | b6 | `second_opinion` row at `egress: none` — skip with reason `egress-none`, no leaf call |
 | `dispatch-egress-full.yaml` | b6 | `second_opinion` row at `egress: full` — diff + overview.md + spec.md + findings.md |
+| `dispatch-smallcap.yaml` | b6 | `second_opinion.max_payload_bytes: 150` — a cap the WP's own documents blow, driving the `payload-oversize <actual>/<cap>` skip (the cap is configured, not hardcoded) |
+| `expertise-compile.yaml` | b3 | hermetic `expertise-map.yaml` for the compiler's `--expertise` seam (the live map is sibling-owned data) |
 | `wp-compile.md` | b3 | WP overview with 11 checklist items in three `{files:}` groups (A 4, B 4 disjoint from A, C 3 overlapping A), `parallel: true` |
 | `spec-no-egress.md` | b6 | feature spec with no `egress:` — the stage row's class stands |
 | `spec-egress-diff-only.md` | b6 | narrowing override, applied |

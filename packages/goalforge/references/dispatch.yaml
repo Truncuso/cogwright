@@ -114,3 +114,6 @@ rollup:
 
 harden:
   token_ceiling: null             # null => tokens are a soft sensor (WARN); integer => hard ceiling (park above it).
+
+second_opinion:
+  max_payload_bytes: 102400       # cap on the `--prompt` argv payload (leaf-interface v1); over it the diff is truncated, and a payload still over the cap is skipped with reason `payload-oversize`.

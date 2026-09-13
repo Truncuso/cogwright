@@ -84,3 +84,6 @@ rollup:
   token_warn: 250000
 harden:
   token_ceiling: null
+
+second_opinion:
+  max_payload_bytes: 102400

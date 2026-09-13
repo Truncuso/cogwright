@@ -102,6 +102,14 @@ TIER_DISPATCH: dict[str, dict[str, str]] = {
 # Model-only view of TIER_DISPATCH, derived — never a second table.
 COMPLEXITY_MODEL: dict[str, str] = {t: d["model"] for t, d in TIER_DISPATCH.items()}
 
+# Every value admissible as a NATIVE dispatch `model` — the Claude tier
+# vocabulary the Agent/Workflow tool resolves, plus the `by_register` sentinel.
+# A non-native stage row must carry the PROVIDER's model id, never one of these
+# (a leaf exits 2 on a tier name); a native row must carry one of these.
+CLAUDE_TIER_MODELS: frozenset[str] = frozenset(
+    set(COMPLEXITY_MODEL.values()) | {"haiku", "fable", "by_register"}
+)
+
 PKG_ROOT = Path(__file__).resolve().parent.parent
 DISPATCH_PATH = PKG_ROOT / "references" / "dispatch.yaml"
 EXPERTISE_MAP_PATH = PKG_ROOT / "references" / "expertise-map.yaml"
@@ -782,12 +790,15 @@ def _compiler_gates() -> tuple[tuple[str, str], ...]:
 
     Read from the compiler itself (imported by path — its filename is not
     importable) so the grader set asserted by ``--test-tiers`` cannot drift
-    from the roles actually dispatched. Returns ``()`` when the compiler is
-    unreadable; the caller turns that into a failure rather than a silent pass."""
+    from the roles actually dispatched.
+
+    An unreadable or unloadable compiler RAISES: `--test-tiers` is an oracle,
+    and a silent ``()`` here would make its grader loop vacuous. The caller
+    asserts the returned tuple is non-empty."""
     path = Path(__file__).resolve().parent / "goalforge-workflow-compile.py"
     spec = importlib.util.spec_from_file_location("goalforge_workflow_compile", path)
     if spec is None or spec.loader is None:
-        return ()
+        raise ImportError(f"cannot load the workflow compiler at {path}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
@@ -855,11 +866,9 @@ def _test_tiers() -> int:
     # ── ticket-48 distinctness: grader vs implement, on BOTH profiles ────
     # The grader set is EVERY grader role the workflow compiler emits as an
     # agent() node — read from its GATES tuple so the two cannot drift. The
-    # `second_opinion` gate is not a grader band: it runs on a non-native
-    # provider whose `model` is a provider id, so it is excluded here.
-    graders = tuple(
-        role for _, role in _compiler_gates() if role != "second_opinion"
-    )
+    # second opinion is absent from GATES by design (a log() line, not an
+    # agent node: its row runs on a non-native provider), so no filter here.
+    graders = tuple(role for _, role in _compiler_gates())
     if not graders:
         failures.append("compiler GATES exposed no grader role")
     for profile in ROLE_TIER_PROFILES:
@@ -1025,6 +1034,19 @@ def _test_tiers() -> int:
             if kinds.get(row.get("provider")) == "native":
                 got = {"model": row.get("model"), "effort": row.get("effort")}
             else:
+                # A non-native row carries the PROVIDER's own model id, so the
+                # model is not comparable to the tier projection — but it must
+                # still NOT be a Claude tier name: a tier there exits 2 at the
+                # leaf (model not found), and reaching `agent({model: ...})`
+                # with a provider id is undispatchable. Both directions are the
+                # B3/N2 failure class, so both are asserted.
+                if row.get("model") in CLAUDE_TIER_MODELS:
+                    failures.append(
+                        f"dispatch.yaml stage {name!r} runs on a non-native "
+                        f"provider but its model {row.get('model')!r} is a "
+                        f"Claude tier name — a leaf exits 2 on it. Use the "
+                        f"provider's own model id."
+                    )
                 want = {"effort": want["effort"]}
                 got = {"effort": row.get("effort")}
             if got != want:

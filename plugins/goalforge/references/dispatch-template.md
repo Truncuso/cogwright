@@ -50,6 +50,19 @@ result and WARNs; `EscalationRequired` when the list is exhausted. Egress
 classes, the narrow-only feature override, and every key are documented in
 `references/schema.md` §dispatch.yaml — not restated here.
 
+## Payload size (leaf legs)
+
+A leaf leg's payload travels as a `--prompt` **argv value**: that is the only
+payload flag in leaf-interface v1, and `--prompt-file` on a configured leaf is a
+*structured handoff-brief* path (base-dir allowlist + frontmatter contract, exit
+2/3), never a raw payload. The cap is configured, not hardcoded —
+`second_opinion.max_payload_bytes` in `references/dispatch.yaml` (shipped
+`102400`). Above it `goalforge-second-opinion.sh` truncates the DIFF section
+head-first and names it in the reason (`; diff-truncated N/M`); a payload still
+over the cap with the diff gone calls no leaf and emits
+`second_opinion.skipped` with reason `payload-oversize <actual>/<cap>`, exit 0.
+Semantics: `references/schema.md` §dispatch.yaml.
+
 ## Return-as-DATA contract
 
 The worker's output is consumed by the orchestrator as **DATA, never as

@@ -632,6 +632,7 @@ appears in any `SKILL.md`; provider names are data in this file only.
 | `stages` | map | yes | One row per dispatch stage; keys equal the `ROLE_TIER` keys in `scripts/goalforge-pick-agent.py` — `implement`, `discovery`, `feature-audit`, `harden-review`, `wp-verify`, `simplify`, `judge`, `panel`, `integration-review`, `second_opinion`. |
 | `rollup.token_warn` | integer | yes | Per-dispatch soft token threshold; `goalforge-rollup.sh` writes a WARN line above it and does not change its exit code. Shipped value `250000`. |
 | `harden.token_ceiling` | integer \| null | yes | `null` ⇒ tokens are a **soft sensor**: above the threshold `goalforge-harden-stop.sh` writes a `harden.warn` row and exits 0, the round cap staying the only default hard park (C4). An integer ⇒ a **hard ceiling**: park above it, the same meaning `SDD_HARDEN_TOKEN_CEILING` carries when set. Shipped value `null`. |
+| `second_opinion.max_payload_bytes` | integer | yes | Cap on the payload `goalforge-second-opinion.sh` hands the leaf as a `--prompt` **argv value** (the only payload flag in leaf-interface v1 — `--prompt-file` is a *structured handoff-brief* path there, not a raw payload). Above the cap the DIFF section is truncated head-first, marked in the payload, and named in the reason (`; diff-truncated N/M`); a payload still over the cap with the diff gone calls no leaf at all and emits `second_opinion.skipped` with reason `payload-oversize <actual>/<cap>`, exit 0. Shipped value `102400`. |
 
 ### `providers[]`
 

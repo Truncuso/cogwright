@@ -73,8 +73,11 @@ widening value is ignored with a WARN row. No content is redacted in any class.
 ## Workflow compile surface
 
 When C5 batching applies, `scripts/goalforge-workflow-compile.py <wp>/overview.md
---dispatch <path>` turns the `## Checklist` into `run/workflows/<wp>.js`:
-disjoint `{files:}` sets become `parallel` nodes of 3-5 items, an overlap forces
-a `pipeline` edge, and gates A/B/C plus the second opinion are nodes carrying
-`{model, effort}` from their own stage rows. The emitted script is launched
-through the Workflow tool — a session surface.
+--dispatch <path> [--expertise <path>]` turns the `## Checklist` into
+`run/workflows/<wp>.js`: disjoint `{files:}` sets become `parallel` nodes of 3-5
+items, an overlap forces a `pipeline` edge, and gates B and C are `agent` nodes
+carrying `{model, effort}` from their own stage rows. Gate A (deterministic) and
+the second opinion (a leaf leg on a non-native provider, so its `model` is a
+provider id `agent()` cannot dispatch) are `log()` lines naming their command —
+no `agent` node the compiler emits ever carries a non-Claude model id. The
+emitted script is launched through the Workflow tool — a session surface.

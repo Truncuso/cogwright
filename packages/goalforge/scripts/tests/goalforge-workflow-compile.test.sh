@@ -5,18 +5,28 @@
 #   known-good : scripts/tests/fixtures/dispatch/wp-compile.md (11 items, three
 #                {files:} groups; A and B disjoint, C overlaps A, parallel: true)
 #                compiles to two parallel nodes of 3-5 items, one pipeline stage
-#                after them, gates B/C and one second-opinion node carrying the
-#                fixture dispatch file's model/effort (gate A is deterministic:
-#                a log() line naming goal.verification.command, never an agent),
-#                a script that opens with
-#                `export const meta`, calls only agent|parallel|pipeline|phase|log,
-#                and parses as ESM.
+#                after them, and gates B/C carrying the fixture dispatch file's
+#                model/effort. Gate A and the SECOND OPINION are deterministic
+#                legs: log() lines naming goal.verification.command and
+#                scripts/goalforge-second-opinion.sh, never agent() nodes — so
+#                no agent node carries a non-Claude model id (the second
+#                opinion's row runs on a non-native provider). The script opens
+#                with `export const meta`, calls only
+#                agent|parallel|pipeline|phase|log, and parses as ESM.
 #   known-bad  : (1) a mktemp copy of the fixture whose overlapping {files:} set
 #                is made disjoint MUST change the compiled graph;
 #                (2) a compiled script with a forbidden call MUST fail the
 #                allowed-call assertion;
 #                (3) malformed YAML frontmatter MUST exit 2, the documented
-#                code, not crash with an uncaught parser error.
+#                code, not crash with an uncaught parser error;
+#                (4) an EMPTY --expertise map MUST empty the emitted
+#                "Expertise refs:" line — proof the compiler reads the seam and
+#                not the live, sibling-owned references/expertise-map.yaml; a
+#                missing --expertise path MUST exit 2.
+#
+# Every model/effort and expertise value comes from a fixture under
+# fixtures/dispatch/ — never from references/dispatch.yaml or
+# references/expertise-map.yaml, which other work packages own and rewrite.
 #
 # TOOL REQUIREMENT (deliberately NOT the skip-on-absent pattern run.sh uses for
 # ruff): the parse check is the only oracle for "this is real JS", so with
@@ -28,6 +38,7 @@ COMPILE="$SD/../goalforge-workflow-compile.py"
 FIXTURES="$SD/fixtures/dispatch"
 WP_FIXTURE="$FIXTURES/wp-compile.md"
 DISPATCH="$FIXTURES/dispatch-default.yaml"
+EXPERTISE="$FIXTURES/expertise-compile.yaml"
 REAL_WP="$SD/../../../../plans/goalforge-overhaul/wp-03-dispatch-routing/overview.md"
 PASS=0; FAIL=0
 
@@ -77,7 +88,7 @@ PY
 
 # --- known-good: compile the fixture -----------------------------------------
 OUT="$T/good"
-if python3 "$COMPILE" "$WP_FIXTURE" --dispatch "$DISPATCH" --out "$OUT" >"$T/stdout" 2>"$T/stderr"; then
+if python3 "$COMPILE" "$WP_FIXTURE" --dispatch "$DISPATCH" --expertise "$EXPERTISE" --out "$OUT" >"$T/stdout" 2>"$T/stderr"; then
     ok "fixture compiles (exit 0)"
 else
     bad "fixture compiles (exit 0)"; cat "$T/stderr"
@@ -97,9 +108,9 @@ head -1 "$SCRIPT" | grep -q '^export const meta = {' \
 
 # --- node count and sizes ----------------------------------------------------
 AGENTS=$(grep -c 'agent({' "$SCRIPT")
-[ "$AGENTS" -eq 6 ] \
-    && ok "6 agent nodes (3 batches + gates B/C + second opinion; gate A is deterministic)" \
-    || bad "6 agent nodes (got $AGENTS)"
+[ "$AGENTS" -eq 5 ] \
+    && ok "5 agent nodes (3 batches + gates B/C; gate A and the second opinion are deterministic legs)" \
+    || bad "5 agent nodes (got $AGENTS)"
 
 # gate A is a log() line naming the WP's verification command — never an agent().
 grep -q 'label: "gate A"' "$SCRIPT" \
@@ -108,6 +119,34 @@ grep -q 'label: "gate A"' "$SCRIPT" \
 grep -q 'log("gate A is deterministic .* no agent node; run: bash scripts/tests/goalforge-workflow-compile.test.sh");$' "$SCRIPT" \
     && ok "gate A log() names goal.verification.command" \
     || bad "gate A log() names goal.verification.command"
+
+# N2: the second opinion is a leaf leg, not an agent node — its dispatch row
+# runs on a non-native provider, so its `model` is a PROVIDER model id.
+grep -q 'label: "second opinion"' "$SCRIPT" \
+    && bad "the second opinion must not be an agent node (non-native provider model)" \
+    || ok "the second opinion is not an agent node"
+grep -q 'log("the second opinion is a leaf leg .* no agent node; run: scripts/goalforge-second-opinion.sh' "$SCRIPT" \
+    && ok "second-opinion log() names scripts/goalforge-second-opinion.sh" \
+    || bad "second-opinion log() names scripts/goalforge-second-opinion.sh"
+
+# N2 INVARIANT: no agent node in a compiled script carries a non-Claude model
+# id. The allowed set is the Claude tier vocabulary the Agent/Workflow tool
+# dispatches natively; anything else (e.g. `glm-5.3:cloud`) is undispatchable.
+non_claude_models() { # $1 = compiled script -> prints offending model literals
+    grep -o 'agent({[^}]*model: "[^"]*"' "$1" \
+        | grep -o 'model: "[^"]*"' | sort -u \
+        | grep -vE 'model: "(sonnet|opus|haiku|fable)"' || true
+}
+assert_claude_models() { # $1 = script  $2 = label
+    local offenders
+    offenders="$(non_claude_models "$1")"
+    if [ -z "$offenders" ]; then
+        ok "no agent node carries a non-Claude model id ($2)"
+    else
+        bad "no agent node carries a non-Claude model id ($2; offenders: $(echo "$offenders" | tr '\n' ' '))"
+    fi
+}
+assert_claude_models "$SCRIPT" "fixture dispatch"
 
 BATCHES=$(grep -c 'label: "batch-' "$SCRIPT")
 [ "$BATCHES" -eq 3 ] && ok "3 batch nodes (A, B, C)" || bad "3 batch nodes (got $BATCHES)"
@@ -151,7 +190,6 @@ check_gate() { # $1 label $2 model $3 effort
 }
 check_gate "gate B" opus high          # wp-verify row
 check_gate "gate C" opus high          # judge row
-check_gate "second opinion" opus low   # second_opinion row (stub provider)
 
 # --- allowed-call assertion ---------------------------------------------------
 OFFENDERS="$(allowed_calls "$SCRIPT")"
@@ -175,7 +213,7 @@ fi
 SAB_OUT="$T/sabotage"
 # The graph comparison below is only meaningful if the sabotage compile SUCCEEDS
 # — a failed compile writes no file and would "differ" for the wrong reason.
-if python3 "$COMPILE" "$SAB_WP" --dispatch "$DISPATCH" --out "$SAB_OUT" >/dev/null 2>"$T/sab-stderr"; then
+if python3 "$COMPILE" "$SAB_WP" --dispatch "$DISPATCH" --expertise "$EXPERTISE" --out "$SAB_OUT" >/dev/null 2>"$T/sab-stderr"; then
     ok "sabotage fixture compiles (exit 0)"
 else
     bad "sabotage fixture compiles (exit 0)"; cat "$T/sab-stderr"
@@ -212,16 +250,51 @@ if [ -f "$REAL_WP" ]; then
     parse_check "$T/real/wp-03-dispatch-routing.js" \
         && ok "real wp-03 compiled script parses as ESM" \
         || bad "real wp-03 compiled script parses as ESM"
+    # The SHIPPED dispatch.yaml is where a real provider model id lives (the
+    # second_opinion row). This is the run that would catch N2 in production —
+    # the hermetic fixture's stub row cannot, its model being a Claude tier.
+    assert_claude_models "$T/real/wp-03-dispatch-routing.js" "shipped references/dispatch.yaml"
 else
     # Not a pass: the oracle did not run. Counted as neither pass nor fail.
     echo "  SKIP: real wp-03 overview absent ($REAL_WP) — smoke case not run"
+fi
+
+# --- known-bad 4 (N4): the expertise map is a SEAM, not live sibling data -----
+# An EMPTY --expertise map must change the emitted "Expertise refs:" line. If
+# the compiler still read references/expertise-map.yaml, the line would be
+# identical and this assertion would fail.
+EMPTY_EXP="$T/expertise-empty.yaml"
+printf 'by_extension: {}\nby_tag: {}\nby_task_type: {}\n' > "$EMPTY_EXP"
+if python3 "$COMPILE" "$WP_FIXTURE" --dispatch "$DISPATCH" --expertise "$EMPTY_EXP" \
+        --out "$T/noexp" >/dev/null 2>"$T/noexp.err"; then
+    if grep -q 'Expertise refs: (none)' "$T/noexp/wp-fixture-compile.js" \
+       && ! grep -q 'Expertise refs: rules/common/coding-style.md' "$T/noexp/wp-fixture-compile.js"; then
+        ok "--expertise is the only expertise source (an empty map empties the refs line)"
+    else
+        bad "--expertise is the only expertise source (an empty map empties the refs line)"
+        grep -o 'Expertise refs: [^\\]*' "$T/noexp/wp-fixture-compile.js" | head -1
+    fi
+else
+    bad "--expertise is the only expertise source (compile with an empty map failed)"
+    cat "$T/noexp.err"
+fi
+
+# A missing --expertise path is a usage error, not a silent empty bundle.
+python3 "$COMPILE" "$WP_FIXTURE" --dispatch "$DISPATCH" \
+    --expertise "$T/absent-expertise.yaml" --out "$T/absent" >/dev/null 2>"$T/absent.err"
+ABSENT_EXIT=$?
+if [ "$ABSENT_EXIT" -eq 2 ] && grep -q 'expertise map not found' "$T/absent.err"; then
+    ok "a missing --expertise path -> exit 2, never a silent empty bundle"
+else
+    bad "a missing --expertise path -> exit 2, never a silent empty bundle (exit $ABSENT_EXIT)"
+    cat "$T/absent.err"
 fi
 
 # --- known-bad 3: malformed frontmatter exits 2 (documented code), not 1 ------
 BADFM="$T/wp-bad-frontmatter.md"
 { echo '---'; echo 'name: wp-bad'; echo 'owned_files: [unclosed'; echo '---';
   echo; echo '## Checklist'; } > "$BADFM"
-python3 "$COMPILE" "$BADFM" --dispatch "$DISPATCH" --out "$T/badfm" >/dev/null 2>"$T/badfm.err"
+python3 "$COMPILE" "$BADFM" --dispatch "$DISPATCH" --expertise "$EXPERTISE" --out "$T/badfm" >/dev/null 2>"$T/badfm.err"
 BADFM_EXIT=$?
 if [ "$BADFM_EXIT" -eq 2 ] && grep -q 'malformed YAML frontmatter' "$T/badfm.err"; then
     ok "malformed frontmatter -> exit 2 with a stderr message"
