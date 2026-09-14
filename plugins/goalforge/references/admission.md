@@ -30,7 +30,7 @@ From `plans/ideas/foreign-implement-dispatch-gated.md` (user direction
 | `model` | string | The provider's own model id. Admission binds the TRIPLE `(task_class, provider, model)`, never `(task_class, provider)` alone: a different model on the same provider is a different capability and needs its own evidence. |
 | `evidence.kind` | enum | `user-experience` \| `benchmark` \| `user-addition`. A closed set: `self-report` is not evidence. |
 | `evidence.ref` | string | Where the evidence lives (a locator the user can re-read). |
-| `permission_set` | list | The permission posture the admitted dispatch is meant to run under. DECLARED data — see "Declared, not enforced". |
+| `permission_set` | list | The permission posture the admitted dispatch is meant to run under. Must be a LIST — a bare string is truthy but would explode into per-character permissions. DECLARED data — see "Declared, not enforced". |
 
 Every key is required. The loader exits `2` naming the row index and the
 offending key; nothing is resolved from a table that failed validation.
@@ -53,6 +53,16 @@ admission decision would not be reproducible.
 
 ## Verdict
 
+Before the table is consulted at all, the stage row must be able to DESCRIBE
+the dispatch it would authorize. A non-native row is refused outright when:
+
+* its `model` is a Claude tier rather than the provider's own model id — that
+  model is the admission KEY, and a leaf exits 2 on a tier name (schema.md
+  §`stages.<stage>`), so no honestly-authored row could match it;
+* its `endpoint` is not `leaf`, or its `egress` is `none` — those two values are
+  copied into the resolution, and a leaf dispatch declared as in-session or as
+  non-egressing is a false declaration.
+
 `resolve(role, task_class, provider, model, table)`:
 
 * provider `kind: native` — admitted, unconditionally; the table governs
@@ -65,7 +75,9 @@ admission decision would not be reproducible.
 
 A refused `implement` resolution falls back to the dispatch file's first
 `kind: native` provider, with the implement STAGE row's model/effort resolved
-as for a native provider. If the dispatch file lists no native provider there
+as for a native provider and `endpoint`/`egress` narrowed to the in-session
+pair (`session` / `none`) — the refused row's leaf endpoint and egress class
+never survive the fallback. If the dispatch file lists no native provider there
 is nothing to fall back to and the resolver exits `2` naming
 `no native provider for fallback` — the refused row is never kept and never
 resolved.
@@ -75,7 +87,10 @@ resolved.
 `goalforge-pick-agent.py --admitted <path>` overrides the table path; ABSENT,
 the shipped `references/admitted-providers.yaml` is read. There is no
 none-means-skip path. `--admitted` is a test seam, and the ledger records which
-table produced the verdict.
+table produced the verdict. A table the caller NAMED must exist: a missing
+`--admitted` / `--table` path exits `2` rather than degrading to an empty
+table, so a typo cannot become a silent blanket refusal at exit 0. Only the
+shipped table may be absent, and then it is empty.
 
 ## The ledger row
 

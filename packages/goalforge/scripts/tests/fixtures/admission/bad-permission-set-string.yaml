@@ -1,0 +1,13 @@
+# b3, seventh sabotage row: `permission_set` is a bare string. It is truthy,
+# so a presence check passes it, and list("admin") would then explode into
+# per-character permissions in the resolution and the ledger.
+schema_version: 1
+
+admitted:
+  - task_class: code/py
+    provider: ollama
+    model: glm-5.3:cloud
+    evidence:
+      kind: user-experience
+      ref: fixtures/admission#permission-set-string
+    permission_set: admin

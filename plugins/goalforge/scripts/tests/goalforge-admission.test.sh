@@ -10,8 +10,8 @@
 #   b5 model binding  b6 task class     b7 invariant text  b8 lint lists
 #
 # Every known-bad is an ANCHORED mutation (fixtures/admission/mutate.py) of a
-# COPY of the package under a mktemp root — the shipped tree is never edited,
-# except by b8's py_compile sabotage, which restores on every exit path.
+# COPY of the package under a mktemp root — the shipped tree is never written
+# to, b8's py_compile sabotage included (it runs the COPY's evals/run.sh).
 set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -46,11 +46,21 @@ RC=$?
 PROV="$(printf '%s' "$OUT" | jget provider)"
 PO="$(printf '%s' "$OUT" | jget propose_only)"
 REASON="$(printf '%s' "$OUT" | jget admission_reason)"
+EP="$(printf '%s' "$OUT" | jget endpoint)"
+EG="$(printf '%s' "$OUT" | jget egress)"
 if [[ "$RC" -eq 0 && "$PROV" == "anthropic" && "$PO" == "False" ]] \
    && [[ "$REASON" == *"code/sh"* ]]; then
     ok "b1 refused: the native provider resolves, propose_only false, reason names code/sh"
 else
     bad "b1 refused (rc=$RC, provider=$PROV, propose_only=$PO, reason=$REASON)"
+fi
+# V-2: the refused row's leaf endpoint / egress class must not survive the
+# fallback — the resolution would otherwise declare an in-session native
+# dispatch as an egressing leaf one.
+if [[ "$EP" == "session" && "$EG" == "none" ]]; then
+    ok "b1 refused: the fallback resolution declares endpoint session / egress none"
+else
+    bad "b1 refused: fallback endpoint/egress (endpoint=$EP, egress=$EG, want session/none)"
 fi
 if [[ "$(rows)" == "1" ]]; then
     ok "b1 refused: exactly one ledger row"
@@ -85,6 +95,15 @@ if [[ "$RC" -eq 0 ]] \
     ok "b2 admitted: the foreign provider resolves with the row's model, evidence ref and permission set"
 else
     bad "b2 admitted (rc=$RC, out=$OUT)"
+fi
+# V-2: an admitted leaf dispatch declares what it is — endpoint leaf, and an
+# egress class other than `none`.
+EP="$(printf '%s' "$OUT" | jget endpoint)"
+EG="$(printf '%s' "$OUT" | jget egress)"
+if [[ "$EP" == "leaf" && "$EG" != "none" ]]; then
+    ok "b2 admitted: the resolution declares endpoint leaf and a non-none egress class ($EG)"
+else
+    bad "b2 admitted endpoint/egress (endpoint=$EP, egress=$EG, want leaf/non-none)"
 fi
 GOT_C="$(printf '%s' "$OUT" | python3 -c 'import json,sys; print(json.dumps(json.load(sys.stdin).get("containment"), sort_keys=True))')"
 WANT_C="$(python3 -c '
@@ -122,7 +141,8 @@ for pair in \
     "bad-missing-model.yaml|model" \
     "bad-missing-evidence.yaml|evidence" \
     "bad-missing-permission-set.yaml|permission_set" \
-    "bad-self-report.yaml|evidence.kind"; do
+    "bad-self-report.yaml|evidence.kind" \
+    "bad-permission-set-string.yaml|permission_set"; do
     FILE="${pair%%|*}"; KEY="${pair##*|}"
     ERR="$(python3 "$ADM" --table "$F/$FILE" 2>&1)"
     RC=$?
@@ -132,6 +152,25 @@ for pair in \
         bad "b3 $FILE: exit 2 naming row 0 and key '$KEY' (rc=$RC, err=$ERR)"
     fi
 done
+
+# A table the CALLER named must EXIST (V-5): a typo'd override silently
+# becoming an empty table would refuse everything at exit 0 and stamp a
+# nonexistent admitted_source on the ledger row.
+ERR="$(python3 "$ADM" --table "$F/no-such-table.yaml" 2>&1)"
+RC=$?
+if [[ "$RC" -eq 2 && "$ERR" == *"not found"* ]]; then
+    ok "b3 explicit table: a named table that does not exist is exit 2, not an empty table"
+else
+    bad "b3 explicit table: want exit 2 naming 'not found' (rc=$RC, err=$ERR)"
+fi
+ERR="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/no-such-table.yaml" 2>&1)"
+RC=$?
+if [[ "$RC" -eq 2 && "$ERR" == *"not found"* ]]; then
+    ok "b3 explicit table: --admitted on a missing path is exit 2 from pick-agent too"
+else
+    bad "b3 explicit table: --admitted missing path (rc=$RC, err=$ERR)"
+fi
 
 # ── b4: the shipped table, the no-flag path, and the no-native fallback ──
 if python3 "$ADM" >/dev/null 2>&1 \
@@ -152,18 +191,34 @@ OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
        --dispatch "$F/dispatch-foreign-native-fallback.yaml" --wp wp-fx 2>"$T/err")"
 RC=$?
 GOT_ME="$(printf '%s' "$OUT" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["model"], d["effort"])' 2>/dev/null)"
+# V-6: "no foreign provider survives in the result" asserted on the PARSED
+# object — every value except the two keys whose job is to name the refused
+# row must be free of the foreign provider's name.
+LEAK="$(printf '%s' "$OUT" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+named = ("admission_reason", "refused_provider")
+print(",".join(k for k, v in d.items()
+               if k not in named and "stub-b" in json.dumps(v)))' 2>/dev/null)"
 NOFLAG_OK=0
 if [[ "$RC" -eq 0 ]] \
    && [[ "$(printf '%s' "$OUT" | jget provider)" == "anthropic" ]] \
    && [[ "$(printf '%s' "$OUT" | jget propose_only)" == "False" ]] \
    && [[ "$GOT_ME" == "$BASE_ME" ]] \
-   && [[ "$OUT" != *"stub-b\": \"provider"* ]]; then
+   && [[ -z "$LEAK" ]]; then
     NOFLAG_OK=1
 fi
 if [[ "$NOFLAG_OK" -eq 1 ]]; then
-    ok "b4 no-flag: the foreign provider is refused and the native one resolves at the stage row's native band ($GOT_ME), propose_only false"
+    ok "b4 no-flag: the foreign provider is refused and the native one resolves at the stage row's native band ($GOT_ME), propose_only false, no key but the refusal record names stub-b"
 else
-    bad "b4 no-flag (rc=$RC, got='$GOT_ME', want='$BASE_ME', out=$OUT)"
+    bad "b4 no-flag (rc=$RC, got='$GOT_ME', want='$BASE_ME', leak='$LEAK', out=$OUT)"
+fi
+EP="$(printf '%s' "$OUT" | jget endpoint)"
+EG="$(printf '%s' "$OUT" | jget egress)"
+if [[ "$EP" == "session" && "$EG" == "none" ]]; then
+    ok "b4 no-flag: the fallback resolution declares endpoint session / egress none"
+else
+    bad "b4 no-flag fallback endpoint/egress (endpoint=$EP, egress=$EG, want session/none)"
 fi
 SHIPPED_SRC="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$PKG/references/admitted-providers.yaml")"
 if [[ "$(rows)" == "1" ]] \
@@ -191,18 +246,34 @@ KB="$T/kb"
 mkdir -p "$KB"
 cp -r "$PKG/scripts" "$PKG/references" "$PKG/agents" "$KB/"
 rm -rf "$KB/scripts/__pycache__"
-kb_pick() {  # $1 = mutation name -> path to the mutated pick-agent
+# $1 = mutation name. Sets the GLOBAL $MUT to the mutated pick-agent and
+# returns 0, or clears it, reports on stderr and returns 1. Never called in a
+# command substitution: a drifted anchor must reach the PARENT shell's counters
+# (V-3 — the FAIL of a dead known-bad used to die in the subshell and the
+# suite still exited 0).
+kb_pick() {
     local dest="$KB/scripts/goalforge-pick-agent.py"
-    cp "$PICK" "$dest.orig"
+    MUT=""
     if ! python3 "$MUTATE" "$1" "$PICK" "$dest" 2>"$T/mut.err"; then
-        bad "known-bad $1: mutation anchor missing ($(cat "$T/mut.err"))"
+        echo "  mutation $1 failed: $(cat "$T/mut.err")" >&2
         return 1
     fi
-    printf '%s' "$dest"
+    MUT="$dest"
 }
 
+# Oracle integrity: the harness's own failure path is exercised before the
+# known-bads rest on it. Under the old command-substitution shape $MUT held the
+# swallowed diagnostic instead of being empty.
+if kb_pick __no_such_anchor__ 2>/dev/null; then
+    bad "harness: a nonexistent mutation anchor must not report success"
+elif [[ -n "$MUT" ]]; then
+    bad "harness: a failed mutation left MUT set to '$MUT' (the diagnostic was swallowed)"
+else
+    ok "harness: a drifted known-bad anchor fails in the PARENT shell and yields no mutant"
+fi
+
 reset
-if MUT="$(kb_pick skip-admission-no-flag)"; then
+if kb_pick skip-admission-no-flag; then
     OUT="$(python3 "$MUT" --task "$F/wp-code-py.md" --role implement \
            --dispatch "$F/dispatch-foreign-native-fallback.yaml" 2>/dev/null)"
     if [[ "$(printf '%s' "$OUT" | jget provider)" != "anthropic" ]] \
@@ -211,10 +282,12 @@ if MUT="$(kb_pick skip-admission-no-flag)"; then
     else
         bad "b4 known-bad 1: a no-flag path that skips admission still passes (out=$OUT)"
     fi
+else
+    bad "b4 known-bad 1: mutation anchor missing ($(cat "$T/mut.err"))"
 fi
 
 reset
-if MUT="$(kb_pick keep-refused-provider)"; then
+if kb_pick keep-refused-provider; then
     OUT="$(python3 "$MUT" --task "$F/wp-code-py.md" --role implement \
            --dispatch "$F/dispatch-foreign-native-fallback.yaml" 2>/dev/null)"
     if [[ "$(printf '%s' "$OUT" | jget provider)" != "anthropic" ]]; then
@@ -222,10 +295,12 @@ if MUT="$(kb_pick keep-refused-provider)"; then
     else
         bad "b4 known-bad 2: a refused branch that keeps the foreign provider still passes (out=$OUT)"
     fi
+else
+    bad "b4 known-bad 2: mutation anchor missing ($(cat "$T/mut.err"))"
 fi
 
 reset
-if MUT="$(kb_pick no-native-keeps-foreign)"; then
+if kb_pick no-native-keeps-foreign; then
     ERR="$(python3 "$MUT" --task "$F/wp-code-py.md" --role implement \
            --dispatch "$F/dispatch-no-native.yaml" 2>&1)"
     RC=$?
@@ -234,6 +309,8 @@ if MUT="$(kb_pick no-native-keeps-foreign)"; then
     else
         bad "b4 known-bad 3: resolving the refused row still exits 2 with the message (rc=$RC)"
     fi
+else
+    bad "b4 known-bad 3: mutation anchor missing ($(cat "$T/mut.err"))"
 fi
 
 # ── b5: admission binds (task_class, provider, MODEL) ────────────────────
@@ -246,6 +323,41 @@ if [[ "$(printf '%s' "$OUT" | jget provider)" == "anthropic" ]] \
     ok "b5 model binding: the same provider on another model is refused, the reason naming both model ids"
 else
     bad "b5 model binding (provider=$(printf '%s' "$OUT" | jget provider), reason=$REASON)"
+fi
+
+# ── b5 (V-1/V-2): a stage row that cannot describe a real leaf dispatch ──
+# The model handed to the admission check is the admission KEY, and the row's
+# endpoint/egress are copied into the resolution. A Claude tier, an in-session
+# endpoint or `egress: none` on a leaf provider is refused BEFORE the table is
+# consulted — even when a table row would otherwise match exactly.
+reset
+OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-ollama-tier.yaml" \
+       --admitted "$F/admitted-claude-tier.yaml" --wp wp-fx 2>/dev/null)"
+RC=$?
+REASON="$(printf '%s' "$OUT" | jget admission_reason)"
+if [[ "$RC" -eq 0 ]] \
+   && [[ "$(printf '%s' "$OUT" | jget provider)" == "anthropic" ]] \
+   && [[ "$(printf '%s' "$OUT" | jget admission_decision)" == "refused" ]] \
+   && [[ "$REASON" == *"Claude tier"* && "$REASON" == *"sonnet"* ]]; then
+    ok "b5 model key: a Claude tier as the provider's model is refused even when a table row names that tier"
+else
+    bad "b5 model key (rc=$RC, provider=$(printf '%s' "$OUT" | jget provider), reason=$REASON)"
+fi
+
+reset
+OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-ollama-egress-none.yaml" \
+       --admitted "$F/admitted-ok.yaml" --wp wp-fx 2>/dev/null)"
+RC=$?
+REASON="$(printf '%s' "$OUT" | jget admission_reason)"
+if [[ "$RC" -eq 0 ]] \
+   && [[ "$(printf '%s' "$OUT" | jget provider)" == "anthropic" ]] \
+   && [[ "$(printf '%s' "$OUT" | jget admission_decision)" == "refused" ]] \
+   && [[ "$REASON" == *"egress"* ]]; then
+    ok "b5 egress coherence: an otherwise-matching row declaring egress none is refused, never admitted as a non-egressing leaf dispatch"
+else
+    bad "b5 egress coherence (rc=$RC, provider=$(printf '%s' "$OUT" | jget provider), reason=$REASON)"
 fi
 
 # ── b6: the deterministic task class ─────────────────────────────────────
@@ -357,28 +469,33 @@ done
 
 # The py_compile gate is UNCONDITIONAL (ruff/pyright WARN-skip when absent), so
 # the listing is load-bearing there and a syntax error must redden run.sh
-# itself. The nested run is guarded: the copy of this file it executes skips
-# this case rather than recursing. The PARENT run that green-lit this file is
-# the "still exits 0" half of the known-bads above.
+# itself. The sabotage runs against a COPY of the whole package under $T and
+# invokes that copy's evals/run.sh (run.sh derives SKILL_DIR from its own
+# location): the tracked tree is never written to, so an interrupted or
+# concurrent run can no longer leave a syntax-error source file behind (V-4).
+# The nested run is guarded: the copy of this file it executes skips this case
+# rather than recursing.
 if [[ -n "${GOALFORGE_ADMISSION_NESTED:-}" ]]; then
     echo "  SKIP: b8 py_compile sabotage (nested run)"
 else
-    cp "$ADM" "$T/admission.orig.py"
-    restore() { cp "$T/admission.orig.py" "$ADM"; rm -rf "$PKG/scripts/__pycache__"; }
-    trap 'restore; rm -rf "$T"' EXIT INT TERM
-    if python3 "$MUTATE" syntax-error "$T/admission.orig.py" "$ADM" 2>"$T/mut.err"; then
-        GOALFORGE_ADMISSION_NESTED=1 bash "$RUN_SH" >"$T/nested.out" 2>&1
+    SBX="$T/pkg"
+    rm -rf "$SBX"
+    cp -r "$PKG" "$SBX"
+    rm -rf "$SBX/scripts/__pycache__"
+    if python3 "$MUTATE" syntax-error "$PKG/scripts/goalforge-admission.py" \
+               "$SBX/scripts/goalforge-admission.py" 2>"$T/mut.err"; then
+        GOALFORGE_ADMISSION_NESTED=1 bash "$SBX/evals/run.sh" >"$T/nested.out" 2>&1
         NRC=$?
-        restore
-        if [[ "$NRC" -ne 0 ]] && grep -q 'py_compile' "$T/nested.out"; then
-            ok "b8 py_compile sabotage: a syntax error in goalforge-admission.py turns evals/run.sh RED (exit $NRC)"
+        # V-7: the oracle is the FAILING py_compile check line, not the mere
+        # mention of py_compile (which run.sh prints either way).
+        if [[ "$NRC" -ne 0 ]] && grep -q '^  FAIL: python3 -m py_compile' "$T/nested.out"; then
+            ok "b8 py_compile sabotage: a syntax error in goalforge-admission.py fails run.sh's py_compile gate (exit $NRC)"
         else
-            bad "b8 py_compile sabotage: run.sh stayed green with a broken goalforge-admission.py (exit $NRC)"
+            bad "b8 py_compile sabotage: run.sh's py_compile gate stayed green with a broken goalforge-admission.py (exit $NRC)"
         fi
     else
         bad "b8 py_compile sabotage: mutation anchor missing ($(cat "$T/mut.err"))"
     fi
-    trap 'rm -rf "$T"' EXIT
 fi
 
 echo

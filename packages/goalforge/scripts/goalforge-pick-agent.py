@@ -587,6 +587,46 @@ def append_ledger_row(row: dict, path: Path | None = None) -> bool:
 # Core resolver
 # ---------------------------------------------------------------------------
 
+def _foreign_row_incoherence(
+    provider: dict, endpoint: str, egress: str, model: str
+) -> str | None:
+    """Why this stage row cannot describe a real dispatch to `provider`.
+
+    Checked BEFORE the admission table is consulted, because the row's own
+    values are what the verdict and the resolution would carry:
+
+    * `model` is the admission KEY — a Claude tier there binds the admission to
+      a model the leaf cannot run (schema.md: a tier makes the leaf exit 2), so
+      no honestly-authored row could ever match it;
+    * `endpoint`/`egress` are copied into the resolution — `session` or
+      `egress: none` on a leaf provider would declare a foreign-API dispatch as
+      in-session and non-egressing.
+
+    Returns the refusal reason, or None when the row is coherent. `native`
+    providers are never incoherent: they are what a refusal falls back TO."""
+    if provider.get("kind") == "native":
+        return None
+    name = provider.get("name")
+    if model in CLAUDE_TIER_MODELS:
+        return (
+            f"resolved model {model!r} for provider {name!r} is a Claude tier, "
+            f"not that provider's own model id — refused (an admission row binds "
+            f"the provider's model, which a leaf must be able to run)"
+        )
+    if endpoint != "leaf":
+        return (
+            f"provider {name!r} runs through an agent-dispatch leaf but the "
+            f"stage row declares endpoint {endpoint!r} — refused"
+        )
+    if egress == "none":
+        return (
+            f"provider {name!r} runs through an agent-dispatch leaf but the "
+            f"stage row declares egress 'none' — refused (a leaf dispatch "
+            f"cannot be non-egressing)"
+        )
+    return None
+
+
 def resolve_stage(
     role: str,
     frontmatter: dict,
@@ -608,9 +648,13 @@ def resolve_stage(
 
     For role ``implement`` the admission table decides the resolver verdict:
     ``admitted`` is the LOADED table (``None`` reads the shipped one — there is
-    no none-means-skip path). A refused non-native provider is replaced by the
-    dispatch file's first ``kind: native`` provider; with no native row to fall
-    back to, ``ValueError`` (caller → exit 2)."""
+    no none-means-skip path). A stage row that cannot describe a real leaf
+    dispatch (a Claude tier as the provider's model, ``endpoint: session``, or
+    ``egress: none``) is refused before the table is consulted; see
+    ``_foreign_row_incoherence``. A refused non-native provider is replaced by
+    the dispatch file's first ``kind: native`` provider and the resolution's
+    ``endpoint``/``egress`` become the in-session pair; with no native row to
+    fall back to, ``ValueError`` (caller → exit 2)."""
     role = _resolve_role_alias(role)
     if role not in ROLE_AGENT:
         raise EscalationRequired(
@@ -653,15 +697,18 @@ def resolve_stage(
     # `touched_files`: a per-invocation file list would make the admission key
     # vary by caller.
     task_class = admission.task_class(frontmatter)
-    if role == "implement":
-        table = admission.load() if admitted is None else admitted
-        verdict = admission.resolve(role, task_class, provider, model, table)
-    else:
-        verdict = Admission(provider.get("kind") == "native", "non-implement role")
+    endpoint = row.get("endpoint", "session")
+    egress = row.get("egress", "none")
     propose_only = provider.get("kind") != "native"
 
     extra: dict = {}
     if role == "implement" and propose_only:
+        table = admission.load() if admitted is None else admitted
+        incoherent = _foreign_row_incoherence(provider, endpoint, egress, model)
+        if incoherent:
+            verdict = Admission(False, incoherent)
+        else:
+            verdict = admission.resolve(role, task_class, provider, model, table)
         extra["admission_reason"] = verdict.reason
         propose_only = False
         if verdict.admitted:
@@ -712,6 +759,10 @@ def resolve_stage(
                 else band["model"]
             )
             effort = row.get("effort") if row.get("effort") != "by_register" else band["effort"]
+            # The fallback runs IN SESSION on the native provider: the refused
+            # row's leaf endpoint and egress class must not survive it, or the
+            # resolution would declare a native dispatch as an egressing one.
+            endpoint, egress = "session", "none"
 
     result: dict = {
         "role": role,
@@ -720,8 +771,8 @@ def resolve_stage(
         "model": model,
         "effort": effort,
         "provider": chosen,
-        "endpoint": row.get("endpoint", "session"),
-        "egress": row.get("egress", "none"),
+        "endpoint": endpoint,
+        "egress": egress,
         "propose_only": propose_only,
         "task_class": task_class,
         **extra,
@@ -1296,7 +1347,7 @@ def main(argv: list[str] | None = None) -> int:
     # No `--admitted` flag means the SHIPPED table, never a skipped check.
     admitted_path = Path(args.admitted) if args.admitted else admission.ADMITTED_PATH
     try:
-        admitted_table = admission.load(admitted_path)
+        admitted_table = admission.load(admitted_path, required=bool(args.admitted))
     except admission.AdmissionTableError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2

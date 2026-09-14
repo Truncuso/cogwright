@@ -19,4 +19,4 @@ stages:
     effort: low
     provider: ollama
     endpoint: leaf
-    egress: none
+    egress: overview          # a leaf dispatch egresses; `none` here is refused

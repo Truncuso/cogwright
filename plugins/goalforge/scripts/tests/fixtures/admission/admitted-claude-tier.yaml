@@ -1,0 +1,13 @@
+# V-1: a well-formed table whose `model` is a Claude tier rather than the
+# provider's own model id. The loader accepts it (the tier vocabulary is the
+# resolver's, not the table's); the RESOLVER must never admit on it.
+schema_version: 1
+
+admitted:
+  - task_class: code/py
+    provider: ollama
+    model: sonnet
+    evidence:
+      kind: user-experience
+      ref: fixtures/admission#claude-tier-as-model
+    permission_set: [read, write]

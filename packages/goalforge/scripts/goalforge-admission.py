@@ -10,9 +10,11 @@ This module has NO ledger I/O. ``goalforge-pick-agent.py`` is the one caller
 and the one ledger writer — the verdict is returned, never recorded here.
 
 Public API:
-    load(path=None) -> list[dict]
+    load(path=None, *, required=False) -> list[dict]
         Read and VALIDATE a table. ``None`` reads the shipped table; the
-        absent-flag path is never a skip. Raises AdmissionTableError.
+        absent-flag path is never a skip. ``required=True`` (the caller named
+        the path) turns a missing file into an error rather than an empty
+        table. Raises AdmissionTableError.
 
     task_class(frontmatter) -> str
         ``<task_type>/<ext>`` from the WP frontmatter's OWN ``owned_files``.
@@ -106,20 +108,31 @@ def validate(rows: object) -> list[dict]:
             )
         if not evidence.get("ref"):
             raise _row_error(index, "evidence.ref", "missing")
+        if not isinstance(row["permission_set"], list):
+            # A bare string is truthy and would explode into per-character
+            # permissions in the resolution and the ledger.
+            raise _row_error(index, "permission_set", "not a list")
         validated.append(row)
     return validated
 
 
-def load(path: Path | None = None) -> list[dict]:
+def load(path: Path | None = None, *, required: bool = False) -> list[dict]:
     """Load and validate a table. ``None`` reads the SHIPPED table.
 
-    A missing file is an empty table, not a skipped check: every non-native
-    implement resolution is refused when no row admits it."""
+    A missing SHIPPED table is an empty table, not a skipped check: every
+    non-native implement resolution is refused when no row admits it. A missing
+    table the CALLER named (``required=True``, i.e. an explicit ``--admitted`` /
+    ``--table`` argument) is an error instead — a typo'd override must not
+    silently become an empty table that refuses everything at exit 0."""
     target = path or ADMITTED_PATH
     try:
         with open(target, "r", encoding="utf-8") as fh:
             data = yaml.safe_load(fh) or {}
     except FileNotFoundError:
+        if required:
+            raise AdmissionTableError(
+                f"admission table not found: {target}"
+            ) from None
         return []
     except yaml.YAMLError as exc:
         raise AdmissionTableError(f"unreadable admission table {target}: {exc}") from exc
@@ -183,10 +196,11 @@ def resolve(role: str, klass: str, provider: dict, model: str,
                 evidence_ref=str(row["evidence"]["ref"]),
                 permission_set=list(row["permission_set"]),
             )
+    candidates = ", ".join(repr(r.get("model")) for r in rows)
     return Admission(
         False,
-        f"admission row for {klass} on {name!r} names model "
-        f"{rows[0].get('model')!r}, resolved model is {model!r} — refused "
+        f"admission row(s) for {klass} on {name!r} name model {candidates}, "
+        f"resolved model is {model!r} — refused "
         "(admission binds task class, provider AND model)",
     )
 
@@ -222,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.task_class:
             print(task_class(_frontmatter(Path(args.task_class))))
             return 0
-        rows = load(Path(args.table) if args.table else None)
+        rows = load(Path(args.table), required=True) if args.table else load()
     except AdmissionTableError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
