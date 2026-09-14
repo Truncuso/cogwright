@@ -1,0 +1,29 @@
+# admitted-providers.yaml — the provider-admission table (wp-06).
+#
+# THE SHIPPED TABLE IS EMPTY BY DESIGN. No foreign or local provider is
+# admitted to the `implement` role without recorded user evidence; an empty
+# table means every non-native implement resolution is REFUSED and falls back
+# to the native provider. Absence of the file, or of a row, NEVER means
+# "skip admission" (fail-closed) — see references/admission.md.
+#
+# Row shape (every key required; validated by scripts/goalforge-admission.py,
+# which exits 2 naming the row index and the offending key):
+#
+#   - task_class: code/py              # <task_type>/<ext>, LITERAL extension
+#     provider: ollama                 # a references/dispatch.yaml providers[].name
+#     model: glm-5.3:cloud             # the provider's own model id — admission
+#                                      # binds (task_class, provider, model)
+#     evidence:
+#       kind: user-experience          # user-experience | benchmark | user-addition
+#       ref: <locator>                 # where the evidence lives
+#     permission_set: [read, write]    # DECLARED, not enforced by this package
+#
+# Adding a row is a user decision (CLAUDE.md Principle 5: foreign and local
+# providers are propose-only). Before the first row lands, re-read the
+# `permission-set-declared-not-enforced` risk in the wp-06 overview: the
+# containment block and the permission set are carried as DATA; nothing in
+# this package enforces them at dispatch time.
+
+schema_version: 1
+
+admitted: []

@@ -1,0 +1,8 @@
+# `self-report` is not evidence: a model's own claim that it did the job.
+schema_version: 1
+admitted:
+  - task_class: code/py
+    provider: ollama
+    model: glm-5.3:cloud
+    evidence: {kind: self-report, ref: fixtures/admission}
+    permission_set: [read]

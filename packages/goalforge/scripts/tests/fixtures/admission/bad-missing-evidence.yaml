@@ -1,0 +1,6 @@
+schema_version: 1
+admitted:
+  - task_class: code/py
+    provider: ollama
+    model: glm-5.3:cloud
+    permission_set: [read]

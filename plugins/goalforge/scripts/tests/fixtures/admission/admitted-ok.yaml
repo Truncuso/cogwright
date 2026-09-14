@@ -1,0 +1,11 @@
+# The one VALID admission table: code/py admitted on ollama/glm-5.3:cloud.
+schema_version: 1
+
+admitted:
+  - task_class: code/py
+    provider: ollama
+    model: glm-5.3:cloud
+    evidence:
+      kind: user-experience
+      ref: fixtures/admission#user-experience-2026-09-14
+    permission_set: [read, write]

@@ -24,12 +24,25 @@ file; `--dispatch <path>` overrides it (tests pass a fixture). No provider is ev
    `budget_check_failed` is **not** a fall-through: the turn completed, its
    result is kept and a WARN row names the overspend. An exhausted list raises
    `EscalationRequired`.
-6. **Propose-only ledger** — every resolution whose provider `kind` is not
-   `native` is propose-only and appends one row at `GOALFORGE_DISPATCH_LEDGER`
-   (default `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/data/dispatch-decisions.jsonl`).
-   Ledger I/O degrades, never blocks.
-7. **Admission seam** — `admission.resolve(role, task_class, provider)` runs for
-   role `implement` before propose-only marking; today it admits only the native provider, and `--admitted <path>` is parsed and reserved (wp-06 fills both).
+6. **Dispatch decision ledger** — one row per decision at
+   `GOALFORGE_DISPATCH_LEDGER` (default
+   `${CLAUDE_CONFIG_DIR:-$HOME/.claude}/data/dispatch-decisions.jsonl`), written
+   by the ONE writer in `goalforge-pick-agent.py`: a resolution left at the
+   non-native default, and every admission decision (§7 — the admission table
+   decides the resolver verdict). `decision` discriminates
+   `propose-only | admitted | refused`, and `admitted_source` /
+   `admitted_override` name the table that produced the verdict. Ledger I/O
+   degrades, never blocks.
+7. **Admission** — `admission.resolve(role, task_class, provider, model)` runs
+   for role `implement`: the admission table decides the resolver verdict
+   (`references/admission.md`). `--admitted <path>` overrides the shipped
+   `references/admitted-providers.yaml`; its absence reads the shipped table and
+   is never a skip. A refused non-native provider is replaced by the first
+   `kind: native` provider (exit 2 when the dispatch file lists none); an
+   admitted one carries the containment block, the evidence ref and the
+   permission set as DECLARED data, with a stderr WARN saying so. The compiler
+   still refuses to emit a non-native `implement` row until
+   `wp-08-admitted-execution`.
 
 The verification strategy comes from the WP's own `goal.verification.strategy`
 and is never inferred here.
@@ -53,7 +66,8 @@ error rather than a guess. Graders (`judge`, `wp-verify`) are pinned to
   `model` per agent but inherits session effort; the **Workflow tool** is the
   only surface with a per-agent effort knob, so a batch mixing efforts uses it.
 - `leaf` — the headless `headless_dispatch` CLI of a non-native provider, with
-  `--max-budget-usd` from the provider row. Always propose-only. The payload
+  `--max-budget-usd` from the provider row. Propose-only unless the admission
+  table decides the resolver verdict is `admitted` for the WP's task class. The payload
   goes as a `--prompt` **argv value** under the configured
   `second_opinion.max_payload_bytes` cap (clamped to the reviewed ceiling
   `102400` with a WARN — one argv string must stay inside `MAX_ARG_STRLEN`).

@@ -190,6 +190,22 @@
       "path": "skills/wayfind/SKILL.md"
     },
     {
+      "from": "references/admission.md",
+      "path": "references/admitted-providers.yaml"
+    },
+    {
+      "from": "references/admission.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "references/admission.md",
+      "path": "scripts/goalforge-admission.py"
+    },
+    {
+      "from": "references/admission.md",
+      "path": "scripts/goalforge-pick-agent.py"
+    },
+    {
       "from": "references/dispatch-template.md",
       "path": "references/discipline-core.md"
     },
@@ -224,6 +240,14 @@
     {
       "from": "references/retrospective.md",
       "path": "scripts/goalforge-trace-read"
+    },
+    {
+      "from": "references/schema.md",
+      "path": "references/admission.md"
+    },
+    {
+      "from": "references/schema.md",
+      "path": "references/admitted-providers.yaml"
     },
     {
       "from": "references/schema.md",
@@ -340,6 +364,14 @@
     {
       "from": "skills/execute/SKILL.md",
       "path": "skills/execute/references/dispatch-resolution.md"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/admission.md"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/admitted-providers.yaml"
     },
     {
       "from": "skills/execute/references/dispatch-resolution.md",

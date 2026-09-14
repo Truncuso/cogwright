@@ -303,10 +303,10 @@ echo ""
 # ── b3: package-level lint/type/compile gates ────────────────────────────────
 echo "[ b3: package lint/type/compile gates ]"
 
-if python3 -m py_compile "$SKILL_DIR/scripts/goalforge-pick-agent.py" "$SKILL_DIR/scripts/goalforge-plan-index.py" 2>/tmp/goalforge-run-sh-$$.out; then
-  check "python3 -m py_compile goalforge-pick-agent.py goalforge-plan-index.py" "pass"
+if python3 -m py_compile "$SKILL_DIR/scripts/goalforge-pick-agent.py" "$SKILL_DIR/scripts/goalforge-plan-index.py" "$SKILL_DIR/scripts/goalforge-admission.py" 2>/tmp/goalforge-run-sh-$$.out; then
+  check "python3 -m py_compile goalforge-pick-agent.py goalforge-plan-index.py goalforge-admission.py" "pass"
 else
-  check "python3 -m py_compile goalforge-pick-agent.py goalforge-plan-index.py" "fail"
+  check "python3 -m py_compile goalforge-pick-agent.py goalforge-plan-index.py goalforge-admission.py" "fail"
   sed 's/^/        /' "/tmp/goalforge-run-sh-$$.out"
 fi
 rm -f "/tmp/goalforge-run-sh-$$.out"
@@ -328,10 +328,10 @@ fi
 rm -f "/tmp/goalforge-run-sh-$$.out"
 
 if command -v ruff >/dev/null 2>&1; then
-  if ruff check --select F,E9,B "$SKILL_DIR/scripts/goalforge-pick-agent.py" >/tmp/goalforge-run-sh-$$.out 2>&1; then
-    check "ruff check --select F,E9,B goalforge-pick-agent.py" "pass"
+  if ruff check --select F,E9,B "$SKILL_DIR/scripts/goalforge-pick-agent.py" "$SKILL_DIR/scripts/goalforge-admission.py" >/tmp/goalforge-run-sh-$$.out 2>&1; then
+    check "ruff check --select F,E9,B goalforge-pick-agent.py goalforge-admission.py" "pass"
   else
-    check "ruff check --select F,E9,B goalforge-pick-agent.py" "fail"
+    check "ruff check --select F,E9,B goalforge-pick-agent.py goalforge-admission.py" "fail"
     sed 's/^/        /' "/tmp/goalforge-run-sh-$$.out"
   fi
   rm -f "/tmp/goalforge-run-sh-$$.out"
@@ -347,10 +347,10 @@ if command -v pyright >/dev/null 2>&1; then
   "reportUnusedVariable": "warning"
 }
 EOF
-  if pyright -p "$PYRIGHT_CFG" "$SKILL_DIR/scripts/goalforge-pick-agent.py" >/tmp/goalforge-run-sh-$$.out 2>&1; then
-    check "pyright (reportUnreachable/reportUnusedVariable=warning) goalforge-pick-agent.py" "pass"
+  if pyright -p "$PYRIGHT_CFG" "$SKILL_DIR/scripts/goalforge-pick-agent.py" "$SKILL_DIR/scripts/goalforge-admission.py" >/tmp/goalforge-run-sh-$$.out 2>&1; then
+    check "pyright (reportUnreachable/reportUnusedVariable=warning) goalforge-pick-agent.py goalforge-admission.py" "pass"
   else
-    check "pyright (reportUnreachable/reportUnusedVariable=warning) goalforge-pick-agent.py" "fail"
+    check "pyright (reportUnreachable/reportUnusedVariable=warning) goalforge-pick-agent.py goalforge-admission.py" "fail"
     sed 's/^/        /' "/tmp/goalforge-run-sh-$$.out"
   fi
   rm -f "$PYRIGHT_CFG" "/tmp/goalforge-run-sh-$$.out"

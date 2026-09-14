@@ -1,0 +1,6 @@
+schema_version: 1
+admitted:
+  - task_class: code/py
+    provider: ollama
+    model: glm-5.3:cloud
+    evidence: {kind: user-experience, ref: fixtures/admission}

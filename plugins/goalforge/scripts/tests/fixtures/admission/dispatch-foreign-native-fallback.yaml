@@ -1,0 +1,22 @@
+# b4: implement on a FOREIGN provider, with a native row to fall back to.
+# The stage row is `by_register`, so the fallback band is the WP's own.
+schema_version: 1
+
+providers:
+  - name: anthropic
+    kind: native
+    leaf: null
+    propose_only: false
+  - name: stub-b
+    kind: foreign
+    leaf: skills/agent-dispatch/stub-b/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+
+stages:
+  implement:
+    model: by_register
+    effort: by_register
+    provider: stub-b
+    endpoint: leaf
+    egress: none

@@ -29,8 +29,10 @@ Public API:
     next_provider(provider_names, current, exit_code, reason) -> (name, warn)
         Pure provider fall-through per leaf-interface.md §5/§6 hazard 2.
 
-    admission.resolve(role, task_class, provider) -> Admission
-        The wp-06 seam. Today: admitted for the native provider only.
+    admission.resolve(role, task_class, provider, model) -> Admission
+        The admission table decides the resolver verdict for role
+        `implement` — scripts/goalforge-admission.py owns the table, the
+        task class and the verdict; references/admission.md is the contract.
 
     tier_to_dispatch(tier) / resolve_dispatch(role, profile, …) -> {model, effort}
     dispatch_launched_event(pick_result, dispatch_result, *, wp=, task=)
@@ -52,7 +54,6 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -116,7 +117,7 @@ EXPERTISE_MAP_PATH = PKG_ROOT / "references" / "expertise-map.yaml"
 TIER_MAP_PATH = PKG_ROOT / "references" / "tier-map.md"
 AGENTS_DIR = PKG_ROOT / "agents"
 
-# The propose-only ledger performance.md names. Overridable for tests.
+# The dispatch-decision ledger performance.md names. Overridable for tests.
 DEFAULT_LEDGER = "data/dispatch-decisions.jsonl"
 
 # Leaf exit codes that carry no result → fall through to the next provider
@@ -435,34 +436,41 @@ def resolve_expertise(
 
 
 # ---------------------------------------------------------------------------
-# Admission seam (wp-06 fills it; `--admitted <path>` is reserved)
+# Admission — the admission table decides the resolver verdict
 # ---------------------------------------------------------------------------
+# `scripts/goalforge-admission.py` owns the table, the deterministic task-class
+# key and the verdict function (contract: `references/admission.md`). This
+# module is its ONLY caller and the ONLY ledger writer: the verdict comes back
+# as data and is recorded here, never there. Compile-level dispatch of a
+# non-native implement row stays refused until `wp-08-admitted-execution`.
 
-@dataclass(frozen=True)
-class Admission:
-    """Verdict of the provider-admission check for one dispatch."""
-
-    admitted: bool
-    reason: str
+ADMISSION_PATH = PKG_ROOT / "scripts" / "goalforge-admission.py"
 
 
-class admission:  # noqa: N801 — a namespace, not a class to instantiate
-    """Provider-admission seam. wp-06 (`wp-06-provider-admission`) fills it.
+def _load_admission():
+    """Import goalforge-admission.py by path (its filename is not importable)."""
+    spec = importlib.util.spec_from_file_location("goalforge_admission", ADMISSION_PATH)
+    if spec is None or spec.loader is None:  # pragma: no cover
+        raise EscalationRequired(f"cannot import the admission module at {ADMISSION_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    # Registered before exec: the module defines dataclasses, which resolve
+    # their annotations through sys.modules.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
-    Today the only admitted kind is ``native``: a foreign or local provider
-    resolves propose-only, never as an executing implementer."""
 
-    @staticmethod
-    def resolve(role: str, task_class: str, provider: dict) -> Admission:
-        """Return the admission verdict for (role, task_class, provider)."""
-        kind = provider.get("kind")
-        if kind == "native":
-            return Admission(True, f"native provider admitted for {role}/{task_class}")
-        return Admission(
-            False,
-            f"provider kind {kind!r} is propose-only for {role}/{task_class} "
-            "(wp-06 decides admission on recorded evidence)",
-        )
+admission = _load_admission()
+Admission = admission.Admission
+
+
+def _verification_command(frontmatter: dict) -> str:
+    """The WP's ``goal.verification.command`` — the containment block's oracle."""
+    goal = frontmatter.get("goal")
+    verification = goal.get("verification") if isinstance(goal, dict) else None
+    if isinstance(verification, dict):
+        return str(verification.get("command") or "")
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -543,11 +551,11 @@ def _walk_providers(
 
 
 # ---------------------------------------------------------------------------
-# Propose-only ledger (degrade-not-block)
+# Dispatch decision ledger (degrade-not-block)
 # ---------------------------------------------------------------------------
 
 def ledger_path() -> Path:
-    """Resolve the propose-only ledger path (``GOALFORGE_DISPATCH_LEDGER``)."""
+    """Resolve the dispatch decision ledger (``GOALFORGE_DISPATCH_LEDGER``)."""
     explicit = os.environ.get("GOALFORGE_DISPATCH_LEDGER")
     if explicit:
         return Path(explicit)
@@ -556,7 +564,10 @@ def ledger_path() -> Path:
 
 
 def append_ledger_row(row: dict, path: Path | None = None) -> bool:
-    """Append one propose-only decision row. Degrade-not-block on OSError."""
+    """Append one dispatch decision row (propose-only | admitted | refused).
+
+    One shape, one writer (references/admission.md § The ledger row).
+    Degrade-not-block on OSError."""
     target = path or ledger_path()
     try:
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -565,8 +576,8 @@ def append_ledger_row(row: dict, path: Path | None = None) -> bool:
         return True
     except OSError as exc:
         print(
-            f"goalforge-pick-agent: WARN could not append the propose-only "
-            f"ledger row to {target}: {exc}",
+            f"goalforge-pick-agent: WARN could not append the dispatch "
+            f"decision ledger row to {target}: {exc}",
             file=sys.stderr,
         )
         return False
@@ -585,6 +596,7 @@ def resolve_stage(
     *,
     profile: str = "semi-autonomous",
     simulations: list[tuple[int, str | None]] | None = None,
+    admitted: list[dict] | None = None,
 ) -> dict:
     """Resolve one stage dispatch from dispatch.yaml + expertise-map.yaml.
 
@@ -592,7 +604,13 @@ def resolve_stage(
     sentinel (the `implement` row) resolves through the register/severity/
     blast-radius logic in ``resolve_role_tier``. Provider starts at the stage
     row's ``provider`` and falls through the preference order per
-    ``next_provider`` for each simulated leaf termination."""
+    ``next_provider`` for each simulated leaf termination.
+
+    For role ``implement`` the admission table decides the resolver verdict:
+    ``admitted`` is the LOADED table (``None`` reads the shipped one — there is
+    no none-means-skip path). A refused non-native provider is replaced by the
+    dispatch file's first ``kind: native`` provider; with no native row to fall
+    back to, ``ValueError`` (caller → exit 2)."""
     role = _resolve_role_alias(role)
     if role not in ROLE_AGENT:
         raise EscalationRequired(
@@ -631,12 +649,69 @@ def resolve_stage(
     chosen, warn = _walk_providers(dispatch, start, simulations or [])
     provider = provider_row(dispatch, chosen)
 
-    task_class = frontmatter.get("task_type") or "code"
+    # The task class is derived from the WP's OWN `owned_files`, never from
+    # `touched_files`: a per-invocation file list would make the admission key
+    # vary by caller.
+    task_class = admission.task_class(frontmatter)
     if role == "implement":
-        verdict = admission.resolve(role, task_class, provider)
+        table = admission.load() if admitted is None else admitted
+        verdict = admission.resolve(role, task_class, provider, model, table)
     else:
         verdict = Admission(provider.get("kind") == "native", "non-implement role")
     propose_only = provider.get("kind") != "native"
+
+    extra: dict = {}
+    if role == "implement" and propose_only:
+        extra["admission_reason"] = verdict.reason
+        propose_only = False
+        if verdict.admitted:
+            extra.update(
+                admission_decision="admitted",
+                evidence_ref=verdict.evidence_ref,
+                permission_set=verdict.permission_set,
+                containment={
+                    "owned_files": list(frontmatter.get("owned_files") or []),
+                    "verification_command": _verification_command(frontmatter),
+                    "commit": False,
+                },
+            )
+            print(
+                "goalforge-pick-agent: WARN containment and permission_set are "
+                "declared, not enforced by this package",
+                file=sys.stderr,
+            )
+        else:
+            native = next(
+                (p for p in dispatch.get("providers") or []
+                 if isinstance(p, dict) and p.get("kind") == "native"),
+                None,
+            )
+            if native is None:
+                raise ValueError(
+                    f"no native provider for fallback: {chosen!r} is refused for "
+                    f"{task_class} and the dispatch file lists no `kind: native` "
+                    "provider to resolve instead"
+                )
+            extra.update(
+                admission_decision="refused",
+                refused_provider=chosen,
+                refused_model=model,
+            )
+            # The fallback's band is the implement STAGE row's, resolved as for
+            # a native provider — provider rows carry no model, so the refused
+            # row's provider model id never survives.
+            band = resolve_dispatch(
+                role, profile,
+                register=register, severity=severity, blast_radius_hit=blast_hit,
+            )
+            chosen = native["name"]
+            row_model = row.get("model")
+            model = (
+                row_model
+                if row_model != "by_register" and row_model in CLAUDE_TIER_MODELS
+                else band["model"]
+            )
+            effort = row.get("effort") if row.get("effort") != "by_register" else band["effort"]
 
     result: dict = {
         "role": role,
@@ -648,11 +723,11 @@ def resolve_stage(
         "endpoint": row.get("endpoint", "session"),
         "egress": row.get("egress", "none"),
         "propose_only": propose_only,
+        "task_class": task_class,
+        **extra,
     }
     if warn:
         result["warn"] = "leaf overspend kept (budget stop after a completed turn)"
-    if not verdict.admitted and role == "implement":
-        result["admission_reason"] = verdict.reason
     return result
 
 
@@ -1144,8 +1219,9 @@ def _build_cli() -> argparse.ArgumentParser:
         "--admitted",
         metavar="FILE",
         default=None,
-        help="Reserved for wp-06 (provider admission evidence); parsed and "
-             "stored, unused today.",
+        help="Admission table (default: the shipped "
+             "references/admitted-providers.yaml). Absent is NOT a skip — the "
+             "shipped table is read and decides the verdict.",
     )
     p.add_argument(
         "--simulate-leaf",
@@ -1217,9 +1293,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: no YAML frontmatter in {task_path}", file=sys.stderr)
         return 2
 
-    # `--admitted` is reserved: parsed and stored, never read (wp-06 fills it).
-    _admitted_path = Path(args.admitted) if args.admitted else None
-    del _admitted_path
+    # No `--admitted` flag means the SHIPPED table, never a skipped check.
+    admitted_path = Path(args.admitted) if args.admitted else admission.ADMITTED_PATH
+    try:
+        admitted_table = admission.load(admitted_path)
+    except admission.AdmissionTableError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
 
     try:
         dispatch = load_dispatch(Path(args.dispatch) if args.dispatch else None)
@@ -1258,6 +1338,7 @@ def main(argv: list[str] | None = None) -> int:
         resolution = resolve_stage(
             args.role, frontmatter, touched, dispatch, expertise_map,
             profile=args.profile, simulations=simulations,
+            admitted=admitted_table,
         )
     except EscalationRequired as exc:
         return _escalate(exc)
@@ -1280,16 +1361,25 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
 
-    if resolution["propose_only"]:
+    # ONE row per dispatch decision, through the ONE writer. On a `refused` row
+    # the provider/model named are the ones that were REFUSED, not the native
+    # provider resolved in their place.
+    decision = resolution.get("admission_decision")
+    if decision or resolution["propose_only"]:
         append_ledger_row({
             "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "wp": args.wp or "",
             "role": resolution["role"],
-            "provider": resolution["provider"],
-            "model": resolution["model"],
+            "provider": resolution.get("refused_provider") or resolution["provider"],
+            "model": resolution.get("refused_model") or resolution["model"],
             "effort": resolution["effort"],
             "endpoint": resolution["endpoint"],
-            "decision": "propose-only",
+            "decision": decision or "propose-only",
+            "task_class": resolution.get("task_class", ""),
+            "reason": resolution.get("admission_reason", "") if decision else "",
+            "evidence_ref": resolution.get("evidence_ref", ""),
+            "admitted_source": str(admitted_path.resolve()),
+            "admitted_override": bool(args.admitted),
         })
 
     if args.emit_dispatch:

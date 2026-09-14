@@ -642,7 +642,7 @@ appears in any `SKILL.md`; provider names are data in this file only.
 | `kind` | enum | yes | `native` \| `foreign` \| `local`. `native` runs in-session (Agent/Workflow tool); the others run through an agent-dispatch leaf. |
 | `leaf` | path \| null | yes | The `headless_dispatch` leaf (leaf-interface.md v1), written relative to `${CLAUDE_CONFIG_DIR:-$HOME/.claude}` — never an absolute home path. `null` for `kind: native`. |
 | `max_budget_usd` | float | no | Passed to the leaf as `--max-budget-usd`. Leaf default `0.10`. Omitted for `native`. |
-| `propose_only` | bool | no | Informative echo of a **derived** rule: `kind != native` is ALWAYS propose-only — its output is a proposal row in the ledger and in `findings.md`, never a gate decision. |
+| `propose_only` | bool | no | Informative echo of the **default verdict** when no admission row admits this provider for the WP's task class: the admission table decides the resolver verdict for role `implement` (`references/admission.md`, `references/admitted-providers.yaml`, shipped empty). A resolution left at that default produces a proposal row in the ledger and in `findings.md`, never a gate decision; compile-level dispatch of a non-native `implement` row stays refused until `wp-08-admitted-execution`. |
 
 ### `stages.<stage>`
 
