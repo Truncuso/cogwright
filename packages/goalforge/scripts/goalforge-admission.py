@@ -19,8 +19,11 @@ Public API:
     task_class(frontmatter) -> str
         ``<task_type>/<ext>`` from the WP frontmatter's OWN ``owned_files``.
 
-    resolve(role, task_class, provider, model, table) -> Admission
+    resolve(role, task_class, provider, model, table, *, leaf_root) -> Admission
         The verdict. ``provider`` is a dispatch.yaml ``providers[]`` row.
+        Admission binds the EXECUTABLE as well as the triple: the row's
+        ``leaf``/``leaf_sha256`` must match the provider row's leaf path and
+        that file's current content.
 
 CLI:
     python3 goalforge-admission.py [--table <yaml>]      # validate, exit 0|2
@@ -29,6 +32,8 @@ CLI:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import os
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
@@ -53,6 +58,10 @@ EVIDENCE_KINDS: frozenset[str] = frozenset(
 REQUIRED_KEYS: tuple[str, ...] = (
     "task_class", "provider", "model", "evidence", "permission_set",
 )
+
+# The executable the row's evidence was gathered against. Checked AFTER the
+# keys above so a row missing one of those is still reported by that key.
+LEAF_KEYS: tuple[str, ...] = ("leaf", "leaf_sha256")
 
 # The task class of a WP whose owned_files carry no file extension.
 NO_EXTENSION = "-"
@@ -112,8 +121,25 @@ def validate(rows: object) -> list[dict]:
             # A bare string is truthy and would explode into per-character
             # permissions in the resolution and the ledger.
             raise _row_error(index, "permission_set", "not a list")
+        for key in LEAF_KEYS:
+            if not isinstance(row.get(key), str) or not row[key].strip():
+                raise _row_error(
+                    index, key,
+                    "missing or not a string — an admitted row binds the EXECUTABLE "
+                    "(leaf path + leaf_sha256), not just the provider name",
+                )
         validated.append(row)
     return validated
+
+
+def default_leaf_root() -> Path:
+    """Root a `providers[].leaf` path is relative to (the Claude corpus)."""
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+
+
+def _leaf_digest(path: Path) -> str:
+    """sha256 of the leaf executable. Raises OSError when it cannot be read."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def load(path: Path | None = None, *, required: bool = False) -> list[dict]:
@@ -134,7 +160,10 @@ def load(path: Path | None = None, *, required: bool = False) -> list[dict]:
                 f"admission table not found: {target}"
             ) from None
         return []
-    except yaml.YAMLError as exc:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
+        # A directory, a permission denial or a binary file is as untrustworthy
+        # as a syntax error: every one of them must reach the caller as an
+        # AdmissionTableError (exit 2), never as a traceback at exit 1.
         raise AdmissionTableError(f"unreadable admission table {target}: {exc}") from exc
     if not isinstance(data, dict):
         raise AdmissionTableError(f"admission table is not a mapping: {target}")
@@ -171,9 +200,51 @@ def task_class(frontmatter: dict) -> str:
 # Verdict
 # ---------------------------------------------------------------------------
 
+def _leaf_incoherence(row: dict, provider: dict, root: Path | None) -> str | None:
+    """Why this row's admission does not cover the executable that would run.
+
+    The row's evidence was gathered against ONE executable. A dispatch file can
+    repoint `providers[].leaf` under an admitted provider name, and the leaf
+    file's own content can change under a stable path — neither inherits the
+    admission. Returns the refusal reason, or None when the binding holds."""
+    name = provider.get("name")
+    declared = row.get("leaf")
+    if not isinstance(declared, str) or not declared.strip():
+        return (
+            f"admission row for {name!r} binds no leaf — refused (a row admits "
+            "an executable, not a provider name)"
+        )
+    configured = provider.get("leaf")
+    if configured != declared:
+        return (
+            f"admission row for {name!r} binds leaf {declared!r} but the "
+            f"dispatch file's provider row runs {configured!r} — refused "
+            "(a repointed leaf does not inherit the admission)"
+        )
+    target = (root or default_leaf_root()) / declared
+    try:
+        digest = _leaf_digest(target)
+    except OSError as exc:
+        return (
+            f"admission row for {name!r} binds leaf {declared!r}, which cannot "
+            f"be read at {target}: {exc} — refused"
+        )
+    if digest.lower() != str(row.get("leaf_sha256", "")).strip().lower():
+        return (
+            f"leaf {declared!r} hashes to {digest} but the admission row for "
+            f"{name!r} records {row.get('leaf_sha256')!r} — refused (the "
+            "evidence was gathered against different content)"
+        )
+    return None
+
+
 def resolve(role: str, klass: str, provider: dict, model: str,
-            table: list[dict] | None = None) -> Admission:
-    """Return the admission verdict for (role, task class, provider, model)."""
+            table: list[dict] | None = None, *,
+            leaf_root: Path | None = None) -> Admission:
+    """Return the admission verdict for (role, task class, provider, model).
+
+    ``leaf_root`` is the root a `providers[].leaf` path resolves against
+    (default: ``CLAUDE_CONFIG_DIR`` or ``~/.claude``)."""
     name = provider.get("name")
     if provider.get("kind") == "native":
         return Admission(True, f"native provider admitted for {role}/{klass}")
@@ -189,6 +260,9 @@ def resolve(role: str, klass: str, provider: dict, model: str,
         )
     for row in rows:
         if row.get("model") == model:
+            unbound = _leaf_incoherence(row, provider, leaf_root)
+            if unbound:
+                return Admission(False, unbound)
             return Admission(
                 True,
                 f"admitted for {klass} on {name!r}/{model!r} "

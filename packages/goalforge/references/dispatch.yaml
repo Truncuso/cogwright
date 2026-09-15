@@ -26,6 +26,11 @@ schema_version: 1
 # WP's task class. The admission table decides the resolver verdict for role
 # `implement` (references/admission.md); compile-level dispatch of a non-native
 # implement row stays refused until wp-08-admitted-execution.
+#
+# `kind` and `leaf` are DERIVED, never taken on the row's word: `kind: native`
+# with a `leaf`, or a duplicate `name`, is refused when this file loads, and an
+# admission row binds the leaf path AND its sha256 — repointing `leaf` under an
+# admitted provider name inherits no admission.
 
 providers:                        # preference order; first = default. No budget accounting.
   - name: anthropic               # native: runs in-session via the Agent/Workflow tool.

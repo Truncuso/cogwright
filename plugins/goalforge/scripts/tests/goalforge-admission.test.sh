@@ -3,11 +3,15 @@
 #
 # The admission table decides the resolver verdict for role `implement`:
 # a foreign or local provider executes only when a row names its task class,
-# its provider AND its model, with closed-kind evidence and a permission set.
+# its provider AND its model, with closed-kind evidence and a permission set —
+# and binds the leaf executable that row's evidence was gathered against.
 #
-#   b1 refused        b2 admitted       b3 six sabotage rows
+#   b1 refused        b2 admitted       b3 sabotage rows
 #   b4 shipped-empty + no-flag + no-native-fallback (3 known-bads)
 #   b5 model binding  b6 task class     b7 invariant text  b8 lint lists
+#   fix lap: S-1 derived kind (loader / resolution / fallback), S-2 leaf
+#   binding (repoint, stale hash, unreadable, missing key), S-3 duplicate
+#   provider names, S-13 --admitted containment + S-9 relative source
 #
 # Every known-bad is an ANCHORED mutation (fixtures/admission/mutate.py) of a
 # COPY of the package under a mktemp root — the shipped tree is never written
@@ -28,9 +32,25 @@ ok()  { echo "  PASS: $1"; PASS=$((PASS+1)); }
 bad() { echo "  FAIL: $1"; FAIL=$((FAIL+1)); }
 
 T="$(mktemp -d)"
-trap 'rm -rf "$T"' EXIT
+# S-13's symlink-escape case needs a link INSIDE the package root; it is named
+# here so the trap removes it even on an interrupted run (the tracked tree is
+# otherwise never written to).
+LINK="$F/admitted-symlink-escape.yaml"
+trap 'rm -rf "$T"; rm -f "$LINK"' EXIT
 LEDGER="$T/ledger/dispatch-decisions.jsonl"
 export GOALFORGE_DISPATCH_LEDGER="$LEDGER"
+
+# An admission row BINDS the leaf executable (S-2): the verdict hashes the file
+# at `$CLAUDE_CONFIG_DIR/<providers[].leaf>`. Point that root at a temp corpus
+# carrying the fixture leaf, so no case depends on the host's own corpus.
+export CLAUDE_CONFIG_DIR="$T/cfg"
+LEAF_REL="skills/agent-dispatch/ollama/scripts/headless_dispatch"
+mkdir -p "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")"
+cp "$F/leaf/headless_dispatch" "$CLAUDE_CONFIG_DIR/$LEAF_REL"
+
+# `admitted_source` is package-relative, never the absolute host path (S-9).
+FIXTURE_SRC="scripts/tests/fixtures/admission/admitted-ok.yaml"
+SHIPPED_SRC="references/admitted-providers.yaml"
 
 jget()  { python3 -c 'import json,sys; print(json.load(sys.stdin).get(sys.argv[1],""))' "$1"; }
 lget()  { python3 -c 'import json,sys; print(json.loads(sys.stdin.readline()).get(sys.argv[1],""))' "$1"; }
@@ -67,7 +87,7 @@ if [[ "$(rows)" == "1" ]]; then
 else
     bad "b1 refused: exactly one ledger row (got $(rows))"
 fi
-WANT_SRC="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$F/admitted-ok.yaml")"
+WANT_SRC="$FIXTURE_SRC"
 if [[ "$(lget decision <"$LEDGER")" == "refused" ]] \
    && [[ "$(lget task_class <"$LEDGER")" == "code/sh" ]] \
    && [[ "$(lget provider <"$LEDGER")" == "ollama" ]] \
@@ -142,7 +162,8 @@ for pair in \
     "bad-missing-evidence.yaml|evidence" \
     "bad-missing-permission-set.yaml|permission_set" \
     "bad-self-report.yaml|evidence.kind" \
-    "bad-permission-set-string.yaml|permission_set"; do
+    "bad-permission-set-string.yaml|permission_set" \
+    "bad-missing-leaf.yaml|leaf"; do
     FILE="${pair%%|*}"; KEY="${pair##*|}"
     ERR="$(python3 "$ADM" --table "$F/$FILE" 2>&1)"
     RC=$?
@@ -220,7 +241,6 @@ if [[ "$EP" == "session" && "$EG" == "none" ]]; then
 else
     bad "b4 no-flag fallback endpoint/egress (endpoint=$EP, egress=$EG, want session/none)"
 fi
-SHIPPED_SRC="$(python3 -c 'import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())' "$PKG/references/admitted-providers.yaml")"
 if [[ "$(rows)" == "1" ]] \
    && [[ "$(lget decision <"$LEDGER")" == "refused" ]] \
    && [[ "$(lget provider <"$LEDGER")" == "stub-b" ]] \
@@ -358,6 +378,132 @@ if [[ "$RC" -eq 0 ]] \
     ok "b5 egress coherence: an otherwise-matching row declaring egress none is refused, never admitted as a non-egressing leaf dispatch"
 else
     bad "b5 egress coherence (rc=$RC, provider=$(printf '%s' "$OUT" | jget provider), reason=$REASON)"
+fi
+
+# ── fix lap: the admission TRUST boundary (S-1, S-2, S-3, S-13) ──────────
+# Three holes an admitted verdict used to rest on: a provider row that DECLARES
+# `kind: native` (skipping the table outright), an admitted triple whose leaf
+# executable was swapped underneath it, and an `--admitted` table read from an
+# arbitrary path. Every case below resolves at exit 0 on the pre-fix code.
+
+# S-1, loader leg: a native row carrying a leaf poisons the whole dispatch file.
+ERR="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-native-with-leaf.yaml" 2>&1)"
+RC=$?
+if [[ "$RC" -eq 2 && "$ERR" == *"kind 'native' but carries leaf"* ]]; then
+    ok "S-1 loader: a providers row declaring kind native while carrying a leaf is refused at load"
+else
+    bad "S-1 loader: want exit 2 naming the row (rc=$RC, err=$ERR)"
+fi
+
+# S-1, resolution leg: every row is coherent on its own; the STAGE row sends
+# the native provider through a leaf. Admission never sees it.
+ERR="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-native-endpoint-leaf.yaml" 2>&1)"
+RC=$?
+if [[ "$RC" -eq 2 && "$ERR" == *"endpoint 'leaf'"* && "$ERR" == *"anthropic"* ]]; then
+    ok "S-1 resolution: a native provider on an endpoint: leaf stage row is refused, never admitted unchecked"
+else
+    bad "S-1 resolution: want exit 2 naming the row (rc=$RC, err=$ERR)"
+fi
+
+# S-1, fallback leg: the refusal's fallback target is chosen BY `kind`, so it
+# is derived the same way. Reachable through the library entry point only —
+# `load_dispatch` refuses such a file before `resolve_stage` ever sees it.
+OUT="$(python3 "$F/fallback_target.py" "$PICK" 2>&1)"
+if [[ "$OUT" == "REFUSED no coherent native provider for fallback:"* ]]; then
+    ok "S-1 fallback: an incoherent native fallback target fails closed instead of resolving"
+else
+    bad "S-1 fallback: want REFUSED naming the incoherent target (got: $OUT)"
+fi
+
+# S-3: two rows, one name — `provider_row` would resolve the first and the
+# second would be live configuration nothing reads.
+ERR="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-dup-names.yaml" 2>&1)"
+RC=$?
+if [[ "$RC" -eq 2 && "$ERR" == *"duplicate provider name 'ollama'"* ]]; then
+    ok "S-3 duplicate provider names are refused at load, not silently first-match resolved"
+else
+    bad "S-3 duplicate provider names (rc=$RC, err=$ERR)"
+fi
+
+# S-2a: the admitted TRIPLE is untouched; the row's leaf names another binary.
+reset
+OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-ollama.yaml" \
+       --admitted "$F/admitted-leaf-repoint.yaml" --wp wp-fx 2>/dev/null)"
+REASON="$(printf '%s' "$OUT" | jget admission_reason)"
+if [[ "$(printf '%s' "$OUT" | jget provider)" == "anthropic" ]] \
+   && [[ "$(printf '%s' "$OUT" | jget admission_decision)" == "refused" ]] \
+   && [[ "$REASON" == *"repointed leaf"* ]]; then
+    ok "S-2 leaf repoint: an admitted (task_class, provider, model) triple does not carry over to another executable"
+else
+    bad "S-2 leaf repoint (provider=$(printf '%s' "$OUT" | jget provider), reason=$REASON)"
+fi
+
+# S-2b: same leaf path, different content than the evidence was gathered on.
+reset
+OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-ollama.yaml" \
+       --admitted "$F/admitted-leaf-stale-hash.yaml" --wp wp-fx 2>/dev/null)"
+REASON="$(printf '%s' "$OUT" | jget admission_reason)"
+if [[ "$(printf '%s' "$OUT" | jget provider)" == "anthropic" ]] \
+   && [[ "$(printf '%s' "$OUT" | jget admission_decision)" == "refused" ]] \
+   && [[ "$REASON" == *"hashes to"* ]]; then
+    ok "S-2 stale hash: a leaf whose content no longer matches leaf_sha256 is refused"
+else
+    bad "S-2 stale hash (provider=$(printf '%s' "$OUT" | jget provider), reason=$REASON)"
+fi
+
+# S-2c: the leaf must be READABLE where the provider row says it runs.
+reset
+mv "$CLAUDE_CONFIG_DIR/$LEAF_REL" "$CLAUDE_CONFIG_DIR/$LEAF_REL.away"
+OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok.yaml" 2>/dev/null)"
+mv "$CLAUDE_CONFIG_DIR/$LEAF_REL.away" "$CLAUDE_CONFIG_DIR/$LEAF_REL"
+if [[ "$(printf '%s' "$OUT" | jget provider)" == "anthropic" ]] \
+   && [[ "$(printf '%s' "$OUT" | jget admission_reason)" == *"cannot be read"* ]]; then
+    ok "S-2 missing leaf: an admitted row whose executable is absent is refused, not admitted unhashed"
+else
+    bad "S-2 missing leaf (provider=$(printf '%s' "$OUT" | jget provider), out=$OUT)"
+fi
+
+# S-13: `--admitted` is a test seam, not an arbitrary-file read. A table
+# outside the package root (or the plans root) decides nothing.
+cp "$F/admitted-ok.yaml" "$T/outside-table.yaml"
+ERR="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-ollama.yaml" --admitted "$T/outside-table.yaml" 2>&1)"
+RC=$?
+if [[ "$RC" -eq 2 && "$ERR" == *"outside the package root"* ]]; then
+    ok "S-13 override containment: an --admitted table outside the package root is refused"
+else
+    bad "S-13 override containment (rc=$RC, err=$ERR)"
+fi
+
+# Same containment, through a symlink INSIDE the package pointing out of it:
+# the path is resolved before it is tested, so the link is not an escape.
+ln -sfn "$T/outside-table.yaml" "$LINK"
+ERR="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+       --dispatch "$F/dispatch-ollama.yaml" --admitted "$LINK" 2>&1)"
+RC=$?
+rm -f "$LINK"
+if [[ "$RC" -eq 2 && "$ERR" == *"outside the package root"* ]]; then
+    ok "S-13 override containment: a symlink inside the package pointing out of it is refused too"
+else
+    bad "S-13 symlink escape (rc=$RC, err=$ERR)"
+fi
+
+# S-13: an active override is announced, and recorded package-relative (S-9).
+reset
+python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
+    --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok.yaml" \
+    --wp wp-fx >/dev/null 2>"$T/err"
+if [[ "$(grep -c -- '--admitted override active' "$T/err")" == "1" ]] \
+   && [[ "$(lget admitted_source <"$LEDGER")" == "$FIXTURE_SRC" ]]; then
+    ok "S-13/S-9: the override WARNs once on stderr and the ledger records a package-relative source"
+else
+    bad "S-13/S-9 override WARN + source (err=$(cat "$T/err"), source=$(lget admitted_source <"$LEDGER"))"
 fi
 
 # ── b6: the deterministic task class ─────────────────────────────────────

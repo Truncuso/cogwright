@@ -199,6 +199,10 @@
     },
     {
       "from": "references/admission.md",
+      "path": "references/\u2026"
+    },
+    {
+      "from": "references/admission.md",
       "path": "scripts/goalforge-admission.py"
     },
     {
@@ -384,6 +388,10 @@
     {
       "from": "skills/execute/references/dispatch-resolution.md",
       "path": "references/tier-map.md"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/\u2026"
     },
     {
       "from": "skills/harden/SKILL.md",

@@ -639,10 +639,10 @@ appears in any `SKILL.md`; provider names are data in this file only.
 | Key | Type | Required | Semantics |
 |---|---|---|---|
 | `name` | string | yes | Provider id referenced by a stage row's `provider`. |
-| `kind` | enum | yes | `native` \| `foreign` \| `local`. `native` runs in-session (Agent/Workflow tool); the others run through an agent-dispatch leaf. |
-| `leaf` | path \| null | yes | The `headless_dispatch` leaf (leaf-interface.md v1), written relative to `${CLAUDE_CONFIG_DIR:-$HOME/.claude}` — never an absolute home path. `null` for `kind: native`. |
+| `kind` | enum | yes | `native` \| `foreign` \| `local`. `native` runs in-session (Agent/Workflow tool); the others run through an agent-dispatch leaf. DERIVED, not trusted: `native` carrying a `leaf` — or reached through a stage row whose `endpoint` is not `session` or `egress` not `none` — is refused at exit 2, as is a duplicate `name`. |
+| `leaf` | path \| null | yes | The `headless_dispatch` leaf (leaf-interface.md v1), written relative to `${CLAUDE_CONFIG_DIR:-$HOME/.claude}` — never an absolute home path. `null` for `kind: native`. An admission row binds this path AND its sha256, so repointing it under an admitted provider name inherits no admission. |
 | `max_budget_usd` | float | no | Passed to the leaf as `--max-budget-usd`. Leaf default `0.10`. Omitted for `native`. |
-| `propose_only` | bool | no | Informative echo of the **default verdict** when no admission row admits this provider for the WP's task class: the admission table decides the resolver verdict for role `implement` (`references/admission.md`, `references/admitted-providers.yaml`, shipped empty). A resolution left at that default produces a proposal row in the ledger and in `findings.md`, never a gate decision; compile-level dispatch of a non-native `implement` row stays refused until `wp-08-admitted-execution`. |
+| `propose_only` | bool | no | Informative echo of the **default verdict** when no admission row admits this provider for the WP's task class: the admission table decides the resolver verdict for role `implement` (`references/admission.md`, `references/admitted-providers.yaml`, shipped empty). A resolution left at that default produces a proposal row in the ledger and in `findings.md`, never a gate decision; compile-level dispatch of a non-native `implement` row stays refused until `wp-08-admitted-execution`. This key is an echo, never the gate: a row setting it `false` is still refused unless a table row binds its task class, model and leaf. |
 
 ### `stages.<stage>`
 

@@ -1,0 +1,15 @@
+# S-2 known-bad: the leaf PATH matches the provider row, but the recorded
+# sha256 is not the current content of that file — the evidence was gathered
+# against a different executable.
+schema_version: 1
+
+admitted:
+  - task_class: code/py
+    provider: ollama
+    model: glm-5.3:cloud
+    leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
+    leaf_sha256: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+    evidence:
+      kind: user-experience
+      ref: fixtures/admission#leaf-stale-hash
+    permission_set: [read, write]

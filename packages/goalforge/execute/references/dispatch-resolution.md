@@ -31,14 +31,25 @@ file; `--dispatch <path>` overrides it (tests pass a fixture). No provider is ev
    non-native default, and every admission decision (§7 — the admission table
    decides the resolver verdict). `decision` discriminates
    `propose-only | admitted | refused`, and `admitted_source` /
-   `admitted_override` name the table that produced the verdict. Ledger I/O
-   degrades, never blocks.
+   `admitted_override` name the table that produced the verdict —
+   `admitted_source` package-relative (`references/…`) or plans-relative
+   (`plans/…`), never an absolute host path. Ledger I/O degrades, never blocks.
 7. **Admission** — `admission.resolve(role, task_class, provider, model)` runs
    for role `implement`: the admission table decides the resolver verdict
-   (`references/admission.md`). `--admitted <path>` overrides the shipped
-   `references/admitted-providers.yaml`; its absence reads the shipped table and
+   (`references/admission.md`). A provider's `kind` is DERIVED, not taken from
+   the row: `kind: native` carrying a `leaf`, or reached through a stage row
+   whose `endpoint` is not `session` or `egress` not `none`, is refused at exit
+   2 (it would otherwise skip the table entirely), as are two provider rows
+   sharing a `name`. An admitted row binds the EXECUTABLE as well as the triple
+   — `leaf` + `leaf_sha256` must match the provider row's leaf and that file's
+   current content, so repointing `providers[].leaf` inherits nothing.
+   `--admitted <path>` overrides the shipped
+   `references/admitted-providers.yaml` from inside the package root or the
+   plans root only (resolved, symlinks followed, exit 2 outside, one stderr
+   WARN when active); its absence reads the shipped table and
    is never a skip. A refused non-native provider is replaced by the first
-   `kind: native` provider (exit 2 when the dispatch file lists none); an
+   `kind: native` provider (exit 2 when the dispatch file lists none, or when
+   that fallback target is itself incoherent); an
    admitted one carries the containment block, the evidence ref and the
    permission set as DECLARED data, with a stderr WARN saying so. The compiler
    still refuses to emit a non-native `implement` row until

@@ -28,6 +28,8 @@ From `plans/ideas/foreign-implement-dispatch-gated.md` (user direction
 | `task_class` | string | `<task_type>/<ext>` — see below. |
 | `provider` | string | A `references/dispatch.yaml` `providers[].name`. |
 | `model` | string | The provider's own model id. Admission binds the TRIPLE `(task_class, provider, model)`, never `(task_class, provider)` alone: a different model on the same provider is a different capability and needs its own evidence. |
+| `leaf` | string | The agent-dispatch executable the evidence was gathered against, relative to `CLAUDE_CONFIG_DIR` (default `~/.claude`). Must equal the `providers[].leaf` of the dispatch row being resolved. |
+| `leaf_sha256` | string | That file's sha256 at admission time. |
 | `evidence.kind` | enum | `user-experience` \| `benchmark` \| `user-addition`. A closed set: `self-report` is not evidence. |
 | `evidence.ref` | string | Where the evidence lives (a locator the user can re-read). |
 | `permission_set` | list | The permission posture the admitted dispatch is meant to run under. Must be a LIST — a bare string is truthy but would explode into per-character permissions. DECLARED data — see "Declared, not enforced". |
@@ -63,12 +65,26 @@ the dispatch it would authorize. A non-native row is refused outright when:
   copied into the resolution, and a leaf dispatch declared as in-session or as
   non-egressing is a false declaration.
 
-`resolve(role, task_class, provider, model, table)`:
+The `kind` a provider row DECLARES is not evidence of what it is. `native` is
+the one kind that skips the table outright and the target every refusal falls
+back to, so it is DERIVED: a row declaring `kind: native` while carrying a
+`leaf`, or reached through a stage row whose `endpoint` is not `session` or
+whose `egress` is not `none`, is incoherent and the resolver exits `2` naming
+it — at load time for the row itself, at resolve time for the stage pairing,
+and again on the fallback target. Two provider rows sharing a `name` are
+refused at load for the same reason: only the first would ever be read.
+
+`resolve(role, task_class, provider, model, table, *, leaf_root=None)`:
 
 * provider `kind: native` — admitted, unconditionally; the table governs
   non-native providers.
-* a row whose `task_class`, `provider` and `model` all match — admitted,
-  carrying `evidence.ref` and `permission_set`.
+* a row whose `task_class`, `provider` and `model` all match AND whose
+  `leaf`/`leaf_sha256` match the provider row's leaf path and that file's
+  current content — admitted, carrying `evidence.ref` and `permission_set`.
+* a row matching the triple whose `leaf` names another path, whose recorded
+  hash is not the file's current one, or whose leaf cannot be read — refused:
+  admission binds the EXECUTABLE, and repointing `providers[].leaf` under an
+  admitted provider name inherits nothing.
 * a row matching `task_class` + `provider` but not `model` — refused, the
   reason naming both model ids.
 * anything else — refused, the reason naming the missing admission.
@@ -86,8 +102,12 @@ resolved.
 
 `goalforge-pick-agent.py --admitted <path>` overrides the table path; ABSENT,
 the shipped `references/admitted-providers.yaml` is read. There is no
-none-means-skip path. `--admitted` is a test seam, and the ledger records which
-table produced the verdict. A table the caller NAMED must exist: a missing
+none-means-skip path. `--admitted` is a test seam, not an arbitrary-file read:
+the path is RESOLVED (symlinks followed) and must land under the package root
+or the plans root, or the resolver exits `2` — the same containment the default
+table is held to. An active override prints one WARN line on stderr naming the
+table it reads, and the ledger records which table produced the verdict. A
+table the caller NAMED must exist: a missing
 `--admitted` / `--table` path exits `2` rather than degrading to an empty
 table, so a typo cannot become a silent blanket refusal at exit 0. Only the
 shipped table may be absent, and then it is empty.
@@ -102,12 +122,20 @@ row per dispatch decision. The keys are the writer's existing
 * `decision` is the sole discriminator over `admitted | refused | propose-only`.
 * `provider`/`model` on a `refused` row name the provider that was REFUSED, not
   the native provider resolved in its place.
-* `admitted_source` is the RESOLVED path of the table that produced the verdict.
+* `admitted_source` is the resolved path of the table that produced the verdict,
+  recorded RELATIVE to the root that contains it (`references/…` under the
+  package, `plans/…` under the plans root) — never the absolute host path.
 * `admitted_override` is `true` iff `--admitted` was passed — so a reader can
   tell a production decision from a fixture one.
 * `reason`/`evidence_ref` are empty strings on a `propose-only` row.
 
 ## Declared, not enforced
+
+The leaf binding is the one thing this package CHECKS rather than declares: an
+admitted verdict has hashed the executable the dispatch row would run. It is a
+check at VERDICT time, not at dispatch time — nothing stops the file changing
+between the verdict and the run, and the check narrows, but does not close, the
+gap the risk row below names.
 
 The containment block and `permission_set` are validated and carried as DATA.
 Nothing in this package enforces them at dispatch time: agent-dispatch's only

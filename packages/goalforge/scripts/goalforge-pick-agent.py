@@ -33,6 +33,9 @@ Public API:
         The admission table decides the resolver verdict for role
         `implement` — scripts/goalforge-admission.py owns the table, the
         task class and the verdict; references/admission.md is the contract.
+        A provider's `kind` is DERIVED here (validate_providers,
+        _native_row_incoherence), never taken from the row: `native` is the
+        one kind that skips the table, so it has to be earned.
 
     tier_to_dispatch(tier) / resolve_dispatch(role, profile, …) -> {model, effort}
     dispatch_launched_event(pick_result, dispatch_result, *, wp=, task=)
@@ -359,6 +362,41 @@ def resolve_dispatch(
 # dispatch.yaml + expertise-map.yaml (both read as DATA)
 # ---------------------------------------------------------------------------
 
+def validate_providers(providers: object, source: object) -> None:
+    """Refuse a `providers:` list that cannot be trusted to name a dispatch.
+
+    Two ways a row lies about what it would run, both of which the admission
+    gate keys on:
+
+    * a DUPLICATE name — ``provider_row`` returns the first match, so a second
+      row's ``kind``/``leaf`` would be live configuration no resolution reads;
+    * a row declaring ``kind: native`` while carrying a ``leaf`` — `native` is
+      the one kind admission never consults a table for, and the fallback
+      target of every refusal. The kind is DERIVED from the row here, never
+      taken on the row's own word."""
+    if providers is not None and not isinstance(providers, list):
+        raise ValueError(f"`providers:` is not a list: {source}")
+    seen: set[str] = set()
+    for index, row in enumerate(providers or []):
+        if not isinstance(row, dict):
+            raise ValueError(f"providers row {index} is not a mapping: {source}")
+        name = row.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"providers row {index} has no name: {source}")
+        if name in seen:
+            raise ValueError(
+                f"duplicate provider name {name!r} in {source} — a name "
+                "resolves to exactly one row"
+            )
+        seen.add(name)
+        if row.get("kind") == "native" and row.get("leaf"):
+            raise ValueError(
+                f"provider {name!r} declares kind 'native' but carries leaf "
+                f"{row['leaf']!r} in {source} — refused (a native provider runs "
+                "in session; kind is derived from the row, never trusted)"
+            )
+
+
 def load_dispatch(path: Path | None = None) -> dict:
     """Load references/dispatch.yaml (or an explicit ``--dispatch`` path)."""
     target = path or DISPATCH_PATH
@@ -366,6 +404,7 @@ def load_dispatch(path: Path | None = None) -> dict:
         data = yaml.safe_load(fh) or {}
     if not isinstance(data, dict):
         raise ValueError(f"dispatch file is not a mapping: {target}")
+    validate_providers(data.get("providers"), target)
     return data
 
 
@@ -445,6 +484,42 @@ def resolve_expertise(
 # non-native implement row stays refused until `wp-08-admitted-execution`.
 
 ADMISSION_PATH = PKG_ROOT / "scripts" / "goalforge-admission.py"
+
+
+def admitted_roots() -> list[tuple[str, Path]]:
+    """Where an admission table may live: the package, and the plans tree.
+
+    The table decides whether a non-native provider may WRITE CODE, so an
+    `--admitted` override is only as trustworthy as its location. Each root is
+    returned with the prefix its contents are recorded under in the ledger, so
+    the row carries a portable path and never the absolute host one (S-9)."""
+    roots: list[tuple[str, Path]] = [("", PKG_ROOT)]
+    for parent in PKG_ROOT.parents:
+        plans = parent / "plans"
+        if plans.is_dir():
+            roots.append(("plans/", plans.resolve()))
+            break
+    return roots
+
+
+def resolve_admitted_path(raw: str | None) -> tuple[Path, str]:
+    """Resolve the admission-table path and its ledger spelling. Fail-closed.
+
+    Returns ``(resolved path, source)``. Symlinks are followed BEFORE the
+    containment test, so a link inside the package cannot point a table at
+    arbitrary content (S-13/S-10); an override outside every root raises
+    ValueError (caller → exit 2) rather than deciding an admission."""
+    target = (Path(raw) if raw else admission.ADMITTED_PATH).resolve()
+    for prefix, root in admitted_roots():
+        try:
+            return target, prefix + str(target.relative_to(root))
+        except ValueError:
+            continue
+    raise ValueError(
+        f"admission table {target} is outside the package root {PKG_ROOT} and "
+        "the plans root — refused (the table decides whether a non-native "
+        "provider may implement; it is not read from an arbitrary path)"
+    )
 
 
 def _load_admission():
@@ -627,6 +702,44 @@ def _foreign_row_incoherence(
     return None
 
 
+def _native_row_incoherence(
+    provider: dict, endpoint: str, egress: str
+) -> str | None:
+    """Why this row cannot describe an IN-SESSION dispatch to `provider`.
+
+    The mirror of ``_foreign_row_incoherence`` for the native direction, and
+    the reason admission cannot key on a self-declared ``kind``: `native` is
+    the one kind that skips the table entirely and the target every refusal
+    falls back to. A row is incoherent when it declares `native` while carrying
+    an agent-dispatch ``leaf``, or when the stage row would send it out of
+    session (``endpoint != 'session'``) or off-box (``egress != 'none'``).
+
+    Returns the refusal reason, or None. Non-native providers are handled by
+    ``_foreign_row_incoherence``."""
+    if provider.get("kind") != "native":
+        return None
+    name = provider.get("name")
+    if provider.get("leaf"):
+        return (
+            f"provider {name!r} declares kind 'native' but carries leaf "
+            f"{provider['leaf']!r} — refused (a native provider runs in "
+            "session; kind is derived from the row, never trusted)"
+        )
+    if endpoint != "session":
+        return (
+            f"provider {name!r} declares kind 'native' but the stage row "
+            f"declares endpoint {endpoint!r} — refused (an in-session provider "
+            "does not run through a leaf)"
+        )
+    if egress != "none":
+        return (
+            f"provider {name!r} declares kind 'native' but the stage row "
+            f"declares egress {egress!r} — refused (an in-session implement "
+            "dispatch does not egress)"
+        )
+    return None
+
+
 def resolve_stage(
     role: str,
     frontmatter: dict,
@@ -702,6 +815,14 @@ def resolve_stage(
     propose_only = provider.get("kind") != "native"
 
     extra: dict = {}
+    if role == "implement":
+        # The admission gate is skipped for `kind: native` — so `native` has to
+        # be EARNED by the row, not declared by it (S-1). Implement-scoped: a
+        # native row with a non-`none` egress class is legitimate elsewhere
+        # (the `panel` stage), but never for the role that writes code.
+        incoherent_native = _native_row_incoherence(provider, endpoint, egress)
+        if incoherent_native:
+            raise ValueError(incoherent_native)
     if role == "implement" and propose_only:
         table = admission.load() if admitted is None else admitted
         incoherent = _foreign_row_incoherence(provider, endpoint, egress, model)
@@ -738,6 +859,13 @@ def resolve_stage(
                     f"no native provider for fallback: {chosen!r} is refused for "
                     f"{task_class} and the dispatch file lists no `kind: native` "
                     "provider to resolve instead"
+                )
+            # The fallback target is selected BY `kind` too, so it is derived
+            # the same way — against the in-session pair the fallback declares.
+            incoherent_native = _native_row_incoherence(native, "session", "none")
+            if incoherent_native:
+                raise ValueError(
+                    f"no coherent native provider for fallback: {incoherent_native}"
                 )
             extra.update(
                 admission_decision="refused",
@@ -1344,8 +1472,20 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: no YAML frontmatter in {task_path}", file=sys.stderr)
         return 2
 
-    # No `--admitted` flag means the SHIPPED table, never a skipped check.
-    admitted_path = Path(args.admitted) if args.admitted else admission.ADMITTED_PATH
+    # No `--admitted` flag means the SHIPPED table, never a skipped check. The
+    # override path is held to the same containment as the default one.
+    try:
+        admitted_path, admitted_source = resolve_admitted_path(args.admitted)
+    except ValueError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
+    if args.admitted:
+        print(
+            f"goalforge-pick-agent: WARN --admitted override active: the "
+            f"admission verdict comes from {admitted_source}, not the shipped "
+            "references/admitted-providers.yaml",
+            file=sys.stderr,
+        )
     try:
         admitted_table = admission.load(admitted_path, required=bool(args.admitted))
     except admission.AdmissionTableError as exc:
@@ -1429,7 +1569,7 @@ def main(argv: list[str] | None = None) -> int:
             "task_class": resolution.get("task_class", ""),
             "reason": resolution.get("admission_reason", "") if decision else "",
             "evidence_ref": resolution.get("evidence_ref", ""),
-            "admitted_source": str(admitted_path.resolve()),
+            "admitted_source": admitted_source,
             "admitted_override": bool(args.admitted),
         })
 
