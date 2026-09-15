@@ -75,14 +75,11 @@ except Exception as exc:                      # noqa: BLE001
     print("FAIL|hooks.json does not parse: %s" % exc)
     sys.exit(2)
 
-# Flatten to (event, matcher, command) — one row per COMMAND ENTRY — and
-# collect every group description once (for the bypass-name scan).
+# Flatten to (event, matcher, command) — one row per COMMAND ENTRY.
 entries = []
-descriptions = []
 for event, groups in (doc.get("hooks") or {}).items():
     for group in groups or []:
         matcher = group.get("matcher")
-        descriptions.append(group.get("description") or "")
         for hook in group.get("hooks") or []:
             if hook.get("type") == "command":
                 entries.append((event, matcher, hook.get("command") or ""))
@@ -118,10 +115,12 @@ for event, matcher, cmd in entries:
         "registered command resolves to an existing file: %s" % (target or resolved))
 
 # A guardrail must never name its own bypass switch on the surface the model
-# reads (hooks.json descriptions reach the model same as stderr does).
+# reads (hooks.json reaches the model same as stderr does) — scan the whole
+# serialized document, not just group descriptions.
+serialized_doc = json.dumps(doc)
 for name in BYPASS_NAMES:
-    hit = any(name in desc for desc in descriptions)
-    say(not hit, "no hooks.json description names %s" % name)
+    hit = name in serialized_doc
+    say(not hit, "no hooks.json document names %s" % name)
 
 # README `Hooks the plugin registers` table must match hooks.json row for
 # row, as (hook, event, matcher) triples — README cells escape pipes as
@@ -174,15 +173,19 @@ while IFS='|' read -r verdict msg; do
 done <<<"$OUT"
 [ "$rc" -eq 0 ] || bad "shipped hooks.json failed the registration table (exit $rc)"
 
-# ── sabotage: four mutated copies, each must be REJECTED ──────────────────
-mutate() { # <label> <python mutation on the parsed doc, as a sed program>
-    local label="$1" prog="$2" copy="$WORK/mutant.json" mrc=0
+# ── sabotage: mutated copies, each must be REJECTED ────────────────────────
+mutate() { # <label> <sed program editing $JSON syntactically>
+    local label="$1" prog="$2" copy="$WORK/mutant.json" mrc=0 out
     sed "$prog" "$JSON" > "$copy"
     if cmp -s "$JSON" "$copy"; then
         bad "sabotage setup failed (no change applied): $label"
         return
     fi
-    run_checker "$copy" >/dev/null 2>&1 || mrc=$?
+    out="$(run_checker "$copy" 2>&1)"; mrc=$?
+    if [ "$mrc" -eq 2 ] && grep -q "does not parse" <<<"$out"; then
+        bad "sabotage setup produced invalid JSON: $label"
+        return
+    fi
     [ "$mrc" -ne 0 ] && ok "sabotage caught: $label" || bad "sabotage NOT caught: $label"
 }
 
@@ -223,16 +226,45 @@ run_checker "$WORK/lib-wired.json" >/dev/null 2>&1 \
     || ok "sabotage caught: goalforge-plans-root.sh registered as a hook"
 
 # 5. (b1 i) SessionStart matcher narrowed back to pre-wp-09 (drops resume)
-mutate "SessionStart matcher back to startup|clear|compact" \
-    's#"startup\|resume\|clear\|compact"#"startup|clear|compact"#'
+python3 - "$JSON" "$WORK/sessionstart-narrowed.json" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+for group in doc["hooks"]["SessionStart"]:
+    if group.get("matcher") == "startup|resume|clear|compact":
+        group["matcher"] = "startup|clear|compact"
+json.dump(doc, open(sys.argv[2], "w", encoding="utf-8"))
+PY
+run_checker "$WORK/sessionstart-narrowed.json" >/dev/null 2>&1 \
+    && bad "sabotage NOT caught: SessionStart matcher back to startup|clear|compact" \
+    || ok "sabotage caught: SessionStart matcher back to startup|clear|compact"
 
 # 6. (b1 ii) mcp__lean-ctx__ctx_call dropped from the single-writer matcher
-mutate "mcp__lean-ctx__ctx_call dropped from the single-writer matcher" \
-    's#\|mcp__lean-ctx__ctx_call"#"#'
+python3 - "$JSON" "$WORK/singlewriter-narrowed.json" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+suffix = "|mcp__lean-ctx__ctx_call"
+for group in doc["hooks"]["PreToolUse"]:
+    matcher = group.get("matcher") or ""
+    if matcher.endswith(suffix):
+        group["matcher"] = matcher[: -len(suffix)]
+json.dump(doc, open(sys.argv[2], "w", encoding="utf-8"))
+PY
+run_checker "$WORK/singlewriter-narrowed.json" >/dev/null 2>&1 \
+    && bad "sabotage NOT caught: mcp__lean-ctx__ctx_call dropped from the single-writer matcher" \
+    || ok "sabotage caught: mcp__lean-ctx__ctx_call dropped from the single-writer matcher"
 
 # 7. (b1 iii) the PostToolUse matcher altered
-mutate "PostToolUse matcher altered" \
-    's#"Edit\|Write\|MultiEdit"#"Edit\|Write"#'
+python3 - "$JSON" "$WORK/posttooluse-altered.json" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+for group in doc["hooks"]["PostToolUse"]:
+    if group.get("matcher") == "Edit|Write|MultiEdit":
+        group["matcher"] = "Edit|Write"
+json.dump(doc, open(sys.argv[2], "w", encoding="utf-8"))
+PY
+run_checker "$WORK/posttooluse-altered.json" >/dev/null 2>&1 \
+    && bad "sabotage NOT caught: PostToolUse matcher altered" \
+    || ok "sabotage caught: PostToolUse matcher altered"
 
 # 8. (b3) hooks.json with the pre-wp-09 :13 description restored (names both
 #    bypass switches again)
