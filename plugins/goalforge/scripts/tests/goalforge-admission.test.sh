@@ -396,6 +396,16 @@ else
     bad "S-1 loader: want exit 2 naming the row (rc=$RC, err=$ERR)"
 fi
 
+# S-4 unreadable table: --table pointing at a DIRECTORY exits 2 naming it.
+mkdir -p "$T/s4-unreadable-table"
+ERR="$(python3 "$ADM" --table "$T/s4-unreadable-table" 2>&1)"
+RC=$?
+if [[ "$RC" -eq 2 && "$ERR" == *"unreadable admission table"* ]]; then
+    ok "S-4 unreadable table: --table pointing at a directory exits 2 naming 'unreadable admission table'"
+else
+    bad "S-4 unreadable table (rc=$RC, err=$ERR)"
+fi
+
 # S-1, resolution leg: every row is coherent on its own; the STAGE row sends
 # the native provider through a leaf. Admission never sees it.
 ERR="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
