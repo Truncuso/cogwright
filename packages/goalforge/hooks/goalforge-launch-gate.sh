@@ -161,7 +161,6 @@ if [ ! -f "$MARKER" ]; then
     echo "goalforge-launch-gate: WARN — this session has ${PCT}% of the 5h window left (threshold ${THRESHOLD}%)." >&2
     echo "  A dispatch launched below the threshold typically dies mid-run on the rate limit and loses its work." >&2
     echo "  Finish in-session, park a handoff, or wait for the window to reset." >&2
-    echo "  Raise or lower the bar with GOALFORGE_LAUNCH_THRESHOLD_PCT." >&2
     mkdir -p "$MARKER_DIR" 2>/dev/null && : > "$MARKER" 2>/dev/null || true
 fi
 

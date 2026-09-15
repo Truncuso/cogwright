@@ -33,27 +33,31 @@ CHECKER="$WORK/check_hooks_json.py"
 cat > "$CHECKER" <<'PY'
 """Check one hooks.json against the expected-registration table.
 
-argv: <hooks.json> <package-root>
+argv: <hooks.json> <package-root> <README.md>
 Prints one `PASS|<msg>` or `FAIL|<msg>` line per assertion; exits 1 if any
 assertion failed, 2 if the file could not be parsed at all.
 """
-import json, sys, os
+import json, re, sys, os
 
 MUST_HAVE = {
-    # script basename -> (event, matcher)
+    # script basename -> (event, matcher) — every matcher is a literal str;
+    # no row may reintroduce the old `None` ("don't care") short-circuit.
     "goalforge-launch-gate.sh":        ("PreToolUse",  "Agent|Workflow"),
-    "goalforge-context-fill.sh":       ("SessionStart", "startup|clear|compact"),
-    "goalforge-session-start.sh":      ("SessionStart", "startup|clear|compact"),
-    "goalforge-single-writer.sh":      ("PreToolUse",  None),
+    "goalforge-context-fill.sh":       ("SessionStart", "startup|resume|clear|compact"),
+    "goalforge-session-start.sh":      ("SessionStart", "startup|resume|clear|compact"),
+    "goalforge-single-writer.sh":      ("PreToolUse",  "Edit|Write|MultiEdit|mcp__lean-ctx__ctx_patch|mcp__lean-ctx__ctx_call"),
     "goalforge-transition-guard.sh":   ("PreToolUse",  "Edit"),
     "goalforge-open-questions-gate.sh": ("PreToolUse",  "Edit"),
-    "goalforge-frontmatter-touch.sh":  ("PostToolUse", None),
+    "goalforge-frontmatter-touch.sh":  ("PostToolUse", "Edit|Write|MultiEdit"),
 }
+assert all(isinstance(matcher, str) for _event, matcher in MUST_HAVE.values()), \
+    "MUST_HAVE matcher must be a literal str, never None"
 MUST_NOT_HAVE = (
     "goalforge-plans-root.sh",     # sourced library
     "goalforge-pre-commit.sh",     # git hook
     "goalforge-quota-read.sh",     # adapter called by the launch gate
 )
+BYPASS_NAMES = ("GOALFORGE_LAUNCH_GATE", "GOALFORGE_LAUNCH_THRESHOLD_PCT")
 
 failed = False
 def say(okness, msg):
@@ -63,6 +67,7 @@ def say(okness, msg):
     print(("PASS|" if okness else "FAIL|") + msg)
 
 path, root = sys.argv[1], sys.argv[2]
+readme_path = sys.argv[3] if len(sys.argv) > 3 else None
 try:
     with open(path, encoding="utf-8") as fh:
         doc = json.load(fh)
@@ -70,11 +75,14 @@ except Exception as exc:                      # noqa: BLE001
     print("FAIL|hooks.json does not parse: %s" % exc)
     sys.exit(2)
 
-# Flatten to (event, matcher, command) — one row per COMMAND ENTRY.
+# Flatten to (event, matcher, command) — one row per COMMAND ENTRY — and
+# collect every group description once (for the bypass-name scan).
 entries = []
+descriptions = []
 for event, groups in (doc.get("hooks") or {}).items():
     for group in groups or []:
         matcher = group.get("matcher")
+        descriptions.append(group.get("description") or "")
         for hook in group.get("hooks") or []:
             if hook.get("type") == "command":
                 entries.append((event, matcher, hook.get("command") or ""))
@@ -87,7 +95,7 @@ for script, (want_event, want_matcher) in sorted(MUST_HAVE.items()):
         say(False, "%s: expected exactly 1 command entry, found %d" % (script, len(hits)))
         continue
     event, matcher, _cmd = hits[0]
-    okness = event == want_event and (want_matcher is None or matcher == want_matcher)
+    okness = event == want_event and matcher == want_matcher
     say(okness, "%s registered on %s (matcher %r)%s" % (
         script, event, matcher,
         "" if okness else " — want %s / %r" % (want_event, want_matcher)))
@@ -109,11 +117,53 @@ for event, matcher, cmd in entries:
     say(target is not None and os.path.isfile(target),
         "registered command resolves to an existing file: %s" % (target or resolved))
 
+# A guardrail must never name its own bypass switch on the surface the model
+# reads (hooks.json descriptions reach the model same as stderr does).
+for name in BYPASS_NAMES:
+    hit = any(name in desc for desc in descriptions)
+    say(not hit, "no hooks.json description names %s" % name)
+
+# README `Hooks the plugin registers` table must match hooks.json row for
+# row, as (hook, event, matcher) triples — README cells escape pipes as
+# `\|`, so unescape before comparing.
+if readme_path is not None:
+    try:
+        with open(readme_path, encoding="utf-8") as fh:
+            readme = fh.read()
+    except Exception as exc:                  # noqa: BLE001
+        say(False, "README.md could not be read: %s" % exc)
+    else:
+        row_re = re.compile(
+            r"^\|\s*`([^`]+)`\s*\|\s*([A-Za-z]+)\s*\|\s*`([^`]+)`\s*\|\s*$",
+            re.MULTILINE)
+        readme_triples = {
+            (hook, event, matcher.replace("\\|", "|"))
+            for hook, event, matcher in row_re.findall(readme)
+        }
+        json_triples = set()
+        for event, matcher, cmd in entries:
+            target = None
+            for token in cmd.replace('"', " ").split():
+                if token.endswith(".sh"):
+                    target = os.path.basename(token)
+                    break
+            if target:
+                json_triples.add((target, event, matcher))
+        say(bool(readme_triples), "README table has at least one hook row")
+        missing = json_triples - readme_triples
+        extra = readme_triples - json_triples
+        say(not missing and not extra,
+            "README table matches hooks.json row for row%s%s" % (
+                "" if not missing else " — README missing: %s" % sorted(missing),
+                "" if not extra else " — README has extra: %s" % sorted(extra)))
+        for name in BYPASS_NAMES:
+            say(name in readme, "README §Install still documents %s" % name)
+
 sys.exit(1 if failed else 0)
 PY
 
-run_checker() { # <hooks.json>
-    python3 "$CHECKER" "$1" "$PKG" 2>&1
+run_checker() { # <hooks.json> [readme.md]
+    python3 "$CHECKER" "$1" "$PKG" "${2:-$PKG/README.md}" 2>&1
 }
 
 # ── the shipped hooks.json ────────────────────────────────────────────────
@@ -171,6 +221,49 @@ PY
 run_checker "$WORK/lib-wired.json" >/dev/null 2>&1 \
     && bad "sabotage NOT caught: goalforge-plans-root.sh registered as a hook" \
     || ok "sabotage caught: goalforge-plans-root.sh registered as a hook"
+
+# 5. (b1 i) SessionStart matcher narrowed back to pre-wp-09 (drops resume)
+mutate "SessionStart matcher back to startup|clear|compact" \
+    's#"startup\|resume\|clear\|compact"#"startup|clear|compact"#'
+
+# 6. (b1 ii) mcp__lean-ctx__ctx_call dropped from the single-writer matcher
+mutate "mcp__lean-ctx__ctx_call dropped from the single-writer matcher" \
+    's#\|mcp__lean-ctx__ctx_call"#"#'
+
+# 7. (b1 iii) the PostToolUse matcher altered
+mutate "PostToolUse matcher altered" \
+    's#"Edit\|Write\|MultiEdit"#"Edit\|Write"#'
+
+# 8. (b3) hooks.json with the pre-wp-09 :13 description restored (names both
+#    bypass switches again)
+python3 - "$JSON" "$WORK/old-desc.json" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+for group in doc["hooks"]["PreToolUse"]:
+    if any("launch-gate" in h.get("command", "") for h in group.get("hooks", [])):
+        group["description"] = (
+            "goalforge launch gate: refuses a NEW Agent/Workflow dispatch when "
+            "the remaining 5h quota is below GOALFORGE_LAUNCH_THRESHOLD_PCT "
+            "(default 10) — a dispatch launched below it dies on the rate "
+            "limit and loses its work. Quota comes from "
+            "hooks/goalforge-quota-read.sh, which is an adapter and is "
+            "deliberately NOT registered here. Unknown quota, or "
+            "GOALFORGE_LAUNCH_GATE=0, exits 0 silently; the explanatory WARN "
+            "prints once per session."
+        )
+json.dump(doc, open(sys.argv[2], "w", encoding="utf-8"))
+PY
+run_checker "$WORK/old-desc.json" >/dev/null 2>&1 \
+    && bad "sabotage NOT caught: pre-wp-09 :13 description restored" \
+    || ok "sabotage caught: pre-wp-09 :13 description restored"
+
+# 9. (b3) README table carrying the pre-wp-09 SessionStart matcher
+README="$PKG/README.md"
+sed 's#startup\\|resume\\|clear\\|compact#startup\\|clear\\|compact#' \
+    "$README" > "$WORK/old-readme.md"
+run_checker "$JSON" "$WORK/old-readme.md" >/dev/null 2>&1 \
+    && bad "sabotage NOT caught: README carrying the pre-wp-09 SessionStart matcher" \
+    || ok "sabotage caught: README carrying the pre-wp-09 SessionStart matcher"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"

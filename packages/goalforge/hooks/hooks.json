@@ -10,7 +10,7 @@
             "timeout": 5
           }
         ],
-        "description": "goalforge launch gate: refuses a NEW Agent/Workflow dispatch when the remaining 5h quota is below GOALFORGE_LAUNCH_THRESHOLD_PCT (default 10) — a dispatch launched below it dies on the rate limit and loses its work. Quota comes from hooks/goalforge-quota-read.sh, which is an adapter and is deliberately NOT registered here. Unknown quota, or GOALFORGE_LAUNCH_GATE=0, exits 0 silently; the explanatory WARN prints once per session."
+        "description": "goalforge launch gate: refuses a NEW Agent/Workflow dispatch when the remaining 5h quota is below the configured threshold (default 10%, README §Install) — a dispatch launched below it dies on the rate limit and loses its work. Quota comes from hooks/goalforge-quota-read.sh, which is an adapter and is deliberately NOT registered here. Unknown quota, or the gate disabled via its README-documented switch, exits 0 silently; the explanatory WARN prints once per session."
       },
       {
         "matcher": "Edit|Write|MultiEdit|mcp__lean-ctx__ctx_patch|mcp__lean-ctx__ctx_call",
@@ -42,7 +42,7 @@
     ],
     "SessionStart": [
       {
-        "matcher": "startup|clear|compact",
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",

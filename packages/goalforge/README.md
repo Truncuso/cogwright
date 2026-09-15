@@ -61,11 +61,11 @@ Wired in `hooks/hooks.json`; the registration is asserted by
 | Hook | Event | Matcher |
 |---|---|---|
 | `goalforge-launch-gate.sh` | PreToolUse | `Agent\|Workflow` |
-| `goalforge-single-writer.sh` | PreToolUse | `Edit\|Write\|MultiEdit\|ctx_patch\|ctx_call` |
+| `goalforge-single-writer.sh` | PreToolUse | `Edit\|Write\|MultiEdit\|mcp__lean-ctx__ctx_patch\|mcp__lean-ctx__ctx_call` |
 | `goalforge-transition-guard.sh` | PreToolUse | `Edit` |
 | `goalforge-open-questions-gate.sh` | PreToolUse | `Edit` |
-| `goalforge-context-fill.sh` | SessionStart | `startup\|clear\|compact` |
-| `goalforge-session-start.sh` | SessionStart | `startup\|clear\|compact` |
+| `goalforge-context-fill.sh` | SessionStart | `startup\|resume\|clear\|compact` |
+| `goalforge-session-start.sh` | SessionStart | `startup\|resume\|clear\|compact` |
 | `goalforge-frontmatter-touch.sh` | PostToolUse | `Edit\|Write\|MultiEdit` |
 
 If a `~/.claude/settings.json` still registers its own copies of any of these

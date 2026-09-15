@@ -74,8 +74,12 @@ rc="$(rc_of "$R")"; out="$(out_of "$R")"
 
 # ── b1 case 4: threshold override moves the verdict ────────────────────────
 R="$(run_hook "$HOOK" "$WORK/high.json" "$WORK/m4" GOALFORGE_LAUNCH_THRESHOLD_PCT=95)"
-[ "$(rc_of "$R")" = 2 ] && ok "threshold override 95 blocks an 80% reading" \
-    || bad "threshold override ignored (rc=$(rc_of "$R"))"
+rc="$(rc_of "$R")"; out="$(out_of "$R")"
+[ "$rc" = 2 ] && ok "threshold override 95 blocks an 80% reading" \
+    || bad "threshold override ignored (rc=$rc)"
+case "$out" in *GOALFORGE_LAUNCH_THRESHOLD_PCT*)
+        bad "the threshold-override run's stderr names GOALFORGE_LAUNCH_THRESHOLD_PCT" ;;
+    *)  ok "threshold-override run's stderr never names GOALFORGE_LAUNCH_THRESHOLD_PCT" ;; esac
 
 # ── b1 case 5 (T3b removal drill): the kill switch ─────────────────────────
 R="$(run_hook "$HOOK" "$WORK/low.json" "$WORK/m5" GOALFORGE_LAUNCH_GATE=0)"
@@ -86,10 +90,16 @@ rc="$(rc_of "$R")"; out="$(out_of "$R")"
 
 # ── V5: the stderr a PreToolUse hook emits reaches the MODEL, so the gate must
 #    not name its own kill switch there. README documents it; stderr does not.
+# This is the first-run path (no marker yet): both the WARN block and the
+# one-line BLOCK print, so both bypass-switch names must be absent from both.
 R="$(run_hook "$HOOK" "$WORK/low.json" "$WORK/m6")"
-case "$(out_of "$R")" in *GOALFORGE_LAUNCH_GATE*)
+out6="$(out_of "$R")"
+case "$out6" in *GOALFORGE_LAUNCH_GATE*)
         bad "the block/WARN stderr names the kill switch (a guardrail printing its own bypass)" ;;
     *)  ok "stderr never names GOALFORGE_LAUNCH_GATE" ;; esac
+case "$out6" in *GOALFORGE_LAUNCH_THRESHOLD_PCT*)
+        bad "the block/WARN stderr names the threshold-override switch (a guardrail printing its own bypass)" ;;
+    *)  ok "stderr never names GOALFORGE_LAUNCH_THRESHOLD_PCT" ;; esac
 
 # ── V7: a session_id of `..` must not escape the marker directory. The marker
 #    root is derived from TMPDIR here precisely because GOALFORGE_LAUNCH_MARKER_DIR
@@ -122,6 +132,9 @@ case "$o1" in *WARN*) ok "run 1 prints the WARN" ;; *) bad "run 1 printed no WAR
 case "$o2" in *WARN*) bad "run 2 re-printed the WARN: '$o2'" ;; *) ok "run 2 prints no WARN" ;; esac
 case "$o2" in *BLOCK*) ok "run 2 still prints the one-line BLOCK" ;;
     *) bad "run 2 printed no BLOCK line: '$o2'" ;; esac
+case "$o2" in *GOALFORGE_LAUNCH_THRESHOLD_PCT*)
+        bad "the repeat (BLOCK-only) run's stderr names GOALFORGE_LAUNCH_THRESHOLD_PCT" ;;
+    *)  ok "repeat (BLOCK-only) run's stderr never names GOALFORGE_LAUNCH_THRESHOLD_PCT" ;; esac
 
 rm -rf "$M"
 R3="$(run_hook "$HOOK" "$WORK/low.json" "$M")"
@@ -170,6 +183,21 @@ sabotage "gate ignores GOALFORGE_LAUNCH_GATE=0" \
 # WARNs on every run
 sabotage "gate re-prints the WARN every run" \
     's#^if \[ ! -f "\$MARKER" \]; then#if true; then#' once
+
+# reintroduces the removed WARN-block line naming GOALFORGE_LAUNCH_THRESHOLD_PCT
+# (T3's deletion at goalforge-launch-gate.sh:164) — the first-run assertion
+# above must catch it.
+STUB_T164="$STUBDIR/bad-threshold-name.sh"
+sed 's#^\(    echo "  Finish in-session, park a handoff, or wait for the window to reset\.\" >&2\)$#\1\n    echo "  Raise or lower the bar with GOALFORGE_LAUNCH_THRESHOLD_PCT." >\&2#' \
+    "$HOOK" > "$STUB_T164"
+if cmp -s "$HOOK" "$STUB_T164"; then
+    bad "sabotage setup failed (no change applied): stub reintroduces the :164 THRESHOLD_PCT line"
+else
+    r="$(run_hook "$STUB_T164" "$WORK/low.json" "$WORK/s5")"
+    case "$(out_of "$r")" in *GOALFORGE_LAUNCH_THRESHOLD_PCT*)
+            ok "sabotage caught: stub reintroduces the :164 THRESHOLD_PCT line" ;;
+        *)  bad "sabotage NOT caught: stub reintroduces the :164 THRESHOLD_PCT line" ;; esac
+fi
 
 # ── the hook's own self-test ───────────────────────────────────────────────
 rc=0; bash "$HOOK" --self-test >"$WORK/selftest.out" 2>&1 || rc=$?
