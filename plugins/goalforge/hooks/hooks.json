@@ -1,4 +1,5 @@
 {
+  "description": "goalforge (Spec-Driven Development chain) hooks: a launch gate on Agent/Workflow dispatch, a single-writer field guard plus two status-edge guards on plan files, session orientation, and a frontmatter touch. Per-group rationale: hooks/README.md.",
   "hooks": {
     "PreToolUse": [
       {
@@ -9,8 +10,7 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-launch-gate.sh\"",
             "timeout": 5
           }
-        ],
-        "description": "goalforge launch gate: refuses a NEW Agent/Workflow dispatch when the remaining 5h quota is below the configured threshold (default 10%, README §Install) — a dispatch launched below it dies on the rate limit and loses its work. Quota comes from hooks/goalforge-quota-read.sh, which is an adapter and is deliberately NOT registered here. Unknown quota, or the gate disabled via its README-documented switch, exits 0 silently; the explanatory WARN prints once per session."
+        ]
       },
       {
         "matcher": "Edit|Write|MultiEdit|mcp__lean-ctx__ctx_patch|mcp__lean-ctx__ctx_call",
@@ -20,8 +20,7 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-single-writer.sh\"",
             "timeout": 5
           }
-        ],
-        "description": "goalforge single-writer: blocks tool-surface mutation of status:/goal_approved_version: on plan files under a resolved PLANS_ROOT. The BLANKET field guard — it simulates Edit, MultiEdit, Write and ctx_patch payloads alike (ctx_call unwrapped one level), which is why the two Edit-only guards below can stay narrow. Fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
+        ]
       },
       {
         "matcher": "Edit",
@@ -36,8 +35,7 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-open-questions-gate.sh\"",
             "timeout": 5
           }
-        ],
-        "description": "goalforge status-edge guards, matcher Edit ONLY because both read an Edit payload's old_string/new_string and can evaluate nothing else: transition-guard (blocks an illegal status edge), open-questions-gate (blocks '-> ready' while an open question is unresolved). A status change arriving via Write or MultiEdit is caught by the single-writer group above, which blocks the field outright. Each fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
+        ]
       }
     ],
     "SessionStart": [
@@ -54,8 +52,7 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-session-start.sh\"",
             "timeout": 10
           }
-        ],
-        "description": "goalforge session orientation, owned by the plugin so installing or removing it takes the injection with it: context-fill prints ONE estimate of how full the window already is; session-start prints the <=15-line orientation block (active features + frontier WP, ready handoffs, wayfind open/frontier counts, one routing line), privacy-scrubbed. Both exit 0 always and print nothing when there is nothing to say; GOALFORGE_SESSION_START=0 disables the orientation block."
+        ]
       }
     ],
     "PostToolUse": [
@@ -67,8 +64,7 @@
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/goalforge-frontmatter-touch.sh\"",
             "timeout": 5
           }
-        ],
-        "description": "goalforge frontmatter-touch: bumps stage_updated: to today on an edited plans/** .md. Reads only the payload's file_path, so all three tools are in scope. Fast-paths to exit 0 unless the edited file is under a resolved PLANS_ROOT."
+        ]
       }
     ]
   }
