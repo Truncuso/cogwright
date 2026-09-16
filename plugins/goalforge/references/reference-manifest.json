@@ -298,18 +298,6 @@
       "path": "references/state-machine.md"
     },
     {
-      "from": "scripts/tests/fixtures/dispatch/README.md",
-      "path": "references/dispatch.yaml"
-    },
-    {
-      "from": "scripts/tests/fixtures/dispatch/wp-compile.md",
-      "path": "scripts/tests/goalforge-workflow-compile.test.sh"
-    },
-    {
-      "from": "scripts/tests/fixtures/dispatch/wp-harden-high/overview.md",
-      "path": "scripts/tests/goalforge-harden-stop.test.sh"
-    },
-    {
       "from": "skills/archive/SKILL.md",
       "path": "references/archive-contract.md"
     },

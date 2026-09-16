@@ -1,2 +1,0 @@
-{"seq":0,"ts":"2026-09-10T09:00:00Z","type":"dispatch.launched","schema_version":1,"wp":"wp-fixture-rollup","task":"T1","agent":"goalforge-implementer","model":"opus","provider":"anthropic","effort":"low"}
-{"seq":1,"ts":"2026-09-10T09:40:00Z","type":"dispatch.completed","schema_version":1,"wp":"wp-fixture-rollup","agent":"goalforge-implementer","outcome":"success","exit_code":0,"tokens":260000,"tool_uses":12}

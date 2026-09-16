@@ -1,6 +1,0 @@
-schema_version: 1
-admitted:
-  - provider: ollama
-    model: glm-5.3:cloud
-    evidence: {kind: user-experience, ref: fixtures/admission}
-    permission_set: [read]
