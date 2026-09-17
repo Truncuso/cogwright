@@ -28,6 +28,10 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || pr
 # keeps that literal out of the file (comment included), so the package and
 # plugin trees stay byte-identical here.
 GF_HOME="$SCRIPT_DIR/.."
+# goalforge_emit_gate_result (sourced below) addresses goalforge-trace-emit
+# relative to $HOOK_DIR — the name every other goalforge hook binds.
+# shellcheck disable=SC2034  # read by the sourced goalforge_emit_gate_result
+HOOK_DIR="$SCRIPT_DIR"
 
 # Sourced for goalforge_plans_roots — the ONE place that knows a plans tree
 # kept as its own git repo (leg 2b) makes the git root ITSELF the plans root.
@@ -36,6 +40,42 @@ GF_HOME="$SCRIPT_DIR/.."
 # still runs unchanged).
 # shellcheck disable=SC1091
 [[ -r "$SCRIPT_DIR/goalforge-plans-root.sh" ]] && source "$SCRIPT_DIR/goalforge-plans-root.sh"
+
+# ── human_required set-once invariant (ticket-72) ──────────────────────────────
+# goalforge-single-writer.sh enforces human_required monotonicity on TOOL writes
+# only — its PreToolUse matcher is Edit|Write|MultiEdit|ctx_patch|ctx_call. A
+# `sed -i` (or any other Bash rewrite) of a WP overview.md never reaches that
+# matcher, so the field can be cleared silently and committed. The two
+# predicates below are DELIBERATE DUPLICATES of their twins in
+# goalforge-single-writer.sh (`hr_is_null`, and `extract_frontmatter` +
+# `extract_value` collapsed into one reader): that hook runs its main body on
+# load and cannot be sourced, and a shared module for three lines of predicate
+# buys indirection, not safety. Keep the null semantics of the two in lockstep.
+
+# True (empty string or the literal unquoted "null") iff $1 is human_required's
+# unset state.  Twin: goalforge-single-writer.sh `hr_is_null`.
+_gf_hr_is_null() {
+    local v="$1"
+    [ -z "$v" ] || [ "$v" = "null" ]
+}
+
+# Prints the trimmed, unquoted value of the first `human_required:` line inside
+# $1's frontmatter region (strictly between the first two `---` fence lines), or
+# empty when there is no CLOSED frontmatter block or no such line. Scoping to
+# the frontmatter is what keeps a prose line mentioning human_required out of
+# scope.  Twin: goalforge-single-writer.sh `extract_frontmatter` + `extract_value`.
+_gf_hr_value() {
+    printf '%s\n' "$1" | awk '
+        /^---$/ { f++; if (f == 2) { closed = 1; exit } ; next }
+        f == 1 && !got && /^[[:space:]]*human_required:/ {
+            v = $0
+            sub(/^[[:space:]]*human_required:[[:space:]]*/, "", v)
+            sub(/^["'"'"']/, "", v); sub(/["'"'"']$/, "", v); sub(/[[:space:]]+$/, "", v)
+            got = 1
+        }
+        END { if (closed && got) print v }
+    '
+}
 
 _goalforge_pre_commit_main() {
     set -uo pipefail
@@ -78,8 +118,9 @@ _goalforge_pre_commit_main() {
     fi
 
     local -A _seen
-    local -a TOUCHED_FEATURES
+    local -a TOUCHED_FEATURES STAGED_OVERVIEWS
     TOUCHED_FEATURES=()
+    STAGED_OVERVIEWS=()
 
     local staged_path feat_dir feat_slug
     while IFS= read -r staged_path; do
@@ -106,9 +147,57 @@ _goalforge_pre_commit_main() {
             _seen["$feat_dir"]=1
             TOUCHED_FEATURES+=("$feat_dir")
         fi
+        # Overview files carry the WP frontmatter the human_required invariant
+        # below reads. Collected from THIS loop so both checks share one
+        # plans-layout predicate and one _archived skip.
+        [[ "$(basename -- "$staged_path")" == "overview.md" ]] && STAGED_OVERVIEWS+=("$staged_path")
     done <<< "$STAGED"
 
     [[ ${#TOUCHED_FEATURES[@]} -eq 0 ]] && exit 0
+
+    # ── human_required is set-once: reject any commit that weakens it ──────
+    # Runs BEFORE schema validation: a weakened human_required is a policy
+    # breach, not a schema error, and the commit must die on it either way.
+    local -a HR_VIOLATIONS
+    HR_VIOLATIONS=()
+    local ov head_text idx_text oldval newval
+    for ov in "${STAGED_OVERVIEWS[@]:+${STAGED_OVERVIEWS[@]}}"; do
+        # No index blob = staged deletion. Removing a whole WP file is an
+        # archive/move operation, not a field weakening — out of scope here.
+        idx_text=$(git show ":$ov" 2>/dev/null) || continue
+        # No HEAD blob = new file -> there is no prior value to weaken.
+        head_text=$(git show "HEAD:$ov" 2>/dev/null) || continue
+        oldval="$(_gf_hr_value "$head_text")"
+        # Unset in HEAD -> null -> "<reason>" is the one sanctioned transition.
+        _gf_hr_is_null "$oldval" && continue
+        newval="$(_gf_hr_value "$idx_text")"
+        if [[ "$oldval" == "$newval" ]]; then
+            goalforge_emit_gate_result "human-required-monotonic" "pass" \
+                "human_required unchanged" "$REPO_ROOT/$ov"
+            continue
+        fi
+        HR_VIOLATIONS+=("$ov|$oldval|$newval")
+        goalforge_emit_gate_result "human-required-monotonic" "fail" \
+            "human_required weakened: '$oldval' -> '${newval:-<absent>}'" "$REPO_ROOT/$ov"
+    done
+
+    if [[ ${#HR_VIOLATIONS[@]} -gt 0 ]]; then
+        {
+            echo "goalforge-pre-commit: BLOCKED — human_required is set-once (ticket-72); this commit weakens it:"
+            local v vfile vold vnew
+            for v in "${HR_VIOLATIONS[@]}"; do
+                vfile="${v%%|*}"
+                vnew="${v#*|}"; vold="${vnew%%|*}"; vnew="${vnew#*|}"
+                echo ""
+                echo "  File:  $vfile"
+                echo "    HEAD:  human_required: $vold"
+                echo "    index: human_required: ${vnew:-<absent>}"
+            done
+            echo ""
+            echo "  Only null -> \"<reason>\" is allowed. Restore the reason; clearing it is the human's call, not an agent's."
+        } >&2
+        exit 2
+    fi
 
     # ── Validate each touched feature; collect failures ────────────────────
     local -a FAILED_DIRS FAILED_OUTPUT
@@ -152,12 +241,13 @@ _goalforge_pre_commit_main() {
 }
 
 # ── Zero-breakage outer wrapper ────────────────────────────────────────────────
-# Run main logic in a subshell; only propagate exit 1 (intentional block).
-# Any unexpected internal error (unbound variable, subprocess crash, etc.)
-# becomes exit 0 — never break the user's commit flow over a hook bug.
+# Run main logic in a subshell; only propagate the INTENTIONAL block codes —
+# 1 (schema error) and 2 (human_required weakened). Any unexpected internal
+# error (unbound variable, subprocess crash, etc.) becomes exit 0 — never break
+# the user's commit flow over a hook bug.
 ( _goalforge_pre_commit_main "$@" )
 _goalforge_ec=$?
-if [[ $_goalforge_ec -eq 1 ]]; then
-    exit 1
+if [[ $_goalforge_ec -eq 1 || $_goalforge_ec -eq 2 ]]; then
+    exit "$_goalforge_ec"
 fi
 exit 0
