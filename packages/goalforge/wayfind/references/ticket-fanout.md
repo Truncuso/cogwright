@@ -28,6 +28,19 @@ on exactly one `ticket_type`, rejected everywhere else. It is a **per-ticket**
 declaration — not a map-level override, not ad-hoc prose in the question, and
 not something a claimer invents for a ticket that did not declare it.
 
+### Fan-out budget
+
+`N` is a declared value (§8), not a free variable — cap it the same way the
+`efficient-verification-fanout` idea (routed 2026-09-17; observed ~23 verify
+agents dispatched for one WP's pre-harden review) caps adversarial fan-out in
+review/harden panels: a small hard ceiling by default (that idea's proposal:
+`min(findings, 6)`), escalated only where the cost demonstrably pays — here,
+only when the ticket's `## Question` genuinely decomposes into that many
+independent, non-overlapping probes (§2). A `fan_out:` value that exists only
+to hit a round number, rather than to match a real split, is the same
+anti-pattern that idea names: unbounded fan-out driven by what CAN be split
+rather than what SHOULD be.
+
 A ticket whose `## Question` does not decompose into independent sub-questions
 should not carry `fan_out` at all. Fan-out buys wall-clock time on a genuinely
 separable sweep; on a single indivisible question it buys N restatements of the
