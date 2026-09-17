@@ -8,14 +8,16 @@
 # Baseline is FAST (small clean goal). Route escalates to STANDARD when ANY
 # strong signal trips:
 #   R1  frontmatter task_type is migration or ops            (strong)
-#   R2  bullets under ## Scope  >= SDD_ROUTE_NS (default 4)  (strong)
+#   R2  bullets under ## Scope In >= SDD_ROUTE_NS (default 4) (strong)
 #   R3  bullets under ## Open Questions >= SDD_ROUTE_NQ (3)  (strong)
 #   R4  distinct path-like tokens in body >= SDD_ROUTE_NF (5)(strong)
 #   R5  blast-radius keyword in Problem/Goal text             (weak)
 # and escalates to WAVE when ANY wave signal trips (multi-feature /
 # cross-spec / parallel fan-out markers — WAVE dominates STANDARD):
-#   W1  bullets under ## Scope >= SDD_ROUTE_NW (default 8)   (wave)
-#   W2  parallel/fan-out keyword in body                      (wave)
+#   W1  bullets under ## Scope In >= SDD_ROUTE_NW (default 8) (wave)
+#   W2  parallel/fan-out keyword in Goal + Scope In text       (wave)
+# R2/W1 count only bullets before a bold **Out:** sub-heading under ## Scope;
+# exclusions are not scope work.
 #
 # Confidence:
 #   pinned     — frontmatter already carries route: (echoed back; idempotent).
@@ -94,8 +96,21 @@ def section(name):
 def bullets(lines):
     return [l for l in lines if re.match(r"^\s*[-*]\s+\S", l)]
 
+def in_scope_lines(lines):
+    """Lines under ## Scope before a bold **Out** sub-heading. Exclusions are
+    not scope work: counting them inflates R2/W1
+    (goalforge-route-scope-bullet-overcount.md:53-55)."""
+    out = []
+    for ln in lines:
+        if re.match(r"^\s*\*\*Out:?\*\*", ln, re.IGNORECASE):
+            break
+        out.append(ln)
+    return out
+
 goal_lines = [l for l in section("goal") if l.strip() and not l.strip().startswith("<")]
-scope_bullets = len(bullets(section("scope")))
+scope_section = section("scope")
+in_scope = in_scope_lines(scope_section)
+scope_bullets = len(bullets(in_scope))
 oq_bullets = len(bullets(section("open questions")))
 
 # R1: task_type migration|ops in frontmatter (tolerate absent).
@@ -117,9 +132,13 @@ r5 = bool(kw)
 
 # Wave signals (multi-feature / cross-spec / parallel fan-out markers).
 w1 = scope_bullets >= NW
+# W2 probes Goal + Scope-In prose only, matching how R5 already probes only
+# Problem + Goal (:114) — a hazard noted elsewhere in the body (e.g. Notes)
+# is not a fan-out signal (goalforge-route-scope-bullet-overcount.md:56-58).
+wave_probe = " ".join(goal_lines + in_scope).lower()
 wkw = re.findall(
     r"\b(parallel|fan[- ]?out|cross-spec|multi-feature|multiple spec\w*|concurrent\w*|wave)\b",
-    body.lower())
+    wave_probe)
 w2 = bool(wkw)
 
 tripped = [s for s, hit in
@@ -275,6 +294,46 @@ EOF
        && [[ "$(field "$out" .route)" == "fast" && "$(field "$out" .confidence)" == "clear" ]]; then
         ok "F14 unrecognized route -> WARN + reclassify fast/clear ok"
     else no "F14 unrecognized route -> err='$err' out='$out'"; fi
+
+    # F15: regression for handoff-thread-layout false positive
+    #      (plans/ideas/goalforge-route-scope-bullet-overcount.md). 6 In +
+    #      5 Out scope bullets (In-scope alone trips R2, not W1) and a
+    #      coordination-hazard sentence with "parallel" outside Goal/Scope
+    #      (in Notes). Must route standard/clear, not wave.
+    cat > "$d/handoff.md" <<'EOF'
+## Goal
+
+ship a layout in four sequential steps
+
+## Scope
+
+**In:**
+
+- item1
+- item2
+- item3
+- item4
+- item5
+- item6
+
+**Out:**
+
+- excl1
+- excl2
+- excl3
+- excl4
+- excl5
+
+## Notes
+
+A parallel session was appending to this file; confirm no live session holds
+it before migrating.
+EOF
+    out="$(classify "$d/handoff.md")"
+    if [[ "$(field "$out" .route)" == "standard" && "$(field "$out" .confidence)" == "clear" \
+          && "$(field "$out" .signals.scope_bullets)" == "6" ]]; then
+        ok "F15 handoff-thread-layout regression -> standard/clear (In-only scope, W2 scoped) ok"
+    else no "F15 handoff-thread-layout regression -> $out"; fi
 
     echo ""
     echo "Results: $p passed, $f failed"
