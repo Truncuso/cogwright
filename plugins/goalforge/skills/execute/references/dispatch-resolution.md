@@ -32,7 +32,7 @@ file; `--dispatch <path>` overrides it (tests pass a fixture). No provider is ev
    decides the resolver verdict). `decision` discriminates
    `propose-only | admitted | refused`, and `admitted_source` /
    `admitted_override` name the table that produced the verdict —
-   `admitted_source` package-relative (`references/…`) or plans-relative
+   `admitted_source` package-relative (`references/`) or plans-relative
    (`plans/…`), never an absolute host path. Ledger I/O degrades, never blocks.
 7. **Admission** — `admission.resolve(role, task_class, provider, model)` runs
    for role `implement`: the admission table decides the resolver verdict

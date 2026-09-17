@@ -37,8 +37,6 @@ plugins/goalforge/references/alias-map.md::
 # retired-by: permanent — the deprecation notice is the point.
 packages/goalforge/README.md::the legacy `sdd-*`
 plugins/goalforge/README.md::the legacy `sdd-*`
-packages/goalforge/SKILL.md::Old `sdd-*` → `goalforge-*` name map
-plugins/goalforge/SKILL.md::Old `sdd-*` → `goalforge-*` name map
 packages/goalforge/SKILL.md::The `sdd-*` skill/script aliases were RETIRED
 plugins/goalforge/SKILL.md::The `sdd-*` skill/script aliases were RETIRED
 
@@ -46,8 +44,6 @@ plugins/goalforge/SKILL.md::The `sdd-*` skill/script aliases were RETIRED
 # retired-by: permanent — installed-hook idempotency marker; INSTALL.md:245
 # documents the block as the never-overwritten contract, and renaming it breaks
 # idempotent re-detection of an already-installed hook.
-packages/goalforge/execute/SKILL.md::`sdd-pre-commit` hook blocks a transition-only commit
-plugins/goalforge/skills/execute/SKILL.md::`sdd-pre-commit` hook blocks a transition-only commit
 packages/goalforge/onboard/SKILL.md::the idempotency marker (`# >>> sdd-pre-commit >>>`)
 plugins/goalforge/skills/onboard/SKILL.md::the idempotency marker (`# >>> sdd-pre-commit >>>`)
 packages/goalforge/onboard/SKILL.md::(`# >>> sdd-pre-commit >>>`) prevents double-installation
@@ -75,9 +71,5 @@ plugins/goalforge/references/trace-events.md::Legacy `.sdd-transitions.jsonl` de
 # retired-by: feature-2 rename decision
 packages/goalforge/references/schema.md::sdd-lifecycle-redesign
 plugins/goalforge/references/schema.md::sdd-lifecycle-redesign
-packages/goalforge/watchdog/SKILL.md::the **separate** `sdd-verification-integrity-gaps` idea
-plugins/goalforge/skills/watchdog/SKILL.md::the **separate** `sdd-verification-integrity-gaps` idea
-packages/goalforge/watchdog/SKILL.md::(+ future `sdd-verification-integrity-gaps`)
-plugins/goalforge/skills/watchdog/SKILL.md::(+ future `sdd-verification-integrity-gaps`)
 packages/goalforge/onboard/SKILL.md::`setup-sdd-repo` surface
 plugins/goalforge/skills/onboard/SKILL.md::`setup-sdd-repo` surface

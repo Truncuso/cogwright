@@ -541,7 +541,7 @@ lint_version() {
 # today. Tracked residual (wp-09 / feature-2). Note the marker alone consumes
 # 61 characters of every child's budget.
 PRIVACY_MAX_DESC=1024
-PRIVACY_EXPECTED_CHILDREN=18
+PRIVACY_EXPECTED_CHILDREN=13
 
 lint_privacy_marker() {
   VIOLATIONS=0
@@ -901,9 +901,9 @@ lint_relation_claims() {
 }
 
 # ---------------------------------------------------------------------------
-# interview-contract — the wp-13 audit-debt pins (F10, F11, F12).
+# interview-contract — the wp-13 audit-debt pins (F10a, F11).
 #
-# Four checks over SEVEN repo-tracked surfaces. Every input is resolved from a
+# Two checks over THREE repo-tracked surfaces. Every input is resolved from a
 # repo-relative path, so the section behaves identically on the author machine
 # and on a CI runner — `scripts/ci-lints.sh` is a GitHub Actions gate step
 # (.github/workflows/validate-plugins.yml, step `repo lints`, ubuntu-latest with
@@ -917,9 +917,6 @@ lint_relation_claims() {
 #               independent substring greps in packages/goalforge/evals/run.sh
 #               survive both a sixth member and a dropped one; set equality does
 #               not.                                                    (1 file)
-#   C2 (F10b) — the `harden` row of fidelity.md names the routing token the
-#               escalation actually rides on, in source AND generated mirror.
-#                                                                      (2 files)
 #   C3 (F11)  — the interview row lives under `requires:` with its degrade line,
 #               is ABSENT from `recommends:`, and the generated manifest agrees.
 #               F11's premise ("no WP decides where the row lives post-flip") is
@@ -927,9 +924,15 @@ lint_relation_claims() {
 #               coverage of scripts/goalforge-generate.sh, which only FATALs on
 #               an EMPTY `requires:` and therefore holds only while interview is
 #               the sole entry.                                        (2 files)
-#   C4 (F12)  — interview/SKILL.md carries the disambiguation literal that
-#               separates the caller-side sense of `specialization` from the
-#               retired nested-sibling sense, in source AND mirror.    (2 files)
+#
+# RETIRED LEGS, not weakened ones. C2 (F10b) asserted over the §Per-stage
+# routing table of references/fidelity.md and C4 (F12) over
+# interview/SKILL.md's `specialization` disambiguation literal. wp-01
+# (goalforge-overhaul) deleted both subjects outright — T8 cut the per-stage
+# routing table from fidelity.md, T1 deleted the `goalforge-interview` child
+# skill — so both legs now assert over text that no longer exists anywhere and
+# can only ever be red. The `interview` PLUGIN dependency they sat beside is
+# untouched and still gated, by C3.
 #
 # MISSING INPUT IS A VIOLATION, NEVER A SKIP. Every surface is repo-tracked, so
 # "not present" always means something is wrong, never "not applicable". There is
@@ -943,22 +946,16 @@ lint_relation_claims() {
 # section at a scratch copy instead of mutating a real file.
 # ---------------------------------------------------------------------------
 GF_IC_ENUM_FIXTURE="${GF_IC_ENUM_FIXTURE:-scripts/lint-baselines/interview-contract-enum.txt}"
-GF_IC_FIDELITY_SRC="${GF_IC_FIDELITY_SRC:-packages/goalforge/references/fidelity.md}"
-GF_IC_FIDELITY_MIRROR="${GF_IC_FIDELITY_MIRROR:-plugins/goalforge/references/fidelity.md}"
 GF_IC_RELATIONS="${GF_IC_RELATIONS:-packages/goalforge/relations.yaml}"
 GF_IC_PLUGIN_JSON="${GF_IC_PLUGIN_JSON:-plugins/goalforge/.claude-plugin/plugin.json}"
-GF_IC_SKILL_SRC="${GF_IC_SKILL_SRC:-packages/goalforge/interview/SKILL.md}"
-GF_IC_SKILL_MIRROR="${GF_IC_SKILL_MIRROR:-plugins/goalforge/skills/interview/SKILL.md}"
 
 # The frozen set, joined the way ic_enum_set() joins the fixture. Vendored from
 # the interview plugin's references/signals-contract.md §Frozen
 # HANDOFF_SUGGESTION enum (v1.1.0); see the fixture header for the pin contract.
 IC_ENUM_EXPECTED='deferred expert:<role> high-fidelity research user-judgment'
-IC_FIDELITY_TOKEN='HANDOFF_SUGGESTION: high-fidelity'
 IC_RELATIONS_ENTRY='- name: interview'
 IC_RELATIONS_DEGRADE='degrade: one-question-at-a-time AskUserQuestion loop in the main session'
 IC_MANIFEST_DEP='"dependencies": [{"name": "interview"'
-IC_SKILL_LITERAL='specialization = caller-side framing of the shared engine'
 
 # ic_enum_set <file> — drop `#` comments and blank lines, sort under LC_ALL=C,
 # join with single spaces. Set equality covers a sixth member and a dropped
@@ -979,7 +976,7 @@ ic_yaml_block() {
 lint_interview_contract() {
   VIOLATIONS=0
   SCANNED=0
-  local f found req rec requires_ok
+  local found req rec requires_ok
 
   # --- C1: the vendored enum fixture declares exactly the five members ------
   SCANNED=$(( SCANNED + 1 ))
@@ -994,21 +991,6 @@ lint_interview_contract() {
       VIOLATIONS=$(( VIOLATIONS + 1 ))
     fi
   fi
-
-  # --- C2: the `harden` row names the routing token, source AND mirror ------
-  for f in "$GF_IC_FIDELITY_SRC" "$GF_IC_FIDELITY_MIRROR"; do
-    SCANNED=$(( SCANNED + 1 ))
-    if [ ! -f "$f" ]; then
-      printf '  %s: fidelity routing table missing\n' "$f" >&2
-      VIOLATIONS=$(( VIOLATIONS + 1 ))
-      continue
-    fi
-    if ! awk '/^\| `harden` \|/' "$f" | grep -qF -e "$IC_FIDELITY_TOKEN"; then
-      printf '  %s: §Per-stage routing `harden` row does not name `%s`\n' \
-        "$f" "$IC_FIDELITY_TOKEN" >&2
-      VIOLATIONS=$(( VIOLATIONS + 1 ))
-    fi
-  done
 
   # --- C3: interview is a HARD requirement, and the manifest agrees ---------
   SCANNED=$(( SCANNED + 1 ))
@@ -1051,21 +1033,6 @@ lint_interview_contract() {
     printf '  %s: manifest does not carry %s\n' "$GF_IC_PLUGIN_JSON" "$IC_MANIFEST_DEP" >&2
     VIOLATIONS=$(( VIOLATIONS + 1 ))
   fi
-
-  # --- C4: the disambiguation literal, source AND mirror --------------------
-  for f in "$GF_IC_SKILL_SRC" "$GF_IC_SKILL_MIRROR"; do
-    SCANNED=$(( SCANNED + 1 ))
-    if [ ! -f "$f" ]; then
-      printf '  %s: goalforge-interview SKILL.md missing\n' "$f" >&2
-      VIOLATIONS=$(( VIOLATIONS + 1 ))
-      continue
-    fi
-    if ! grep -qF -e "$IC_SKILL_LITERAL" "$f"; then
-      printf '  %s: missing the pinned disambiguation literal `%s`\n' \
-        "$f" "$IC_SKILL_LITERAL" >&2
-      VIOLATIONS=$(( VIOLATIONS + 1 ))
-    fi
-  done
 
   [ "$VIOLATIONS" -eq 0 ]
 }

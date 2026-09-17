@@ -123,7 +123,7 @@ row per dispatch decision. The keys are the writer's existing
 * `provider`/`model` on a `refused` row name the provider that was REFUSED, not
   the native provider resolved in its place.
 * `admitted_source` is the resolved path of the table that produced the verdict,
-  recorded RELATIVE to the root that contains it (`references/…` under the
+  recorded RELATIVE to the root that contains it (`references/` under the
   package, `plans/…` under the plans root) — never the absolute host path.
 * `admitted_override` is `true` iff `--admitted` was passed — so a reader can
   tell a production decision from a fixture one.

@@ -11,10 +11,6 @@
     },
     {
       "from": "README.md",
-      "path": "hooks/tests/goalforge-hooks-json.test.sh"
-    },
-    {
-      "from": "README.md",
       "path": "references/alias-map.md"
     },
     {
@@ -71,27 +67,11 @@
     },
     {
       "from": "commands/goalforge-run.md",
-      "path": "scripts/goalforge-generate.sh"
-    },
-    {
-      "from": "commands/goalforge-run.md",
-      "path": "skills/<child>/SKILL.md"
-    },
-    {
-      "from": "commands/goalforge-run.md",
       "path": "skills/run/SKILL.md"
     },
     {
       "from": "commands/implement.md",
       "path": "references/schema.md"
-    },
-    {
-      "from": "commands/implement.md",
-      "path": "scripts/goalforge-generate.sh"
-    },
-    {
-      "from": "commands/implement.md",
-      "path": "skills/<child>/SKILL.md"
     },
     {
       "from": "commands/implement.md",
@@ -104,14 +84,6 @@
     {
       "from": "commands/plan.md",
       "path": "references/schema.md"
-    },
-    {
-      "from": "commands/plan.md",
-      "path": "scripts/goalforge-generate.sh"
-    },
-    {
-      "from": "commands/plan.md",
-      "path": "skills/<child>/SKILL.md"
     },
     {
       "from": "commands/plan.md",
@@ -135,14 +107,6 @@
     },
     {
       "from": "commands/spec.md",
-      "path": "scripts/goalforge-generate.sh"
-    },
-    {
-      "from": "commands/spec.md",
-      "path": "skills/<child>/SKILL.md"
-    },
-    {
-      "from": "commands/spec.md",
       "path": "skills/capture/SKILL.md"
     },
     {
@@ -159,14 +123,6 @@
     },
     {
       "from": "commands/verify.md",
-      "path": "scripts/goalforge-generate.sh"
-    },
-    {
-      "from": "commands/verify.md",
-      "path": "skills/<child>/SKILL.md"
-    },
-    {
-      "from": "commands/verify.md",
       "path": "skills/run/SKILL.md"
     },
     {
@@ -179,14 +135,6 @@
     },
     {
       "from": "commands/wayfind.md",
-      "path": "scripts/goalforge-generate.sh"
-    },
-    {
-      "from": "commands/wayfind.md",
-      "path": "skills/<child>/SKILL.md"
-    },
-    {
-      "from": "commands/wayfind.md",
       "path": "skills/wayfind/SKILL.md"
     },
     {
@@ -196,10 +144,6 @@
     {
       "from": "references/admission.md",
       "path": "references/dispatch.yaml"
-    },
-    {
-      "from": "references/admission.md",
-      "path": "references/\u2026"
     },
     {
       "from": "references/admission.md",
@@ -351,10 +295,6 @@
     },
     {
       "from": "skills/execute/SKILL.md",
-      "path": "scripts/goalforge-generate.sh"
-    },
-    {
-      "from": "skills/execute/SKILL.md",
       "path": "skills/execute/references/dispatch-resolution.md"
     },
     {
@@ -376,10 +316,6 @@
     {
       "from": "skills/execute/references/dispatch-resolution.md",
       "path": "references/tier-map.md"
-    },
-    {
-      "from": "skills/execute/references/dispatch-resolution.md",
-      "path": "references/\u2026"
     },
     {
       "from": "skills/harden/SKILL.md",
@@ -428,10 +364,6 @@
     {
       "from": "skills/run/SKILL.md",
       "path": "scripts/goalforge-workflow-compile.py"
-    },
-    {
-      "from": "skills/run/SKILL.md",
-      "path": "skills/<child>/SKILL.md"
     },
     {
       "from": "skills/run/workflows/README.md",

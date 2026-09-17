@@ -87,7 +87,7 @@ Full package→plugin pipeline, relations map, and the daily workflow:
 
 | System | Status | What it is |
 |---|---|---|
-| **goalforge** | **shipped** (v3.0.0) | Goal-and-verification-driven development chain: capture → spec → decompose → harden → execute → verify. Work packages are *goal objects* — outcome, verification strategy, constraints, boundaries — so "done" is machine-decidable wherever possible. 18 skills — 15 chain stages plus `wayfind`, `prototype`, and `brief`. |
+| **goalforge** | **shipped** (v4.0.0) | Goal-and-verification-driven development chain: capture → spec → decompose → harden → execute → verify. Work packages are *goal objects* — outcome, verification strategy, constraints, boundaries — so "done" is machine-decidable wherever possible. 13 skills — 11 chain stages plus `wayfind` and `prototype`. |
 | **interview** | **shipped** (v1.0.3) | Interview engine plugin (source repo: [elicitforge](https://github.com/Truncuso/elicitforge)) — grills plans, specs, and ideas before they're acted on, via typed presets (`/interview` with `preset: <name>`) or a bare grill (`/grill`); goalforge's harden stage delegates to it. |
 | **project-onboard** | in development | One front door that sets up a new *or* existing project with the full agentic surface: git + guardrail hooks, intent interview, memory/doc spine, retrieval indexes — interactive for new projects, plan-only auto mode for existing ones. |
 | **agent-dispatch** | planned (next) | Route work to the right model/provider (Anthropic, DeepSeek, Z.AI, Ollama, OpenRouter) with explicit model+effort per dispatch. |
@@ -99,18 +99,15 @@ Full package→plugin pipeline, relations map, and the daily workflow:
 
 ### Inside goalforge
 
-The chain is fifteen stage skills, alongside three skills that are **not**
-stages (`wayfind`, `prototype`, `brief`) — two of them worth naming here,
-because they handle the work *before* a spec is writable, and the work a spec
-cannot answer on paper:
+The chain is eleven stage skills, alongside two skills that are **not**
+stages (`wayfind`, `prototype`) — both worth naming here, because they handle
+the work *before* a spec is writable, and the work a spec cannot answer on
+paper:
 
 | Sub-capability | Status | What it is |
 |---|---|---|
 | **wayfind** (v0.3.0) | shipped | Pre-spec on-ramp for a foggy, multi-session effort: builds a decision map (`map.md` pointer-index + one-decision-per-ticket files), drives a frontier-computed work loop across sessions, and graduates in place into `goalforge-capture` once the fog clears. Skipped entirely when a feature is already clear. |
 | **prototype** (v0.3.0) | shipped | Declared spike register: one design question, explicit success criteria, throwaway code in a logic / UI / perf branch. The findings doc is the survivor; the code is deleted or absorbed through review at production rigor — never merged in spike form. |
-
-`brief` is the third non-stage skill: it authors the task briefs that
-`goalforge-execute` consumes.
 
 ```mermaid
 flowchart LR
