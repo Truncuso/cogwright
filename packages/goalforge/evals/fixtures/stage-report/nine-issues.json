@@ -1,0 +1,243 @@
+{
+  "stage": "harden",
+  "wp": "wp-07-stage-reports",
+  "reader": "anonymous",
+  "changed": [
+    {
+      "text": "G3 round 1 returned BLOCK with 2 CRITICAL and 8 HIGH findings",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:13"
+    }
+  ],
+  "issues": [
+    {
+      "id": "G3-1",
+      "text": "no JSON-Schema library exists, so b1's known-bads cannot fail",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:39",
+      "evidence": "reviewer verified this against the live file",
+      "options": [
+        {
+          "label": "fix in this lap",
+          "pro": "the oracle becomes load-bearing",
+          "con": "one more amendment round"
+        },
+        {
+          "label": "defer",
+          "pro": "no edit now",
+          "con": "the cheapest green stays deleting the check"
+        },
+        {
+          "label": "route to a later WP",
+          "pro": "keeps this lap small",
+          "con": "the goal facet stays unverifiable until then"
+        }
+      ],
+      "recommended": "fix in this lap",
+      "owner": "human"
+    },
+    {
+      "id": "G3-2",
+      "text": "the ref regex rejects the legal path#heading form",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:40",
+      "evidence": "reviewer verified this against the live file",
+      "options": [
+        {
+          "label": "fix in this lap",
+          "pro": "the oracle becomes load-bearing",
+          "con": "one more amendment round"
+        },
+        {
+          "label": "defer",
+          "pro": "no edit now",
+          "con": "the cheapest green stays deleting the check"
+        },
+        {
+          "label": "route to a later WP",
+          "pro": "keeps this lap small",
+          "con": "the goal facet stays unverifiable until then"
+        }
+      ],
+      "recommended": "fix in this lap",
+      "owner": "human"
+    },
+    {
+      "id": "G3-4",
+      "text": "the exact 9-name event roster is not in owned_files",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:47",
+      "evidence": "reviewer verified this against the live file",
+      "options": [
+        {
+          "label": "fix in this lap",
+          "pro": "the oracle becomes load-bearing",
+          "con": "one more amendment round"
+        },
+        {
+          "label": "defer",
+          "pro": "no edit now",
+          "con": "the cheapest green stays deleting the check"
+        },
+        {
+          "label": "route to a later WP",
+          "pro": "keeps this lap small",
+          "con": "the goal facet stays unverifiable until then"
+        }
+      ],
+      "recommended": "fix in this lap",
+      "owner": "human"
+    },
+    {
+      "id": "G3-5",
+      "text": "the SKILL.md line budget is already spent",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:48",
+      "evidence": "reviewer verified this against the live file",
+      "options": [
+        {
+          "label": "fix in this lap",
+          "pro": "the oracle becomes load-bearing",
+          "con": "one more amendment round"
+        },
+        {
+          "label": "defer",
+          "pro": "no edit now",
+          "con": "the cheapest green stays deleting the check"
+        },
+        {
+          "label": "route to a later WP",
+          "pro": "keeps this lap small",
+          "con": "the goal facet stays unverifiable until then"
+        }
+      ],
+      "recommended": "fix in this lap",
+      "owner": "human"
+    },
+    {
+      "id": "G3-6",
+      "text": "reader-slug path traversal has no oracle",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:49",
+      "evidence": "reviewer verified this against the live file",
+      "options": [
+        {
+          "label": "fix in this lap",
+          "pro": "the oracle becomes load-bearing",
+          "con": "one more amendment round"
+        },
+        {
+          "label": "defer",
+          "pro": "no edit now",
+          "con": "the cheapest green stays deleting the check"
+        },
+        {
+          "label": "route to a later WP",
+          "pro": "keeps this lap small",
+          "con": "the goal facet stays unverifiable until then"
+        }
+      ],
+      "recommended": "fix in this lap",
+      "owner": "human"
+    },
+    {
+      "id": "G3-7",
+      "text": "the privacy oracle tests stdout, not the written profile",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:50",
+      "evidence": "reviewer verified this against the live file",
+      "options": [
+        {
+          "label": "fix in this lap",
+          "pro": "the oracle becomes load-bearing",
+          "con": "one more amendment round"
+        },
+        {
+          "label": "defer",
+          "pro": "no edit now",
+          "con": "the cheapest green stays deleting the check"
+        },
+        {
+          "label": "route to a later WP",
+          "pro": "keeps this lap small",
+          "con": "the goal facet stays unverifiable until then"
+        }
+      ],
+      "recommended": "fix in this lap",
+      "owner": "human"
+    },
+    {
+      "id": "G3-9",
+      "text": "b2 is prose-enforced: a citation is not a call",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:52",
+      "evidence": "reviewer verified this against the live file",
+      "options": [
+        {
+          "label": "fix in this lap",
+          "pro": "the oracle becomes load-bearing",
+          "con": "one more amendment round"
+        },
+        {
+          "label": "defer",
+          "pro": "no edit now",
+          "con": "the cheapest green stays deleting the check"
+        },
+        {
+          "label": "route to a later WP",
+          "pro": "keeps this lap small",
+          "con": "the goal facet stays unverifiable until then"
+        }
+      ],
+      "recommended": "fix in this lap",
+      "owner": "human"
+    },
+    {
+      "id": "G3-14",
+      "text": "the 40-line budget has no overflow rule behind it",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:71",
+      "evidence": "reviewer verified this against the live file",
+      "options": [
+        {
+          "label": "fix in this lap",
+          "pro": "the oracle becomes load-bearing",
+          "con": "one more amendment round"
+        },
+        {
+          "label": "defer",
+          "pro": "no edit now",
+          "con": "the cheapest green stays deleting the check"
+        },
+        {
+          "label": "route to a later WP",
+          "pro": "keeps this lap small",
+          "con": "the goal facet stays unverifiable until then"
+        }
+      ],
+      "recommended": "fix in this lap",
+      "owner": "human"
+    },
+    {
+      "id": "G3-15",
+      "text": "nothing asserts next_gate survives a populated assumed_known",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:74",
+      "evidence": "reviewer verified this against the live file",
+      "options": [
+        {
+          "label": "fix in this lap",
+          "pro": "the oracle becomes load-bearing",
+          "con": "one more amendment round"
+        },
+        {
+          "label": "defer",
+          "pro": "no edit now",
+          "con": "the cheapest green stays deleting the check"
+        },
+        {
+          "label": "route to a later WP",
+          "pro": "keeps this lap small",
+          "con": "the goal facet stays unverifiable until then"
+        }
+      ],
+      "recommended": "fix in this lap",
+      "owner": "human"
+    }
+  ],
+  "next_gate": {
+    "ask": "Authorize a fix lap and one more review round past the C4 cap?",
+    "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:235"
+  },
+  "assumed_known": []
+}

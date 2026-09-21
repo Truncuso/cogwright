@@ -144,6 +144,20 @@ Set `created:` and `updated:` in `overview.md` to today (`YYYY-MM-DD`). The `hoo
 Write/Edit where a machine has it registered; the skill sets them explicitly so
 correctness never depends on that hook being wired.
 
+### Step 4a — Resolve the reader once (C8)
+
+Resolve the reader slug at feature creation, so an `anonymous` reader WARNs at
+the FRONT of the chain rather than at the first gate that wanted a profile. The
+call never blocks: an unresolvable reader is one WARN and a disabled profile.
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-reader.sh --slug --feature-dir <PLANS_ROOT>/<feature>
+```
+
+The profile itself is machine state, not a memory fact
+(`${CLAUDE_PLUGIN_ROOT}/references/reader-profile.md`); it is written only from
+a human's own answer at a C7 touchpoint, never here and never by an agent.
+
 ### Step 4b — Scan live ideas for overlap (propose-only)
 
 A new feature may already cover an idea in `plans/ideas/`. Surface those so the
@@ -191,7 +205,7 @@ bash ~/.claude/skills/goalforge/scripts/goalforge-route.sh <PLANS_ROOT>/<feature
 The route is DATA on the artifact: downstream skills read `route:` from the
 overview, so routing survives session resume.
 
-### Step 5 — Report
+### Step 5 — Outputs written
 
 ```
 Created: <PLANS_ROOT>/<feature>/overview.md  (status: draft, route: <fast|standard|wave>)

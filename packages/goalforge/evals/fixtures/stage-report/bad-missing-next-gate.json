@@ -1,0 +1,10 @@
+{
+  "stage": "harden",
+  "wp": "wp-07-stage-reports",
+  "reader": "anonymous",
+  "changed": [{ "text": "one change", "ref": "a/b.py:12" }],
+  "issues": [
+    { "id": "X4", "text": "a report with no gate at all", "ref": "a/b.py:12", "owner": "human" }
+  ],
+  "assumed_known": []
+}

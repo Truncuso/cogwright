@@ -126,41 +126,36 @@ the block skeleton). `goal.outcome` is authoritative — it supersedes the body
 ### Step 3 — HUMAN GATE: present and seek approval
 
 Before writing any files or advancing status, present the draft spec to the
-user:
+user — through the ONE human template (C7), never a second hand-rolled format:
 
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh spec <feature> \
+  --json <report.json> --feature-dir <PLANS_ROOT>/<feature>
 ```
-Draft spec for <feature>:
 
-## Goal  (task_type: <task_type>)
-outcome:       <one measurable sentence>
-verification:  strategy=<strategy>  check=<check>
-constraints:   <list>
-boundaries:    <list>
-iteration:     <iteration_policy>
-blocked_stop:  <blocked_stop>
+The report's `changed[]` carries the goal block first — it is the contract the
+rest of the spec serves — then Design, Interface Contract and Non-Goals; its
+`issues[]` carry the Open Questions, one per bullet, each with its `ref`; and
+its `next_gate.ask` is verbatim:
 
-## Design
-<approach summary>
-
-## Interface Contract
-<contracts summary>
-
-## Non-Goals
-<exclusions>
-
-## Open Questions
-<unresolved items>
-
+```text
 Approve this spec and advance status (draft → ready)? [yes/no/revise/grill]  (grill omitted when SDD_AUTONOMY=unattended or the interview skill is unresolvable)
 ```
 
-Present the goal block first — it is the contract the rest of the spec serves.
 If any goal facet is vague or unset (and not a deliberate open question), refine
 it in Step 2b before re-presenting rather than asking the user to approve an
 under-specified goal.
 
 **Do not proceed until the user replies with an affirmative.** If the user
-requests revisions, iterate the design pass (Step 2) and re-present.
+requests revisions, iterate the design pass (Step 2) and re-present the DIFF:
+pass the previous report as `--previous`, so a `revise` round renders only what
+changed and never re-pastes the whole draft (C7).
+
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh spec <feature> \
+  --json <report.json> --previous <prev-report.json> --feature-dir <PLANS_ROOT>/<feature>
+```
+
 If the user declines, exit without writing any files or changing any status.
 
 `grill` is the fourth answer, additive: `yes`, `no`, and `revise` keep the
@@ -214,7 +209,7 @@ Update `<PLANS_ROOT>/<feature>/overview.md` in place:
 
 Do not modify any other frontmatter fields.
 
-### Step 6 — Report
+### Step 6 — Outputs written
 
 ```
 Updated: <PLANS_ROOT>/<feature>/overview.md  (status: draft → ready)

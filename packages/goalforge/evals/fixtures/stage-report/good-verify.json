@@ -1,0 +1,14 @@
+{
+  "stage": "verify",
+  "wp": "wp-07-stage-reports",
+  "reader": "anonymous",
+  "changed": [
+    { "text": "gates A/B/C ran over the WP's single commit", "ref": "packages/goalforge/verify/SKILL.md:54" }
+  ],
+  "issues": [],
+  "next_gate": {
+    "ask": "Gate C judge and the second opinion disagree — which verdict stands?",
+    "ref": "packages/goalforge/verify/SKILL.md:98"
+  },
+  "assumed_known": []
+}

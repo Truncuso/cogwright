@@ -1,0 +1,26 @@
+{
+  "stage": "execute",
+  "wp": "wp-07-stage-reports",
+  "reader": "anonymous",
+  "changed": [
+    { "text": "T1-T5 landed: schema, validator keywords, template, emitter, reader", "ref": "packages/goalforge/scripts/goalforge-stage-report.sh:1" }
+  ],
+  "issues": [
+    {
+      "id": "T8",
+      "text": "verify/SKILL.md has zero deletion budget and two call sites to add",
+      "ref": "packages/goalforge/verify/SKILL.md:120",
+      "options": [
+        { "label": "extend existing fenced blocks", "pro": "two lines total", "con": "the calls read as gate plumbing" },
+        { "label": "new sections", "pro": "explicit", "con": "breaches the line cap" }
+      ],
+      "recommended": "extend existing fenced blocks",
+      "owner": "agent"
+    }
+  ],
+  "next_gate": {
+    "ask": "The WP verification command is green — hand off to goalforge-verify?",
+    "ref": "packages/goalforge/execute/SKILL.md#6 — Deterministic eval, then the one commit"
+  },
+  "assumed_known": []
+}

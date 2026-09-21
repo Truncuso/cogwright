@@ -1,0 +1,28 @@
+{
+  "stage": "spec",
+  "wp": "goalforge-overhaul",
+  "reader": "anonymous",
+  "changed": [
+    { "text": "C6 gained the stage.report event and its field list", "ref": "plans/goalforge-overhaul/spec.md:157" },
+    { "text": "C8 now types the reader profile as machine state", "ref": "plans/goalforge-overhaul/spec.md:187" }
+  ],
+  "issues": [
+    {
+      "id": "OQ3",
+      "text": "Does the report obligation cover every stage exit, or only C7 (human touchpoints)?",
+      "ref": "plans/goalforge-overhaul/spec.md:169",
+      "evidence": "decompose and run have exits but no touchpoint",
+      "options": [
+        { "label": "touchpoints only", "pro": "no report where nobody reads one", "con": "a later touchpoint must remember to wire one" },
+        { "label": "every stage exit", "pro": "uniform rule", "con": "decompose and run emit reports nobody reads" }
+      ],
+      "recommended": "touchpoints only",
+      "owner": "human"
+    }
+  ],
+  "next_gate": {
+    "ask": "Approve this spec and advance status (draft -> ready)? [yes/no/revise]",
+    "ref": "packages/goalforge/spec/SKILL.md#Step 3 — HUMAN GATE: present and seek approval"
+  },
+  "assumed_known": []
+}

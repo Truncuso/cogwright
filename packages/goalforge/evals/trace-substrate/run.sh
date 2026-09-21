@@ -172,18 +172,19 @@ case_e() {
     if ! _validate_log "$fx" >/dev/null 2>&1; then
         fail e "every fixture event should validate against the embedded schema"; return
     fi
-    # assert all 9 event types are represented
+    # assert all 10 event types are represented
     types="$(python3 - "$fx" <<'PY'
 import sys, json
 seen = {json.loads(l)["type"] for l in open(sys.argv[1]) if l.strip()}
 want = {"wp.status_changed","feature.status_changed","task.status_changed",
         "commit.linked","gate.result","finding.recorded",
-        "dispatch.launched","dispatch.completed","issue.recorded"}
+        "dispatch.launched","dispatch.completed","issue.recorded",
+        "stage.report"}
 print("OK" if seen == want else "MISSING " + ",".join(sorted(want - seen)))
 PY
 )"
     if [[ "$types" == "OK" ]]; then
-        pass e "all 9 event types present and schema-valid"
+        pass e "all 10 event types present and schema-valid"
     else
         fail e "fixture coverage incomplete ($types)"
     fi
@@ -265,8 +266,8 @@ import sys
 from importlib.machinery import SourceFileLoader
 mod = SourceFileLoader("emit", sys.argv[1]).load_module()
 s = mod.load_schema()
-assert len(s.get("oneOf", [])) == 9, "expected 9 schema branches"
-print("  ok embedded schema parses (9 branches)")
+assert len(s.get("oneOf", [])) == 19, "expected 19 schema branches"
+print("  ok embedded schema parses (19 branches)")
 PY
     then :; else echo "  SCHEMA PARSE FAILED"; ok=1; fi
     if _validate_log "$FIXTURES/all-events.jsonl" >/dev/null 2>&1; then

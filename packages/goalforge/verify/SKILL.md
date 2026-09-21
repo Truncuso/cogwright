@@ -88,6 +88,7 @@ Then take ONE second opinion on that verdict:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-second-opinion.sh <wp> --feature-dir <feature> --verdict <gate-C-verdict-file> --diff <wp-diff-file>
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh verify <wp-id> --json <report.json> --feature-dir <feature>   # on judge/second-opinion disagreement (C7)
 ```
 
 `--verdict` (gate C verdict text) and `--diff` (the WP diff) are FILES, so the
@@ -105,6 +106,7 @@ never break the tie yourself.
    ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp> verified \
      --from implemented --reason "gates A/B/C passed" --actor goalforge-verify
+   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh verify <wp-id> --json <report.json> --feature-dir <feature>   # gate completion (C7)
    ```
 2. **Last WP?** If every sibling `wp-*/overview.md` is now `verified`, run one
    integration review over the whole-feature diff (role `integration-review`)

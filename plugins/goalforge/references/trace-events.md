@@ -65,7 +65,7 @@ Degrade-not-block: any attribution lookup failure resolves to `"unknown"`/`""`;
 it never blocks the emit, and the emitter warns to stderr + exits 0 on emission
 failure so it never blocks the underlying chain operation.
 
-## Event types (18)
+## Event types (19)
 
 All eighteen are schema-defined here (single schema home). `harden.warn` is
 added by wp-03 (producer: `goalforge-harden-stop.sh`, exit 0). Producer coverage
@@ -93,6 +93,12 @@ gains a `warn` value on its existing `result` enum this WP
 `result` stay all-required, unchanged from the pre-wp-01 contract. `warn` is
 non-blocking (never counted toward the C4 self-disable budget); `fail` is the
 strike `goalforge-gate-budget.sh` (T19) counts.
+
+`stage.report` is added by wp-07 (C6/C7): the one machine-readable human-facing
+report, emitted once per C7 touchpoint. Producer:
+`scripts/goalforge-stage-report.sh`, called from `capture`, `spec`, `harden`,
+`execute` and `verify`. A stage exit with NO human touchpoint (`decompose`,
+`run`) carries no report obligation (wp-07 OQ3, user 2026-09-13).
 
 ### `wp.status_changed`
 
@@ -368,6 +374,31 @@ payload shape as `reharden.proposed`, pointing at the same evidence file.
 
 Plus attribution fields (as above), with `mode: evidence`.
 
+### `stage.report`
+
+The human-facing stage report (spec.md C6/C7, wp-07). Exactly one row per C7
+touchpoint, appended never rewritten. The row carries the report PAYLOAD
+inline; the payload's standalone contract — the only seam goalforge-viz
+consumes (ticket-76) — is `references/schema/stage-report.schema.json`, and the
+branch below agrees with it **field for field** on the payload (wp-07 b5).
+Rendered to the human through `references/templates/stage-report.md`; that
+template is the sole human format, never a second one.
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `stage` | string (`capture`\|`spec`\|`harden`\|`execute`\|`verify`) | yes | The touchpoint-owning stage. |
+| `wp` | string | yes | WP id, or the feature id for a feature-level touchpoint. |
+| `reader` | string (`^[a-z0-9][a-z0-9._-]*$`) | yes | Reader slug per C8. The pattern admits no `@` — the full email is never stored. |
+| `changed` | array of `{text, ref}` | yes | What this stage changed since the reader last saw it. |
+| `issues` | array of `{id?, text, ref, evidence?, options?, recommended?, owner}` | yes | One entry per thing the reader must decide or know. `owner` is `human`\|`agent`; `options` (when present) holds at least two `{label, pro, con}`. Zero issues is legal. |
+| `next_gate` | object `{ask, ref}` | yes | The ask. Never collapsed by the overflow rule, never suppressed by `assumed_known` (OQ1). |
+| `assumed_known` | array of string | no | Ids the reader profile marks seen; named, body omitted. |
+
+Every `ref` is `<path>:<line>` or `<path>#<heading>`
+(`^[^\s:]+(:[0-9]+|#[^\s].*)$`), never a paraphrase.
+
+Plus attribution fields (as above).
+
 ## Legacy `.sdd-transitions.jsonl` derivation cross-check (task-04)
 
 The legacy ledger row shape (from `goalforge-transition.sh` `do_write`) is:
@@ -473,7 +504,8 @@ these; validators select the branch set by the row's `schema_version`.
         "harden.round",
         "wp.verified",
         "second_opinion.ok",
-        "second_opinion.skipped"
+        "second_opinion.skipped",
+        "stage.report"
       ]
     },
     "schema_version": { "type": "integer", "minimum": 1 }
@@ -804,6 +836,79 @@ these; validators select the branch set by the row's `schema_version`.
         "decision_ref": { "type": "string" }
       },
       "required": ["type", "wp", "evidence"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "stage.report" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "stage": {
+          "type": "string",
+          "enum": ["capture", "spec", "harden", "execute", "verify"]
+        },
+        "wp": { "type": "string" },
+        "reader": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]*$" },
+        "changed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["text", "ref"],
+            "additionalProperties": false,
+            "properties": {
+              "text": { "type": "string" },
+              "ref": { "type": "string", "pattern": "^[^\\s:]+(:[0-9]+|#[^\\s].*)$" }
+            }
+          }
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["text", "ref", "owner"],
+            "additionalProperties": false,
+            "properties": {
+              "id": { "type": "string" },
+              "text": { "type": "string" },
+              "ref": { "type": "string", "pattern": "^[^\\s:]+(:[0-9]+|#[^\\s].*)$" },
+              "evidence": { "type": "string" },
+              "options": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["label", "pro", "con"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "label": { "type": "string" },
+                    "pro": { "type": "string" },
+                    "con": { "type": "string" }
+                  }
+                }
+              },
+              "recommended": { "type": "string" },
+              "owner": { "type": "string", "enum": ["human", "agent"] }
+            }
+          }
+        },
+        "next_gate": {
+          "type": "object",
+          "required": ["ask", "ref"],
+          "additionalProperties": false,
+          "properties": {
+            "ask": { "type": "string" },
+            "ref": { "type": "string", "pattern": "^[^\\s:]+(:[0-9]+|#[^\\s].*)$" }
+          }
+        },
+        "assumed_known": { "type": "array", "items": { "type": "string" } },
+        "actor": { "type": "string" },
+        "mode": { "type": "string" },
+        "session": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type", "stage", "wp", "reader", "changed", "issues", "next_gate"],
       "additionalProperties": false
     }
   ]

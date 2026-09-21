@@ -1,0 +1,103 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://goalforge/stage-report.schema.json",
+  "title": "goalforge stage.report payload",
+  "description": "The PAYLOAD of a stage.report trace event (spec.md C6). This file is the ONLY seam goalforge-viz consumes (ticket-76). The trace ENVELOPE that carries this payload is the schema embedded in references/trace-events.md; the two documents agree field for field on the payload (wp-07 b5) and a fork between them is a test failure, not a variant. The `ref` pattern `^[^\\s:]+(:[0-9]+|#[^\\s].*)$` is written out at each site rather than factored into `definitions` + `$ref`: the only validator in this package (goalforge-trace-emit `_validate`) implements a draft-07 SUBSET with no `$ref` resolution, so a factored pattern would silently never be applied.",
+  "type": "object",
+  "required": ["stage", "wp", "reader", "changed", "issues", "next_gate"],
+  "additionalProperties": false,
+  "properties": {
+    "stage": {
+      "description": "The C7-touchpoint-owning stage that emitted this report.",
+      "type": "string",
+      "enum": ["capture", "spec", "harden", "execute", "verify"]
+    },
+    "wp": {
+      "description": "WP id, or the feature id for a feature-level touchpoint (capture, spec).",
+      "type": "string"
+    },
+    "reader": {
+      "description": "Reader slug per C8. The local-part of an address at most — the full email is never stored, and this pattern admits no `@`.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9._-]*$"
+    },
+    "changed": {
+      "description": "What this stage changed since the reader last saw it.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "ref"],
+        "additionalProperties": false,
+        "properties": {
+          "text": { "type": "string" },
+          "ref": {
+            "description": "`<path>:<line>` or `<path>#<heading>`, never a paraphrase (spec.md:165).",
+            "type": "string",
+            "pattern": "^[^\\s:]+(:[0-9]+|#[^\\s].*)$"
+          }
+        }
+      }
+    },
+    "issues": {
+      "description": "One entry per thing the reader must decide or know. Zero issues is legal (a clean gate); every issue present carries a `ref`.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["text", "ref", "owner"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "Stable id (WP slug, ticket id, decision id). Required for an issue that may later land in `assumed_known[]`, and named in the overflow line when the issue collapses.",
+            "type": "string"
+          },
+          "text": { "type": "string" },
+          "ref": {
+            "description": "`<path>:<line>` or `<path>#<heading>`, never a paraphrase (spec.md:165).",
+            "type": "string",
+            "pattern": "^[^\\s:]+(:[0-9]+|#[^\\s].*)$"
+          },
+          "evidence": {
+            "description": "Optional quoted evidence. The LOCATOR for that evidence is `ref`, which is what C6 requires of every issue.",
+            "type": "string"
+          },
+          "options": {
+            "description": "A genuine choice, so at least two entries when present.",
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "object",
+              "required": ["label", "pro", "con"],
+              "additionalProperties": false,
+              "properties": {
+                "label": { "type": "string" },
+                "pro": { "type": "string" },
+                "con": { "type": "string" }
+              }
+            }
+          },
+          "recommended": { "type": "string" },
+          "owner": { "type": "string", "enum": ["human", "agent"] }
+        }
+      }
+    },
+    "next_gate": {
+      "description": "The ask this touchpoint puts to the reader. Never collapsed by the overflow rule and never suppressed by `assumed_known` (wp-07 OQ1, C7).",
+      "type": "object",
+      "required": ["ask", "ref"],
+      "additionalProperties": false,
+      "properties": {
+        "ask": { "type": "string" },
+        "ref": {
+          "description": "`<path>:<line>` or `<path>#<heading>`, never a paraphrase (spec.md:165).",
+          "type": "string",
+          "pattern": "^[^\\s:]+(:[0-9]+|#[^\\s].*)$"
+        }
+      }
+    },
+    "assumed_known": {
+      "description": "Ids the reader profile marks seen; the report names them and omits their body.",
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}

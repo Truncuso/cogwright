@@ -160,9 +160,9 @@ done
 
 echo ""
 
-# ── wp-07 conformance tests ─────────────────────────────────────────────────
-# Re-asserts the facts wp-07 establishes (tasks 01-03) so they survive later WPs.
-echo "[ wp-07 conformance tests ]"
+# ── slim-core skill-metadata conformance tests ──────────────────────────────
+# Labelled by CONTENT (was "wp-07 conformance tests", a DIFFERENT plan's wp-07).
+echo "[ slim-core skill-metadata conformance tests ]"
 
 WAYFIND_MD="$SKILL_DIR/wayfind/SKILL.md"
 
@@ -228,6 +228,92 @@ TODO_HITS="$(grep -c 'todo\.md' "$SKILL_DIR/capture/SKILL.md" 2>/dev/null || tru
 [ "${TODO_HITS:-1}" -eq 0 ] \
   && check "capture/SKILL.md carries zero todo.md citations" "pass" \
   || check "capture/SKILL.md carries zero todo.md citations (got $TODO_HITS)" "fail"
+
+echo ""
+
+# ── stage-report conformance tests (wp-07-stage-reports, b2) ────────────────
+# Every C7 touchpoint INVOKES the emitter, and the invocation must sit inside a
+# fenced ```bash block — a citation in prose is not a call. Known-bads: a
+# call-deleted copy of each stage file, and a copy of each `<= 125` assertion
+# site with the ceiling raised to 135.
+echo "[ stage-report conformance tests ]"
+
+SR_TMP="$(mktemp -d)"
+
+# Extract ONLY the fenced bash blocks of a markdown file.
+bash_blocks() {
+  awk '/^ *```bash$/ {f=1; next} /^ *```$/ {f=0} f' "$1"
+}
+
+# <stage>:<script>:<expected touchpoint call count>
+for spec_row in \
+  "spec:goalforge-stage-report.sh:2" \
+  "harden:goalforge-stage-report.sh:2" \
+  "execute:goalforge-stage-report.sh:2" \
+  "verify:goalforge-stage-report.sh:2" \
+  "capture:goalforge-reader.sh:1"
+do
+  STAGE="${spec_row%%:*}"; REST="${spec_row#*:}"
+  SCRIPT="${REST%%:*}"; WANT="${REST##*:}"
+  SF="$SKILL_DIR/$STAGE/SKILL.md"
+  GOT="$(bash_blocks "$SF" | grep -c "scripts/$SCRIPT" || true)"
+  [ "$GOT" -ge "$WANT" ] \
+    && check "$STAGE/SKILL.md invokes $SCRIPT in a fenced bash block (>= $WANT)" "pass" \
+    || check "$STAGE/SKILL.md invokes $SCRIPT in a fenced bash block (want >= $WANT, got $GOT)" "fail"
+
+  # KNOWN-BAD: delete the call lines; the same grep must then find nothing.
+  grep -v "scripts/$SCRIPT" "$SF" > "$SR_TMP/$STAGE.nocall.md"
+  SAB="$(bash_blocks "$SR_TMP/$STAGE.nocall.md" | grep -c "scripts/$SCRIPT" || true)"
+  [ "$SAB" -eq 0 ] \
+    && check "known-bad: $STAGE/SKILL.md with the call deleted fails the check" "pass" \
+    || check "known-bad: $STAGE/SKILL.md with the call deleted fails the check" "fail"
+done
+
+# spec's revise round renders the DIFF, not the whole draft again (C7).
+bash_blocks "$SKILL_DIR/spec/SKILL.md" | grep -q -- "--previous" \
+  && check "spec/SKILL.md revise round passes --previous in a fenced bash block" "pass" \
+  || check "spec/SKILL.md revise round passes --previous in a fenced bash block" "fail"
+
+# NEGATIVE: no stage invents a report heading of its own — the template is the
+# only human format (C7).
+SR_HEAD_OK="pass"
+for STAGE in capture spec harden execute verify; do
+  grep -qE '^#+ .*(Report|Stage report)$' "$SKILL_DIR/$STAGE/SKILL.md" && SR_HEAD_OK="fail"
+done
+check "no stage SKILL.md carries a report heading of its own" "$SR_HEAD_OK"
+
+# The three `<= 125` assertion sites still assert the LITERAL 125, so a future
+# ceiling raise cannot land in the SKILL.md size alone.
+for SITE in "evals/run.sh" "harden/evals/run.sh" "verify/evals/run.sh"; do
+  grep -q -- '-le 125' "$SKILL_DIR/$SITE" \
+    && check "$SITE asserts the literal 125" "pass" \
+    || check "$SITE asserts the literal 125" "fail"
+  # KNOWN-BAD: the same site with the ceiling raised to 135.
+  sed 's/-le 125/-le 135/' "$SKILL_DIR/$SITE" > "$SR_TMP/ceiling.sh"
+  grep -q -- '-le 125' "$SR_TMP/ceiling.sh" \
+    && check "known-bad: $SITE with the ceiling raised to 135 fails the check" "fail" \
+    || check "known-bad: $SITE with the ceiling raised to 135 fails the check" "pass"
+done
+
+# The template, the payload schema and the two prose homes are on disk.
+SR_REFS_OK="pass"
+for f in \
+  "$SKILL_DIR/references/templates/stage-report.md" \
+  "$SKILL_DIR/references/schema/stage-report.schema.json" \
+  "$SKILL_DIR/references/reader-profile.md" \
+  "$SKILL_DIR/scripts/goalforge-stage-report.sh" \
+  "$SKILL_DIR/scripts/goalforge-reader.sh"
+do
+  [ -e "$f" ] || SR_REFS_OK="fail"
+done
+check "stage-report template, payload schema, reader docs and scripts exist" "$SR_REFS_OK"
+
+# The template states the overflow rule the renderer implements (b6).
+grep -q '^## Overflow rule$' "$SKILL_DIR/references/templates/stage-report.md" \
+  && check "references/templates/stage-report.md states the overflow rule" "pass" \
+  || check "references/templates/stage-report.md states the overflow rule" "fail"
+
+rm -rf "$SR_TMP"
 
 echo ""
 

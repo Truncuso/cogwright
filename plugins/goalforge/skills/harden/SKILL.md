@@ -59,6 +59,7 @@ Ask the stop rule before each round; record each completed round after it:
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-harden-stop.sh <wp-dir>   # 0 run, 3 park, 2 error
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-trace-emit --feature-dir <feature> \
   --event '{"type":"harden.round","wp":"<wp-id>","round":1,"tokens":<round-tokens>}'
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh harden <wp-id> --json <report.json> --feature-dir <feature>   # on park (exit 3), C7
 ```
 
 Exit 3 = park: the script writes the `harden.parked` row; append `harden:
@@ -93,16 +94,18 @@ One changelog row per goal facet changed; an invalid goal block never transition
 A human decides iff any of: `human_required` is set (a **veto** over the
 auto-advance predicate — an agent may set it, never clear it, and no other
 signal overrides it); `register: production` and `severity: HIGH`; the stop rule
-parked; or an irreversible action is in scope. Present the resolved questions
-(agent-answered rows marked), the accepted risks with their `## Risks` rows,
-and the goal block; advance only on an explicit yes. Otherwise advance
-autonomously with signal evidence in the ledger. One door, never both:
+parked; or an irreversible action is in scope. RENDER that gate through
+`goalforge-stage-report.sh` — resolved questions, accepted risks and the goal
+block are its `changed[]`/`issues[]`, and the template (C7) is the only human
+format; advance only on an explicit yes. Otherwise advance
+autonomously with signal evidence in the ledger. One door, never both
+(`--mode human` here, `--mode auto` with an `auto: OQ=0, G1-G4 pass` reason):
 
 ```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh harden <wp-id> \
+  --json <report.json> --feature-dir <feature>
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp-dir> ready \
   --reason "human approval; goal block validates" --mode human
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp-dir> ready \
-  --reason "auto: OQ=0, G1-G4 pass, human_required unset, severity=<sev>" --mode auto
 ```
 
 Unattended with a human required: write the gate prompt verbatim to

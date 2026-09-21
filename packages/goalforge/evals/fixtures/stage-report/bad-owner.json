@@ -1,0 +1,11 @@
+{
+  "stage": "harden",
+  "wp": "wp-07-stage-reports",
+  "reader": "anonymous",
+  "changed": [{ "text": "one change", "ref": "a/b.py:12" }],
+  "issues": [
+    { "id": "X6", "text": "owner is outside {human, agent}", "ref": "a/b.py:12", "owner": "nobody" }
+  ],
+  "next_gate": { "ask": "proceed?", "ref": "a/b.py:12" },
+  "assumed_known": []
+}

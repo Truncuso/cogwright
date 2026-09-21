@@ -1,0 +1,36 @@
+{
+  "stage": "harden",
+  "wp": "wp-07-stage-reports",
+  "reader": "anonymous",
+  "changed": [
+    {
+      "text": "the reader profile marks wp-02 and ticket-48 seen",
+      "ref": "packages/goalforge/references/reader-profile.md#Fields"
+    }
+  ],
+  "issues": [
+    {
+      "id": "wp-02",
+      "text": "schema v6 frontmatter landed in wp-02",
+      "ref": "plans/goalforge-overhaul/wp-02-schema-v6/overview.md:1",
+      "owner": "agent"
+    },
+    {
+      "id": "ticket-48",
+      "text": "the dispatch seam is ticket-48's shape",
+      "ref": "plans/goalforge-improvement/wayfind/ticket-48.md:1",
+      "owner": "agent"
+    },
+    {
+      "id": "OQ1",
+      "text": "assumed_known must never suppress a gate ask",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/overview.md:197",
+      "owner": "human"
+    }
+  ],
+  "next_gate": {
+    "ask": "GATE-ASK-SENTINEL: advance wp-07 from hardened to ready?",
+    "ref": "packages/goalforge/harden/SKILL.md#The `hardened \u2192 ready` gate (C7)"
+  },
+  "assumed_known": []
+}

@@ -178,6 +178,14 @@
       "path": "skills/execute/references/dispatch-resolution.md"
     },
     {
+      "from": "references/reader-profile.md",
+      "path": "scripts/goalforge-reader.sh"
+    },
+    {
+      "from": "references/reader-profile.md",
+      "path": "scripts/goalforge-stage-report.sh"
+    },
+    {
       "from": "references/retrospective.md",
       "path": "references/trace-events.md"
     },
@@ -234,12 +242,28 @@
       "path": "scripts/goalforge-transition.sh"
     },
     {
+      "from": "references/templates/stage-report.md",
+      "path": "scripts/goalforge-stage-report.sh"
+    },
+    {
       "from": "references/tier-map.md",
       "path": "references/dispatch.yaml"
     },
     {
       "from": "references/trace-events.md",
+      "path": "references/schema/stage-report.schema.json"
+    },
+    {
+      "from": "references/trace-events.md",
       "path": "references/state-machine.md"
+    },
+    {
+      "from": "references/trace-events.md",
+      "path": "references/templates/stage-report.md"
+    },
+    {
+      "from": "references/trace-events.md",
+      "path": "scripts/goalforge-stage-report.sh"
     },
     {
       "from": "skills/archive/SKILL.md",
@@ -268,6 +292,10 @@
     {
       "from": "skills/capture/SKILL.md",
       "path": "references/fidelity.md"
+    },
+    {
+      "from": "skills/capture/SKILL.md",
+      "path": "references/reader-profile.md"
     },
     {
       "from": "skills/capture/SKILL.md",
