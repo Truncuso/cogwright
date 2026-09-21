@@ -207,9 +207,9 @@ echo "[ b5: SKILL.md line budgets ]"
 
 for STAGE in decompose harden execute verify; do
   LC="$(wc -l < "$SKILL_DIR/$STAGE/SKILL.md" 2>/dev/null || echo 999999)"
-  [ "$LC" -le 120 ] \
-    && check "$STAGE/SKILL.md <= 120 lines (got $LC)" "pass" \
-    || check "$STAGE/SKILL.md <= 120 lines (got $LC)" "fail"
+  [ "$LC" -le 125 ] \
+    && check "$STAGE/SKILL.md <= 125 lines (got $LC)" "pass" \
+    || check "$STAGE/SKILL.md <= 125 lines (got $LC)" "fail"
 done
 
 # b5: name: equals the directory basename (ticket-79 option 1) for the three

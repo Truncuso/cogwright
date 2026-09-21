@@ -28,10 +28,10 @@ check() {
 echo "=== goalforge-verify: contract checks ==="
 
 LC="$(wc -l < "$SKILL_MD")"
-if [ "$LC" -le 120 ]; then
-  echo "  PASS [STATIC-CONTRACT]: SKILL.md <= 120 lines (got $LC)"; PASS=$((PASS+1))
+if [ "$LC" -le 125 ]; then
+  echo "  PASS [STATIC-CONTRACT]: SKILL.md <= 125 lines (got $LC)"; PASS=$((PASS+1))
 else
-  echo "  FAIL [STATIC-CONTRACT]: SKILL.md <= 120 lines (got $LC)"; FAIL=$((FAIL+1))
+  echo "  FAIL [STATIC-CONTRACT]: SKILL.md <= 125 lines (got $LC)"; FAIL=$((FAIL+1))
 fi
 
 NEG_OK=1

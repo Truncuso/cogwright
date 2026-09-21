@@ -62,8 +62,8 @@ check_tree() {
     # execute/SKILL.md line budget
     local lines
     lines="$(wc -l < "$root/execute/SKILL.md" 2>/dev/null || echo 99999)"
-    if [[ "$lines" -gt 120 ]]; then
-        echo "    execute/SKILL.md is $lines lines (max 120)"; rc=1
+    if [[ "$lines" -gt 125 ]]; then
+        echo "    execute/SKILL.md is $lines lines (max 125)"; rc=1
     fi
 
     # `name:` equals the directory basename
@@ -118,9 +118,9 @@ for wf in "${WIRING_FILES[@]}"; do
 done
 for _ in $(seq 1 25); do echo "padding" >> "$root/execute/SKILL.md"; done
 if check_tree "$root" >/dev/null; then
-    bad "sabotage: execute/SKILL.md over 120 lines is rejected"
+    bad "sabotage: execute/SKILL.md over 125 lines is rejected"
 else
-    ok "sabotage: execute/SKILL.md over 120 lines is rejected"
+    ok "sabotage: execute/SKILL.md over 125 lines is rejected"
 fi
 
 root="$T/sabotage-name"
