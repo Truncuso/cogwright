@@ -64,13 +64,14 @@ Ask the stop rule before each round; record each completed round after it:
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-harden-stop.sh <wp-dir>   # 0 run, 3 park, 2 error
 python3 ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-trace-emit --feature-dir <feature> \
   --event '{"type":"harden.round","wp":"<wp-id>","round":1,"tokens":<round-tokens>}'
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh harden <wp-id> --json <report.json> --feature-dir <feature>   # on park (exit 3), C7
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh harden <wp-id> --json <report.json> --feature-dir <feature>   # on a NEW park (`PARK —` output), C7
 ```
 
-Exit 3 = park: the script writes the `harden.parked` row; append `harden:
-ceiling-breached, rounds=2` to `findings.md`, report, and stop. Two rounds
+Exit 3 = park: on a NEW park (`PARK — … park-seq=<N>`) the script writes the
+`harden.parked` row AND the `harden: ceiling-breached` findings.md line — the agent writes neither; `already parked` writes neither. Cite `park-seq=<N>`. Two rounds
 maximum, round 2 diff-only, 60k tokens across all harden gates; a BLOCK
 surviving round 2 is a human touchpoint, not a third review call.
+Re-entry (attended, once per ruling): `goalforge-harden-stop.sh --reset --reason "<ruling locator> park-seq=<N>" --decision-ref <path>`, N being the last `harden.parked` seq, and the decision-ref is the `findings.md` ruling section carrying `answered_by: human` plus that locator verbatim.
 
 Review the WP `overview.md`: goal outcome measurable, `verification.command` +
 `behaviors[]` covering every outcome facet, checklist items inside `owned_files`,

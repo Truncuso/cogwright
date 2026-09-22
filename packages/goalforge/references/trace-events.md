@@ -65,9 +65,12 @@ Degrade-not-block: any attribution lookup failure resolves to `"unknown"`/`""`;
 it never blocks the emit, and the emitter warns to stderr + exits 0 on emission
 failure so it never blocks the underlying chain operation.
 
-## Event types (19)
+## Event types
 
-All eighteen are schema-defined here (single schema home). `harden.warn` is
+All are schema-defined here (single schema home); the branch count is pinned
+once, in `evals/trace-substrate/run.sh` by the assertion
+`assert len(s.get("oneOf", [])) == N, "expected N schema branches"`, and not
+restated as a number in this prose. `harden.warn` is
 added by wp-03 (producer: `goalforge-harden-stop.sh`, exit 0). Producer coverage
 this WP: `wp.status_changed`, `feature.status_changed`, `commit.linked`,
 `gate.result` have live producers (transition wiring + legacy derivation).
@@ -237,6 +240,29 @@ harden cost.
 | `wp` | string | yes | WP under harden review. |
 | `round` | integer | yes | Round number (1 or 2 — round 2 is diff-only per C4). |
 | `tokens` | integer | yes | Tokens spent in this round. |
+
+Plus attribution fields.
+
+### `harden.reset`
+
+A parked harden loop re-entered on a recorded human ruling (wp-14). Makes
+`goalforge-harden-stop.sh` count rounds and tokens only from this row forward
+for the WP. Producer: `goalforge-harden-stop.sh --reset` — fail-closed, unlike
+`harden.parked`/`harden.warn`: the script requires a post-emit read-back of
+this row before exiting 0 (`goalforge-trace-emit` is degrade-not-block, so its
+exit code alone cannot signal admission). Admission is three conjunctive
+conditions: the `decision_ref` file's text carries `answered_by: human` and the
+verbatim `reason` locator; its mtime is strictly newer than the last
+`harden.parked` row's `ts`; and the WP is currently parked (that park row is
+later than the WP's last `harden.reset` row) — so one ruling admits exactly one
+re-entry.
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | yes | WP whose harden loop is re-entered. |
+| `reason` | string | yes | Locator/text of the human ruling granting re-entry. |
+| `rounds_cleared` | integer | yes | Rounds completed at the park this reset clears (audit value). |
+| `decision_ref` | string | yes | Path to the recorded human ruling, as given on the command line. Required on this event type (it is optional everywhere else): the row is only meaningful if it names the record the re-entry was granted from. |
 
 Plus attribution fields.
 
@@ -502,6 +528,7 @@ these; validators select the branch set by the row's `schema_version`.
         "harden.parked",
         "harden.warn",
         "harden.round",
+        "harden.reset",
         "wp.verified",
         "second_opinion.ok",
         "second_opinion.skipped",
@@ -682,6 +709,23 @@ these; validators select the branch set by the row's `schema_version`.
         "decision_ref": { "type": "string" }
       },
       "required": ["type", "wp", "round", "tokens"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "harden.reset" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "reason": { "type": "string" },
+        "rounds_cleared": { "type": "integer" },
+        "actor": { "type": "string" },
+        "session": { "type": "string" },
+        "model": { "type": "string" },
+        "provider": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type", "wp", "reason", "rounds_cleared", "decision_ref"],
       "additionalProperties": false
     },
     {
