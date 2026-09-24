@@ -67,7 +67,8 @@ printf '%s' "$PROMPT" > "$STUB_CAPTURE"
 echo "call" >> "$STUB_CALLS"
 STUB_EXIT="${STUB_EXIT:-0}"
 STUB_REASON="${STUB_REASON:-}"
-printf '{"type":"result","subtype":"success","is_error":false,"result":"stub second opinion: verdict looks sound","codex":{"reason":"%s"}}\n' "$STUB_REASON" > "$OUTPUT"
+STUB_RESULT="${STUB_RESULT:-stub second opinion: verdict looks sound}"
+printf '{"type":"result","subtype":"success","is_error":false,"result":"%s","codex":{"reason":"%s"}}\n' "$STUB_RESULT" "$STUB_REASON" > "$OUTPUT"
 echo "EXIT_CODE=$STUB_EXIT" >> "$OUTPUT"
 exit "$STUB_EXIT"
 STUBEOF
@@ -305,12 +306,65 @@ else
     cat "$T/stderr.txt"
 fi
 
-# ledger accumulated exactly one row per leaf call (cases 2,3,4,6,7,8,10,12,13,
-# 14 = 10; cases 1, 5, 9 and 11 never reach the leaf)
-if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "10" ]]; then
-    ok "ledger row count equals leaf-call count (10)"
+# --- case 15 (issue 579): the full leaf result is recoverable, not just the --
+# --- 200-char excerpt kept in the trace row's `reason` ----------------------
+# A leaf result over 200 chars must still be fully recoverable afterwards: the
+# `second_opinion.ok` row's `reason` stays a short excerpt (readability), but
+# the row also carries a `decision_ref` pointing at a file under
+# `<feature-dir>/second-opinions/` that holds the leaf's FULL, untruncated
+# JSON envelope.
+LONG_RESULT="$(printf 'one minor oracle gap finding %.0s' $(seq 1 20))"
+STUB_RESULT="$LONG_RESULT" run_so_pinned dispatch-default.yaml spec-no-egress.md
+DECISION_REF_LINE="$(grep 'second_opinion.ok' "$FEATURE/trace-events.jsonl" | tail -1)"
+REF_REL="$(printf '%s' "$DECISION_REF_LINE" | grep -o '"decision_ref":"[^"]*"' | cut -d'"' -f4)"
+if [[ -n "$REF_REL" ]] && [[ -f "$FEATURE/$REF_REL" ]] \
+   && grep -q "$LONG_RESULT" "$FEATURE/$REF_REL" \
+   && ! grep -q "$LONG_RESULT" "$FEATURE/trace-events.jsonl"; then
+    ok "full leaf result recoverable via decision_ref (reason stays a short excerpt)"
 else
-    bad "ledger row count equals leaf-call count (10): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
+    bad "full leaf result recoverable via decision_ref (reason stays a short excerpt)"
+    echo "  decision_ref: '$REF_REL'"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 16 (issue 579): the exit-4 budget_exceeded persist site, and -------
+# --- skipped rows never carry a decision_ref ---------------------------------
+# The `second_opinion.ok` emit for the budget_exceeded/budget_check_failed
+# path is a SEPARATE call site from the exit-0 one (case 15 only exercises the
+# latter): it must persist and reference the full leaf output too.
+STUB_EXIT=4 STUB_REASON=budget_exceeded STUB_RESULT="$LONG_RESULT" \
+    run_so_pinned dispatch-default.yaml spec-no-egress.md
+BUDGET_LINE="$(grep 'second_opinion.ok' "$FEATURE/trace-events.jsonl" | tail -1)"
+BUDGET_REF="$(printf '%s' "$BUDGET_LINE" | grep -o '"decision_ref":"[^"]*"' | cut -d'"' -f4)"
+if [[ -n "$BUDGET_REF" ]] && [[ -f "$FEATURE/$BUDGET_REF" ]] \
+   && grep -q "$LONG_RESULT" "$FEATURE/$BUDGET_REF" \
+   && ! grep -q "$LONG_RESULT" "$FEATURE/trace-events.jsonl"; then
+    ok "exit-4 budget_exceeded also persists + references the full leaf result"
+else
+    bad "exit-4 budget_exceeded also persists + references the full leaf result"
+    echo "  decision_ref: '$BUDGET_REF'"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# a second_opinion.skipped row (leaf never ran to completion) must carry NO
+# decision_ref at all — reuse the leaf-exit-1 scenario from case 8.
+STUB_EXIT=1 run_so_pinned dispatch-default.yaml spec-no-egress.md
+SKIPPED_LINE="$(grep 'second_opinion.skipped' "$FEATURE/trace-events.jsonl" | tail -1)"
+if [[ -n "$SKIPPED_LINE" ]] && ! printf '%s' "$SKIPPED_LINE" | grep -q '"decision_ref"'; then
+    ok "second_opinion.skipped rows carry no decision_ref"
+else
+    bad "second_opinion.skipped rows carry no decision_ref"
+    echo "  $SKIPPED_LINE"
+fi
+
+# ledger accumulated exactly one row per leaf call (cases 2,3,4,6,7,8,10,12,13,
+# 14,15,16a,16b = 13; cases 1, 5, 9 and 11 never reach the leaf. 16b reaches
+# the leaf — STUB_EXIT=1 — but its second_opinion.skipped emit carries no
+# decision_ref, which is exactly the case it asserts)
+if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "13" ]]; then
+    ok "ledger row count equals leaf-call count (13)"
+else
+    bad "ledger row count equals leaf-call count (13): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
 fi
 
 echo

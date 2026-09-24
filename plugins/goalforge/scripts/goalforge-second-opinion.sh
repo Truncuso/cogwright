@@ -28,7 +28,9 @@
 # Trace rows (via scripts/goalforge-trace-emit, best-effort):
 #   second_opinion.ok      — leaf ran and its turn completed (exit 0, or exit 4
 #                            budget_exceeded/budget_check_failed: the result is
-#                            kept, the overspend named in the reason)
+#                            kept, the overspend named in the reason). `reason`
+#                            is a 200-char excerpt; the full leaf envelope is
+#                            persisted and pointed to via `decision_ref` (issue 579).
 #   second_opinion.skipped — reason `no-payload` (neither --verdict nor --diff
 #                            resolves to a non-empty file: there is nothing to
 #                            take an opinion ON), `dispatcher-absent` (leaf
@@ -120,20 +122,41 @@ MAX_PAYLOAD_BYTES="$MAX_PAYLOAD_DEFAULT"
 # a WARN rather than honoured into an exec failure (exit 126).
 MAX_PAYLOAD_CEILING=$((100 * 1024))
 
-emit() { # $1=event type  $2=reason  ($PROVIDER/$MODEL when resolved)
+emit() { # $1=event type  $2=reason  $3=decision_ref (optional; $PROVIDER/$MODEL from env)
     local emitter="$SD/goalforge-trace-emit"
     [[ -f "$emitter" ]] || return 0
     command -v python3 >/dev/null 2>&1 || return 0
-    TYPE="$1" WP="$WP_NAME" REASON="$2" PROVIDER="${PROVIDER:-}" MODEL="${MODEL:-}" python3 -c '
+    TYPE="$1" WP="$WP_NAME" REASON="$2" PROVIDER="${PROVIDER:-}" MODEL="${MODEL:-}" DECISION_REF="${3:-}" python3 -c '
 import json, os, sys
 row = {"type": os.environ["TYPE"], "wp": os.environ["WP"], "reason": os.environ["REASON"]}
-for key in ("provider", "model"):
+for key in ("provider", "model", "decision_ref"):
     val = os.environ.get(key.upper(), "")
     if val:
         row[key] = val
 sys.stdout.write(json.dumps(row))
 ' 2>/dev/null | python3 "$emitter" --feature-dir "$FEATURE_DIR" >/dev/null 2>&1 || true
     return 0
+}
+
+# Persists the leaf's full JSON envelope (EXIT_CODE trailer stripped — that
+# trailer is not valid JSON, leaf-interface.md §6 hazard 1) to a deterministic
+# path under the feature dir, so the finding `reason` truncates to 200 chars
+# for readability WITHOUT losing the rest (issue 579). Echoes the path
+# relative to $FEATURE_DIR, or "" on any failure (best-effort, never blocks).
+persist_leaf_output() {
+    [[ -s "$OUT" ]] || { echo ""; return 0; }
+    local so_dir="$FEATURE_DIR/second-opinions"
+    mkdir -p "$so_dir" 2>/dev/null || { echo ""; return 0; }
+    local ts rel abs
+    ts="$(date -u +%Y%m%dT%H%M%S)-$$"
+    rel="second-opinions/${WP_NAME}-${ts}.json"
+    abs="$FEATURE_DIR/$rel"
+    if grep -v '^EXIT_CODE=' "$OUT" > "$abs.tmp" 2>/dev/null && [[ -s "$abs.tmp" ]] && mv "$abs.tmp" "$abs" 2>/dev/null; then
+        echo "$rel"
+    else
+        rm -f "$abs.tmp"
+        echo ""
+    fi
 }
 
 # --- nothing to opine on? --------------------------------------------------
@@ -388,9 +411,11 @@ except OSError as exc:
 ' || true
 
 if [[ "$LEAF_EXIT" -eq 0 ]]; then
-    emit second_opinion.ok "${LEAF_RESULT}${REASON_SUFFIX}"
+    DECISION_REF="$(persist_leaf_output)"
+    emit second_opinion.ok "${LEAF_RESULT}${REASON_SUFFIX}" "$DECISION_REF"
 elif [[ "$LEAF_EXIT" -eq 4 && ( "$LEAF_REASON" == "budget_exceeded" || "$LEAF_REASON" == "budget_check_failed" ) ]]; then
-    emit second_opinion.ok "${LEAF_RESULT}${REASON_SUFFIX}; overspend: $LEAF_REASON"
+    DECISION_REF="$(persist_leaf_output)"
+    emit second_opinion.ok "${LEAF_RESULT}${REASON_SUFFIX}; overspend: $LEAF_REASON" "$DECISION_REF"
 else
     emit second_opinion.skipped "leaf-exit-${LEAF_EXIT}${REASON_SUFFIX}"
 fi

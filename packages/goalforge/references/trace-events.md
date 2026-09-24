@@ -290,7 +290,8 @@ review and it returned a usable verdict.
 | `wp` | string | no | WP under review, if known. |
 | `provider` | string | no | Second-opinion provider (e.g. `ollama`). |
 | `model` | string | no | Second-opinion model id. |
-| `reason` | string | no | Detail. |
+| `reason` | string | no | Detail (a truncated excerpt of the leaf result). |
+| `decision_ref` | string | no | Path to the persisted full leaf output JSON, relative to the feature dir (e.g. `second-opinions/wp-01-example-20260924T091000-4211.json`), or `""`. |
 
 Plus attribution fields.
 
