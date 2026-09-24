@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
-# Fixture leaf for goalforge-admission.test.sh — the executable an admission
-# row BINDS to (task_class, provider, model, leaf, leaf_sha256). Never run.
-exit 0
+# Fixture leaf for goalforge-admission.test.sh and goalforge-workflow-compile.test.sh
+# — the executable an admission row BINDS to (task_class, provider, model, leaf,
+# leaf_sha256). It never reaches a provider: when run (only through
+# scripts/goalforge-leaf-exec.sh, wp-08 b12) it touches $LEAF_MARKER, the
+# oracle's "the leaf was executed" signal, and exits ${LEAF_EXIT:-0}.
+[ -n "${LEAF_MARKER:-}" ] && : > "$LEAF_MARKER"
+exit "${LEAF_EXIT:-0}"

@@ -4,10 +4,12 @@
 is the loader, the task-class derivation, and the verdict function;
 `scripts/goalforge-pick-agent.py` is the only caller and the only ledger writer.
 
-The admission table decides the resolver verdict for role `implement`. It does
-NOT decide execution: `goalforge-workflow-compile.py` still refuses to emit an
-`agent()` node for a non-native stage row, so an admitted resolution is data
-until `wp-08-admitted-execution` owns the compile-level exception.
+The admission table decides the resolver verdict for role `implement`. Since
+wp-08 it also gates EXECUTION: `goalforge-workflow-compile.py` emits an
+admitted non-native implement row as a leaf leg run through
+`scripts/goalforge-leaf-exec.sh`, but only from the shipped table, only when
+its bytes are the committed HEAD content of a goalforge-guarded repository —
+see `execute/references/dispatch-resolution.md` § Admitted execution.
 
 ## The three user conditions
 
@@ -32,10 +34,13 @@ From `plans/ideas/foreign-implement-dispatch-gated.md` (user direction
 | `leaf_sha256` | string | That file's sha256 at admission time. |
 | `evidence.kind` | enum | `user-experience` \| `benchmark` \| `user-addition`. A closed set: `self-report` is not evidence. |
 | `evidence.ref` | string | Where the evidence lives (a locator the user can re-read). |
-| `permission_set` | list | The permission posture the admitted dispatch is meant to run under. Must be a LIST — a bare string is truthy but would explode into per-character permissions. DECLARED data — see "Declared, not enforced". |
+| `permission_set` | list | The permission posture the admitted dispatch is meant to run under. Must be a LIST — a bare string is truthy but would explode into per-character permissions. POSTURE DOCUMENTATION, declared data — see "Declared, not enforced". |
+| `max_egress` | enum | `none` \| `diff-only` \| `overview` \| `full` — the declared egress CEILING of the admitted dispatch. A dispatch row whose declared `egress` ranks above it (`none < diff-only < overview < full`) is refused, `egress incoherent`. Both values are declarations: this is a coherence check between two declarations, not a runtime egress control. |
 
 Every key is required. The loader exits `2` naming the row index and the
-offending key; nothing is resolved from a table that failed validation.
+offending key (`missing required key 'max_egress'`; an out-of-enum value reads
+`max_egress '<v>' not in {none, diff-only, overview, full}`); nothing is
+resolved from a table that failed validation.
 
 ## The task-class key
 
@@ -80,7 +85,9 @@ refused at load for the same reason: only the first would ever be read.
   non-native providers.
 * a row whose `task_class`, `provider` and `model` all match AND whose
   `leaf`/`leaf_sha256` match the provider row's leaf path and that file's
-  current content — admitted, carrying `evidence.ref` and `permission_set`.
+  current content AND whose `max_egress` covers the stage row's `egress` —
+  admitted, carrying `evidence.ref`, `permission_set`, `leaf`, `leaf_sha256`
+  and `max_egress`.
 * a row matching the triple whose `leaf` names another path, whose recorded
   hash is not the file's current one, or whose leaf cannot be read — refused:
   admission binds the EXECUTABLE, and repointing `providers[].leaf` under an
@@ -110,7 +117,10 @@ table it reads, and the ledger records which table produced the verdict. A
 table the caller NAMED must exist: a missing
 `--admitted` / `--table` path exits `2` rather than degrading to an empty
 table, so a typo cannot become a silent blanket refusal at exit 0. Only the
-shipped table may be absent, and then it is empty.
+shipped table may be absent, and then it is empty — for the resolver verdict
+alone. The EXECUTION decision (the workflow compile, the leaf wrapper) has no
+empty-table fallback: a missing or unreadable table fails CLOSED with its own
+load-failure reason.
 
 ## The ledger row
 
@@ -133,9 +143,9 @@ row per dispatch decision. The keys are the writer's existing
 
 The leaf binding is the one thing this package CHECKS rather than declares: an
 admitted verdict has hashed the executable the dispatch row would run. It is a
-check at VERDICT time, not at dispatch time — nothing stops the file changing
-between the verdict and the run, and the check narrows, but does not close, the
-gap the risk row below names.
+check at VERDICT time; for an admitted compile, `scripts/goalforge-leaf-exec.sh`
+re-hashes the leaf against the HEAD-bound table immediately before running it.
+That narrows, but does not close, the gap the risk row below names.
 
 The containment block and `permission_set` are validated and carried as DATA.
 Nothing in this package enforces them at dispatch time: agent-dispatch's only

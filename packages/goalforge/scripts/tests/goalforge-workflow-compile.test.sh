@@ -58,6 +58,16 @@ fi
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 
+# Hermetic environment for EVERY compile, wrapper and installer invocation
+# (wp-08, G3r5): a fresh empty home (git reads global config from HOME and
+# XDG_CONFIG_HOME, which survive the compiler's GIT_* scrub), a pinned leaf
+# root, and a temp dispatch ledger — no case reads or writes host state.
+export HOME="$T/home"
+export XDG_CONFIG_HOME="$T/home/.config"
+export CLAUDE_CONFIG_DIR="$T/cfg"
+export GOALFORGE_DISPATCH_LEDGER="$T/ledger/dispatch-decisions.jsonl"
+mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$CLAUDE_CONFIG_DIR"
+
 parse_check() { # $1 = script path
     local m="$T/parse-$RANDOM.mjs"
     cp "$1" "$m"
@@ -170,12 +180,14 @@ fi
 # compiler emits as agent() nodes) on the local stub provider with the
 # provider-shaped model id `glm-5.3:cloud`. Before the provider-kind check the
 # compiler exited 0 and emitted three agent({model: "glm-5.3:cloud"}) nodes.
+# Since wp-08 a non-native implement row is decided by the SHIPPED admission
+# table (empty), so the refusal names the missing admission.
 NONNATIVE="$FIXTURES/dispatch-nonnative-implement.yaml"
 python3 "$COMPILE" "$WP_FIXTURE" --dispatch "$NONNATIVE" --expertise "$EXPERTISE" \
     --out "$T/nonnative" >/dev/null 2>"$T/nonnative.err"
 NN_EXIT=$?
 NN_SCRIPT="$T/nonnative/wp-fixture-compile.js"
-if [ "$NN_EXIT" -eq 2 ] && [ ! -f "$NN_SCRIPT" ] && grep -q "not 'native'" "$T/nonnative.err"; then
+if [ "$NN_EXIT" -eq 2 ] && [ ! -f "$NN_SCRIPT" ] && grep -q "missing admission (" "$T/nonnative.err"; then
     ok "an agent-node role on a non-native provider row -> exit 2, nothing emitted"
 else
     bad "an agent-node role on a non-native provider row -> exit 2, nothing emitted (exit $NN_EXIT)"
@@ -330,6 +342,407 @@ if [ "$BADFM_EXIT" -eq 2 ] && grep -q 'malformed YAML frontmatter' "$T/badfm.err
 else
     bad "malformed frontmatter -> exit 2 with a stderr message (exit $BADFM_EXIT)"
     cat "$T/badfm.err"
+fi
+
+# =============================================================================
+# wp-08 — ADMITTED execution (b1-b3, b5-b8, b10-b13)
+# =============================================================================
+# A non-native implement row compiles iff the DEFAULT admission table admits
+# it. Every case below drives that table through the ONE in-process seam,
+# `goalforge_admission.ADMITTED_PATH` (fixtures/admission/compile_seam.py),
+# against a HERMETIC COMMITTED REPLICA of this package (U3): the compiler binds
+# an admitting table to `git show HEAD:<path>` in a goalforge-guarded repository,
+# so the admitting fixtures must be committed — in the replica, never in the
+# checked-in tree, which no case writes. No case skips the HEAD binding.
+PKG="$(cd "$SD/../.." && pwd)"
+ADM_FX="$SD/fixtures/admission"
+SEAM="$ADM_FX/compile_seam.py"
+PROBE="$FIXTURES/workflow_probe.mjs"
+CHECK="$FIXTURES/check_admitted.py"
+WPA="$FIXTURES/wp-admitted.md"
+D_ADM="$FIXTURES/dispatch-admitted.yaml"
+LEAF_REL="skills/agent-dispatch/ollama/scripts/headless_dispatch"
+KEY_TRIPLE="(code/py, ollama, glm-5.3:cloud)"
+GITQ=(env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 git
+      -c user.name=goalforge-fixture -c user.email=fixture@example.invalid
+      -c commit.gpgsign=false)
+
+# System git config cannot be redirected once the compiler scrubs GIT_*: a set
+# system core.hooksPath would turn every admitting case red for a host reason.
+# FAIL loudly — never skip (G3r5).
+if SYS_HP="$(env -u GIT_CONFIG_NOSYSTEM git config --system --get core.hooksPath 2>/dev/null)"; then
+    echo "goalforge-workflow-compile.test.sh: system git config sets core.hooksPath" \
+         "($SYS_HP); the wp-08 admitted cases cannot run hermetically. Unset it." >&2
+    exit 2
+fi
+
+# The pinned leaf root: the fixture leaf under the temp CLAUDE_CONFIG_DIR.
+mkdir -p "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")"
+cp "$ADM_FX/leaf/headless_dispatch" "$CLAUDE_CONFIG_DIR/$LEAF_REL"
+chmod +x "$CLAUDE_CONFIG_DIR/$LEAF_REL"
+LEAF_FILE="$CLAUDE_CONFIG_DIR/$LEAF_REL"
+LEAF_ORIG="$T/leaf.orig"
+cp "$LEAF_FILE" "$LEAF_ORIG"
+
+# mk_replica <dir> git|nogit — a temp copy of packages/goalforge/ whose
+# canonical references/admitted-providers.yaml holds b1's admitting fixture;
+# `git` also inits, commits once and installs the goalforge pre-commit.
+mk_replica() {
+    mkdir -p "$1"
+    cp -r "$PKG/." "$1/"
+    find "$1" -name __pycache__ -type d -prune -exec rm -rf {} +
+    rm -rf "$1/run"
+    cp "$1/scripts/tests/fixtures/admission/admitted-ok.yaml" "$1/references/admitted-providers.yaml"
+    # b13 (iii): a table committed now and deleted by a later commit.
+    cp "$1/scripts/tests/fixtures/admission/admitted-ok.yaml" "$1/scripts/tests/fixtures/admission/admitted-absent.yaml"
+    [ "$2" = git ] || return 0
+    "${GITQ[@]}" -C "$1" init -q
+    "${GITQ[@]}" -C "$1" add -A
+    "${GITQ[@]}" -C "$1" commit -qm "replica"
+    env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+        bash "$1/scripts/goalforge-install-hooks.sh" "$1" >/dev/null
+}
+R="$T/replica"
+mk_replica "$R" git
+RFX="$R/scripts/tests/fixtures/admission"
+RCOMPILE="$R/scripts/goalforge-workflow-compile.py"
+if [ -x "$R/.git/hooks/pre-commit" ] && [ -n "$("${GITQ[@]}" -C "$R" rev-parse HEAD 2>/dev/null)" ]; then
+    ok "setup: committed package replica with the goalforge pre-commit installed"
+else
+    bad "setup: committed package replica with the goalforge pre-commit installed"
+fi
+
+# seam_compile <name> <table|-> <dispatch> [env assignments...] — runs the
+# replica's compiler in-process; sets RC, writes $T/<name>.err, out $T/<name>/.
+seam_compile() {
+    local name="$1" table="$2" dispatch="$3"; shift 3
+    env "$@" python3 "$SEAM" compile "$RCOMPILE" "$table" "$T/$name.spy" -- \
+        "$WPA" --dispatch "$dispatch" --expertise "$EXPERTISE" --out "$T/$name" \
+        >"$T/$name.out" 2>"$T/$name.err"
+    RC=$?
+}
+err_has() { grep -qF -- "$2" "$T/$1.err"; }
+
+# --- b1 / b5 / b6(ii) / b8: the admitted compile --------------------------------
+rm -rf "$T/ledger"
+HOST_LEDGER="$CLAUDE_CONFIG_DIR/data/dispatch-decisions.jsonl"
+HOST_BEFORE="$(sha256sum "$HOST_LEDGER" 2>/dev/null || echo absent)"
+seam_compile b1 "$RFX/admitted-ok.yaml" "$D_ADM"
+B1_JS="$T/b1/wp-fx-admitted.js"
+if [ "$RC" -eq 0 ] && [ -f "$B1_JS" ]; then
+    ok "b1 admitted: compile exits 0 and writes the workflow"
+else
+    bad "b1 admitted: compile exits 0 and writes the workflow (rc=$RC)"; cat "$T/b1.err"
+fi
+if [ -f "$B1_JS" ]; then
+    cp "$B1_JS" "$T/b1.mjs"
+    node "$PROBE" "$T/b1.mjs" 0 >"$T/b1.probe0" 2>"$T/b1.probe0.err"
+    node "$PROBE" "$T/b1.mjs" 1 >"$T/b1.probe1" 2>"$T/b1.probe1.err"
+    while IFS= read -r line; do
+        case "$line" in
+            "ok "*)  ok "b1 ${line#ok }" ;;
+            *)       bad "b1 ${line#bad }" ;;
+        esac
+    done < <(python3 "$CHECK" "$T/b1.probe0" "$T/b1.probe1" code/py ollama glm-5.3:cloud 2>&1)
+    OFF="$(allowed_calls "$B1_JS")"
+    [ -z "$OFF" ] && ok "b1 admitted script calls only agent|parallel|pipeline|phase|log" \
+                  || bad "b1 admitted script calls only agent|parallel|pipeline|phase|log (offenders: $OFF)"
+    parse_check "$B1_JS" && ok "b1 admitted script parses as ESM ($PARSER)" \
+                         || bad "b1 admitted script parses as ESM ($PARSER)"
+    assert_claude_models "$B1_JS" "admitted leg"
+fi
+# LEG as data, straight from the emitted file (b5 needs leaf + leaf_sha256).
+leg_field() { python3 -c '
+import json, sys
+for line in open(sys.argv[1], encoding="utf-8"):
+    if line.startswith("const LEG = "):
+        print(json.loads(line[len("const LEG = "):].rstrip().rstrip(";"))[sys.argv[2]])
+' "$1" "$2"; }
+
+# b5: the emitted leaf resolves under the pinned leaf root, is executable, and
+# its sha256 is the one emitted.
+E_LEAF="$(leg_field "$B1_JS" leaf 2>/dev/null)"
+E_SHA="$(leg_field "$B1_JS" leaf_sha256 2>/dev/null)"
+if [ -n "$E_LEAF" ] && [ -f "$CLAUDE_CONFIG_DIR/$E_LEAF" ] && [ -x "$CLAUDE_CONFIG_DIR/$E_LEAF" ]; then
+    ok "b5 the emitted leaf exists and is executable under the pinned leaf root ($E_LEAF)"
+else
+    bad "b5 the emitted leaf exists and is executable under the pinned leaf root (leaf='$E_LEAF')"
+fi
+if [ -n "$E_SHA" ] && [ "$E_SHA" = "$(sha256sum "$CLAUDE_CONFIG_DIR/$E_LEAF" 2>/dev/null | cut -d' ' -f1)" ]; then
+    ok "b5 the emitted leaf_sha256 equals sha256sum of the resolved fixture leaf"
+else
+    bad "b5 the emitted leaf_sha256 equals sha256sum of the resolved fixture leaf (got '$E_SHA')"
+fi
+
+# b6 (ii): exactly one provenance line naming the patched default table.
+if [ "$(grep -cxF "admitted table: $RFX/admitted-ok.yaml" "$T/b1.err")" = "1" ]; then
+    ok "b6(ii) stderr carries ONE 'admitted table: <ADMITTED_PATH>' provenance line"
+else
+    bad "b6(ii) provenance line (stderr: $(cat "$T/b1.err"))"
+fi
+
+# b8: exactly one ledger row, through resolve_and_log (spy), with the pinned
+# fields; the host-default ledger untouched.
+lget() { python3 -c 'import json,sys; print(json.loads(sys.stdin.readline()).get(sys.argv[1],""))' "$1"; }
+LROWS="$(wc -l < "$GOALFORGE_DISPATCH_LEDGER" 2>/dev/null | tr -d ' ' || echo 0)"
+if [ "$LROWS" = "1" ] \
+   && [ "$(lget decision <"$GOALFORGE_DISPATCH_LEDGER")" = "admitted" ] \
+   && [ "$(lget provider <"$GOALFORGE_DISPATCH_LEDGER")" = "ollama" ] \
+   && [ "$(lget model <"$GOALFORGE_DISPATCH_LEDGER")" = "glm-5.3:cloud" ] \
+   && [ "$(lget task_class <"$GOALFORGE_DISPATCH_LEDGER")" = "code/py" ] \
+   && [ "$(lget admitted_override <"$GOALFORGE_DISPATCH_LEDGER")" = "False" ] \
+   && [ "$(lget evidence_ref <"$GOALFORGE_DISPATCH_LEDGER")" = "fixtures/admission#user-experience-2026-09-14" ] \
+   && [ "$(lget admitted_source <"$GOALFORGE_DISPATCH_LEDGER")" = "scripts/tests/fixtures/admission/admitted-ok.yaml" ]; then
+    ok "b8 exactly ONE ledger row: admitted, the fixture's provider/model/task_class/evidence_ref, override false, admitted_source = the patched fixture literal"
+else
+    bad "b8 ledger row (rows=$LROWS): $(cat "$GOALFORGE_DISPATCH_LEDGER" 2>&1)"
+fi
+SPY="$(cat "$T/b1.spy" 2>/dev/null)"
+if [ "$SPY" = '{"calls": 1, "decisions": ["admitted"]}' ]; then
+    ok "b8 the compile obtained the verdict through ONE resolve_and_log call (admission_decision admitted)"
+else
+    bad "b8 resolve_and_log spy (got: $SPY)"
+fi
+DEF_SRC="$(python3 "$SEAM" default-source "$R/scripts/goalforge-pick-agent.py")"
+[ "$DEF_SRC" = "references/admitted-providers.yaml" ] \
+    && ok "b8 unpatched resolve_admitted_path(None)[1] == references/admitted-providers.yaml" \
+    || bad "b8 unpatched resolve_admitted_path(None)[1] (got '$DEF_SRC')"
+[ "$(sha256sum "$HOST_LEDGER" 2>/dev/null || echo absent)" = "$HOST_BEFORE" ] \
+    && ok "b8 the default-path ledger is untouched (writes go to the hermetic ledger only)" \
+    || bad "b8 the default-path ledger changed"
+
+# --- b6 (i): the CLI surface carries no admission-table option -------------------
+CLI_SET="$(python3 "$SEAM" cli "$RCOMPILE" | tr '\n' ' ')"
+if [ "$CLI_SET" = "--dispatch --expertise --help --out -h overview " ]; then
+    ok "b6(i) positional dests ∪ option strings == {overview, --dispatch, --expertise, --out, -h, --help}"
+else
+    bad "b6(i) CLI surface (got: $CLI_SET)"
+fi
+
+# --- b2 / b7 (i): empty table -> missing admission, "admitted nothing" ----------
+seam_compile b2 "$RFX/admitted-empty.yaml" "$D_ADM"
+if [ "$RC" -eq 2 ] && err_has b2 "$KEY_TRIPLE" && err_has b2 "admitted nothing" \
+   && [ ! -f "$T/b2/wp-fx-admitted.js" ]; then
+    ok "b2/b7(i) empty table -> exit 2 naming $KEY_TRIPLE and 'admitted nothing', nothing emitted"
+else
+    bad "b2/b7(i) empty table (rc=$RC): $(cat "$T/b2.err")"
+fi
+
+# --- b7 (ii): unloadable table (malformed, nonexistent) -> distinct fail-closed --
+printf 'admitted: [unclosed\n' > "$RFX/malformed.yaml"
+for variant in malformed.yaml no-such-table.yaml; do
+    seam_compile "b7-$variant" "$RFX/$variant" "$D_ADM"
+    if [ "$RC" -eq 2 ] && err_has "b7-$variant" "$RFX/$variant" \
+       && err_has "b7-$variant" "load failure, failed CLOSED" \
+       && ! err_has "b7-$variant" "missing admission" && ! err_has "b7-$variant" "admitted nothing"; then
+        ok "b7(ii) $variant -> exit 2 naming the path + load failure, failed CLOSED (never the empty-table reason)"
+    else
+        bad "b7(ii) $variant (rc=$RC): $(cat "$T/b7-$variant.err")"
+    fi
+done
+rm -f "$RFX/malformed.yaml"
+
+# --- b3: egress coherence = dispatch egress <= row max_egress --------------------
+b3_case() { # <name> <table> <dispatch> <want rc> [levels...]
+    local name="$1" table="$2" dispatch="$3" want="$4"; shift 4
+    seam_compile "$name" "$RFX/$table" "$FIXTURES/$dispatch"
+    local good=1 lvl
+    [ "$RC" -eq "$want" ] || good=0
+    if [ "$want" -eq 2 ]; then
+        err_has "$name" "egress incoherent" || good=0
+        for lvl in "$@"; do err_has "$name" "'$lvl'" || good=0; done
+    fi
+    if [ "$good" -eq 1 ]; then ok "b3 $name -> exit $want"; else bad "b3 $name -> exit $want (rc=$RC): $(cat "$T/$name.err")"; fi
+}
+b3_case b3-none-vs-full      admitted-egress-none.yaml      dispatch-admitted-egress-full.yaml      2 none full
+b3_case b3-diffonly-vs-overview admitted-egress-diff-only.yaml dispatch-admitted.yaml              2 diff-only overview
+b3_case b3-equal-overview    admitted-ok.yaml               dispatch-admitted.yaml                  0
+b3_case b3-full-vs-diffonly  admitted-egress-full.yaml      dispatch-admitted-egress-diff-only.yaml 0
+
+# --- b10: max_egress required + closed enum (loader substrings) ------------------
+seam_compile b10-missing "$RFX/bad-missing-max-egress.yaml" "$D_ADM"
+if [ "$RC" -eq 2 ] && err_has b10-missing "missing required key 'max_egress'" && ! err_has b10-missing "egress incoherent"; then
+    ok "b10(i) no max_egress -> exit 2 \"missing required key 'max_egress'\", never the incoherence path"
+else
+    bad "b10(i) (rc=$RC): $(cat "$T/b10-missing.err")"
+fi
+seam_compile b10-enum "$RFX/bad-max-egress-enum.yaml" "$D_ADM"
+if [ "$RC" -eq 2 ] && err_has b10-enum "max_egress 'wide' not in {none, diff-only, overview, full}" && ! err_has b10-enum "egress incoherent"; then
+    ok "b10(ii) max_egress: wide -> exit 2 naming the closed enum, never the incoherence path"
+else
+    bad "b10(ii) (rc=$RC): $(cat "$T/b10-enum.err")"
+fi
+
+# --- b11: fable is advisor-only on BOTH paths -------------------------------------
+FABLE_MSG="fable is advisor-only, never an implementer"
+seam_compile b11-admitted "$RFX/admitted-fable.yaml" "$FIXTURES/dispatch-admitted-fable.yaml"
+if [ "$RC" -eq 2 ] && err_has b11-admitted "$FABLE_MSG" && ! err_has b11-admitted "missing admission"; then
+    ok "b11(i) an ADMITTED (code/py, ollama, fable) row -> exit 2, fable advisor-only"
+else
+    bad "b11(i) (rc=$RC): $(cat "$T/b11-admitted.err")"
+fi
+seam_compile b11-native - "$FIXTURES/dispatch-native-fable.yaml"
+if [ "$RC" -eq 2 ] && err_has b11-native "$FABLE_MSG" && ! err_has b11-native "missing admission"; then
+    ok "b11(ii) a NATIVE implement row on fable -> exit 2, fable advisor-only"
+else
+    bad "b11(ii) (rc=$RC): $(cat "$T/b11-native.err")"
+fi
+
+# --- b6 (iii): competing table routes never reach the resolver --------------------
+seam_compile b6-env "$RFX/admitted-empty.yaml" "$D_ADM" \
+    GOALFORGE_ADMITTED="$RFX/admitted-ok.yaml" GOALFORGE_ADMITTED_PATH="$RFX/admitted-ok.yaml" \
+    GOALFORGE_ADMISSION_TABLE="$RFX/admitted-ok.yaml"
+if [ "$RC" -eq 2 ] && err_has b6-env "missing admission $KEY_TRIPLE"; then
+    ok "b6(iii)(a) a GOALFORGE_ADMITTED*-style env var does not supply the table"
+else
+    bad "b6(iii)(a) env route (rc=$RC): $(cat "$T/b6-env.err")"
+fi
+seam_compile b6-key "$RFX/admitted-empty.yaml" "$FIXTURES/dispatch-admitted-path-key.yaml"
+if [ "$RC" -eq 2 ] && err_has b6-key "missing admission $KEY_TRIPLE"; then
+    ok "b6(iii)(b) an admission-path key in the dispatch file does not supply the table"
+else
+    bad "b6(iii)(b) dispatch-key route (rc=$RC): $(cat "$T/b6-key.err")"
+fi
+
+# --- b12: the leaf wrapper, run VERBATIM inside the replica -----------------------
+WRAPPER_SRC="$PKG/scripts/goalforge-leaf-exec.sh"
+CODE_LINES="$(grep -v '^[[:space:]]*#' "$WRAPPER_SRC")"
+if grep -qF 'if [[ $# -ne 3 ]]; then' <<<"$CODE_LINES" \
+   && grep -qF 'TABLE="$(dirname "$0")/../references/admitted-providers.yaml"' <<<"$CODE_LINES" \
+   && [ "$(grep -c 'admitted-providers' <<<"$CODE_LINES")" = "1" ] \
+   && ! grep -q 'GOALFORGE_' <<<"$CODE_LINES"; then
+    ok "b12 structural: exactly three positionals, table ONLY \$(dirname \"\$0\")/../references/admitted-providers.yaml, no GOALFORGE_* read"
+else
+    bad "b12 structural assertion over scripts/goalforge-leaf-exec.sh"
+fi
+# The canonical-table compile (no seam: the wrapper subprocess cannot see one).
+seam_compile b12 - "$D_ADM"
+CALL="$(leg_field "$T/b12/wp-fx-admitted.js" wrapper_call 2>/dev/null)"
+if [ "$RC" -eq 0 ] && [ "$CALL" = "scripts/goalforge-leaf-exec.sh code/py ollama glm-5.3:cloud" ]; then
+    ok "b12 the canonical-table compile emits the wrapper call keyed by the row"
+else
+    bad "b12 canonical-table compile (rc=$RC, call='$CALL'): $(cat "$T/b12.err")"
+fi
+MARK="$T/leaf-ran"
+run_call() { # <extra argv string> -> RC, marker state, $T/wrap.err
+    rm -f "$MARK"
+    ( cd "$R" && LEAF_MARKER="$MARK" LEAF_EXIT=7 bash -c "$CALL$1" ) >/dev/null 2>"$T/wrap.err"
+    RC=$?
+}
+run_call ""
+if [ "$RC" -eq 7 ] && [ -f "$MARK" ]; then
+    ok "b12(ii) leaf unchanged: the wrapper runs the leaf and returns its exit status (7)"
+else
+    bad "b12(ii) leaf unchanged (rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/wrap.err")"
+fi
+printf '# edited after compile\n' >> "$LEAF_FILE"
+run_call ""
+if [ "$RC" -eq 2 ] && [ ! -f "$MARK" ] && grep -q "leaf_sha256 mismatch" "$T/wrap.err"; then
+    ok "b12(i) leaf edited after compile -> exit 2 naming the leaf_sha256 mismatch, leaf NOT executed"
+else
+    bad "b12(i) (rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/wrap.err")"
+fi
+FORGED="$(sha256sum "$LEAF_FILE" | cut -d' ' -f1)"
+run_call " $FORGED"
+if [ "$RC" -eq 2 ] && [ ! -f "$MARK" ]; then
+    ok "b12(iii-a) leaf edited + forged sha as an extra argument -> exit 2, leaf NOT executed"
+else
+    bad "b12(iii-a) (rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/wrap.err")"
+fi
+sed -i "s/leaf_sha256: .*/leaf_sha256: $FORGED/" "$R/references/admitted-providers.yaml"
+run_call ""
+if [ "$RC" -eq 2 ] && [ ! -f "$MARK" ] && grep -q "differs from git show HEAD" "$T/wrap.err"; then
+    ok "b12(iii-b) leaf edited + working-tree table re-stamped (uncommitted) -> exit 2, HEAD-bound, leaf NOT executed"
+else
+    bad "b12(iii-b) (rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/wrap.err")"
+fi
+"${GITQ[@]}" -C "$R" checkout -q -- references/admitted-providers.yaml
+cp "$LEAF_ORIG" "$LEAF_FILE"
+mkdir -p "$T/outside"
+cp "$LEAF_ORIG" "$T/outside/headless_dispatch"
+rm -f "$LEAF_FILE"
+ln -s "$T/outside/headless_dispatch" "$LEAF_FILE"
+run_call ""
+if [ "$RC" -eq 2 ] && [ ! -f "$MARK" ] && grep -q "outside the leaf root" "$T/wrap.err"; then
+    ok "b12(iv) leaf replaced by a symlink to a byte-identical copy outside the root -> exit 2, NOT executed"
+else
+    bad "b12(iv) (rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/wrap.err")"
+fi
+rm -f "$LEAF_FILE"
+cp "$LEAF_ORIG" "$LEAF_FILE"
+chmod +x "$LEAF_FILE"
+
+# --- b13: the admitting table must be the committed, guarded HEAD table ----------
+b13_expect() { # <name> <substring>
+    if [ "$RC" -eq 2 ] && err_has "$1" "$2" && ! err_has "$1" "missing admission"; then
+        ok "b13 $1 -> exit 2 ($2)"
+    else
+        bad "b13 $1 -> exit 2 ($2) (rc=$RC): $(cat "$T/$1.err")"
+    fi
+}
+# (i) edited after the replica's commit.
+printf '# edited after commit\n' >> "$RFX/admitted-ok.yaml"
+seam_compile b13-i "$RFX/admitted-ok.yaml" "$D_ADM"
+b13_expect b13-i "differs from git show HEAD"
+# (iv) the same edit, with GIT_DIR / GIT_WORK_TREE pointing at a forged
+# repository whose HEAD holds the edited bytes: scrubbed, so still a mismatch
+# against the REAL replica.
+FORGED_GIT="$T/forged.git"
+"${GITQ[@]}" init -q --bare "$FORGED_GIT"
+"${GITQ[@]}" --git-dir="$FORGED_GIT" --work-tree="$R" add scripts/tests/fixtures/admission/admitted-ok.yaml
+"${GITQ[@]}" --git-dir="$FORGED_GIT" --work-tree="$R" commit -qm forged
+seam_compile b13-iv "$RFX/admitted-ok.yaml" "$D_ADM" GIT_DIR="$FORGED_GIT" GIT_WORK_TREE="$R"
+b13_expect b13-iv "differs from git show HEAD"
+"${GITQ[@]}" -C "$R" checkout -q -- scripts/tests/fixtures/admission/admitted-ok.yaml
+# (ii) a repository-free replica: no .git anywhere above it.
+R2="$T/nogit/replica"
+mk_replica "$R2" nogit
+RCOMPILE_SAVE="$RCOMPILE"; RCOMPILE="$R2/scripts/goalforge-workflow-compile.py"
+seam_compile b13-ii "$R2/scripts/tests/fixtures/admission/admitted-ok.yaml" "$D_ADM"
+RCOMPILE="$RCOMPILE_SAVE"
+if [ -z "$(git -C "$R2" rev-parse --show-toplevel 2>/dev/null)" ]; then
+    b13_expect b13-ii "outside a git work tree"
+    err_has b13-ii "failed CLOSED" && ok "b13 b13-ii states it failed CLOSED" || bad "b13 b13-ii states it failed CLOSED"
+else
+    bad "b13 (ii) setup: $R2 sits inside a git work tree"
+fi
+# (iii) absent from HEAD: committed, the deletion committed, then rewritten.
+"${GITQ[@]}" -C "$R" rm -q scripts/tests/fixtures/admission/admitted-absent.yaml
+( cd "$R" && "${GITQ[@]}" commit -qm "drop admitted-absent" </dev/null >/dev/null 2>&1 )
+cp "$RFX/admitted-ok.yaml" "$RFX/admitted-absent.yaml"
+seam_compile b13-iii "$RFX/admitted-absent.yaml" "$D_ADM"
+b13_expect b13-iii "absent from HEAD"
+rm -f "$RFX/admitted-absent.yaml"
+# (v) a nested `git init` over the table's directory, no goalforge pre-commit.
+"${GITQ[@]}" -C "$RFX" init -q
+"${GITQ[@]}" -C "$RFX" add admitted-ok.yaml
+"${GITQ[@]}" -C "$RFX" commit -qm nested
+seam_compile b13-v "$RFX/admitted-ok.yaml" "$D_ADM"
+b13_expect b13-v "unguarded"
+# (vi) the nested repository's pre-commit carries the installer's marker block,
+# but it invokes a STUB goalforge-pre-commit.sh outside PKG_ROOT/hooks/.
+mkdir -p "$T/stub-hooks"
+printf '#!/usr/bin/env bash\nexit 0\n' > "$T/stub-hooks/goalforge-pre-commit.sh"
+printf '#!/usr/bin/env bash\n# >>> sdd-pre-commit >>>\nbash "%s" || exit $?\n# <<< sdd-pre-commit <<<\n' \
+    "$T/stub-hooks/goalforge-pre-commit.sh" > "$RFX/.git/hooks/pre-commit"
+chmod +x "$RFX/.git/hooks/pre-commit"
+seam_compile b13-vi "$RFX/admitted-ok.yaml" "$D_ADM"
+b13_expect b13-vi "unguarded"
+rm -rf "$RFX/.git"
+# (vii-a) a forged GLOBAL core.hooksPath in the redirected temp home.
+mkdir -p "$T/home-forged/.config" "$T/elsewhere-hooks"
+printf '[core]\n\thooksPath = %s\n' "$T/elsewhere-hooks" > "$T/home-forged/.gitconfig"
+seam_compile b13-viia "$RFX/admitted-ok.yaml" "$D_ADM" HOME="$T/home-forged" XDG_CONFIG_HOME="$T/home-forged/.config"
+b13_expect b13-viia "global core.hooksPath is set"
+if ! err_has b13-viia "unguarded"; then ok "b13 (vii-a) reason is distinct from the unguarded-repository reason"; else bad "b13 (vii-a) reused the unguarded reason"; fi
+# (vii-b) the same redirection with a CLEAN .gitconfig admits.
+mkdir -p "$T/home-clean/.config"
+printf '[user]\n\tname = fixture\n' > "$T/home-clean/.gitconfig"
+seam_compile b13-viib "$RFX/admitted-ok.yaml" "$D_ADM" HOME="$T/home-clean" XDG_CONFIG_HOME="$T/home-clean/.config"
+if [ "$RC" -eq 0 ] && [ -f "$T/b13-viib/wp-fx-admitted.js" ]; then
+    ok "b13 (vii-b) a clean redirected home admits exactly as b1"
+else
+    bad "b13 (vii-b) clean-config control (rc=$RC): $(cat "$T/b13-viib.err")"
 fi
 
 echo

@@ -51,9 +51,10 @@ file; `--dispatch <path>` overrides it (tests pass a fixture). No provider is ev
    `kind: native` provider (exit 2 when the dispatch file lists none, or when
    that fallback target is itself incoherent); an
    admitted one carries the containment block, the evidence ref and the
-   permission set as DECLARED data, with a stderr WARN saying so. The compiler
-   still refuses to emit a non-native `implement` row until
-   `wp-08-admitted-execution`.
+   permission set as DECLARED data, with a stderr WARN saying so. A matching
+   row whose `max_egress` ranks below the stage row's `egress` is refused
+   (`egress incoherent`). Whether an admitted row EXECUTES is the workflow
+   compile's decision — see "Admitted execution" below.
 
 The verification strategy comes from the WP's own `goal.verification.strategy`
 and is never inferred here.
@@ -114,3 +115,49 @@ the second opinion (a leaf leg on a non-native provider, so its `model` is a
 provider id `agent()` cannot dispatch) are `log()` lines naming their command —
 no `agent` node the compiler emits ever carries a non-Claude model id. The
 emitted script is launched through the Workflow tool — a session surface.
+
+## Admitted execution (wp-08)
+
+An `implement` row on a non-native provider compiles if and only if the
+admission table admits it for the WP; every other non-native implement row
+exits 2 naming the missing `(task_class, provider, model)` admission.
+
+- **Default table only.** The compiler reads ONLY the shipped
+  `references/admitted-providers.yaml` (`goalforge_admission.ADMITTED_PATH`,
+  read at call time) through `goalforge-pick-agent.resolve_and_log`, which
+  writes the one ledger row. Its interface contract carries NO override: no
+  flag, no environment variable and no dispatch-file key names another table,
+  so a non-default admission table is refused unconditionally. A missing or
+  unreadable table fails CLOSED with its own reason, never as an empty table.
+- **Coherence.** The dispatch row's `egress` must be `<=` the admitting row's
+  `max_egress` over `none < diff-only < overview < full`.
+- **HEAD binding.** The admitting table's bytes (read once) must equal
+  `git show HEAD:<path>` in the table's own repository, resolved with every
+  `GIT_*` variable scrubbed; outside a git work tree, or absent from HEAD, the
+  compile exits 2. That repository must also carry the goalforge pre-commit
+  (`scripts/goalforge-install-hooks.sh`'s marker block invoking this package's
+  `hooks/goalforge-pre-commit.sh`), and no global or system `core.hooksPath`
+  may be set. Consequence: admitted execution needs a git checkout with the
+  goalforge pre-commit installed — an installed plugin copy with no `.git`
+  never admits. The pre-commit in turn blocks any commit that adds or changes
+  an `admitted:` row unless the user confirms interactively on the terminal.
+- **Leaf-leg emission.** The foreign model is never an `agent()` node.
+  Pipeline stage 1 is a NATIVE runner `agent()` (the `discovery` row's
+  model/effort, output schema `{exit_code, stderr}`) whose only action is the
+  call `scripts/goalforge-leaf-exec.sh <task_class> <provider> <model>` — keyed
+  by the admission row, with no hash and no table argument. Gate B and gate C
+  are stages 2 and 3, each run only when stage 1's `exit_code` is 0. The leg's
+  provider, model, effort, evidence ref, permission set, containment block,
+  `leaf` + `leaf_sha256` and `enforced: false` travel as data.
+- **The wrapper.** `goalforge-leaf-exec.sh` accepts exactly the three row-key
+  arguments, reads the table only script-relative, re-derives `leaf` and
+  `leaf_sha256` from the HEAD-bound table, requires the leaf's real path to lie
+  under the leaf root, re-hashes it and exits 2 without running it on any
+  mismatch; otherwise it runs the leaf and returns its status.
+- **`--test-tiers`** has no WP and so no task class. It applies the
+  EXISTENTIAL rule: a non-native implement row passes iff SOME admission row,
+  for any task class, binds its provider, model, the provider row's leaf, a
+  current `leaf_sha256` and `max_egress >= egress`. The per-WP task-class
+  decision, the HEAD binding and the wrapper stay with the compile.
+- **Advisor-only.** An implement row whose model is `fable` exits 2 on both
+  the admitted and the native path.

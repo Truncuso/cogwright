@@ -26,6 +26,13 @@ Public API:
         provider, endpoint, egress, propose_only} (plus `warn` when a leaf
         overspend was kept).
 
+    resolve_and_log(role, frontmatter, touched_files, dispatch, expertise_map,
+                    *, profile, wp, bind_head) -> dict
+        resolve_stage against the DEFAULT admission table
+        (`admission.ADMITTED_PATH`, read at call time, fail closed) plus the
+        one ledger row — the path goalforge-workflow-compile.py takes, so an
+        admitted compile is never an unlogged consumer of the verdict.
+
     next_provider(provider_names, current, exit_code, reason) -> (name, warn)
         Pure provider fall-through per leaf-interface.md §5/§6 hazard 2.
 
@@ -480,8 +487,8 @@ def resolve_expertise(
 # `scripts/goalforge-admission.py` owns the table, the deterministic task-class
 # key and the verdict function (contract: `references/admission.md`). This
 # module is its ONLY caller and the ONLY ledger writer: the verdict comes back
-# as data and is recorded here, never there. Compile-level dispatch of a
-# non-native implement row stays refused until `wp-08-admitted-execution`.
+# as data and is recorded here, never there. The workflow compile reaches the
+# verdict only through `resolve_and_log` below (wp-08).
 
 ADMISSION_PATH = PKG_ROOT / "scripts" / "goalforge-admission.py"
 
@@ -829,7 +836,8 @@ def resolve_stage(
         if incoherent:
             verdict = Admission(False, incoherent)
         else:
-            verdict = admission.resolve(role, task_class, provider, model, table)
+            verdict = admission.resolve(role, task_class, provider, model, table,
+                                        egress=egress)
         extra["admission_reason"] = verdict.reason
         propose_only = False
         if verdict.admitted:
@@ -837,6 +845,9 @@ def resolve_stage(
                 admission_decision="admitted",
                 evidence_ref=verdict.evidence_ref,
                 permission_set=verdict.permission_set,
+                leaf=verdict.leaf,
+                leaf_sha256=verdict.leaf_sha256,
+                max_egress=verdict.max_egress,
                 containment={
                     "owned_files": list(frontmatter.get("owned_files") or []),
                     "verification_command": _verification_command(frontmatter),
@@ -908,6 +919,73 @@ def resolve_stage(
     if warn:
         result["warn"] = "leaf overspend kept (budget stop after a completed turn)"
     return result
+
+
+def ledger_row(resolution: dict, *, wp: str, admitted_source: str,
+               admitted_override: bool) -> dict:
+    """The ONE ledger row shape (references/admission.md § The ledger row).
+
+    On a `refused` row the provider/model named are the ones that were
+    REFUSED, not the native provider resolved in their place."""
+    decision = resolution.get("admission_decision")
+    return {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "wp": wp,
+        "role": resolution["role"],
+        "provider": resolution.get("refused_provider") or resolution["provider"],
+        "model": resolution.get("refused_model") or resolution["model"],
+        "effort": resolution["effort"],
+        "endpoint": resolution["endpoint"],
+        "decision": decision or "propose-only",
+        "task_class": resolution.get("task_class", ""),
+        "reason": resolution.get("admission_reason", "") if decision else "",
+        "evidence_ref": resolution.get("evidence_ref", ""),
+        "admitted_source": admitted_source,
+        "admitted_override": admitted_override,
+    }
+
+
+def resolve_and_log(
+    role: str,
+    frontmatter: dict,
+    touched_files: list[str],
+    dispatch: dict,
+    expertise_map: dict,
+    *,
+    profile: str = "semi-autonomous",
+    wp: str = "",
+    bind_head: bool = False,
+) -> dict:
+    """Resolve one stage against the DEFAULT admission table and log it.
+
+    The execution decision's entry point (goalforge-workflow-compile.py): the
+    table is ONLY `admission.ADMITTED_PATH`, read at call time — there is no
+    table-path parameter, so neither a flag, an environment variable nor a
+    dispatch-file key can supply another table. The table is read ONCE and
+    fails CLOSED when missing or unreadable (never an empty-table fallback).
+    With ``bind_head``, an admitted verdict additionally requires those same
+    bytes to be the table's committed HEAD content in a guarded repository
+    (`admission.verify_head_binding`); a failure raises AdmissionTableError
+    and writes no `admitted` row. Otherwise one ledger row is appended per
+    admission decision through `append_ledger_row`, the one writer.
+
+    Returns the resolution plus `admission_table_rows` (the table's row count)."""
+    table_path, admitted_source = resolve_admitted_path(None)
+    raw = admission.read_table(table_path)
+    table = admission.parse(raw, table_path)
+    resolution = resolve_stage(
+        role, frontmatter, touched_files, dispatch, expertise_map,
+        profile=profile, admitted=table,
+    )
+    decision = resolution.get("admission_decision")
+    if bind_head and decision == "admitted":
+        admission.verify_head_binding(table_path, raw)
+    if decision or resolution["propose_only"]:
+        append_ledger_row(ledger_row(
+            resolution, wp=wp, admitted_source=admitted_source,
+            admitted_override=False,
+        ))
+    return {**resolution, "admission_table_rows": len(table)}
 
 
 # ---------------------------------------------------------------------------
@@ -1282,7 +1360,38 @@ def _test_tiers() -> int:
         # NATIVE provider row. Checked BEFORE the projection loop below, which
         # `continue`s past the `implement` row (its tier is the `by_register`
         # sentinel) and so could never see this class.
-        for agent_role in ("implement", *(role for _, role in _compiler_gates())):
+        #
+        # The `implement` row is the one exception (wp-08): on a non-native
+        # provider the compiler emits it as a leaf leg, never an agent() node,
+        # iff the admission table admits it. This check has no WP and so no
+        # task class, so it applies the EXISTENTIAL rule — some row, for any
+        # task class, binds (provider, model, leaf, current leaf_sha256,
+        # max_egress >= egress). The per-WP decision, the HEAD binding and
+        # the wrapper stay with the compile.
+        impl = stages.get("implement") or {}
+        impl_kind = kinds.get(impl.get("provider"))
+        if impl_kind is None:
+            failures.append(
+                f"dispatch.yaml stage 'implement' names provider "
+                f"{impl.get('provider')!r}, which has no kind"
+            )
+        elif impl_kind != "native":
+            try:
+                table = admission.load(resolve_admitted_path(None)[0])
+                refusal = admission.admits_any(
+                    provider_row(shipped, str(impl.get("provider"))),
+                    str(impl.get("model")), str(impl.get("egress")), table,
+                )
+            except (admission.AdmissionTableError, ValueError,
+                    EscalationRequired) as exc:
+                refusal = f"admission table unusable: {exc}"
+            if refusal:
+                failures.append(
+                    f"dispatch.yaml stage 'implement' runs on non-native "
+                    f"provider {impl.get('provider')!r} but no admission row "
+                    f"admits it: {refusal}"
+                )
+        for agent_role in (role for _, role in _compiler_gates()):
             row = stages.get(agent_role) or {}
             kind = kinds.get(row.get("provider"))
             if kind != "native":
@@ -1555,23 +1664,11 @@ def main(argv: list[str] | None = None) -> int:
     # ONE row per dispatch decision, through the ONE writer. On a `refused` row
     # the provider/model named are the ones that were REFUSED, not the native
     # provider resolved in their place.
-    decision = resolution.get("admission_decision")
-    if decision or resolution["propose_only"]:
-        append_ledger_row({
-            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "wp": args.wp or "",
-            "role": resolution["role"],
-            "provider": resolution.get("refused_provider") or resolution["provider"],
-            "model": resolution.get("refused_model") or resolution["model"],
-            "effort": resolution["effort"],
-            "endpoint": resolution["endpoint"],
-            "decision": decision or "propose-only",
-            "task_class": resolution.get("task_class", ""),
-            "reason": resolution.get("admission_reason", "") if decision else "",
-            "evidence_ref": resolution.get("evidence_ref", ""),
-            "admitted_source": admitted_source,
-            "admitted_override": bool(args.admitted),
-        })
+    if resolution.get("admission_decision") or resolution["propose_only"]:
+        append_ledger_row(ledger_row(
+            resolution, wp=args.wp or "", admitted_source=admitted_source,
+            admitted_override=bool(args.admitted),
+        ))
 
     if args.emit_dispatch:
         event = dispatch_launched_event(

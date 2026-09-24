@@ -5,6 +5,7 @@ schema_version: 1
 
 admitted:
   - task_class: code/py
+    max_egress: overview
     provider: ollama
     model: glm-5.3:cloud
     evidence:

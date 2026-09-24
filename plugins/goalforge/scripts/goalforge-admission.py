@@ -34,6 +34,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import re
+import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
@@ -55,9 +57,21 @@ EVIDENCE_KINDS: frozenset[str] = frozenset(
 )
 
 # Every key a row must carry. `evidence` is checked structurally below.
+# `max_egress` (wp-08) is appended LAST: the declared egress ceiling of the
+# admitted dispatch, checked against the dispatch row's declared `egress`.
 REQUIRED_KEYS: tuple[str, ...] = (
-    "task_class", "provider", "model", "evidence", "permission_set",
+    "task_class", "provider", "model", "evidence", "permission_set", "max_egress",
 )
+
+# The egress classes in their total order (execute/references/dispatch-resolution.md
+# § Egress classes). A dispatch is coherent with a row iff its egress ranks at
+# or below the row's `max_egress`.
+EGRESS_LEVELS: tuple[str, ...] = ("none", "diff-only", "overview", "full")
+
+# The goalforge pre-commit installer's marker block (scripts/goalforge-install-hooks.sh).
+HOOK_MARKER_OPEN = "# >>> sdd-pre-commit >>>"
+HOOK_MARKER_CLOSE = "# <<< sdd-pre-commit <<<"
+PRE_COMMIT_HOOK = PKG_ROOT / "hooks" / "goalforge-pre-commit.sh"
 
 # The executable the row's evidence was gathered against. Checked AFTER the
 # keys above so a row missing one of those is still reported by that key.
@@ -79,6 +93,9 @@ class Admission:
     reason: str
     evidence_ref: str = ""
     permission_set: list = field(default_factory=list)
+    leaf: str = ""
+    leaf_sha256: str = ""
+    max_egress: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +120,15 @@ def validate(rows: object) -> list[dict]:
             raise _row_error(index, "admitted", "row is not a mapping")
         for key in REQUIRED_KEYS:
             if not row.get(key):
-                raise _row_error(index, key, "missing")
+                raise AdmissionTableError(
+                    f"admitted-providers row {index}: missing required key {key!r}"
+                )
+        if row["max_egress"] not in EGRESS_LEVELS:
+            # Closed enum: an unknown level must never reach the coherence rank.
+            raise AdmissionTableError(
+                f"admitted-providers row {index}: max_egress {row['max_egress']!r} "
+                f"not in {{{', '.join(EGRESS_LEVELS)}}}"
+            )
         evidence = row["evidence"]
         if not isinstance(evidence, dict):
             raise _row_error(index, "evidence", "not a mapping")
@@ -152,22 +177,176 @@ def load(path: Path | None = None, *, required: bool = False) -> list[dict]:
     silently become an empty table that refuses everything at exit 0."""
     target = path or ADMITTED_PATH
     try:
-        with open(target, "r", encoding="utf-8") as fh:
-            data = yaml.safe_load(fh) or {}
+        raw = read_table(target)
+    except AdmissionTableError:
+        if not required and not Path(target).exists():
+            return []
+        raise
+    return parse(raw, target)
+
+
+def read_table(path: Path) -> bytes:
+    """The table file's bytes, read ONCE. Fails CLOSED on any read failure.
+
+    The execution decision (the workflow compile, the leaf wrapper) reads
+    through here with no empty-table fallback: a missing or unreadable table
+    never degrades to "nothing admitted" at exit 0 — it is its own error."""
+    try:
+        return Path(path).read_bytes()
     except FileNotFoundError:
-        if required:
-            raise AdmissionTableError(
-                f"admission table not found: {target}"
-            ) from None
-        return []
-    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
-        # A directory, a permission denial or a binary file is as untrustworthy
-        # as a syntax error: every one of them must reach the caller as an
-        # AdmissionTableError (exit 2), never as a traceback at exit 1.
-        raise AdmissionTableError(f"unreadable admission table {target}: {exc}") from exc
+        raise AdmissionTableError(
+            f"admission table not found: {path} — load failure, failed CLOSED"
+        ) from None
+    except OSError as exc:
+        # A directory or a permission denial is as untrustworthy as a syntax
+        # error: it reaches the caller as an AdmissionTableError (exit 2).
+        raise AdmissionTableError(
+            f"unreadable admission table {path}: {exc} — load failure, failed CLOSED"
+        ) from exc
+
+
+def parse(raw: bytes, source: object) -> list[dict]:
+    """Parse and VALIDATE table bytes already read by ``read_table``."""
+    try:
+        data = yaml.safe_load(raw.decode("utf-8")) or {}
+    except (UnicodeDecodeError, yaml.YAMLError) as exc:
+        raise AdmissionTableError(
+            f"unreadable admission table {source}: {exc} — load failure, failed CLOSED"
+        ) from exc
     if not isinstance(data, dict):
-        raise AdmissionTableError(f"admission table is not a mapping: {target}")
+        raise AdmissionTableError(f"admission table is not a mapping: {source}")
     return validate(data.get("admitted"))
+
+
+# ---------------------------------------------------------------------------
+# HEAD binding (wp-08 T3) — an admitting table must be the COMMITTED table
+# ---------------------------------------------------------------------------
+# An uncommitted table edit must not admit anything: the pre-commit guard on
+# admitted-providers.yaml is only on the path if the admitting bytes went
+# through a commit. This is a cost-raiser, not a trust boundary (a forged hook
+# file or plumbing commits stay a recorded residual, wp-08 Risks).
+
+def _git_env(*, isolate_config: bool) -> dict[str, str]:
+    """The caller's environment with EVERY ``GIT_*`` variable scrubbed.
+
+    An agent-settable ``GIT_DIR`` / ``GIT_WORK_TREE`` would point the HEAD read
+    at a forged repository. ``isolate_config`` additionally hides global and
+    system config for the HEAD read itself; the ``core.hooksPath`` lookup runs
+    WITHOUT it, because hiding that setting would hide what `git commit` runs."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    if isolate_config:
+        env["GIT_CONFIG_NOSYSTEM"] = "1"
+        env["GIT_CONFIG_GLOBAL"] = os.devnull
+    return env
+
+
+def _git(args: list[str], cwd: Path, *, isolate_config: bool = True):
+    return subprocess.run(
+        ["git", "-C", str(cwd), *args], env=_git_env(isolate_config=isolate_config),
+        capture_output=True, check=False,
+    )
+
+
+def _marker_hook_paths(text: str) -> list[str]:
+    """The paths the installer's marker block invokes (`bash "<path>" ...`)."""
+    paths: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == HOOK_MARKER_OPEN:
+            inside = True
+            continue
+        if stripped == HOOK_MARKER_CLOSE:
+            inside = False
+            continue
+        m = re.match(r'^bash\s+"([^"]+)"', stripped) if inside else None
+        if m:
+            paths.append(m.group(1))
+    return paths
+
+
+def _guard_reason(table_dir: Path) -> str | None:
+    """Why the repository anchored at ``table_dir`` is not goalforge-guarded."""
+    for scope in ("--global", "--system"):
+        res = _git(["config", scope, "--get", "core.hooksPath"], table_dir,
+                   isolate_config=False)
+        if res.returncode == 0:
+            value = res.stdout.decode("utf-8", "replace").strip()
+            return (
+                f"a {scope[2:]} core.hooksPath is set ({value!r}) — the "
+                "repository's own pre-commit is not what `git commit` runs; "
+                "admission failed CLOSED"
+            )
+        if res.returncode != 1:
+            return (
+                f"the {scope[2:]} core.hooksPath lookup failed "
+                f"(git exit {res.returncode}) — admission failed CLOSED"
+            )
+    res = _git(["rev-parse", "--git-path", "hooks"], table_dir)
+    if res.returncode != 0:
+        return "the repository's hooks directory cannot be resolved — failed CLOSED"
+    hooks = Path(res.stdout.decode("utf-8", "replace").strip())
+    if not hooks.is_absolute():
+        hooks = table_dir / hooks
+    pre_commit = hooks / "pre-commit"
+    try:
+        text = pre_commit.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        text = ""
+    want = os.path.realpath(PRE_COMMIT_HOOK)
+    if any(os.path.realpath(p) == want for p in _marker_hook_paths(text)):
+        return None
+    return (
+        f"the table's repository is unguarded: {pre_commit} carries no "
+        f"goalforge installer marker block invoking {PRE_COMMIT_HOOK} "
+        "(install it with scripts/goalforge-install-hooks.sh)"
+    )
+
+
+def verify_head_binding(path: Path, raw: bytes) -> None:
+    """Refuse table bytes that are not the table's committed HEAD content.
+
+    ``raw`` are the bytes the caller already read and parsed (read once). The
+    repository is anchored at the table's OWN directory with every ``GIT_*``
+    variable scrubbed; absent from HEAD is a mismatch, never a skipped check;
+    and the repository must carry the goalforge pre-commit guard. Raises
+    AdmissionTableError with a distinct reason per failure."""
+    table_dir = Path(path).resolve().parent
+    name = Path(path).name
+    try:
+        prefix = _git(["rev-parse", "--show-prefix"], table_dir)
+    except OSError as exc:
+        raise AdmissionTableError(
+            f"admission table {path}: git is not runnable ({exc}) — HEAD binding "
+            "failed CLOSED"
+        ) from exc
+    if prefix.returncode != 0:
+        raise AdmissionTableError(
+            f"admission table {path} is outside a git work tree — the HEAD "
+            "binding cannot be checked, failed CLOSED"
+        )
+    rel = prefix.stdout.decode("utf-8", "replace").strip() + name
+    head = _git(["show", f"HEAD:{rel}"], table_dir)
+    if head.returncode != 0:
+        raise AdmissionTableError(
+            f"admission table {path} is absent from HEAD (git show HEAD:{rel} "
+            "found nothing) — an uncommitted table is a HEAD mismatch, refused"
+        )
+    if head.stdout != raw:
+        raise AdmissionTableError(
+            f"admission table {path} differs from git show HEAD:{rel} — HEAD "
+            "mismatch: only the committed table admits, refused"
+        )
+    unguarded = _guard_reason(table_dir)
+    if unguarded:
+        raise AdmissionTableError(f"admission table {path}: {unguarded}")
+
+
+def egress_within(egress: object, max_egress: object) -> bool:
+    """``egress <= max_egress`` over none < diff-only < overview < full."""
+    if egress not in EGRESS_LEVELS or max_egress not in EGRESS_LEVELS:
+        return False
+    return EGRESS_LEVELS.index(egress) <= EGRESS_LEVELS.index(max_egress)
 
 
 # ---------------------------------------------------------------------------
@@ -240,11 +419,14 @@ def _leaf_incoherence(row: dict, provider: dict, root: Path | None) -> str | Non
 
 def resolve(role: str, klass: str, provider: dict, model: str,
             table: list[dict] | None = None, *,
-            leaf_root: Path | None = None) -> Admission:
+            leaf_root: Path | None = None,
+            egress: str | None = None) -> Admission:
     """Return the admission verdict for (role, task class, provider, model).
 
     ``leaf_root`` is the root a `providers[].leaf` path resolves against
-    (default: ``CLAUDE_CONFIG_DIR`` or ``~/.claude``)."""
+    (default: ``CLAUDE_CONFIG_DIR`` or ``~/.claude``). ``egress`` is the
+    dispatch row's declared egress class: when given, a matching row whose
+    ``max_egress`` ranks below it is refused (`egress incoherent`)."""
     name = provider.get("name")
     if provider.get("kind") == "native":
         return Admission(True, f"native provider admitted for {role}/{klass}")
@@ -263,12 +445,23 @@ def resolve(role: str, klass: str, provider: dict, model: str,
             unbound = _leaf_incoherence(row, provider, leaf_root)
             if unbound:
                 return Admission(False, unbound)
+            if egress is not None and not egress_within(egress, row.get("max_egress")):
+                return Admission(
+                    False,
+                    f"egress incoherent: the dispatch row declares egress "
+                    f"{egress!r} but the admission row for {klass} on "
+                    f"{name!r}/{model!r} caps it at max_egress "
+                    f"{row.get('max_egress')!r} — refused",
+                )
             return Admission(
                 True,
                 f"admitted for {klass} on {name!r}/{model!r} "
                 f"(evidence {row['evidence']['kind']})",
                 evidence_ref=str(row["evidence"]["ref"]),
                 permission_set=list(row["permission_set"]),
+                leaf=str(row["leaf"]),
+                leaf_sha256=str(row["leaf_sha256"]).strip().lower(),
+                max_egress=str(row["max_egress"]),
             )
     candidates = ", ".join(repr(r.get("model")) for r in rows)
     return Admission(
@@ -277,6 +470,79 @@ def resolve(role: str, klass: str, provider: dict, model: str,
         f"resolved model is {model!r} — refused "
         "(admission binds task class, provider AND model)",
     )
+
+
+def admits_any(provider: dict, model: str, egress: str,
+               table: list[dict] | None = None, *,
+               leaf_root: Path | None = None) -> str | None:
+    """The EXISTENTIAL rule for a WP-less config self-check (``--test-tiers``).
+
+    With no WP there is no task class, so the row passes iff SOME admission
+    row, for ANY task class, admits (provider, model) with a bound, current
+    leaf and ``max_egress >= egress``. Returns None when one does, else the
+    refusal reason. The per-WP task-class decision stays with the compile."""
+    name = provider.get("name")
+    classes = sorted({
+        str(r.get("task_class")) for r in (table or [])
+        if r.get("provider") == name and r.get("model") == model
+    })
+    if not classes:
+        return (
+            f"no admission row for (*, {name}, {model}) — refused (the implement "
+            "row runs on a non-native provider no row admits)"
+        )
+    reasons = []
+    for klass in classes:
+        verdict = resolve("implement", klass, provider, model, table,
+                          leaf_root=leaf_root, egress=egress)
+        if verdict.admitted:
+            return None
+        reasons.append(verdict.reason)
+    return "; ".join(reasons)
+
+
+def verify_leaf(table_path: Path, klass: str, provider: str, model: str, *,
+                leaf_root: Path | None = None) -> Path:
+    """Re-derive and re-check the admitted leaf for one row key (the wrapper).
+
+    Reads the table once, requires those bytes to be the committed HEAD
+    content (``verify_head_binding``), takes the row's ``leaf`` and
+    ``leaf_sha256`` from THAT table only, requires the leaf's real path to lie
+    under the leaf root and re-hashes it. Returns the real path to execute.
+    Raises AdmissionTableError on any failure — the leaf is never run then."""
+    raw = read_table(table_path)
+    verify_head_binding(table_path, raw)
+    rows = [
+        r for r in parse(raw, table_path)
+        if r.get("task_class") == klass and r.get("provider") == provider
+        and r.get("model") == model
+    ]
+    if len(rows) != 1:
+        raise AdmissionTableError(
+            f"no single admission row for ({klass}, {provider}, {model}) in the "
+            f"HEAD-bound table {table_path} — refused"
+        )
+    row = rows[0]
+    root = Path(os.path.realpath(leaf_root or default_leaf_root()))
+    target = Path(os.path.realpath(root / str(row["leaf"])))
+    if root not in target.parents:
+        raise AdmissionTableError(
+            f"leaf {row['leaf']!r} resolves to {target}, outside the leaf root "
+            f"{root} — refused, not executed"
+        )
+    try:
+        digest = _leaf_digest(target)
+    except OSError as exc:
+        raise AdmissionTableError(
+            f"leaf {target} cannot be read: {exc} — refused, not executed"
+        ) from exc
+    if digest != str(row["leaf_sha256"]).strip().lower():
+        raise AdmissionTableError(
+            f"leaf_sha256 mismatch: {target} hashes to {digest} but the "
+            f"HEAD-bound admission row records {row['leaf_sha256']!r} — "
+            "refused, not executed"
+        )
+    return target
 
 
 # ---------------------------------------------------------------------------
@@ -304,9 +570,20 @@ def main(argv: list[str] | None = None) -> int:
                         "references/admitted-providers.yaml).")
     p.add_argument("--task-class", metavar="FILE", default=None,
                    help="Print the task class derived from this WP's frontmatter.")
+    p.add_argument("--verify-leaf", nargs=4,
+                   metavar=("TABLE", "TASK_CLASS", "PROVIDER", "MODEL"),
+                   default=None,
+                   help="scripts/goalforge-leaf-exec.sh's check: print the real "
+                        "path of the admitted leaf for this row key, exit 2 "
+                        "unless the HEAD-bound table, the leaf root and the "
+                        "leaf hash all hold.")
     args = p.parse_args(argv)
 
     try:
+        if args.verify_leaf:
+            table, klass, provider, model = args.verify_leaf
+            print(verify_leaf(Path(table), klass, provider, model))
+            return 0
         if args.task_class:
             print(task_class(_frontmatter(Path(args.task_class))))
             return 0

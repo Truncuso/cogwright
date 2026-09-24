@@ -1,0 +1,99 @@
+# dispatch-admitted.yaml — dispatch-default.yaml plus an `ollama` provider row (the leaf
+# path admission fixtures bind), with ONE change: the implement row runs on ollama/glm-5.3:cloud through its leaf, egress overview, effort low (b1)
+# (wp-08 admitted execution). The second_opinion leaf row carries a provider
+# model id, so --test-tiers passes these configs apart from the implement
+# row under test. Every other row is byte-identical.
+
+schema_version: 1
+
+providers:
+  - name: anthropic
+    kind: native
+    leaf: null
+    propose_only: false
+  - name: stub-a
+    kind: local
+    leaf: skills/agent-dispatch/stub-a/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+  - name: stub-b
+    kind: foreign
+    leaf: skills/agent-dispatch/stub-b/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+  - name: ollama
+    kind: local
+    leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+
+stages:
+  implement:
+    model: glm-5.3:cloud
+    effort: low
+    provider: ollama
+    endpoint: leaf
+    egress: overview
+  discovery:
+    model: sonnet
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  feature-audit:
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  harden-review:
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  wp-verify:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  simplify:
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  judge:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  panel:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: overview
+  integration-review:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  second_opinion:                 # a leaf row carries the PROVIDER's model id
+    model: qwen3-coder:cloud
+    effort: low
+    provider: stub-a
+    endpoint: leaf
+    egress: overview
+
+rollup:
+  token_warn: 250000
+
+harden:
+  token_ceiling: null
+
+second_opinion:
+  max_payload_bytes: 102400

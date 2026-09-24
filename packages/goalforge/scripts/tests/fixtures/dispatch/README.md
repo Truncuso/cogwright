@@ -21,6 +21,12 @@ writable copy `cp -r`s it into its own `mktemp -d` root.
 | `spec-no-egress.md` | b6 | feature spec with no `egress:` — the stage row's class stands |
 | `spec-egress-diff-only.md` | b6 | narrowing override, applied |
 | `spec-egress-full.md` | b6 | widening override, ignored with a WARN row |
+| `dispatch-admitted.yaml` | wp-08 b1-b3, b5-b8, b12-b13; pick-agent b4 | `dispatch-default.yaml` + an `ollama` provider row; `implement` on ollama/`glm-5.3:cloud`, endpoint leaf, egress overview, effort low; `second_opinion` carries a provider model id so `--test-tiers` isolates the implement row |
+| `dispatch-admitted-egress-full.yaml` / `-egress-diff-only.yaml` | wp-08 b3 | `dispatch-admitted.yaml` with only `egress` changed (coherence pairs) |
+| `dispatch-admitted-fable.yaml` / `dispatch-native-fable.yaml` | wp-08 b11 | implement model `fable`, on ollama / on the native provider — advisor-only on both paths |
+| `dispatch-admitted-path-key.yaml` | wp-08 b6(iii) | `dispatch-admitted.yaml` plus admission-path keys nothing may read |
+| `wp-admitted.md` | wp-08 | a two-item code/py WP compiled against the admitted rows |
+| `workflow_probe.mjs` / `check_admitted.py` | wp-08 b1 | execute a compiled script under stub `agent`/`pipeline`/`log` hooks and assert what it DID (stage of each agent, gate conditioning on the runner's `exit_code`, the leg data) |
 | `trace-b5.jsonl` | b5 | one `dispatch.launched` + one `dispatch.completed` at `tokens: 260000`, `tool_uses: 12` — above `rollup.token_warn: 250000` |
 | `trace-b7-320k.jsonl` | b7 | one `harden.round` at `tokens: 320000`, round 1 |
 | `trace-b7-rounds2.jsonl` | b7 | two `harden.round` rows at `tokens: 1000` — the round cap, not the token sensor |

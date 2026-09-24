@@ -7,6 +7,19 @@
 #   - goalforge-validate.sh not found / not executable → exit 0 + stderr notice
 #   - any internal error in this hook → exit 0 (never break commit flow)
 #
+# ONE guard runs FIRST and FAILS CLOSED (wp-08 T7): a staged change that adds
+# or changes an `admitted:` row of references/admitted-providers.yaml (package
+# or plugin mirror) is BLOCKED unless the user confirms INTERACTIVELY on the
+# controlling terminal (/dev/tty). A commit-message trailer and an environment
+# variable are NOT accepted — an agent can write either. A headless commit that
+# adds an admitted row is therefore ALWAYS blocked; that is the guarantee. Any
+# error while evaluating such a staged change exits 2, never 0.
+#
+# Installation: this file reaches a repository through
+# scripts/goalforge-install-hooks.sh, which writes (or appends) a marked block to
+# the repo's pre-commit invoking it. That marker block is also what the workflow
+# compiler's guarded-repository check looks for before it admits a table.
+#
 # The hook uses --strict ONLY (never --require-commit); commit-hash
 # recording is enforced at goalforge-verify time, not here.
 #
@@ -77,8 +90,96 @@ _gf_hr_value() {
     '
 }
 
+# ── admitted-providers.yaml guard (wp-08 T7; ruling 3, 2026-09-22) ────────────
+# The staged paths it guards: the package table and its plugin mirror.
+_GF_ADMITTED_RE='(^|/)(packages|plugins)/goalforge/references/admitted-providers\.yaml$'
+
+# Row detection compares the PARSED YAML of the HEAD blob and the index blob:
+# an index row equal to no HEAD row is an add or a change (block-style,
+# flow-style and in-place edits alike); comment-only edits and removals are not.
+# argv: <HEAD blob file | -> <index blob file>. Prints changed|unchanged; any
+# parse or shape failure exits non-zero (the guard then fails closed).
+_GF_ADMITTED_DIFF_PY='
+import sys
+import yaml
+
+def rows(path, label):
+    with open(path, encoding="utf-8") as fh:
+        data = yaml.safe_load(fh)
+    if data is None:
+        return []
+    if not isinstance(data, dict):
+        raise SystemExit(label + " blob is not a mapping")
+    found = data.get("admitted") or []
+    if not isinstance(found, list):
+        raise SystemExit(label + " blob: `admitted:` is not a list")
+    return found
+
+head = [] if sys.argv[1] == "-" else rows(sys.argv[1], "HEAD")
+index = rows(sys.argv[2], "index")
+print("changed" if any(row not in head for row in index) else "unchanged")
+'
+
+# The ONE accepted human marker: an answer read from the controlling terminal.
+# Reads ONLY the literal /dev/tty — never stdin, an environment variable or a
+# file. Defined unconditionally, so an exported function of the same name
+# cannot pre-empt it. (The regression test redefines it after sourcing.)
+_gf_admitted_confirm() {
+    local answer=""
+    read -r answer </dev/tty 2>/dev/null || return 1
+    [[ "$answer" == "y" || "$answer" == "Y" || "$answer" == "yes" ]]
+}
+
+# Returns 0 (allow) or 2 (block). Run in a subshell by the caller, which maps
+# EVERY non-zero status to 2: an evaluation error fails CLOSED.
+_gf_admitted_guard() {
+    set -uo pipefail
+    git rev-parse --git-dir >/dev/null 2>&1 || return 0
+    local staged path verdict work head_arg
+    staged=$(git diff --cached --name-only 2>/dev/null) || {
+        echo "goalforge-pre-commit: BLOCKED — cannot list staged paths to check admitted-providers.yaml — failed closed" >&2
+        return 2
+    }
+    work=$(mktemp -d) || return 2
+    while IFS= read -r -u 3 path; do
+        [[ -n "$path" && "$path" =~ $_GF_ADMITTED_RE ]] || continue
+        # Not in the index: a staged deletion. A removal adds no row.
+        git cat-file -e ":$path" 2>/dev/null || continue
+        git show ":$path" > "$work/index" 2>/dev/null || { rm -rf "$work"; return 2; }
+        head_arg="-"
+        if git cat-file -e "HEAD:$path" 2>/dev/null; then
+            git show "HEAD:$path" > "$work/head" 2>/dev/null || { rm -rf "$work"; return 2; }
+            head_arg="$work/head"
+        fi
+        if ! verdict=$(python3 -c "$_GF_ADMITTED_DIFF_PY" "$head_arg" "$work/index" 2>"$work/err"); then
+            echo "goalforge-pre-commit: BLOCKED — cannot evaluate staged $path (load failure: $(tail -n 1 "$work/err")) — failed closed" >&2
+            rm -rf "$work"
+            return 2
+        fi
+        [[ "$verdict" == "changed" ]] || continue
+        echo "goalforge-pre-commit: $path — this commit adds or changes an admitted: row (it lets a non-native provider execute implement)." >&2
+        echo "  Confirm on the terminal [y/N]:" >&2
+        if _gf_admitted_confirm; then
+            echo "goalforge-pre-commit: admitted row confirmed interactively." >&2
+            continue
+        fi
+        {
+            echo "goalforge-pre-commit: BLOCKED — $path: adding or changing an admitted: row requires INTERACTIVE confirmation on the controlling terminal (/dev/tty)."
+            echo "  A commit-message trailer or an environment variable is not accepted. A headless commit that adds an admitted row is always blocked — a human commits it at a terminal."
+        } >&2
+        rm -rf "$work"
+        return 2
+    done 3<<< "$staged"   # fd 3: the loop never consumes stdin
+    rm -rf "$work"
+    return 0
+}
+
 _goalforge_pre_commit_main() {
     set -uo pipefail
+
+    # FIRST, before every early exit below: the admitted-table guard. Any
+    # non-zero status from it — a block or an internal error — is exit 2.
+    ( _gf_admitted_guard ) || exit 2
 
     local VALIDATE_SCRIPT="${GOALFORGE_VALIDATE_SCRIPT:-$GF_HOME/scripts/goalforge-validate.sh}"
 
@@ -244,10 +345,20 @@ _goalforge_pre_commit_main() {
 # Run main logic in a subshell; only propagate the INTENTIONAL block codes —
 # 1 (schema error) and 2 (human_required weakened). Any unexpected internal
 # error (unbound variable, subprocess crash, etc.) becomes exit 0 — never break
-# the user's commit flow over a hook bug.
-( _goalforge_pre_commit_main "$@" )
-_goalforge_ec=$?
-if [[ $_goalforge_ec -eq 1 || $_goalforge_ec -eq 2 ]]; then
-    exit "$_goalforge_ec"
+# the user's commit flow over a hook bug. The admitted-table guard's errors are
+# already 2 by the time they reach this remap, so they stay a block.
+# Exposed as a function (and guarded by the source check below) so a test can
+# source this file and drive the wrapper — exit-code mapping included.
+goalforge_pre_commit() {
+    ( _goalforge_pre_commit_main "$@" )
+    local ec=$?
+    if [[ $ec -eq 1 || $ec -eq 2 ]]; then
+        return "$ec"
+    fi
+    return 0
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    goalforge_pre_commit "$@"
+    exit $?
 fi
-exit 0

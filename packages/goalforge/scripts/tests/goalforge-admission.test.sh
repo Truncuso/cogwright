@@ -163,7 +163,8 @@ for pair in \
     "bad-missing-permission-set.yaml|permission_set" \
     "bad-self-report.yaml|evidence.kind" \
     "bad-permission-set-string.yaml|permission_set" \
-    "bad-missing-leaf.yaml|leaf"; do
+    "bad-missing-leaf.yaml|leaf" \
+    "bad-missing-max-egress.yaml|max_egress"; do
     FILE="${pair%%|*}"; KEY="${pair##*|}"
     ERR="$(python3 "$ADM" --table "$F/$FILE" 2>&1)"
     RC=$?
@@ -569,20 +570,12 @@ else
     bad "b7 present: the ledger writer's docstring names all three decisions"
 fi
 
-# (iii) no site claims the COMPILER admits anything.
-B7_FILES=(references/schema.md references/dispatch.yaml
-          execute/references/dispatch-resolution.md scripts/goalforge-pick-agent.py)
-NEG_HITS=""
-for lit in "compiler admits" "compile admits" "--test-tiers admits"; do
-    for rel in "${B7_FILES[@]}"; do
-        [[ "$(python3 "$PHRASE" "$PKG/$rel" "$lit")" != "0" ]] && NEG_HITS="$NEG_HITS $rel:'$lit'"
-    done
-done
-if [[ -z "$NEG_HITS" ]]; then
-    ok "b7 negative: no ratchet file claims the compiler or --test-tiers admits a non-native implement row"
-else
-    bad "b7 negative: positive-compile claim(s) present:$NEG_HITS"
-fi
+# (iii) RETIRED by wp-08 (OQ6 (a), human ruling 2026-09-24 G3r2): the negative
+# grep for "compiler admits" / "compile admits" / "--test-tiers admits"
+# enforced words for an invariant wp-08 makes false — an admitted non-native
+# implement row now compiles. The behavior is asserted where it lives:
+# scripts/tests/goalforge-workflow-compile.test.sh (b1-b13) and
+# scripts/tests/goalforge-pick-agent.test.sh (b4).
 
 # The compile-level invariant R2-4 KEEPS must still be stated verbatim.
 if [[ "$(python3 "$PHRASE" "$PKG/execute/references/dispatch-resolution.md" \

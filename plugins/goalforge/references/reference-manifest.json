@@ -155,6 +155,10 @@
     },
     {
       "from": "references/admission.md",
+      "path": "scripts/goalforge-leaf-exec.sh"
+    },
+    {
+      "from": "references/admission.md",
       "path": "scripts/goalforge-pick-agent.py"
     },
     {
@@ -351,6 +355,10 @@
     },
     {
       "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "hooks/goalforge-pre-commit.sh"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
       "path": "references/admission.md"
     },
     {
@@ -368,6 +376,14 @@
     {
       "from": "skills/execute/references/dispatch-resolution.md",
       "path": "references/tier-map.md"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "scripts/goalforge-install-hooks.sh"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "scripts/goalforge-leaf-exec.sh"
     },
     {
       "from": "skills/harden/SKILL.md",

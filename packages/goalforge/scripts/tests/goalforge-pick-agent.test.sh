@@ -189,6 +189,70 @@ else
     bad "references/specialist-map.yaml retired by wp-03 (still present)"
 fi
 
+# ── wp-08 b4: --test-tiers applies the EXISTENTIAL admission rule ────────
+# --test-tiers has no WP and so no task class: a non-native implement row
+# passes iff SOME admission row, for ANY task class, binds its (provider,
+# model, leaf, current leaf_sha256, max_egress >= egress). Run in process
+# through fixtures/admission/tiers_seam.py, which patches the dispatch
+# loader's path and goalforge_admission.ADMITTED_PATH — no CLI flag.
+TIERS="$SD/fixtures/admission/tiers_seam.py"
+ADM_FX="$SD/fixtures/admission"
+D_ADM="$DISPATCH_FIXTURES/dispatch-admitted.yaml"
+export CLAUDE_CONFIG_DIR="$T/cfg"
+LEAF_REL="skills/agent-dispatch/ollama/scripts/headless_dispatch"
+mkdir -p "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")"
+cp "$ADM_FX/leaf/headless_dispatch" "$CLAUDE_CONFIG_DIR/$LEAF_REL"
+
+tiers() { # <name> <dispatch|-> <table|-> -> RC; $T/<name>.out (stdout+stderr)
+    python3 "$TIERS" "$SCRIPT" "$2" "$3" >"$T/$1.out" 2>&1
+    RC=$?
+}
+impl_fails() { grep "FAIL: .*stage 'implement'" "$T/$1.out" || true; }
+
+tiers b4-i - -
+if [[ "$RC" -eq 0 ]] && grep -q "all role→tier invariants pass" "$T/b4-i.out"; then
+    ok "b4(i) shipped dispatch.yaml + shipped (empty) table: --test-tiers passes (native implement row)"
+else
+    bad "b4(i) shipped config (rc=$RC): $(cat "$T/b4-i.out")"
+fi
+tiers b4-ii "$D_ADM" "$ADM_FX/admitted-ok.yaml"
+if [[ "$RC" -eq 0 && -z "$(impl_fails b4-ii)" ]]; then
+    ok "b4(ii) a foreign implement row + an admitting table: no implement failure"
+else
+    bad "b4(ii) admitted row flagged: $(impl_fails b4-ii)"
+fi
+tiers b4-iii "$D_ADM" "$ADM_FX/admitted-leaf-stale-hash.yaml"
+if [[ "$RC" -ne 0 ]] && impl_fails b4-iii | grep -q "hashes to"; then
+    ok "b4(iii) a stale leaf_sha256 FLAGS the implement row naming the leaf hash mismatch"
+else
+    bad "b4(iii) stale hash (rc=$RC): $(impl_fails b4-iii)"
+fi
+tiers b4-iv "$D_ADM" "$ADM_FX/admitted-empty.yaml"
+if [[ "$RC" -ne 0 ]] && impl_fails b4-iv | grep -qF "(*, ollama, glm-5.3:cloud)" \
+   && ! grep -q "not 'native'" "$T/b4-iv.out"; then
+    ok "b4(iv) an empty table FLAGS the row naming the missing (*, provider, model) — not the pre-wp-08 \"not 'native'\" text"
+else
+    bad "b4(iv) empty table (rc=$RC): $(cat "$T/b4-iv.out")"
+fi
+tiers b4-v "$D_ADM" "$ADM_FX/admitted-other-model.yaml"
+if [[ "$RC" -ne 0 ]] && impl_fails b4-v | grep -qF "(*, ollama, glm-5.3:cloud)"; then
+    ok "b4(v) the same provider admitted for another model only FLAGS the row"
+else
+    bad "b4(v) other model (rc=$RC): $(impl_fails b4-v)"
+fi
+tiers b4-vi "$D_ADM" "$ADM_FX/admitted-code-sh.yaml"
+if [[ "$RC" -eq 0 && -z "$(impl_fails b4-vi)" ]]; then
+    ok "b4(vi) an admission for another task class only (code/sh) suffices — existential rule"
+else
+    bad "b4(vi) other task class flagged: $(impl_fails b4-vi)"
+fi
+tiers b4-vii "$D_ADM" "$ADM_FX/admitted-egress-diff-only.yaml"
+if [[ "$RC" -ne 0 ]] && impl_fails b4-vii | grep -q "egress incoherent"; then
+    ok "b4(vii) max_egress below the row's egress FLAGS the row naming the egress incoherence"
+else
+    bad "b4(vii) egress (rc=$RC): $(impl_fails b4-vii)"
+fi
+
 echo
 echo "goalforge-pick-agent.test.sh: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

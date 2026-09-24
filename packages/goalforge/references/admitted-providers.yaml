@@ -23,7 +23,17 @@
 #     evidence:
 #       kind: user-experience          # user-experience | benchmark | user-addition
 #       ref: <locator>                 # where the evidence lives
-#     permission_set: [read, write]    # DECLARED, not enforced by this package
+#     permission_set: [read, write]    # posture documentation — DECLARED, not
+#                                      # enforced by this package
+#     max_egress: overview             # none | diff-only | overview | full — the
+#                                      # declared egress ceiling; a dispatch row
+#                                      # whose egress ranks above it is refused
+#                                      # (a check between two declarations, not
+#                                      # a runtime egress control)
+#
+# Committing a row: the goalforge pre-commit blocks any commit that adds or
+# changes a row unless you confirm INTERACTIVELY on the terminal, and the
+# workflow compile admits only the table's committed HEAD content.
 #
 # Adding a row is a user decision (CLAUDE.md Principle 5: foreign and local
 # providers are propose-only). Before the first row lands, re-read the

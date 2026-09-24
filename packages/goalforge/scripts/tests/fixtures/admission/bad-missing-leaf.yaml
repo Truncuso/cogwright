@@ -3,9 +3,10 @@ schema_version: 1
 
 admitted:
   - task_class: code/py
+    max_egress: overview
     provider: ollama
     model: glm-5.3:cloud
-    leaf_sha256: cf5d9648983ae405a989edb02a0c6d7430999a54a8863e02e513a01a8b03e8cf
+    leaf_sha256: 0624a2af0f1a2c70a41341bea6d8832abae884e0f71c8e887eaeebfd02306331
     evidence:
       kind: user-experience
       ref: fixtures/admission#missing-leaf

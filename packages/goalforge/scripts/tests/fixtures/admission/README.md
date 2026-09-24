@@ -21,3 +21,18 @@ kind, so these carry the trust-boundary cases:
   (resolution) and `fallback_target.py` (fallback target, library entry point) —
   a self-declared `kind: native` that would skip the table.
 * `dispatch-dup-names.yaml` — two provider rows, one name.
+
+wp-08 (admitted execution): every row carries the required `max_egress`, and
+`leaf/headless_dispatch` touches `$LEAF_MARKER` and exits `${LEAF_EXIT:-0}`
+when run, so the leaf-wrapper cases can tell "executed" from "refused".
+
+* `admitted-egress-{none,diff-only,full}.yaml` — `admitted-ok.yaml` differing
+  only in `max_egress` (coherence pairs; `--test-tiers` egress case).
+* `admitted-empty.yaml` — a well-formed table that admits nothing.
+* `admitted-fable.yaml` — admits `fable`; the compile must still refuse it.
+* `admitted-other-model.yaml` / `admitted-code-sh.yaml` — same provider,
+  another model / another task class only (`--test-tiers` existential rule).
+* `bad-missing-max-egress.yaml` / `bad-max-egress-enum.yaml` — loader refusals.
+* `compile_seam.py` / `tiers_seam.py` — drive the compiler and `--test-tiers`
+  in process through `goalforge_admission.ADMITTED_PATH` (and the dispatch
+  loader's path); no CLI flag exists for either.

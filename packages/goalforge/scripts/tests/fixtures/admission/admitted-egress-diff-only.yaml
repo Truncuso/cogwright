@@ -1,0 +1,14 @@
+# wp-08 b3/b4(vii): admitted-ok.yaml with max_egress: diff-only (only max_egress differs).
+schema_version: 1
+
+admitted:
+  - task_class: code/py
+    max_egress: diff-only
+    provider: ollama
+    model: glm-5.3:cloud
+    leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
+    leaf_sha256: 0624a2af0f1a2c70a41341bea6d8832abae884e0f71c8e887eaeebfd02306331
+    evidence:
+      kind: user-experience
+      ref: fixtures/admission#user-experience-2026-09-14
+    permission_set: [read, write]

@@ -42,19 +42,37 @@ non-native provider, so its `model` is a PROVIDER model id that
 `scripts/goalforge-second-opinion.sh`. No agent node the compiler emits ever
 carries a non-Claude model id.
 
+ADMITTED EXECUTION (wp-08). An `implement` row on a non-native provider
+compiles iff the DEFAULT admission table (`goalforge_admission.ADMITTED_PATH`,
+read at call time through `goalforge-pick-agent.resolve_and_log`, which writes
+the one ledger row) admits (task_class, provider, model) for the WP, the row's
+`max_egress` covers the dispatch row's `egress`, and the admitting table bytes
+are the committed HEAD content of a goalforge-guarded repository. The foreign
+model is still never an `agent()` node: pipeline stage 1 is a NATIVE runner
+`agent()` (the `discovery` row's model/effort, schema {exit_code, stderr})
+whose only action is the wrapper call `scripts/goalforge-leaf-exec.sh
+<task_class> <provider> <model>`; gates B and C are stages 2 and 3, each run
+only when that stage's `exit_code === 0`. The leg's provider, model, effort,
+evidence ref, permission set, containment block, leaf + leaf_sha256 and
+`enforced: false` ride along as data (`const LEG`). Every other non-native
+implement row exits 2 naming the missing admission; an advisor-only model
+(fable) as the implement model exits 2 on either path.
+
 The emitted script calls exactly five functions — `agent`, `parallel`,
 `pipeline`, `phase`, `log` — and opens with `export const meta = {`. It
-contains no `Date`, no `Math.random`, no `fs`, no imports, and no control
-flow: the body is two `phase()` declarations, three `log()` calls, and one
-returned expression, so it is deterministic to read and to diff.
+contains no `Date`, no `Math.random`, no `fs` and no imports. The native path
+has no control flow: the body is two `phase()` declarations, three `log()`
+calls, and one returned expression. The admitted path's only conditionals are
+the two `exit_code === 0` gate conditions.
 
 CLI:
     python3 goalforge-workflow-compile.py <wp-overview.md>
         [--dispatch <yaml>] [--expertise <yaml>] [--out <dir>]
 
 Exit codes: 0 compiled (the script path plus a one-line invocation hint on
-stdout); 2 usage, unreadable input, no or malformed frontmatter, no checklist item, or an
-unresolvable dispatch row.
+stdout); 2 usage, unreadable input, no or malformed frontmatter, no checklist item, an
+unresolvable dispatch row, or a non-native implement row that is not admitted
+(missing admission, egress incoherent, unloadable table, HEAD binding).
 """
 from __future__ import annotations
 
@@ -62,6 +80,7 @@ import argparse
 import importlib.util
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -90,6 +109,22 @@ GATES: tuple[tuple[str, str], ...] = (
 # `agent({model: ...})` cannot dispatch natively. Like gate A it is emitted as a
 # log() line naming the deterministic script that owns the leg.
 SECOND_OPINION_SCRIPT = "scripts/goalforge-second-opinion.sh"
+
+# wp-08: an ADMITTED non-native implement row is never an agent() node. It is
+# a leaf leg run through this ONE pinned wrapper, keyed by the admission row
+# (task_class, provider, model) — no hash and no table argument; the wrapper
+# re-derives both from the HEAD-bound admission table.
+LEAF_EXEC_SCRIPT = "scripts/goalforge-leaf-exec.sh"
+
+# The NATIVE runner agent() that executes the wrapper call as pipeline stage 1
+# takes its {model, effort} from this dispatch stage row: running one fixed
+# command and reporting its exit code is the mechanical lookup-class work the
+# `discovery` row is banded for. assert_native_agent_row guards it like every
+# other agent() node.
+RUNNER_ROLE = "discovery"
+
+# Fable plans, judges and advises; it is never dispatched as an implementer.
+ADVISOR_ONLY_MODELS = frozenset({"fable"})
 
 ITEM_RE = re.compile(
     r"^-\s*\[[ xX]\]\s*(?P<id>\S+)\s+(?P<text>.*?)\s*\{files:\s*(?P<files>[^}]*)\}"
@@ -231,11 +266,14 @@ def gate_prompt(label: str, wp_name: str) -> str:
 
 
 def agent_call(
-    *, label: str, phase_name: str, model: str, effort: str, prompt: str, indent: str
+    *, label: str, phase_name: str, model: str, effort: str, prompt: str, indent: str,
+    schema: str | None = None,
 ) -> str:
+    """One `agent({...})` node; ``schema`` names a JS constant, emitted bare."""
+    tail = f", schema: {schema}" if schema else ""
     return (
         f"{indent}agent({{ label: {js(label)}, phase: {js(phase_name)}, "
-        f"model: {js(model)}, effort: {js(effort)}, prompt: {js(prompt)} }})"
+        f"model: {js(model)}, effort: {js(effort)}, prompt: {js(prompt)}{tail} }})"
     )
 
 
@@ -265,6 +303,188 @@ def assert_native_agent_row(module, dispatch: dict, role: str, model: str) -> No
             f"model {model!r} is not a Claude tier "
             f"({sorted(module.CLAUDE_TIER_MODELS)})"
         )
+
+
+def refuse_advisor_only(model: str) -> None:
+    """An implement row whose model is advisor-only (fable) never compiles.
+
+    Checked on the NATIVE path too: fable is a Claude tier, so
+    ``assert_native_agent_row`` alone would pass it. Raises ``ValueError``."""
+    if model in ADVISOR_ONLY_MODELS:
+        raise ValueError(
+            f"implement row names model {model!r}: fable is advisor-only, never "
+            "an implementer — refused (it plans, judges and advises; it is not "
+            "dispatched as a worker)"
+        )
+
+
+def gate_calls(module, dispatch: dict, wp_name: str, *,
+               indent: str = "") -> list[tuple[str, str]]:
+    """`(label, agent() call)` per gate, each row asserted native + Claude tier."""
+    out: list[tuple[str, str]] = []
+    for label, role in GATES:
+        row = module.stage_row(dispatch, role)
+        model, effort = row.get("model"), row.get("effort")
+        if not model or not effort:
+            raise ValueError(f"dispatch stage row {role!r} is missing model and/or effort")
+        assert_native_agent_row(module, dispatch, role, str(model))
+        out.append((label, agent_call(
+            label=label, phase_name="gates", model=str(model), effort=str(effort),
+            prompt=gate_prompt(label, wp_name), indent=indent,
+        )))
+    return out
+
+
+def admitted_failure(resolution: dict, provider: str, stage_model: str) -> str:
+    """The exit-2 reason for a non-native implement row the table does not admit."""
+    reason = str(resolution.get("admission_reason") or "")
+    if reason.startswith("egress incoherent"):
+        return f"implement row on non-native provider {provider!r} refused: {reason}"
+    klass = resolution.get("task_class", "?")
+    model = resolution.get("refused_model") or stage_model
+    nothing = (
+        " — the admission table admitted nothing (0 rows)"
+        if resolution.get("admission_table_rows") == 0 else ""
+    )
+    return (
+        f"implement row on non-native provider {provider!r} refused: missing "
+        f"admission ({klass}, {provider}, {model}){nothing} — {reason}"
+    )
+
+
+RUNNER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "exit_code": {"type": "integer"},
+        "stderr": {"type": "string"},
+    },
+    "required": ["exit_code", "stderr"],
+}
+
+
+def runner_prompt(wp_name: str, call: str) -> str:
+    return "\n".join([
+        f"You are the leaf runner for work package {wp_name}.",
+        "Your ONLY action: from the goalforge package root (the directory "
+        "holding scripts/ and references/), run exactly this command, verbatim, "
+        "with no added, removed or changed argument:",
+        f"  {call}",
+        "Do not edit any file. Do not run anything else. Do not retry.",
+        "Return exit_code (the command's exit status) and stderr (its standard "
+        "error, verbatim).",
+    ])
+
+
+def compile_admitted_script(
+    frontmatter: dict, items: list[ChecklistItem], dispatch: dict, module,
+    expertise_map: dict, touched: list[str],
+) -> str:
+    """A non-native implement row: admitted → the leaf leg, else ValueError.
+
+    The verdict comes ONLY through ``pick_agent.resolve_and_log`` against the
+    default table (``goalforge_admission.ADMITTED_PATH``, read at call time),
+    which writes the one ledger row and — for an admitted verdict — binds the
+    table bytes to HEAD. The foreign model is never an agent() node: stage 1 is
+    a NATIVE runner whose only action is the wrapper call; gates B and C are
+    later stages, each conditioned on the runner's ``exit_code === 0``."""
+    wp_name = str(frontmatter.get("name") or "unnamed-wp")
+    impl_row = module.stage_row(dispatch, "implement")
+    provider = str(impl_row.get("provider"))
+    print(f"admitted table: {module.admission.ADMITTED_PATH}", file=sys.stderr)
+    resolution = module.resolve_and_log(
+        "implement", frontmatter, touched, dispatch, expertise_map,
+        profile="semi-autonomous", wp=wp_name, bind_head=True,
+    )
+    if resolution.get("admission_decision") != "admitted":
+        raise ValueError(admitted_failure(resolution, provider, str(impl_row.get("model"))))
+
+    runner = module.stage_row(dispatch, RUNNER_ROLE)
+    runner_model, runner_effort = runner.get("model"), runner.get("effort")
+    if not runner_model or not runner_effort:
+        raise ValueError(f"dispatch stage row {RUNNER_ROLE!r} is missing model and/or effort")
+    assert_native_agent_row(module, dispatch, RUNNER_ROLE, str(runner_model))
+
+    key = [str(resolution["task_class"]), provider, str(resolution["model"])]
+    call = " ".join(shlex.quote(part) for part in [LEAF_EXEC_SCRIPT, *key])
+    leg = {
+        "role": "implement",
+        "provider": provider,
+        "model": resolution["model"],
+        "effort": resolution["effort"],
+        "task_class": resolution["task_class"],
+        "egress": resolution["egress"],
+        "max_egress": resolution["max_egress"],
+        "evidence_ref": resolution["evidence_ref"],
+        "permission_set": resolution["permission_set"],
+        "containment": resolution["containment"],
+        "leaf": resolution["leaf"],
+        "leaf_sha256": resolution["leaf_sha256"],
+        "wrapper": LEAF_EXEC_SCRIPT,
+        "wrapper_argv": key,
+        "wrapper_call": call,
+        # The pick-agent WARN, surviving as data: containment and
+        # permission_set are declared, not enforced by this package.
+        "enforced": False,
+        "checklist": [item.id for item in items],
+    }
+    gates = dict(gate_calls(module, dispatch, wp_name))
+    runner_node = agent_call(
+        label="leaf runner", phase_name="leaf", model=str(runner_model),
+        effort=str(runner_effort), prompt=runner_prompt(wp_name, call), indent="",
+        schema="RUNNER_SCHEMA",
+    )
+    command = verification_command(frontmatter)
+    gate_a = (
+        "gate A is deterministic — no agent node; run: " + command
+        if command
+        else "gate A is deterministic — no agent node; the WP declares no "
+             "goal.verification.command"
+    )
+    second_opinion = (
+        "the second opinion is a leaf leg — no agent node; run: "
+        f"{SECOND_OPINION_SCRIPT} <wp> --feature-dir <feature> "
+        "--verdict <gate-C verdict> --diff <wp diff>"
+    )
+    description = (
+        f"Compiled from the {wp_name} checklist: {len(items)} items on the "
+        f"ADMITTED leaf leg ({resolution['task_class']}, {provider}, "
+        f"{resolution['model']}) run by {LEAF_EXEC_SCRIPT}, then gates B/C "
+        "conditioned on its exit_code (gate A and the second opinion are "
+        "deterministic legs)."
+    )
+    return (
+        "export const meta = {\n"
+        f"  name: {js(wp_name)},\n"
+        f"  description: {js(description)},\n"
+        "  phases: [\n"
+        f"    {{ title: \"leaf\", detail: {js('Admitted implement leg: a native runner executes the pinned leaf wrapper.')} }},\n"
+        f"    {{ title: \"gates\", detail: {js('Gate B and gate C, each only when the leaf leg exited 0.')} }}\n"
+        "  ]\n"
+        "};\n"
+        "\n"
+        "// GENERATED by scripts/goalforge-workflow-compile.py — do not hand-edit.\n"
+        f"const LEG = {json.dumps(leg, sort_keys=True)};\n"
+        f"const RUNNER_SCHEMA = {json.dumps(RUNNER_SCHEMA, sort_keys=True)};\n"
+        "\n"
+        "export default () => {\n"
+        "  phase(\"leaf\");\n"
+        "  phase(\"gates\");\n"
+        f"  log({js(description)});\n"
+        f"  log({js(gate_a)});\n"
+        f"  log({js(second_opinion)});\n"
+        "  return pipeline(\n"
+        "    [LEG],\n"
+        # Stage 1 runs the wrapper; stages 2 and 3 are gates B and C, each
+        # conditioned on stage 1's exit_code (a null runner result throws,
+        # which drops the item — no gate runs).
+        f"    async leg => await {runner_node},\n"
+        "    async run => ({ runner: run, gate_b: run.exit_code === 0 ? "
+        f"await {gates['gate B']} : null }}),\n"
+        "    async prev => prev.runner.exit_code === 0 ? "
+        f"await {gates['gate C']} : null\n"
+        "  );\n"
+        "};\n"
+    )
 
 
 def row_dispatch(module, dispatch: dict, role: str, frontmatter: dict,
@@ -307,8 +527,16 @@ def compile_script(
     is_parallel = bool(frontmatter.get("parallel"))
     touched = sorted({f for item in items for f in item.files})
 
+    impl_row = module.stage_row(dispatch, "implement")
+    refuse_advisor_only(str(impl_row.get("model")))
+    impl_kind = module.provider_row(dispatch, impl_row.get("provider")).get("kind")
+    if impl_kind != "native":
+        return compile_admitted_script(frontmatter, items, dispatch, module,
+                                       expertise_map, touched)
+
     batch = row_dispatch(module, dispatch, "implement", frontmatter, touched,
                          expertise_map)
+    refuse_advisor_only(str(batch["model"]))
     assert_native_agent_row(module, dispatch, "implement", str(batch["model"]))
     persona = roster_agent_path(module, batch["agent"])
     expertise = list(batch["expertise"])
@@ -355,22 +583,7 @@ def compile_script(
                 )
             )
 
-    for label, role in GATES:
-        row = module.stage_row(dispatch, role)
-        model, effort = row.get("model"), row.get("effort")
-        if not model or not effort:
-            raise ValueError(f"dispatch stage row {role!r} is missing model and/or effort")
-        assert_native_agent_row(module, dispatch, role, str(model))
-        calls.append(
-            agent_call(
-                label=label,
-                phase_name="gates",
-                model=str(model),
-                effort=str(effort),
-                prompt=gate_prompt(label, wp_name),
-                indent="    ",
-            )
-        )
+    calls += [call for _, call in gate_calls(module, dispatch, wp_name, indent="    ")]
 
     command = verification_command(frontmatter)
     gate_a = (
@@ -476,6 +689,11 @@ def main(argv: list[str] | None = None) -> int:
     try:
         script = compile_script(frontmatter, items, dispatch, pick_agent,
                                 expertise_map)
+    except pick_agent.admission.AdmissionTableError as exc:
+        # Distinct from the missing-admission reason: the table could not be
+        # loaded, or its admitting bytes are not the committed, guarded table.
+        print(f"ERROR: admission table check failed CLOSED: {exc}", file=sys.stderr)
+        return 2
     except (ValueError, pick_agent.EscalationRequired) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
