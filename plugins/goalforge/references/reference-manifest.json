@@ -178,6 +178,10 @@
       "path": "skills/execute/references/dispatch-resolution.md"
     },
     {
+      "from": "references/lens-ownership.md",
+      "path": "references/expertise-map.yaml"
+    },
+    {
       "from": "references/reader-profile.md",
       "path": "scripts/goalforge-reader.sh"
     },
@@ -355,6 +359,10 @@
     },
     {
       "from": "skills/harden/SKILL.md",
+      "path": "references/lens-ownership.md"
+    },
+    {
+      "from": "skills/harden/SKILL.md",
       "path": "references/schema.md"
     },
     {
@@ -416,6 +424,10 @@
     {
       "from": "skills/verify/SKILL.md",
       "path": "references/expertise-map.yaml"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "references/lens-ownership.md"
     },
     {
       "from": "skills/verify/SKILL.md",
