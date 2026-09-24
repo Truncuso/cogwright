@@ -7,8 +7,8 @@
 #     the T1-pinned minimum class list (verbatim tokens).
 # b2: every owner is a member of the closed owner set (expertise-map.yaml
 #     by_extension/by_tag/by_task_type keys for panel mode; literal
-#     `harden G3` for single-pass mode; literal `Gate B`/`Gate C` for the
-#     verify cluster).
+#     `harden G3` for single-pass mode; literal `Gate A`/`Gate B`/`Gate C` for
+#     the verify cluster, with `owned-files-scope` pinned to `Gate A`).
 # b3: harden/SKILL.md and verify/SKILL.md point at the table by path (not a
 #     paraphrase), neither restates it, and both stay <= 125 lines.
 # b4: a re-attribution rule section exists and no single-pass owner cell uses
@@ -42,13 +42,23 @@ PINNED_CLASSES=(correctness error-handling complexity-delta root-cause-ai-slop \
 # ── shared parsers ──────────────────────────────────────────────────────────
 
 # One TAB-separated "class<TAB>panel<TAB>single<TAB>verify" line per data row.
+# Scoped to the table's own header row (the one under the
+# "## Concern-class ownership table" heading, identified by its "Concern
+# class" header cell) through the next blank line, so a second pipe table
+# elsewhere in the file is never parsed as class rows. Counts every `|` data
+# row in that span — backticked or not — excluding only the header row itself
+# and the `---` separator row.
 extract_rows() {
   awk -F'|' '
-    /^\| `/ {
+    !active && /^\|/ && $0 ~ /Concern class/ { active = 1; next }
+    active && /^\| *-/ { next }
+    active && /^\|/ {
       for (i = 2; i <= 5; i++) { gsub(/^[ \t]+|[ \t]+$/, "", $i) }
       cls = $2; gsub(/`/, "", cls)
       printf "%s\t%s\t%s\t%s\n", cls, $3, $4, $5
+      next
     }
+    active && /^[ \t]*$/ { active = 0 }
   ' "$1"
 }
 
@@ -104,7 +114,10 @@ check_b2() {
     [ -z "$cls" ] && continue
     grep -qxF "$panel" <<< "$keys" || { echo "panel owner outside closed set: $cls=$panel"; rc=1; }
     [ "$single" = "harden G3" ] || { echo "single-pass owner not the literal 'harden G3': $cls=$single"; rc=1; }
-    [ "$verify" = "Gate B" ] || [ "$verify" = "Gate C" ] || { echo "verify-cluster owner not 'Gate B'/'Gate C': $cls=$verify"; rc=1; }
+    [ "$verify" = "Gate A" ] || [ "$verify" = "Gate B" ] || [ "$verify" = "Gate C" ] || { echo "verify-cluster owner not 'Gate A'/'Gate B'/'Gate C': $cls=$verify"; rc=1; }
+    if [ "$cls" = "owned-files-scope" ] && [ "$verify" != "Gate A" ]; then
+      echo "owned-files-scope verify-cluster owner must be 'Gate A': got $verify"; rc=1
+    fi
   done <<< "$rows"
   return "$rc"
 }
@@ -150,10 +163,12 @@ expect_ok  check_b1 "$TABLE"
 expect_bad check_b1 "$FIX/bad-unowned-class.md"
 expect_bad check_b1 "$FIX/bad-duplicate-owner.md"
 expect_bad check_b1 "$FIX/bad-missing-pinned-class.md"
+expect_bad check_b1 "$FIX/bad-unbackticked-row.md"
 
 echo "[ b2: owners in the closed set ]"
 expect_ok  check_b2 "$TABLE"
 expect_bad check_b2 "$FIX/bad-owner-outside-closed-set.md"
+expect_bad check_b2 "$FIX/bad-owned-files-scope-not-gate-a.md"
 
 echo "[ b4: re-attribution rule section + vocabulary ]"
 expect_ok  check_b4_section "$TABLE"

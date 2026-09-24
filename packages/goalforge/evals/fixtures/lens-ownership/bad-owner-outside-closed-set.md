@@ -10,6 +10,6 @@
 | `root-cause-ai-slop` | code | harden G3 | Gate B |
 | `goal-measurability` | eval | harden G3 | Gate C |
 | `verification-coverage` | eval | harden G3 | Gate C |
-| `owned-files-scope` | frontend | harden G3 | Gate B |
+| `owned-files-scope` | frontend | harden G3 | Gate A |
 | `contract-slice` | docs | harden G3 | Gate C |
 | `depends-on-direction` | docs | harden G3 | Gate C |

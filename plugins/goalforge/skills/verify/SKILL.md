@@ -86,8 +86,8 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-second-opinion.sh <wp> --feature-di
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh verify <wp-id> --json <report.json> --feature-dir <feature>   # on judge/second-opinion disagreement (C7)
 ```
 
-Concern-class ownership across the Gate B/Gate C split, and what a class does
-when its owning lens is skipped: `${CLAUDE_PLUGIN_ROOT}/references/lens-ownership.md`.
+Concern-class ownership across the Gate A/Gate B/Gate C split, and what a
+class does when its owning lens is skipped: `${CLAUDE_PLUGIN_ROOT}/references/lens-ownership.md`.
 
 `--verdict` (gate C verdict text) and `--diff` (the WP diff) are FILES, so the
 payload is deterministic input, not derived from the working tree; with neither

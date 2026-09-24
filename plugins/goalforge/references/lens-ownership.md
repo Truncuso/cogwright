@@ -3,9 +3,9 @@
 Every review concern class the goalforge chain checks has exactly one named
 owner per review mode: harden G3's 3x panel, harden G3's single-pass
 relaxation (`severity` below `HIGH` or `register` other than `production`),
-and the verify cluster's Gate B / Gate C split. This table is the single home
-for that mapping — `harden/SKILL.md` and `verify/SKILL.md` point here rather
-than restate it.
+and the verify cluster's Gate A / Gate B / Gate C split. This table is the
+single home for that mapping — `harden/SKILL.md` and `verify/SKILL.md` point
+here rather than restate it.
 
 ## Concern-class ownership table
 
@@ -17,7 +17,7 @@ than restate it.
 | `root-cause-ai-slop` | code | harden G3 | Gate B |
 | `goal-measurability` | eval | harden G3 | Gate C |
 | `verification-coverage` | eval | harden G3 | Gate C |
-| `owned-files-scope` | docs | harden G3 | Gate B |
+| `owned-files-scope` | docs | harden G3 | Gate A |
 | `contract-slice` | docs | harden G3 | Gate C |
 | `depends-on-direction` | docs | harden G3 | Gate C |
 
@@ -29,7 +29,7 @@ bundles are convened; they are not a dispatch target of their own, and do not
 assert that today's panel dispatch can route by concern class (it cannot —
 harden's three reviewers get "distinct expertise bundles", not lens roles;
 see `harden/SKILL.md:81-83`). Verify-cluster owners are the literal gate
-headings `Gate B` and `Gate C` from `verify/SKILL.md`.
+headings `Gate A`, `Gate B` and `Gate C` from `verify/SKILL.md`.
 
 ## Re-attribution rule
 
