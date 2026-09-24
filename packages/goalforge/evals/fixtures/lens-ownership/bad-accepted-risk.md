@@ -2,6 +2,8 @@
 # known-bad for b4 — `verification-coverage`'s single-pass cell records the
 # concern as an accepted risk instead of folding it into the surviving pass.
 
+## Concern-class ownership table
+
 | Concern class | 3x-panel owner | Single-pass owner | Verify-cluster owner |
 | --- | --- | --- | --- |
 | `correctness` | code | harden G3 | Gate B |

@@ -5,6 +5,8 @@
 # duplicate (RED). This fixture's sole defect is that trailing unbackticked
 # row — every backticked row above it is valid.
 
+## Concern-class ownership table
+
 | Concern class | 3x-panel owner | Single-pass owner | Verify-cluster owner |
 | --- | --- | --- | --- |
 | `correctness` | code | harden G3 | Gate B |

@@ -1,6 +1,8 @@
 # fixture: bad-duplicate-owner
 # known-bad for b1 — `correctness` has two rows (two owners in the same mode).
 
+## Concern-class ownership table
+
 | Concern class | 3x-panel owner | Single-pass owner | Verify-cluster owner |
 | --- | --- | --- | --- |
 | `correctness` | code | harden G3 | Gate B |

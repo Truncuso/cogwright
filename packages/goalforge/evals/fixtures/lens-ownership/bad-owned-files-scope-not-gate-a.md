@@ -3,6 +3,8 @@
 # instead of the pinned `Gate A` (Gate A step 3 is the owned_files boundary
 # check; human ruling 2026-09-24).
 
+## Concern-class ownership table
+
 | Concern class | 3x-panel owner | Single-pass owner | Verify-cluster owner |
 | --- | --- | --- | --- |
 | `correctness` | code | harden G3 | Gate B |

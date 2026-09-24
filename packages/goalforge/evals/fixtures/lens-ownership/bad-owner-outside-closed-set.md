@@ -2,6 +2,8 @@
 # known-bad for b2 — `owned-files-scope`'s panel owner ("frontend") is not a
 # key under by_extension/by_tag/by_task_type in references/expertise-map.yaml.
 
+## Concern-class ownership table
+
 | Concern class | 3x-panel owner | Single-pass owner | Verify-cluster owner |
 | --- | --- | --- | --- |
 | `correctness` | code | harden G3 | Gate B |

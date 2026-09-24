@@ -1,6 +1,8 @@
 # fixture: bad-missing-pinned-class
 # known-bad for b1 — omits the T1-pinned `depends-on-direction` row entirely.
 
+## Concern-class ownership table
+
 | Concern class | 3x-panel owner | Single-pass owner | Verify-cluster owner |
 | --- | --- | --- | --- |
 | `correctness` | code | harden G3 | Gate B |

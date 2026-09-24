@@ -42,23 +42,27 @@ PINNED_CLASSES=(correctness error-handling complexity-delta root-cause-ai-slop \
 # ── shared parsers ──────────────────────────────────────────────────────────
 
 # One TAB-separated "class<TAB>panel<TAB>single<TAB>verify" line per data row.
-# Scoped to the table's own header row (the one under the
-# "## Concern-class ownership table" heading, identified by its "Concern
-# class" header cell) through the next blank line, so a second pipe table
-# elsewhere in the file is never parsed as class rows. Counts every `|` data
-# row in that span — backticked or not — excluding only the header row itself
-# and the `---` separator row.
+# Scoped to the literal "## Concern-class ownership table" heading line: the
+# first `|` line seen after that heading is the header row, the next is the
+# `---` separator (skipped), and scanning stops for good at the first blank
+# line after data rows start — so a decoy pipe table whose header row also
+# happens to say "Concern class" (but is not preceded by this exact heading)
+# is never parsed, and rows are never picked back up from a second table
+# later in the file. Counts every `|` data row in that span — backticked or
+# not, indented or not — excluding only the header row itself and the `---`
+# separator row.
 extract_rows() {
   awk -F'|' '
-    !active && /^\|/ && $0 ~ /Concern class/ { active = 1; next }
-    active && /^\| *-/ { next }
-    active && /^\|/ {
+    !active && /^## Concern-class ownership table/ { seen = 1; next }
+    seen && !active && /^[ \t]*\|/ { active = 1; next }
+    active && /^[ \t]*\| *-/ { next }
+    active && /^[ \t]*\|/ {
       for (i = 2; i <= 5; i++) { gsub(/^[ \t]+|[ \t]+$/, "", $i) }
       cls = $2; gsub(/`/, "", cls)
       printf "%s\t%s\t%s\t%s\n", cls, $3, $4, $5
       next
     }
-    active && /^[ \t]*$/ { active = 0 }
+    active && /^[ \t]*$/ { exit }
   ' "$1"
 }
 
@@ -164,11 +168,15 @@ expect_bad check_b1 "$FIX/bad-unowned-class.md"
 expect_bad check_b1 "$FIX/bad-duplicate-owner.md"
 expect_bad check_b1 "$FIX/bad-missing-pinned-class.md"
 expect_bad check_b1 "$FIX/bad-unbackticked-row.md"
+expect_bad check_b1 "$FIX/bad-decoy-table-before-real.md"
+expect_bad check_b1 "$FIX/bad-indented-duplicate-row.md"
 
 echo "[ b2: owners in the closed set ]"
 expect_ok  check_b2 "$TABLE"
 expect_bad check_b2 "$FIX/bad-owner-outside-closed-set.md"
 expect_bad check_b2 "$FIX/bad-owned-files-scope-not-gate-a.md"
+expect_bad check_b2 "$FIX/bad-verify-owner-outside-closed-set.md"
+expect_bad check_b2 "$FIX/bad-single-pass-not-g3.md"
 
 echo "[ b4: re-attribution rule section + vocabulary ]"
 expect_ok  check_b4_section "$TABLE"

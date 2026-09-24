@@ -1,6 +1,8 @@
 # fixture: bad-unowned-class
 # known-bad for b1 — `correctness`'s single-pass cell is empty (unowned).
 
+## Concern-class ownership table
+
 | Concern class | 3x-panel owner | Single-pass owner | Verify-cluster owner |
 | --- | --- | --- | --- |
 | `correctness` | code |  | Gate B |
