@@ -91,13 +91,39 @@ refuses (exit 1, no write) when `RATIFIED` is absent or malformed (any of
 `date=`, `sha256=`, `diff_sha256=`, `base_sha256=` missing), when `sha256=` or
 `diff_sha256=` does not match the current bytes, when `spec.md` is neither the
 applied state (`sha256=`) nor the ratified base (`base_sha256=`), or, from the
-base, when a changed goal facet has no added `## Goal Changelog` row. Then,
-each step skip-if-present so a partial apply resumes:
+base, when a changed goal facet has no added `## Goal Changelog` row.
+
+From the base it then takes `flock` on the feature's transition lock file (the
+same lock `goalforge-transition.sh` holds while it writes a status) and holds
+it through its last write, so no status write lands between the check and the
+writes, and no supersede write reverts a concurrent status write. A
+read-only pre-pass over every WP computes every remaining refusal before the
+first write:
+
+- **Unparseable slice.** `contract_slice` is read as a YAML flow list
+  (`[C2, C3]`) or a block list (`contract_slice:` then `- C<n>` lines at any
+  indent), items optionally quoted, a trailing ` # comment` stripped. A value
+  that does not parse fully into `C<n>` ids refuses the apply, naming the WP
+  (fail-closed: an unread slice never silently skips a WP).
+- **In flight** (human ruling H2, "Refuse apply"). A WP at `hardened`,
+  `executing` or `implemented` whose `contract_slice` names a `changed`,
+  `dropped` or `ambiguous[].dropped` key refuses the apply, naming the WP.
+  The renumber rule: an `ambiguous` pair's dropped id counts as affected for
+  this refusal only; supersede and reharden still leave `ambiguous` keys
+  untouched. The walk-back target is `ready`: the human walks each named WP
+  back to `ready` (`goalforge-transition.sh <wp> ready --reason "<respec>"`)
+  and reruns the apply, whose reharden step then writes that WP's durable
+  evidence file.
+
+Then, each step skip-if-present so a partial apply resumes:
 
 1. **Supersede, never delete.** Each `verified` WP whose `contract_slice`
-   names a `changed` or `dropped` key gains `superseded_by:` and one
+   names a `changed` or `dropped` key gains `superseded_by:` and a dated
    `## Supersession` note. It keeps `status: verified` and every prior file
    (`redecompose/SKILL.md`, dropped-verified). Never archived, never removed.
+   On a later revision `superseded_by:` is rewritten to name the latest
+   proposal, and the one `## Supersession` section keeps one note per
+   proposal (a note already present for this proposal is skipped).
 2. **Reharden evidence.** Each such `ready` WP gains
    `<wp>/reharden/<YYYY-MM-DD>-respec-<slug>.md` with
    `kind: execution-learning` and `locator:` the proposal's `diff.json`. The
@@ -107,7 +133,9 @@ each step skip-if-present so a partial apply resumes:
 
 Every date the apply writes is `RATIFIED` `date=`, never the wall clock, so a
 rerun on a later day finds its own effects. `ambiguous` keys are reported,
-never acted on. A rerun on the applied state is an exit-0 no-op. The apply
+never acted on. A rerun on the applied state is an exit-0 no-op: the spec
+copy is the last step, so `applied` means the WP steps already ran, and they
+are skipped entirely (a WP whose status moved since is not touched). The apply
 makes no status write and no transition, and prints a JSON report naming the
 superseded and reharden WPs.
 

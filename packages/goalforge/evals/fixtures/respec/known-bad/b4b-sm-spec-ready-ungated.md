@@ -139,10 +139,11 @@ Feature states are linearly ordered:
 | completed | 5 |
 
 - **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no` —
-  except out of `draft` and `spec`: the only forward edge out of `draft` is
-  `draft -> spec` and the only one out of `spec` is `spec -> ready`. There is no
-  `draft -> ready` row and no `draft|spec -> active|executing|completed` row,
-  so every path from `draft` or `spec` onward passes `spec -> ready`.
+  except out of `draft` and `spec`: for a feature that is not `route: fast`,
+  the only forward edge out of `draft` is `draft -> spec` and the only one out
+  of `spec` is `spec -> ready`. There is no `draft -> ready` row and no
+  `draft|spec -> active|executing` or `spec -> completed` row, and the one
+  `draft -> completed` row is scoped to `route: fast`, so for a feature that is not `route: fast`, every path from `draft` or `spec` onward passes `spec -> ready`.
 - **Reverse** edge (`order(to) < order(from)`): legal, `reason_required: yes` —
   mirrors the WP FREE-REVERSE policy (every later→earlier edge is sanctioned; a
   reverse feature transition needs a `--reason`).
@@ -157,37 +158,49 @@ Feature states are linearly ordered:
   ratification". Proposal, ratification marker and apply:
   `references/respec.md`.
 - **`completed`** is reached from `executing` or `active` (and, forward-skipping,
-  from `ready` or later). `archived` is a terminal state reached ONLY via
+  from `ready` or later). One exit is route-scoped: `draft -> completed` is legal only for a `route: fast` feature with no `spec.md`
+  (human ruling H3, "Scoped exit for fast": a fast feature is never specced,
+  so this exit bypasses no spec-approval gate). `goalforge-transition.sh`
+  takes a row whose `route` is not `any` only when the feature overview's
+  top-level `route:` scalar (trailing ` # comment` and quotes stripped) equals
+  it — a missing `route:` never matches — and, for `fast`, only when
+  `<feature>/spec.md` is absent. `archived` is a terminal state reached ONLY via
   `goalforge-archive` — it is intentionally **not** an edge target here, so the
   transition mechanism never moves a feature to/from `archived`.
 
 ## Feature edges
 
-| from | to | reason_required | human_gated |
-|---|---|---|---|
-| draft | spec | no | no |
-| spec | draft | yes | no |
-| spec | ready | no | no |
-| ready | draft | yes | no |
-| ready | spec | yes | no |
-| ready | active | no | no |
-| ready | executing | no | no |
-| ready | completed | no | no |
-| active | draft | yes | no |
-| active | spec | yes | no |
-| active | ready | yes | no |
-| active | executing | no | no |
-| active | completed | no | no |
-| executing | draft | yes | no |
-| executing | spec | yes | no |
-| executing | ready | yes | no |
-| executing | active | yes | no |
-| executing | completed | no | no |
-| completed | draft | yes | no |
-| completed | spec | yes | no |
-| completed | ready | yes | no |
-| completed | active | yes | no |
-| completed | executing | yes | no |
+The fifth column `route` scopes a row to features whose overview carries that
+`route:` value; `any` applies to every feature. Every row here carries five
+cells: a row with fewer is an `edge_lookup` error (refused), never read as
+`any`. (The WP `## Edges` table above has four columns and reads as `any`.)
+
+| from | to | reason_required | human_gated | route |
+|---|---|---|---|---|
+| draft | spec | no | no | any |
+| draft | completed | no | no | fast |
+| spec | draft | yes | no | any |
+| spec | ready | no | no | any |
+| ready | draft | yes | no | any |
+| ready | spec | yes | no | any |
+| ready | active | no | no | any |
+| ready | executing | no | no | any |
+| ready | completed | no | no | any |
+| active | draft | yes | no | any |
+| active | spec | yes | no | any |
+| active | ready | yes | no | any |
+| active | executing | no | no | any |
+| active | completed | no | no | any |
+| executing | draft | yes | no | any |
+| executing | spec | yes | no | any |
+| executing | ready | yes | no | any |
+| executing | active | yes | no | any |
+| executing | completed | no | no | any |
+| completed | draft | yes | no | any |
+| completed | spec | yes | no | any |
+| completed | ready | yes | no | any |
+| completed | active | yes | no | any |
+| completed | executing | yes | no | any |
 
 ## Feature reverse-edge note
 

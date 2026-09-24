@@ -15,6 +15,10 @@
 #   references/state-machine.md.
 # Feature-level `→ready` skips the WP-only goal-hash gate; `archived` is not a
 # feature edge target (that terminal move lives in goalforge-archive.sh only).
+# A `## Feature edges` row whose `route` cell is not `any` (today only
+# `draft -> completed`, route `fast`) is taken only when the feature overview's
+# `route:` equals it and, for `fast`, when <feature>/spec.md is absent. The
+# table path is fixed to SCRIPT_DIR/../references (no env override).
 #
 # Reads the overview.md current `status:` as the authoritative `from`,
 # validates the `from→to` edge against the selected table
@@ -227,14 +231,18 @@ PY
 }
 
 # ── Look up a from→to edge in state-machine.md ──────────────────────────────
-# Prints "legal <reason_required> <human_gated>" or "illegal" (or "error").
-# $3 selects the table section header ("Edges" for WPs, "Feature edges" for
-# features) — matched exactly so the two tables never collide.
+# Prints "legal <reason_required> <human_gated> <route>" or "illegal" (or
+# "error"). $3 selects the table section header ("Edges" for WPs, "Feature
+# edges" for features) — matched exactly so the two tables never collide.
+# route: the fifth cell. A four-cell `## Edges` row reads `any`; a matched
+# `## Feature edges` row with fewer than five cells is an "error" (refused), so
+# a malformed row never widens a route-scoped exit to every feature.
 edge_lookup() {
     python3 - "$STATE_MACHINE" "$1" "$2" "$3" <<'PY'
 import sys
 sm, frm, to, header = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 want = ("## " + header).lower()
+feature_table = header.lower() == "feature edges"
 try:
     text = open(sm, encoding="utf-8").read()
 except OSError:
@@ -253,9 +261,41 @@ for ln in text.splitlines():
     if cells[0].lower() == "from" or set("".join(cells)) <= set("-: "):
         continue
     if cells[0] == frm and cells[1] == to:
-        print(f"legal {cells[2]} {cells[3]}")
+        if len(cells) >= 5 and cells[4]:
+            route = cells[4]
+        elif feature_table:
+            print("error"); sys.exit(0)
+        else:
+            route = "any"
+        print(f"legal {cells[2]} {cells[3]} {route}")
         sys.exit(0)
 print("illegal")
+PY
+}
+
+# ── Read a feature overview's top-level `route:` scalar ──────────────────────
+# Prints the value with a trailing ` # comment` and surrounding quotes
+# stripped, or nothing when the key is absent (a missing route never matches a
+# route-scoped row). Only unindented frontmatter lines are read.
+read_route() {
+    python3 - "$1" <<'PY'
+import re, sys
+try:
+    lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
+except OSError:
+    sys.exit(0)
+if not lines or lines[0].strip() != "---":
+    sys.exit(0)
+for ln in lines[1:]:
+    if ln.strip() == "---":
+        break
+    m = re.match(r"^route:(.*)$", ln)
+    if m:
+        v = re.sub(r"\s+#.*$", "", m.group(1)).strip()
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
+            v = v[1:-1].strip()
+        print(v)
+        break
 PY
 }
 
@@ -341,11 +381,29 @@ transition() {
         return 1
     fi
 
-    local RES VERDICT RR HG
+    local RES VERDICT RR HG ROUTE
     RES="$(edge_lookup "$FROM" "$TO" "$SECTION")"
-    read -r VERDICT RR HG <<<"$RES"
+    read -r VERDICT RR HG ROUTE <<<"$RES"
+    if [[ "$VERDICT" == "error" ]]; then
+        echo "ERROR: edge_lookup error for $FROM -> $TO (state-machine.md $SECTION unreadable, or the row has fewer than five cells); refused" >&2; return 1
+    fi
     if [[ "$VERDICT" != "legal" ]]; then
         echo "ERROR: illegal transition $FROM -> $TO (not in state-machine.md $SECTION)" >&2; return 1
+    fi
+    # ── route-scoped row (Feature edges `route` column; human ruling H3) ─────
+    # A row whose route is not `any` is taken only when the feature overview's
+    # `route:` equals it (a missing `route:` never matches) and, for `fast`,
+    # only when <feature>/spec.md is absent: a specced feature passes
+    # `spec -> ready`, whatever its route: says.
+    if [[ "$ROUTE" != "any" ]]; then
+        local FROUTE
+        FROUTE="$(read_route "$FEATURE_DIR/overview.md")"
+        if [[ -z "$FROUTE" || "$FROUTE" != "$ROUTE" ]]; then
+            echo "ERROR: $FROM -> $TO is scoped to route: $ROUTE features; $FEATURE_DIR/overview.md has route: '${FROUTE:-<none>}' (refused, status unchanged)" >&2; return 1
+        fi
+        if [[ "$ROUTE" == "fast" && -e "$FEATURE_DIR/spec.md" ]]; then
+            echo "ERROR: $FROM -> $TO (route: fast) requires no spec.md, but $FEATURE_DIR/spec.md exists; a specced feature passes spec -> ready (refused, status unchanged)" >&2; return 1
+        fi
     fi
     if [[ "$RR" == "yes" && -z "$REASON" ]]; then
         echo "ERROR: reverse transition $FROM -> $TO requires --reason" >&2; return 1
@@ -979,6 +1037,42 @@ EOF
         ok "(s) reverse feature edge requires --reason (rejected without, succeeds with)"
     else
         no "(s) reverse feature edge with --reason should succeed"
+    fi
+
+    # ── (s2)(s3)(s4) route-scoped draft -> completed (Feature edges `route`) ────
+    #   (s2) route: fast, no spec.md → completes; (s3) route: standard → refused;
+    #   (s4) route: fast WITH a spec.md → refused (a specced feature passes
+    #   spec -> ready). Refusals leave status: draft.
+    _mk_route_feat() {  # $1=dir $2=route line (empty = no route:)
+        mkdir -p "$1"
+        { printf -- '---\nname: %s\ntitle: route self-test fixture\nstatus: draft\n' "$(basename "$1")"
+          [[ -n "$2" ]] && printf '%s\n' "$2"
+          printf 'feature: %s\nwork_packages: []\n---\n\n# route fixture\n' "$(basename "$1")"
+        } > "$1/overview.md"
+    }
+    local rfast="$_ST_TMP/plans/rfast" rstd="$_ST_TMP/plans/rstd" rspec="$_ST_TMP/plans/rspec"
+    _mk_route_feat "$rfast" "route: fast"
+    _mk_route_feat "$rstd" "route: standard"
+    _mk_route_feat "$rspec" "route: fast"; printf -- '---\nname: rspec-spec\n---\n' > "$rspec/spec.md"
+    if bash "$SELF" "$rfast" completed >/dev/null 2>&1 \
+       && [[ "$(read_status "$rfast/overview.md")" == "completed" ]]; then
+        ok "(s2) route: fast feature with no spec.md takes draft -> completed"
+    else
+        no "(s2) route: fast feature with no spec.md should take draft -> completed"
+    fi
+    if bash "$SELF" "$rstd" completed >/dev/null 2>&1; then
+        no "(s3) route: standard feature must not take draft -> completed"
+    elif [[ "$(read_status "$rstd/overview.md")" == "draft" ]]; then
+        ok "(s3) route: standard feature refused draft -> completed (status unchanged)"
+    else
+        no "(s3) route: standard draft -> completed refused but status mutated"
+    fi
+    if bash "$SELF" "$rspec" completed >/dev/null 2>&1; then
+        no "(s4) route: fast feature with a spec.md must not take draft -> completed"
+    elif [[ "$(read_status "$rspec/overview.md")" == "draft" ]]; then
+        ok "(s4) route: fast feature with a spec.md refused draft -> completed (status unchanged)"
+    else
+        no "(s4) route: fast + spec.md draft -> completed refused but status mutated"
     fi
 
     # ── (t)(u)(v) evidence-gated ready→hardened revert — the re-harden edge (wp-02)
