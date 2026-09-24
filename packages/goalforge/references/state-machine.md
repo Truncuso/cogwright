@@ -138,15 +138,26 @@ Feature states are linearly ordered:
 | executing | 4 |
 | completed | 5 |
 
-- **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no`.
+- **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no` —
+  except out of `draft` and `spec`: the only forward edge out of `draft` is
+  `draft -> spec` and the only one out of `spec` is `spec -> ready`. There is no
+  `draft -> ready` row and no `draft|spec -> active|executing|completed` row,
+  so every path from `draft` or `spec` onward passes `spec -> ready`.
 - **Reverse** edge (`order(to) < order(from)`): legal, `reason_required: yes` —
   mirrors the WP FREE-REVERSE policy (every later→earlier edge is sanctioned; a
   reverse feature transition needs a `--reason`).
-- **Human-gated**: `draft→ready` and `spec→ready` (the feature review gate) carry
-  `human_gated: yes`. The gate is enforced by the calling skill; the mechanism
+- **Human-gated**: `spec -> ready` is the single spec-approval gate (the
+  ratification of a first spec and of a revision alike) and the only feature
+  edge that carries `human_gated: yes`. `draft -> spec` is the ungated
+  proposal edge. The gate is enforced by the calling skill; the mechanism
   only records it.
+- **Respec edges**: `ready -> spec`, `active -> spec`, `executing -> spec` and
+  `completed -> spec` are the reverse rows a spec-invalidating learning takes
+  (`--reason "<learning>"`); a feature at `spec` means "a proposal awaits
+  ratification". Proposal, ratification marker and apply:
+  `references/respec.md`.
 - **`completed`** is reached from `executing` or `active` (and, forward-skipping,
-  from any earlier state). `archived` is a terminal state reached ONLY via
+  from `ready` or later). `archived` is a terminal state reached ONLY via
   `goalforge-archive` — it is intentionally **not** an edge target here, so the
   transition mechanism never moves a feature to/from `archived`.
 
@@ -155,15 +166,8 @@ Feature states are linearly ordered:
 | from | to | reason_required | human_gated |
 |---|---|---|---|
 | draft | spec | no | no |
-| draft | ready | no | yes |
-| draft | active | no | no |
-| draft | executing | no | no |
-| draft | completed | no | no |
 | spec | draft | yes | no |
 | spec | ready | no | yes |
-| spec | active | no | no |
-| spec | executing | no | no |
-| spec | completed | no | no |
 | ready | draft | yes | no |
 | ready | spec | yes | no |
 | ready | active | no | no |

@@ -14,8 +14,9 @@
 # its WP through the PINNED edge chain
 #   spec -> hardened -> [goal-hash --record] -> ready (--mode auto)
 #        -> executing -> implemented -> verified
-# then takes the fixture FEATURE's one legal forward edge draft -> completed, so
-# both edge tables and both classify_target branches are exercised (the
+# then walks the fixture FEATURE draft -> spec -> ready -> completed (every path
+# out of draft passes the spec -> ready gate; wp-10 removed the forward skips),
+# so both edge tables and both classify_target branches are exercised (the
 # FEATURE-level `draft` status is unaffected by wp-01 T6/T10, which retires
 # `draft` at the WP level only). The on-disk `status:` is read back after EVERY
 # hop and the first mismatch fails the run. A shortcut (e.g. the legal one-hop
@@ -247,10 +248,19 @@ walk_chain() {
     bash "$TRANSITION" "$WP_DIR" verified --reason "smoke: implemented to verified"
     assert_status "$WP_OVERVIEW" verified "implemented->verified"
 
-    # The feature edge table's one legal forward hop — also exercises
-    # classify_target's `feature` branch.
-    bash "$TRANSITION" "$FEATURE_DIR" completed --reason "smoke: feature draft to completed"
-    assert_status "$FEATURE_OVERVIEW" completed "feature draft->completed"
+    # The feature edge table's forward path — also exercises classify_target's
+    # `feature` branch. The spec -> ready hop is a mechanism exercise, not a
+    # chain ratification: transition.sh records human_gated, never enforces it
+    # (state-machine.md §Feature policy).
+    bash "$TRANSITION" "$FEATURE_DIR" spec --reason "smoke: feature draft to spec (proposal)"
+    assert_status "$FEATURE_OVERVIEW" spec "feature draft->spec"
+
+    bash "$TRANSITION" "$FEATURE_DIR" ready --mode human \
+        --reason "smoke: mechanism exercise of spec to ready, not a ratification"
+    assert_status "$FEATURE_OVERVIEW" ready "feature spec->ready"
+
+    bash "$TRANSITION" "$FEATURE_DIR" completed --reason "smoke: feature ready to completed"
+    assert_status "$FEATURE_OVERVIEW" completed "feature ready->completed"
 }
 
 # ── 3. Assert the end state from an authority other than our own control flow ─
@@ -261,7 +271,9 @@ PINNED_EDGES=(
     '"from": "ready", "to": "executing"'
     '"from": "executing", "to": "implemented"'
     '"from": "implemented", "to": "verified"'
-    '"from": "draft", "to": "completed"'
+    '"from": "draft", "to": "spec"'
+    '"from": "spec", "to": "ready"'
+    '"from": "ready", "to": "completed"'
 )
 
 assert_end_state() {

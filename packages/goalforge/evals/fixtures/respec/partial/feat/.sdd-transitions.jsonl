@@ -1,0 +1,1 @@
+{"ts": "2026-09-01T10:00:00Z", "wp": "feat", "from": "executing", "to": "spec", "reason": "respec: the 5 s budget misses the SLA", "actor": "human", "override": false, "commit": "abc1234", "mode": "human"}

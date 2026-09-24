@@ -19,6 +19,10 @@
     },
     {
       "from": "README.md",
+      "path": "references/respec.md"
+    },
+    {
+      "from": "README.md",
       "path": "references/schema.md"
     },
     {
@@ -190,6 +194,18 @@
       "path": "scripts/goalforge-stage-report.sh"
     },
     {
+      "from": "references/respec.md",
+      "path": "references/state-machine.md"
+    },
+    {
+      "from": "references/respec.md",
+      "path": "scripts/goalforge-respec-apply.sh"
+    },
+    {
+      "from": "references/respec.md",
+      "path": "scripts/goalforge-respec-diff.sh"
+    },
+    {
       "from": "references/retrospective.md",
       "path": "references/trace-events.md"
     },
@@ -232,6 +248,10 @@
     {
       "from": "references/state-machine.md",
       "path": "hooks/goalforge-transition-guard.sh"
+    },
+    {
+      "from": "references/state-machine.md",
+      "path": "references/respec.md"
     },
     {
       "from": "references/state-machine.md",
@@ -411,7 +431,23 @@
     },
     {
       "from": "skills/spec/SKILL.md",
+      "path": "references/respec.md"
+    },
+    {
+      "from": "skills/spec/SKILL.md",
       "path": "references/schema.md"
+    },
+    {
+      "from": "skills/spec/SKILL.md",
+      "path": "references/state-machine.md"
+    },
+    {
+      "from": "skills/spec/SKILL.md",
+      "path": "scripts/goalforge-respec-apply.sh"
+    },
+    {
+      "from": "skills/spec/SKILL.md",
+      "path": "scripts/goalforge-respec-diff.sh"
     },
     {
       "from": "skills/verify/SKILL.md",

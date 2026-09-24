@@ -5,7 +5,7 @@
       "id": 1,
       "should_trigger": true,
       "prompt": "Run a design pass for the notification-service feature",
-      "expected_output": "Reads overview.md (status: draft), writes spec.md, advances overview.md status to ready. HUMAN-GATED: must present draft and await approval before writing files.",
+      "expected_output": "Reads overview.md (status: draft), writes spec.md as the proposal and takes the ungated draft → spec edge, presents the proposal and awaits approval, then ratifies on the human-gated spec → ready edge.",
       "files": [
         "evals/fixtures/overview.md"
       ],
@@ -14,8 +14,8 @@
         "SKILL.md input is overview.md with status: draft",
         "SKILL.md output is spec.md with its own status: spec",
         "SKILL.md output updates overview.md status to ready",
-        "SKILL.md declares draft → spec transition is human-gated",
-        "SKILL.md states skill must present draft to user before writing files",
+        "SKILL.md declares spec → ready as the single human-gated spec-approval transition and draft → spec as the ungated proposal edge",
+        "SKILL.md states skill must present the proposal to the user before ratifying (spec.md is written before the gate for a first spec)",
         "SKILL.md references feature-spec template",
         "SKILL.md forbids creating WP folders or task files"
       ]
@@ -24,7 +24,7 @@
       "id": 2,
       "should_trigger": true,
       "prompt": "Write the design document and spec for the payment-gateway feature",
-      "expected_output": "Reads plans/payment-gateway/overview.md (status: draft), conducts design pass, authors goal block in spec.md frontmatter, presents draft to user for approval, then writes spec.md and updates overview.md status to ready.",
+      "expected_output": "Reads plans/payment-gateway/overview.md (status: draft), conducts design pass, authors goal block in spec.md frontmatter, writes spec.md as the proposal (draft → spec), presents it to the user for approval, then ratifies it and updates overview.md status to ready (spec → ready).",
       "files": [],
       "expectations": [
         "SKILL.md triggers on user asking to spec, design, or elaborate on a feature with an existing overview.md",
@@ -47,7 +47,7 @@
       "id": 4,
       "should_trigger": true,
       "prompt": "Author the spec for the search-indexing-pipeline with a numeric verification strategy",
-      "expected_output": "Conducts design pass; authors goal block with task_type and goal.verification.strategy = 'numeric'; goal.verification.check includes bench/metric/op/threshold fields; presents draft for approval before writing files.",
+      "expected_output": "Conducts design pass; authors goal block with task_type and goal.verification.strategy = 'numeric'; goal.verification.check includes bench/metric/op/threshold fields; writes spec.md as the proposal, then presents it for ratification before advancing status.",
       "files": [],
       "expectations": [
         "SKILL.md goal.verification.strategy supports deterministic, numeric, judge, human",

@@ -1,5 +1,5 @@
 ---
-description: "Spec authoring via the goalforge chain — scaffold a new feature with goalforge-capture, then draft→spec with goalforge-spec. Human-gated draft→spec transition. First step of the chain."
+description: "Spec authoring via the goalforge chain — scaffold a new feature with goalforge-capture, then propose and ratify spec.md with goalforge-spec. Human-gated spec→ready ratification. First step of the chain."
 ---
 
 # /spec
@@ -47,10 +47,13 @@ the alternative when the whole chain should be driven end-to-end.
 `<PLANS_ROOT>` resolves per `${CLAUDE_PLUGIN_ROOT}/references/schema.md`
 §PLANS_ROOT resolution.
 
-## Human gate (draft → ready)
+## Human gate (spec → ready)
 
-- Present the full `spec.md` to the user.
-- **Wait for explicit user approval** before the feature status advances.
+- `goalforge-spec` writes the proposal (`spec.md` at `draft -> spec` for a
+  first spec; a `respec/<YYYY-MM-DD>-<slug>/` proposal for a revision) and
+  presents it to the user.
+- **Wait for explicit user approval** before the feature status advances:
+  the ratification on `spec → ready` is the single spec-approval gate.
 - If the user requests changes, loop `goalforge-spec` until they approve.
 - A WP leaves `/spec` at `status: spec` ONLY when both its **outcome** and its
   **verification method** are written. Unresolved unknowns keep it at `draft`.

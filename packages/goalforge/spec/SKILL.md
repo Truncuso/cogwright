@@ -1,9 +1,9 @@
 ---
 name: spec
-description: "Run a design pass on a captured feature and produce the spec document. Reads plans/<feature>/overview.md, optionally invokes personas or architect for a multi-lens review, writes plans/<feature>/spec.md from the feature-spec template, and advances the feature status draft → ready. HUMAN-GATED: must receive explicit user approval before advancing status. Trigger: the user asks to spec, design, or elaborate on a feature that already has an overview.md (status: draft)."
+description: "Run a design pass on a captured feature and propose the spec document, or propose a revision of an approved spec when a learning falsifies it (the respec edge). Reads plans/<feature>/overview.md, optionally invokes personas or architect for a multi-lens review, writes plans/<feature>/spec.md from the feature-spec template as the proposal (draft → spec), and ratifies it on spec → ready. HUMAN-GATED: spec → ready needs explicit user approval. Trigger: the user asks to spec, design, or elaborate on a feature that already has an overview.md (status: draft), or a feature sits at status: spec with a proposal awaiting ratification."
 metadata:
   skill-kind: preference
-  version: 1.1.0
+  version: 1.2.0
 hooks:
   Stop:
     - hooks:
@@ -13,10 +13,20 @@ hooks:
 
 # goalforge-spec
 
-Reads a captured feature overview, conducts a design pass, writes `spec.md`,
-and advances the feature status from `draft` to `ready`. The `draft → ready`
-transition is **human-gated**: the skill halts and asks for explicit approval
-before changing any `status:` field.
+Reads a captured feature overview, conducts a design pass, PROPOSES the spec,
+and ratifies it with the human. spec → ready is the single human-gated spec-approval transition
+for a first spec and a revision alike: the stage proposes, the human ratifies,
+and the skill halts and asks for explicit approval before taking that edge.
+
+- **First spec** (feature at `draft`): the design pass writes `spec.md` as the
+  proposal and takes `draft -> spec` (ungated). The Step 3 `yes` takes
+  `spec -> ready --mode human`.
+- **Revision** (feature at `spec`, entered through a respec edge
+  `ready|active|executing|completed -> spec` with `--reason "<learning>"`):
+  the stage writes only the proposal dir `respec/<YYYY-MM-DD>-<slug>/`
+  (`proposed-spec.md` + `diff.json`) and never touches `spec.md`. The Step 3
+  `yes` writes `RATIFIED`, runs `goalforge-respec-apply.sh`, then takes
+  `spec -> ready --mode human`. Contract: `references/respec.md`.
 
 **Full route only.** A `route: fast` feature (overview frontmatter, stamped by
 `goalforge-capture`) has no `spec.md` by design — its single WP carries the complete
@@ -30,27 +40,36 @@ Templates: `~/.claude/skills/goalforge/references/templates/`.
 ## Unattended mode (`SDD_AUTONOMY=unattended`)
 
 When `SDD_AUTONOMY=unattended` is set (the `autopilot` driver sets it), the
-`draft → ready` sign-off has no human to grant it. **Do not call `AskUserQuestion`
-to wait — PARK:** write the spec and the verbatim approval prompt to a handoff and
-stop (the run resumes when a human approves, or on the next `/autopilot`); the
-parked prompt is the gate block with the `grill` token stripped. The
-status is **not** advanced autonomously — accepting a spec is a human commitment.
+`spec → ready` ratification has no human to grant it. **Do not call
+`AskUserQuestion` to wait — PARK:** the stage writes the proposal and parks; it never writes RATIFIED,
+never runs `goalforge-respec-apply.sh`, and never takes `spec -> ready`. Write the
+verbatim approval prompt to a handoff and stop (the run resumes at feature
+`spec` when a human approves, or on the next `/autopilot`); the parked prompt
+is the gate block with the `grill` token stripped. A first spec may still take
+the ungated `draft -> spec` proposal edge. Accepting a spec is a human commitment.
 Spec *content* quality checks (personas/architect/judge) are evidence-decidable and
 still run. See `~/.claude/skills/autopilot/references/autonomy-policy.md`. Unset
 (`interactive`) behaviour is unchanged.
 
 ## Inputs
 
-- `<PLANS_ROOT>/<feature>/overview.md` — must exist; `status: draft`.
+- `<PLANS_ROOT>/<feature>/overview.md` — must exist; `status: draft` (first
+  spec) or `status: spec` (a proposal awaits ratification, or a respec edge
+  just re-opened an approved spec).
+- For a revision: the learning that falsifies a requirement (the respec edge's
+  `--reason`).
 
 ## Outputs (contracted files only)
 
-| File | Template | Status after |
-|---|---|---|
-| `<PLANS_ROOT>/<feature>/spec.md` | `feature-spec.md` | `spec` (own frontmatter) |
-| `<PLANS_ROOT>/<feature>/overview.md` | — (update in place) | `ready` |
+| File | Template | Written | Feature status after |
+|---|---|---|---|
+| `<PLANS_ROOT>/<feature>/spec.md` (first spec) | `feature-spec.md` | at `draft -> spec`, as the proposal | `spec` |
+| `<PLANS_ROOT>/<feature>/respec/<YYYY-MM-DD>-<slug>/proposed-spec.md` + `diff.json` (revision) | — | at feature `spec`, as the proposal | `spec` |
+| `<PLANS_ROOT>/<feature>/respec/<YYYY-MM-DD>-<slug>/RATIFIED` (revision) | — | Step 3 `yes`, attended only | `spec` |
+| `<PLANS_ROOT>/<feature>/overview.md` | — (status via `goalforge-transition.sh`) | Step 3 `yes` | `ready` |
 
-No other files are created or modified.
+A revision's `spec.md` and WP effects are written by `goalforge-respec-apply.sh`,
+never by hand. No other files are created or modified.
 
 ## Procedure
 
@@ -63,7 +82,10 @@ Read `<PLANS_ROOT>/<feature>/overview.md`. Extract:
 - Scope (In/Out).
 - Any existing open questions or notes.
 
-If `status:` is not `draft`, warn and ask the user to confirm before proceeding.
+If `status:` is `spec`, this is a ratification or a revision: read the
+existing proposal (`spec.md` for a first spec, the newest `respec/` dir for a
+revision) and the respec `--reason`. For any other status, warn and ask the
+user to confirm before proceeding.
 
 ### Step 2 — Design pass
 
@@ -123,10 +145,38 @@ the block skeleton). `goal.outcome` is authoritative — it supersedes the body
 - Document any significant concerns or alternative approaches surfaced.
 - Skip for trivial features or when the user wants speed over thoroughness.
 
-### Step 3 — HUMAN GATE: present and seek approval
+### Step 2c — Write the proposal
 
-Before writing any files or advancing status, present the draft spec to the
-user — through the ONE human template (C7), never a second hand-rolled format:
+The proposal is written BEFORE the gate; ratification, not the write, is the
+approval.
+
+- **First spec** (feature at `draft`): create `<PLANS_ROOT>/<feature>/spec.md`
+  from the `feature-spec.md` template, populate every body section from the
+  design pass, then take the ungated proposal edge
+  `goalforge-transition.sh <feature> spec --from draft --reason "spec proposal"`.
+
+  ```yaml
+  name: <feature>-spec
+  title: <human title> — spec
+  status: spec
+  created: <today YYYY-MM-DD>
+  updated: <today YYYY-MM-DD>
+  feature: <feature>
+  ```
+
+- **Revision** (feature at `spec` after a respec edge): leave `spec.md`
+  untouched. Write `<PLANS_ROOT>/<feature>/respec/<YYYY-MM-DD>-<slug>/`
+  holding `proposed-spec.md` (a complete candidate spec.md; log each changed
+  goal facet in its `## Goal Changelog` via
+  `goalforge-goal-changelog.sh append <proposal>/proposed-spec.md <facet> ...`)
+  and `diff.json`
+  (`bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-respec-diff.sh spec.md proposed-spec.md`).
+  Carry every `ambiguous` pair (a renumber) into the gate as an open question.
+
+### Step 3 — HUMAN GATE: present and seek ratification
+
+Before ratifying, present the proposal to the user — through the ONE human
+template (C7), never a second hand-rolled format:
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh spec <feature> \
@@ -134,33 +184,36 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh spec <feature> \
 ```
 
 The report's `changed[]` carries the goal block first — it is the contract the
-rest of the spec serves — then Design, Interface Contract and Non-Goals; its
+rest of the spec serves — then Design, Interface Contract and Non-Goals (for a
+revision: the `diff.json` buckets, `changed` and `dropped` keys first); its
 `issues[]` carry the Open Questions, one per bullet, each with its `ref`; and
 its `next_gate.ask` is verbatim:
 
 ```text
-Approve this spec and advance status (draft → ready)? [yes/no/revise/grill]  (grill omitted when SDD_AUTONOMY=unattended or the interview skill is unresolvable)
+Ratify this spec proposal and advance status (spec → ready)? [yes/no/revise/grill]  (grill omitted when SDD_AUTONOMY=unattended or the interview skill is unresolvable)
 ```
 
 If any goal facet is vague or unset (and not a deliberate open question), refine
-it in Step 2b before re-presenting rather than asking the user to approve an
+it in Step 2b before re-presenting rather than asking the user to ratify an
 under-specified goal.
 
 **Do not proceed until the user replies with an affirmative.** If the user
-requests revisions, iterate the design pass (Step 2) and re-present the DIFF:
-pass the previous report as `--previous`, so a `revise` round renders only what
-changed and never re-pastes the whole draft (C7).
+requests revisions (`revise`), iterate the design pass (Step 2), rewrite the
+proposal (Step 2c; a revision's `diff.json` is regenerated) and re-present the
+DIFF: pass the previous report as `--previous`, so a `revise` round renders
+only what changed and never re-pastes the whole draft (C7).
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh spec <feature> \
   --json <report.json> --previous <prev-report.json> --feature-dir <PLANS_ROOT>/<feature>
 ```
 
-If the user declines, exit without writing any files or changing any status.
+If the user declines (`no`), stop: the proposal stays at feature `spec`, no
+`RATIFIED` is written and no status changes.
 
 `grill` is the fourth answer, additive: `yes`, `no`, and `revise` keep the
-semantics above unchanged. It runs a pre-acceptance grill over the draft
-**before any file is written**. Frame the session from the drafted goal block,
+semantics above unchanged. It runs a pre-ratification grill over the proposal
+**before anything is ratified**. Frame the session from the drafted goal block,
 the Design, and the Open Questions exactly as rendered in the block above, then
 delegate the Q&A loop to the `interview` plugin skill with the literal
 `preset: spec-grill`. The `interview` plugin skill takes only a `preset:`
@@ -168,8 +221,8 @@ argument (no artifact argument), so that framing is the only channel to the
 draft; question technique and stopping behavior stay with the engine. Fold the
 returned signals into a Step 2 / Step 2b revision (goal-facet signals go to
 Step 2b) and re-present this same gate — a grill never advances status and never
-stamps a file. An `ADR_CANDIDATE` is carried as an open question and routed to
-`adr-write` at harden, not written here.
+writes `RATIFIED`. An `ADR_CANDIDATE` is carried as an open question and routed
+to `adr-write` at harden, not written here.
 
 Under `SDD_AUTONOMY=unattended` the `grill` option is **not** offered: the gate
 PARKs per §Unattended mode above, unchanged, and no `AskUserQuestion` is
@@ -180,41 +233,40 @@ instead, the option degrades, it never blocks the gate. If resolution fails at
 invocation time after `grill` was chosen, report the unresolved skill in one line
 and re-present the gate as `[yes/no/revise]` — never stall, never advance.
 
-This gate enforces the `draft → ready` human-gated transition for the feature
-(§2 Status state machine; goalforge-spec advances overview.md, not spec.md).
+This gate enforces the `spec → ready` human-gated transition for the feature
+(`references/state-machine.md` §Feature policy; goalforge-spec advances
+overview.md, not spec.md's own `status: spec`).
 
-### Step 4 — Stamp `spec.md`
+### Step 4 — Ratify (the `yes` branch, attended only)
 
-After user approval, create `<PLANS_ROOT>/<feature>/spec.md` from the
-`feature-spec.md` template:
-
-```yaml
-name: <feature>-spec
-title: <human title> — spec
-status: spec
-created: <today YYYY-MM-DD>
-updated: <today YYYY-MM-DD>
-feature: <feature>
-```
-
-Populate all body sections from the approved design pass output.
+- **First spec**: nothing more to write — `spec.md` is the ratified proposal.
+- **Revision**: write `RATIFIED` in the proposal dir, one line
+  (`ratified_by: human date=<proposal-dir date> sha256=<proposed-spec.md> diff_sha256=<diff.json> base_sha256=<spec.md> reply=<verbatim reply>`,
+  `references/respec.md`), then run
+  `bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-respec-apply.sh <feature-dir> <proposal-dir>`.
+  It supersedes affected `verified` WPs in place, writes reharden evidence for
+  affected `ready` WPs, and copies the proposal over `spec.md`. A non-zero exit
+  is a refusal: report it and stop, never patch `spec.md` by hand.
 
 ### Step 5 — Advance `overview.md` status
 
-Update `<PLANS_ROOT>/<feature>/overview.md` in place:
+Take the gate edge through the single status writer:
 
-- Set `status: ready`.
-- Set `updated: <today YYYY-MM-DD>`.
-- Add the spec link to the Links section if not already present.
+```bash
+bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <PLANS_ROOT>/<feature> ready \
+  --from spec --mode human --reason "spec ratified: <verbatim reply>"
+```
 
-Do not modify any other frontmatter fields.
+It sets `status: ready`. Then add the spec link to the Links section of
+`overview.md` if not already present. Do not modify any other frontmatter fields.
 
 ### Step 6 — Outputs written
 
 ```
-Updated: <PLANS_ROOT>/<feature>/overview.md  (status: draft → ready)
-Created: <PLANS_ROOT>/<feature>/spec.md      (status: spec)
-Next: run goalforge-decompose to break the spec into work packages.
+Updated: <PLANS_ROOT>/<feature>/overview.md  (status: spec → ready)
+Created: <PLANS_ROOT>/<feature>/spec.md      (status: spec; first spec)
+Applied: respec/<YYYY-MM-DD>-<slug>/         (revision; apply report lists superseded and reharden WPs)
+Next: run goalforge-decompose (first spec) or goalforge-harden on the reharden WPs (revision).
 ```
 
 ## Drafting discipline
@@ -240,19 +292,27 @@ change the human gate or any status transition):
 
 ## Constraints
 
-- **Never** advance status without explicit human approval (Step 3 gate).
+- **Never** take `spec -> ready` or write `RATIFIED` without explicit human
+  approval (Step 3 gate).
 - **Never** create WP folders or task files — those belong to `goalforge-decompose`.
-- **Never** modify `todo.md` or any WP files.
-- Write only the two contracted files above.
-- If `spec.md` already exists, ask the user whether to overwrite or merge.
+- **Never** modify `todo.md` or edit any WP file by hand — a revision's WP
+  effects come only from `goalforge-respec-apply.sh`.
+- Once ratified, spec.md changes only through goalforge-respec-apply.sh; the
+  stage writes a `respec/` proposal, never the approved `spec.md`.
+- Write only the contracted files above.
+- If `spec.md` already exists for a feature at `draft`, ask the user whether to
+  overwrite or merge.
 
 ## Human-gate rationale
 
-`draft → ready` (the feature gate) is one of two human-gated transitions in the SDD state machine
-(§2 of spec.md). Automatic advancement would bypass design review and allow
+`spec → ready` is the feature's one spec-approval gate; with `hardened → ready`
+(the WP gate) it is one of the two human-gated edges of the SDD state machine
+(`references/state-machine.md`). There is no `draft`-exit gate and no second
+gate on a revision: a first spec and a revision are both proposals ratified on
+the same edge. Automatic advancement would bypass design review and allow
 under-specified work to reach execution. The gate is a presentation + explicit
-approval, not just a confirmation dialog — the user must see the full draft
-before approving.
+approval, not just a confirmation dialog — the user must see the full proposal
+(or, for a revision, its diff) before ratifying.
 
 ## Plans root
 
@@ -270,11 +330,11 @@ Templates at `~/.claude/skills/goalforge/references/templates/`. Stamped files c
 
 ## Gotchas
 
-- The human-gated transition protected here is `overview.md` advancing OUT of `draft` (to `ready`, per this skill's Step 3 gate + Outputs table) — it NEVER happens without explicit approval: not on re-run, not if `spec.md` already exists, not via any flag. (`spec.md` carries its own `status: spec`; don't conflate the two.) Bypassing the gate violates the SDD state-machine contract.
+- The human-gated transition protected here is `overview.md` advancing from `spec` to `ready` (the ratification, per this skill's Step 3 gate + Outputs table) — it NEVER happens without explicit approval: not on re-run, not if `spec.md` already exists, not via any flag. A second pass over an approved spec is legal only as a respec proposal the human ratifies and `goalforge-respec-apply.sh` reconciles; an unratified or unreconciled second pass (a hand edit of `spec.md`, a `RATIFIED` written without a `yes`, an apply skipped) is forbidden. (`spec.md` carries its own `status: spec`; don't conflate the two.) Bypassing the gate violates the SDD state-machine contract.
 - The goal block (`task_type`, `goal.outcome`, `goal.verification`, etc.) is authored in `spec.md` frontmatter, NOT in `overview.md` — writing goal block fields to `overview.md` is incorrect and those values will be ignored by `goalforge-harden` and `goalforge-execute`.
-- If `spec.md` already exists, the skill must ask the user whether to overwrite or merge — silently overwriting a previously approved spec discards prior design decisions; silently skipping leaves the overview in a potentially inconsistent state.
+- If `spec.md` already exists at `draft`, the skill must ask the user whether to overwrite or merge — silently overwriting discards prior design decisions. An approved spec is never overwritten: it is revised through a respec proposal, which supersedes affected verified WPs in place instead of deleting their evidence.
 - Goal facets left partially specified must have a corresponding entry in `## Open Questions`; an empty facet with no open question entry will not be detected here but will be surfaced (and grilled) by `goalforge-harden` — this is expected behavior, but it delays the chain unnecessarily if the spec author forgot to record the question.
-- Both files (`spec.md` and the updated `overview.md`) are written only after user approval; a partial write that creates `spec.md` but does not update `overview.md` status leaves the chain in an inconsistent state that `goalforge-decompose` will reject (it reads `overview.md` for the feature `status: ready` precondition).
+- A first spec's `spec.md` is written at `draft -> spec` as the proposal; `overview.md` reaches `ready` only on ratification. A feature parked at `spec` is not decomposable: `goalforge-decompose` rejects it (it reads `overview.md` for the feature `status: ready` precondition) until the proposal is ratified.
 - **Spin-off candidates during spec:** if speccing reveals an adjacent improvement worth capturing, invoke the `idea` package (mode=capture) — see `rules/common/idea-capture.md`. Don't silently absorb it into scope.
 - **An unpinned cross-WP contract is a spec defect, not a decompose one.** If WP-B will read what WP-A writes, the path + schema belong in the Interface Contract *here* — leaving it for decompose forces a guess and surfaces as a pre-harden BLOCK. The spec is the single home for shared shapes.
 - **A live/manual step inside a deterministic feature check** will propagate into the WP verification surfaces at decompose and BLOCK at pre-harden review. Keep the deterministic gate offline-reproducible; state live checks as a separate manual note.

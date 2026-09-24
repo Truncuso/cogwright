@@ -33,7 +33,7 @@ and a checklist; there are no task files.
 | Skill | Stage | Path |
 |-------|-------|------|
 | `goalforge-capture` | free-text intent → `overview.md` (draft) | `capture/` |
-| `goalforge-spec` | design pass → `spec.md` with goal + behaviors, draft → ready | `spec/` |
+| `goalforge-spec` | design pass → `spec.md` with goal + behaviors, draft → spec → ready (ratified); respec | `spec/` |
 | `goalforge-decompose` | spec → WP overviews with checklists; `--add-wp` mode | `decompose/` |
 | `goalforge-harden` | WP spec → hardened → ready (gates G1-G4, 2-round stop) | `harden/` |
 | `goalforge-execute` | ready → executing → implemented (one owner, one commit) | `execute/` |

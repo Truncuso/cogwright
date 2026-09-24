@@ -17,7 +17,7 @@ aliases were retired 2026-07-21.
 | Skill | Contract |
 |---|---|
 | `goalforge-capture` | Free-text intent → feature `overview.md` (status: draft) + route |
-| `goalforge-spec` | Write `spec.md`; define measurable goal + verification criteria (draft → ready) |
+| `goalforge-spec` | Write `spec.md`; define measurable goal + verification criteria; propose (draft → spec), ratify (spec → ready); respec proposals |
 | `goalforge-decompose` | Break the spec into WP `overview.md` files — WP overview + checklist, no task stubs; `--add-wp` mode |
 | `goalforge-harden` | Resolve open questions; advance to `ready` |
 | `goalforge-execute` | Dispatch one owner for the whole WP; one commit, no per-task checkpoint; `ready`/`executing` → `implemented` |
@@ -97,7 +97,9 @@ tabulated in `references/alias-map.md`.
 
 `draft → spec → hardened → ready → executing → verified`
 
-`draft → ready` (feature gate) and `hardened → ready` (WP gate) are human-gated. `archived` is
+`spec → ready` (feature gate, the single spec-approval ratification) and `hardened → ready`
+(WP gate) are human-gated; a spec revision re-enters through a respec edge
+(`references/respec.md`). `archived` is
 terminal, reached only via explicit user action. Details:
 `references/state-machine.md`.
 

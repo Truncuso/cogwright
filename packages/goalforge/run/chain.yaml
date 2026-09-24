@@ -19,10 +19,10 @@ steps:
     precondition: null   # chain entry; no prior status required
 
   - skill: goalforge/spec
-    purpose: "Write spec.md — the goal object (outcome + verification.behaviors) and the C1-C7 Interface Contract; advance the feature draft → ready"
+    purpose: "Propose spec.md — the goal object (outcome + verification.behaviors) and the C1-C7 Interface Contract — on the ungated draft → spec proposal edge (or a respec proposal), then ratify it on the human-gated spec → ready edge"
     precondition:
       target: feature
-      status: draft
+      status: draft   # a feature at status spec (proposal awaiting ratification, or a respec) is also admitted
     human_gated: true
 
   - skill: goalforge/decompose

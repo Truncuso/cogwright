@@ -26,6 +26,7 @@ Sibling `chain.yaml` declares the step sequence; never reorder or extend it here
    |---|---|---|---|---|
    | *(none yet)* | feature | capture | `goalforge-capture` | — |
    | `draft` | feature | spec | `goalforge-spec` | human |
+   | `spec` | feature | spec (ratify) | `goalforge-spec` | human at `spec → ready` |
    | `ready` | feature | decompose | `goalforge-decompose` | auto |
    | `spec` | WP | harden | `goalforge-harden` | human at `hardened → ready` |
    | `ready` / `executing` | WP | execute (resume) | `goalforge-execute` | auto |
