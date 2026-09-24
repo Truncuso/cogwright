@@ -1390,17 +1390,31 @@ def check_evolved_goal(path, fm, status):
         return
     if not goal_hash_sh or not os.path.exists(goal_hash_sh):
         return                      # degrade: hasher unavailable — never false-error
+    # `--matches` accepts the narrow hash (current definition) or the frozen
+    # LEGACY whole-block hash (stamps recorded before 2026-09-09, 4b3b953).
     try:
-        res = subprocess.run(['bash', goal_hash_sh, str(path)],
+        res = subprocess.run(['bash', goal_hash_sh, '--matches', str(path), approved_s],
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     except OSError:
         return
-    recomputed = (res.stdout or '').strip()
+    out = (res.stdout or '').strip()
+    if res.returncode == 0 and out == 'narrow':
+        return
+    if res.returncode == 0 and out == 'legacy':
+        warn(path,
+             f"legacy-hash-stamp: goal_approved_version {approved_s} is a pre-2026-09-09 "
+             f"whole-block hash; goal unchanged. Migrate: "
+             f"goalforge-goal-hash.sh --restamp-legacy {path.parent}")
+        return
+    recomputed = out            # exit 1: narrow hash of the current goal; exit 3: empty
     if recomputed != approved_s:
         err(path,
             f"evolved-goal-without-reharden: goal changed after approval "
             f"(recompute {recomputed or '<none>'} != approved {approved_s})",
-            f"Re-open for re-harden: goalforge-transition.sh {path.parent.name} hardened "
+            f"If the stamp predates 2026-09-09 (legacy whole-block hash) and only "
+            f"non-goal facets changed, try: goalforge-goal-hash.sh --restamp-legacy "
+            f"{path.parent} (proof-gated via git history, refuses otherwise). Else "
+            f"re-open for re-harden: goalforge-transition.sh {path.parent.name} hardened "
             f"--mode evidence --evidence <reharden-file> --reason 'goal evolved' "
             f"(evidence-gated from ready; template references/templates/reharden-evidence.md); "
             f"re-approval re-stamps goal_approved_version")
