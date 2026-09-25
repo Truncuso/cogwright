@@ -49,10 +49,12 @@ the one ledger row) admits (task_class, provider, model) for the WP, the row's
 `max_egress` covers the dispatch row's `egress`, and the admitting table bytes
 are the committed HEAD content of a goalforge-guarded repository. The foreign
 model is still never an `agent()` node: pipeline stage 1 is a NATIVE runner
-`agent()` (the `discovery` row's model/effort, schema {exit_code, stderr})
-whose only action is the wrapper call `scripts/goalforge-leaf-exec.sh
-<task_class> <provider> <model>`; gates B and C are stages 2 and 3, each run
-only when that stage's `exit_code === 0`. The leg's provider, model, effort,
+`agent()` (the `discovery` row's model/effort, schema {exit_code, stderr,
+stdout}) whose only action is the wrapper call `scripts/goalforge-leaf-exec.sh
+<task_class> <provider> <model> < <brief file>`; the brief is the WP overview.md
+bytes at HEAD, which the compile writes to `leaf-brief.txt` beside it (a
+plans root outside a git work tree exits 2). Gates B and C are stages 2 and 3,
+each run only when that stage's `exit_code === 0`. The leg's provider, model, effort,
 evidence ref, permission set, containment block, leaf + leaf_sha256 and
 `enforced: false` ride along as data (`const LEG`). Every other non-native
 implement row exits 2 naming the missing admission; an advisor-only model
@@ -357,9 +359,13 @@ RUNNER_SCHEMA = {
     "properties": {
         "exit_code": {"type": "integer"},
         "stderr": {"type": "string"},
+        "stdout": {"type": "string"},
     },
-    "required": ["exit_code", "stderr"],
+    "required": ["exit_code", "stderr", "stdout"],
 }
+
+# The leaf's brief, written beside the WP overview.md (plans/<feature>/<wp>/).
+LEAF_BRIEF_NAME = "leaf-brief.txt"
 
 
 def runner_prompt(wp_name: str, call: str) -> str:
@@ -370,14 +376,32 @@ def runner_prompt(wp_name: str, call: str) -> str:
         "with no added, removed or changed argument:",
         f"  {call}",
         "Do not edit any file. Do not run anything else. Do not retry.",
-        "Return exit_code (the command's exit status) and stderr (its standard "
-        "error, verbatim).",
+        "Return exit_code (the command's exit status), stderr (its standard "
+        "error, verbatim) and stdout (its standard output, verbatim).",
     ])
+
+
+def write_leaf_brief(module, overview: Path) -> Path:
+    """Write the WP overview.md bytes AT HEAD to ``leaf-brief.txt`` beside it.
+
+    Never the working-tree overview.md: the brief is read through the same
+    scrubbed-``GIT_*`` HEAD read as the admission table, and an overview
+    outside a git work tree or absent from HEAD fails CLOSED (ValueError)."""
+    try:
+        brief, _ = module.admission.head_bytes(overview, "WP overview")
+    except module.admission.AdmissionTableError as exc:
+        raise ValueError(f"leaf brief: {exc}") from None
+    target = overview.resolve().parent / LEAF_BRIEF_NAME
+    try:
+        target.write_bytes(brief)
+    except OSError as exc:
+        raise ValueError(f"leaf brief: cannot write {target}: {exc}") from None
+    return target
 
 
 def compile_admitted_script(
     frontmatter: dict, items: list[ChecklistItem], dispatch: dict, module,
-    expertise_map: dict, touched: list[str],
+    expertise_map: dict, touched: list[str], overview: Path,
 ) -> str:
     """A non-native implement row: admitted → the leaf leg, else ValueError.
 
@@ -405,7 +429,10 @@ def compile_admitted_script(
     assert_native_agent_row(module, dispatch, RUNNER_ROLE, str(runner_model))
 
     key = [str(resolution["task_class"]), provider, str(resolution["model"])]
-    call = " ".join(shlex.quote(part) for part in [LEAF_EXEC_SCRIPT, *key])
+    gates = dict(gate_calls(module, dispatch, wp_name))
+    brief = write_leaf_brief(module, overview)
+    call = (" ".join(shlex.quote(part) for part in [LEAF_EXEC_SCRIPT, *key])
+            + " < " + shlex.quote(str(brief)))
     leg = {
         "role": "implement",
         "provider": provider,
@@ -421,13 +448,13 @@ def compile_admitted_script(
         "leaf_sha256": resolution["leaf_sha256"],
         "wrapper": LEAF_EXEC_SCRIPT,
         "wrapper_argv": key,
+        "brief": str(brief),
         "wrapper_call": call,
         # The pick-agent WARN, surviving as data: containment and
         # permission_set are declared, not enforced by this package.
         "enforced": False,
         "checklist": [item.id for item in items],
     }
-    gates = dict(gate_calls(module, dispatch, wp_name))
     runner_node = agent_call(
         label="leaf runner", phase_name="leaf", model=str(runner_model),
         effort=str(runner_effort), prompt=runner_prompt(wp_name, call), indent="",
@@ -521,7 +548,7 @@ def verification_command(frontmatter: dict) -> str:
 
 def compile_script(
     frontmatter: dict, items: list[ChecklistItem], dispatch: dict, module,
-    expertise_map: dict,
+    expertise_map: dict, overview: Path,
 ) -> str:
     wp_name = str(frontmatter.get("name") or "unnamed-wp")
     is_parallel = bool(frontmatter.get("parallel"))
@@ -532,7 +559,7 @@ def compile_script(
     impl_kind = module.provider_row(dispatch, impl_row.get("provider")).get("kind")
     if impl_kind != "native":
         return compile_admitted_script(frontmatter, items, dispatch, module,
-                                       expertise_map, touched)
+                                       expertise_map, touched, overview)
 
     batch = row_dispatch(module, dispatch, "implement", frontmatter, touched,
                          expertise_map)
@@ -688,7 +715,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         script = compile_script(frontmatter, items, dispatch, pick_agent,
-                                expertise_map)
+                                expertise_map, overview)
     except pick_agent.admission.AdmissionTableError as exc:
         # Distinct from the missing-admission reason: the table could not be
         # loaded, or its admitting bytes are not the committed, guarded table.

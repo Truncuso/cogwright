@@ -41,9 +41,15 @@ def main(argv: list[str]) -> int:
     check("leg carries the declared-not-enforced marker (enforced: false)", leg.get("enforced") is False, leg.get("enforced"))
 
     call = str(leg.get("wrapper_call", ""))
-    argv_call = shlex.split(call) if call else []
+    words = shlex.split(call) if call else []
+    # The verbatim call is `<wrapper> <row key> < <brief file>`: the argv ends
+    # at the stdin redirect, which must name the compile-written brief.
+    argv_call = words[:-2] if len(words) > 2 and words[-2] == "<" else words
     check("wrapper call is the pinned wrapper keyed by EXACTLY the row key (no hash, no table)",
           argv_call == [WRAPPER, klass, provider, model], argv_call)
+    check("wrapper call reads the brief from stdin: `< <leg.brief>` ending leaf-brief.txt",
+          words[-2:] == ["<", leg.get("brief")] and str(leg.get("brief")).endswith("/leaf-brief.txt"),
+          words)
     check("wrapper call never names the leaf directly",
           leg.get("leaf") and all(leg["leaf"] not in part for part in argv_call), argv_call)
 
@@ -51,8 +57,8 @@ def main(argv: list[str]) -> int:
     check("runner exit 0: three agent() calls (runner, gate B, gate C)", len(agents) == 3, [a.get("label") for a in agents])
     runner = agents[0] if agents else {}
     props = ((runner.get("schema") or {}).get("properties") or {})
-    check("stage 1 is the NATIVE runner agent() with schema {exit_code, stderr}",
-          runner.get("stage") == 1 and set(props) == {"exit_code", "stderr"}
+    check("stage 1 is the NATIVE runner agent() with schema {exit_code, stderr, stdout}",
+          runner.get("stage") == 1 and set(props) == {"exit_code", "stderr", "stdout"}
           and runner.get("model") in CLAUDE_TIERS and bool(runner.get("effort")), runner)
     check("the runner's only action is the emitted wrapper call, verbatim",
           call and call in str(runner.get("prompt", "")), runner.get("prompt"))

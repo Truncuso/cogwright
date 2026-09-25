@@ -1365,8 +1365,8 @@ def _test_tiers() -> int:
         # provider the compiler emits it as a leaf leg, never an agent() node,
         # iff the admission table admits it. This check has no WP and so no
         # task class, so it applies the EXISTENTIAL rule — some row, for any
-        # task class, binds (provider, model, leaf, current leaf_sha256,
-        # max_egress >= egress). The per-WP decision, the HEAD binding and
+        # task class, binds (provider, model, leaf, current leaf_sha256 and
+        # leaf_closure, max_egress >= egress). The per-WP decision, the HEAD binding and
         # the wrapper stay with the compile.
         impl = stages.get("implement") or {}
         impl_kind = kinds.get(impl.get("provider"))

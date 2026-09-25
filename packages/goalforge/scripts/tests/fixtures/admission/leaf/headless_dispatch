@@ -1,8 +1,27 @@
 #!/usr/bin/env bash
 # Fixture leaf for goalforge-admission.test.sh and goalforge-workflow-compile.test.sh
-# — the executable an admission row BINDS to (task_class, provider, model, leaf,
-# leaf_sha256). It never reaches a provider: when run (only through
-# scripts/goalforge-leaf-exec.sh, wp-08 b12) it touches $LEAF_MARKER, the
-# oracle's "the leaf was executed" signal, and exits ${LEAF_EXIT:-0}.
-[ -n "${LEAF_MARKER:-}" ] && : > "$LEAF_MARKER"
+# — the entry file an admission row BINDS (leaf + leaf_sha256), inside a tree
+# (helper.sh, lib/common.sh) its `leaf_closure` manifest binds too. It never
+# reaches a provider. It enforces leaf-interface v1 §3 — exits 1 unless
+# --model, --prompt and --output are all given — so an arg-less call fails
+# like a real leaf. When run (only through scripts/goalforge-leaf-exec.sh) it
+# writes its argv, NUL-separated, to $LEAF_MARKER (the oracle's "the leaf was
+# executed" signal), a JSON envelope to --output, and exits ${LEAF_EXIT:-0}.
+args=("$@")
+model="" prompt_given=0 output=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --model)    model="${2:-}"; shift 2 ;;
+        --provider) shift 2 ;;
+        --prompt)   prompt_given=1; shift 2 ;;
+        --output)   output="${2:-}"; shift 2 ;;
+        *) echo "headless_dispatch: unknown flag '$1'" >&2; exit 1 ;;
+    esac
+done
+if [ -z "$model" ] || [ "$prompt_given" -ne 1 ] || [ -z "$output" ]; then
+    echo "headless_dispatch: missing required flag(s): --model --prompt --output" >&2
+    exit 1
+fi
+[ -n "${LEAF_MARKER:-}" ] && printf '%s\0' "${args[@]}" > "$LEAF_MARKER"
+printf '{"schema_version": "1", "status": "ok", "model": "%s"}\n' "$model" > "$output"
 exit "${LEAF_EXIT:-0}"

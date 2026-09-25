@@ -6,7 +6,7 @@
 // The stubs record every agent() call with the pipeline STAGE it ran in
 // (1-based; 0 = outside any pipeline stage), every log() line and every
 // pipeline's items. The agent whose opts carry a `schema` is the runner; it
-// returns {exit_code: <arg>, stderr: ""}. A stage that throws drops the item,
+// returns {exit_code: <arg>, stderr: "", stdout: ""}. A stage that throws drops the item,
 // exactly as the Workflow tool's pipeline() does. So "gate B/C run only after,
 // and only when, the runner exited 0" is observed, not read off the text.
 import { pathToFileURL } from "node:url";
@@ -23,7 +23,7 @@ globalThis.parallel = async (thunks) =>
 globalThis.agent = async (opts) => {
   events.push({ kind: "agent", stage, ...opts });
   return opts && opts.schema
-    ? { exit_code: Number(exitArg), stderr: "" }
+    ? { exit_code: Number(exitArg), stderr: "", stdout: "" }
     : { verdict: "stub" };
 };
 globalThis.pipeline = async (items, ...stages) => {

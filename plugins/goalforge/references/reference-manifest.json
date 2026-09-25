@@ -382,10 +382,6 @@
       "path": "scripts/goalforge-install-hooks.sh"
     },
     {
-      "from": "skills/execute/references/dispatch-resolution.md",
-      "path": "scripts/goalforge-leaf-exec.sh"
-    },
-    {
       "from": "skills/harden/SKILL.md",
       "path": "agents/reviewer.md"
     },

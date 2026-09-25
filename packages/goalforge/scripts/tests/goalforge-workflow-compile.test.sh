@@ -345,7 +345,7 @@ else
 fi
 
 # =============================================================================
-# wp-08 — ADMITTED execution (b1-b3, b5-b8, b10-b13)
+# wp-08 — ADMITTED execution (b1-b3, b5-b8, b10-b14)
 # =============================================================================
 # A non-native implement row compiles iff the DEFAULT admission table admits
 # it. Every case below drives that table through the ONE in-process seam,
@@ -359,7 +359,8 @@ ADM_FX="$SD/fixtures/admission"
 SEAM="$ADM_FX/compile_seam.py"
 PROBE="$FIXTURES/workflow_probe.mjs"
 CHECK="$FIXTURES/check_admitted.py"
-WPA="$FIXTURES/wp-admitted.md"
+# WPA (the admitted WP fixture) is the REPLICA's copy, set below: the compile
+# writes its leaf brief beside it from `git show HEAD:<overview>` (H2).
 D_ADM="$FIXTURES/dispatch-admitted.yaml"
 LEAF_REL="skills/agent-dispatch/ollama/scripts/headless_dispatch"
 KEY_TRIPLE="(code/py, ollama, glm-5.3:cloud)"
@@ -378,7 +379,7 @@ fi
 
 # The pinned leaf root: the fixture leaf under the temp CLAUDE_CONFIG_DIR.
 mkdir -p "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")"
-cp "$ADM_FX/leaf/headless_dispatch" "$CLAUDE_CONFIG_DIR/$LEAF_REL"
+cp -r "$ADM_FX/leaf/." "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")/"
 chmod +x "$CLAUDE_CONFIG_DIR/$LEAF_REL"
 LEAF_FILE="$CLAUDE_CONFIG_DIR/$LEAF_REL"
 LEAF_ORIG="$T/leaf.orig"
@@ -406,6 +407,7 @@ R="$T/replica"
 mk_replica "$R" git
 RFX="$R/scripts/tests/fixtures/admission"
 RCOMPILE="$R/scripts/goalforge-workflow-compile.py"
+WPA="$R/scripts/tests/fixtures/dispatch/wp-admitted.md"
 if [ -x "$R/.git/hooks/pre-commit" ] && [ -n "$("${GITQ[@]}" -C "$R" rev-parse HEAD 2>/dev/null)" ]; then
     ok "setup: committed package replica with the goalforge pre-commit installed"
 else
@@ -572,6 +574,12 @@ if [ "$RC" -eq 2 ] && err_has b10-enum "max_egress 'wide' not in {none, diff-onl
 else
     bad "b10(ii) (rc=$RC): $(cat "$T/b10-enum.err")"
 fi
+seam_compile b10-closure "$RFX/bad-missing-leaf-closure.yaml" "$D_ADM"
+if [ "$RC" -eq 2 ] && err_has b10-closure "missing required key 'leaf_closure'" && ! err_has b10-closure "egress incoherent"; then
+    ok "b10(iii) no leaf_closure -> exit 2 \"missing required key 'leaf_closure'\", never defaulted"
+else
+    bad "b10(iii) (rc=$RC): $(cat "$T/b10-closure.err")"
+fi
 
 # --- b11: fable is advisor-only on BOTH paths -------------------------------------
 FABLE_MSG="fable is advisor-only, never an implementer"
@@ -618,7 +626,8 @@ fi
 # The canonical-table compile (no seam: the wrapper subprocess cannot see one).
 seam_compile b12 - "$D_ADM"
 CALL="$(leg_field "$T/b12/wp-fx-admitted.js" wrapper_call 2>/dev/null)"
-if [ "$RC" -eq 0 ] && [ "$CALL" = "scripts/goalforge-leaf-exec.sh code/py ollama glm-5.3:cloud" ]; then
+BRIEF="$(realpath "$(dirname "$WPA")")/leaf-brief.txt"
+if [ "$RC" -eq 0 ] && [ "$CALL" = "scripts/goalforge-leaf-exec.sh code/py ollama glm-5.3:cloud < $BRIEF" ]; then
     ok "b12 the canonical-table compile emits the wrapper call keyed by the row"
 else
     bad "b12 canonical-table compile (rc=$RC, call='$CALL'): $(cat "$T/b12.err")"
@@ -671,6 +680,107 @@ fi
 rm -f "$LEAF_FILE"
 cp "$LEAF_ORIG" "$LEAF_FILE"
 chmod +x "$LEAF_FILE"
+
+# b12 (v)-(ix): the leaf_closure — every regular file under the leaf's tree.
+LEAF_DIR="$(dirname "$LEAF_FILE")"
+restore_leaf_tree() { rm -rf "$LEAF_DIR"; mkdir -p "$LEAF_DIR"; cp -r "$ADM_FX/leaf/." "$LEAF_DIR/"; }
+closure_case() { # <label> [rule substring]  (the tree was mutated just before)
+    run_call ""
+    if [ "$RC" -eq 2 ] && [ ! -f "$MARK" ] && grep -q "leaf_closure mismatch" "$T/wrap.err" \
+       && grep -q "${2:-leaf_closure mismatch}" "$T/wrap.err"; then
+        ok "b12($1) -> exit 2 naming the leaf_closure mismatch, leaf NOT executed"
+    else
+        bad "b12($1) (rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/wrap.err")"
+    fi
+    restore_leaf_tree
+}
+printf '# edited after compile\n' >> "$LEAF_DIR/helper.sh"
+closure_case "v) closure sibling changed"
+rm -f "$LEAF_DIR/helper.sh"
+closure_case "vi) closure sibling deleted"
+cp "$LEAF_DIR/helper.sh" "$T/outside/helper.sh"
+rm -f "$LEAF_DIR/helper.sh"
+ln -s "$T/outside/helper.sh" "$LEAF_DIR/helper.sh"
+closure_case "vii) closure sibling -> out-of-root symlink to a byte-identical copy"
+printf '# unlisted\n' > "$LEAF_DIR/unlisted.sh"
+closure_case "viii) unlisted file added under the leaf tree"
+cp -r "$LEAF_DIR/lib" "$T/outside/lib"
+rm -rf "$LEAF_DIR/lib"
+ln -s "$T/outside/lib" "$LEAF_DIR/lib"
+# Rule (d) by name: a walker that merely skipped the symlink would still exit 2
+# (lib/common.sh then reads as missing), so the reason itself is pinned.
+closure_case "ix) lib/ -> out-of-root directory symlink to a byte-identical copy" "symlink to a directory"
+
+# --- b14: the leaf-interface v1 argv and the HEAD brief --------------------------
+# The fixture leaf enforces §3 (exit 1 unless --model, --prompt, --output) and
+# writes its argv, NUL-separated, to the marker; the emitted call line runs
+# unchanged, its own `< <brief file>` redirect supplying stdin.
+leaf_argv() { # <index> -> the leaf's argv[index] from the marker (raw bytes to stdout)
+    python3 -c 'import sys; sys.stdout.buffer.write(open(sys.argv[1], "rb").read().split(b"\0")[int(sys.argv[2])])' "$MARK" "$1"
+}
+strip1() { python3 -c 'import sys; b = open(sys.argv[1], "rb").read(); sys.stdout.buffer.write(b[:-1] if b.endswith(b"\n") else b)' "$1"; }
+rm -f "$MARK"
+( cd "$R" && LEAF_MARKER="$MARK" bash -c "$CALL" ) >"$T/b14.out" 2>"$T/wrap.err"
+RC=$?
+"${GITQ[@]}" -C "$R" show "HEAD:scripts/tests/fixtures/dispatch/wp-admitted.md" > "$T/wp-head.md"
+if [ "$RC" -eq 0 ] && [ -f "$MARK" ] \
+   && [ "$(leaf_argv 0)" = "--model" ] && [ "$(leaf_argv 1)" = "glm-5.3:cloud" ] \
+   && [ "$(leaf_argv 2)" = "--provider" ] && [ "$(leaf_argv 3)" = "ollama" ] \
+   && [ "$(leaf_argv 4)" = "--prompt" ] && cmp -s <(leaf_argv 5) <(strip1 "$T/wp-head.md") \
+   && [ "$(leaf_argv 6)" = "--output" ] && [[ "$(leaf_argv 7)" == /* ]] \
+   && [ "$(python3 -c 'import sys; print(len(open(sys.argv[1], "rb").read().split(b"\0")))' "$MARK")" = "9" ]; then
+    ok "b14(i) the leaf gets --model/--provider from the row, --prompt = the HEAD brief (modulo one newline), an absolute --output"
+else
+    bad "b14(i) leaf argv (rc=$RC): $(tr '\0' ' ' < "$MARK" 2>/dev/null | head -c 300) $(cat "$T/wrap.err")"
+fi
+if [ "$(cat "$T/b14.out")" = '{"schema_version": "1", "status": "ok", "model": "glm-5.3:cloud"}' ] && [ "$RC" -eq 0 ]; then
+    ok "b14(i) the wrapper's stdout is the leaf's --output file and its exit status the leaf's"
+else
+    bad "b14(i) wrapper stdout (rc=$RC): $(cat "$T/b14.out")"
+fi
+cp "$BRIEF" "$T/brief.orig"
+brief_case() { # <label> <want: run|refuse> <stderr substring>
+    rm -f "$MARK"
+    ( cd "$R" && LEAF_MARKER="$MARK" bash -c "$CALL" ) >/dev/null 2>"$T/wrap.err"
+    RC=$?
+    if [ "$2" = refuse ] && [ "$RC" -eq 2 ] && [ ! -f "$MARK" ] && grep -q "$3" "$T/wrap.err"; then
+        ok "b14($1) -> exit 2 naming $3, leaf NOT executed"
+    elif [ "$2" = run ] && [ "$RC" -eq 0 ] && [ -f "$MARK" ] && cmp -s <(leaf_argv 5) "$BRIEF"; then
+        ok "b14($1) -> the leaf runs and --prompt carries every brief byte"
+    else
+        bad "b14($1) (rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/wrap.err")"
+    fi
+}
+head -c 102401 /dev/zero | tr '\0' a > "$BRIEF"
+brief_case "ii) 102401-byte brief" refuse "brief cap"
+head -c 102400 /dev/zero | tr '\0' a > "$BRIEF"
+brief_case "iii) 102400-byte brief" run
+printf 'a\0b' > "$BRIEF"
+brief_case "iv) brief with a NUL byte" refuse "NUL"
+cp "$T/brief.orig" "$BRIEF"
+# (v) overview.md edited in the working tree, uncommitted, before the compile.
+printf '\nUNCOMMITTED WORKING-TREE EDIT\n' >> "$WPA"
+seam_compile b14v - "$D_ADM"
+rm -f "$MARK"
+( cd "$R" && LEAF_MARKER="$MARK" bash -c "$(leg_field "$T/b14v/wp-fx-admitted.js" wrapper_call)" ) >/dev/null 2>"$T/wrap.err"
+if [ -f "$MARK" ] && cmp -s <(leaf_argv 5) <(strip1 "$T/wp-head.md") && cmp -s "$BRIEF" "$T/wp-head.md"; then
+    ok "b14(v) --prompt is git show HEAD:<overview> (modulo one newline), not the uncommitted working-tree edit"
+else
+    bad "b14(v) HEAD brief (compile rc=$RC): $(cat "$T/b14v.err" "$T/wrap.err")"
+fi
+"${GITQ[@]}" -C "$R" checkout -q -- scripts/tests/fixtures/dispatch/wp-admitted.md
+# A plans root outside any git work tree has no HEAD brief: exit 2, fail closed.
+mkdir -p "$T/nogit/plans/wp"
+cp "$WPA" "$T/nogit/plans/wp/overview.md"
+WPA_SAVE="$WPA"; WPA="$T/nogit/plans/wp/overview.md"
+seam_compile b14-nogit "$RFX/admitted-ok.yaml" "$D_ADM"
+WPA="$WPA_SAVE"
+if [ "$RC" -eq 2 ] && err_has b14-nogit "leaf brief" && err_has b14-nogit "outside a git work tree" \
+   && [ ! -f "$T/nogit/plans/wp/leaf-brief.txt" ] && [ ! -f "$T/b14-nogit/wp-fx-admitted.js" ]; then
+    ok "b14 a WP outside a git work tree -> exit 2 (no HEAD brief), nothing written"
+else
+    bad "b14 non-git plans root (rc=$RC): $(cat "$T/b14-nogit.err")"
+fi
 
 # --- b13: the admitting table must be the committed, guarded HEAD table ----------
 b13_expect() { # <name> <substring>

@@ -32,13 +32,15 @@ From `plans/ideas/foreign-implement-dispatch-gated.md` (user direction
 | `model` | string | The provider's own model id. Admission binds the TRIPLE `(task_class, provider, model)`, never `(task_class, provider)` alone: a different model on the same provider is a different capability and needs its own evidence. |
 | `leaf` | string | The agent-dispatch executable the evidence was gathered against, relative to `CLAUDE_CONFIG_DIR` (default `~/.claude`). Must equal the `providers[].leaf` of the dispatch row being resolved. |
 | `leaf_sha256` | string | That file's sha256 at admission time. |
+| `leaf_closure` | mapping | The leaf CLOSURE: leaf-root-relative path → sha256 for EVERY regular file under the `leaf` entry file's directory, recursively (the entry file included; no `source` line is parsed). A listed file missing or unreadable, a file under the tree absent from the manifest, a file symlink resolving outside the leaf root, or any directory symlink under the tree is a mismatch — refused, and `scripts/goalforge-leaf-exec.sh` exits 2 without running the leaf. Any edit under the leaf's tree therefore needs a re-pinned manifest. |
 | `evidence.kind` | enum | `user-experience` \| `benchmark` \| `user-addition`. A closed set: `self-report` is not evidence. |
 | `evidence.ref` | string | Where the evidence lives (a locator the user can re-read). |
 | `permission_set` | list | The permission posture the admitted dispatch is meant to run under. Must be a LIST — a bare string is truthy but would explode into per-character permissions. POSTURE DOCUMENTATION, declared data — see "Declared, not enforced". |
 | `max_egress` | enum | `none` \| `diff-only` \| `overview` \| `full` — the declared egress CEILING of the admitted dispatch. A dispatch row whose declared `egress` ranks above it (`none < diff-only < overview < full`) is refused, `egress incoherent`. Both values are declarations: this is a coherence check between two declarations, not a runtime egress control. |
 
 Every key is required. The loader exits `2` naming the row index and the
-offending key (`missing required key 'max_egress'`; an out-of-enum value reads
+offending key (`missing required key 'max_egress'`, `missing required key
+'leaf_closure'`; an out-of-enum value reads
 `max_egress '<v>' not in {none, diff-only, overview, full}`); nothing is
 resolved from a table that failed validation.
 
@@ -85,13 +87,14 @@ refused at load for the same reason: only the first would ever be read.
   non-native providers.
 * a row whose `task_class`, `provider` and `model` all match AND whose
   `leaf`/`leaf_sha256` match the provider row's leaf path and that file's
-  current content AND whose `max_egress` covers the stage row's `egress` —
-  admitted, carrying `evidence.ref`, `permission_set`, `leaf`, `leaf_sha256`
-  and `max_egress`.
+  current content AND whose `leaf_closure` matches the leaf's directory tree
+  AND whose `max_egress` covers the stage row's `egress` — admitted, carrying
+  `evidence.ref`, `permission_set`, `leaf`, `leaf_sha256` and `max_egress`.
 * a row matching the triple whose `leaf` names another path, whose recorded
-  hash is not the file's current one, or whose leaf cannot be read — refused:
-  admission binds the EXECUTABLE, and repointing `providers[].leaf` under an
-  admitted provider name inherits nothing.
+  hash is not the file's current one, whose leaf cannot be read, or whose
+  `leaf_closure` does not match the tree — refused: admission binds the leaf
+  closure, and repointing `providers[].leaf` under an admitted provider name
+  inherits nothing.
 * a row matching `task_class` + `provider` but not `model` — refused, the
   reason naming both model ids.
 * anything else — refused, the reason naming the missing admission.
@@ -142,10 +145,13 @@ row per dispatch decision. The keys are the writer's existing
 ## Declared, not enforced
 
 The leaf binding is the one thing this package CHECKS rather than declares: an
-admitted verdict has hashed the executable the dispatch row would run. It is a
-check at VERDICT time; for an admitted compile, `scripts/goalforge-leaf-exec.sh`
-re-hashes the leaf against the HEAD-bound table immediately before running it.
-That narrows, but does not close, the gap the risk row below names.
+admitted verdict has hashed the leaf closure the dispatch row would run (the
+entry file and every file under its directory tree). It is a check at VERDICT
+time; for an admitted compile, `scripts/goalforge-leaf-exec.sh` re-hashes the
+entry file and the closure against the HEAD-bound table immediately before
+running it. That narrows, but does not close, the gap the risk row below names:
+dependencies outside the leaf's tree (`PATH` binaries, env-selected paths) are
+not hashed, and the leaf re-reads its files after the wrapper hashed them.
 
 The containment block and `permission_set` are validated and carried as DATA.
 Nothing in this package enforces them at dispatch time: agent-dispatch's only

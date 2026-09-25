@@ -40,9 +40,11 @@ file; `--dispatch <path>` overrides it (tests pass a fixture). No provider is ev
    the row: `kind: native` carrying a `leaf`, or reached through a stage row
    whose `endpoint` is not `session` or `egress` not `none`, is refused at exit
    2 (it would otherwise skip the table entirely), as are two provider rows
-   sharing a `name`. An admitted row binds the EXECUTABLE as well as the triple
-   — `leaf` + `leaf_sha256` must match the provider row's leaf and that file's
-   current content, so repointing `providers[].leaf` inherits nothing.
+   sharing a `name`. An admitted row binds the leaf closure as well as the
+   triple — `leaf` + `leaf_sha256` must match the provider row's leaf and that
+   file's current content, and `leaf_closure` must hash every regular file
+   under the leaf's directory tree, so repointing `providers[].leaf` or editing
+   a sibling the leaf sources inherits nothing.
    `--admitted <path>` overrides the shipped
    `references/admitted-providers.yaml` from inside the package root or the
    plans root only (resolved, symlinks followed, exit 2 outside, one stderr
@@ -143,21 +145,29 @@ exits 2 naming the missing `(task_class, provider, model)` admission.
   an `admitted:` row unless the user confirms interactively on the terminal.
 - **Leaf-leg emission.** The foreign model is never an `agent()` node.
   Pipeline stage 1 is a NATIVE runner `agent()` (the `discovery` row's
-  model/effort, output schema `{exit_code, stderr}`) whose only action is the
-  call `scripts/goalforge-leaf-exec.sh <task_class> <provider> <model>` — keyed
-  by the admission row, with no hash and no table argument. Gate B and gate C
-  are stages 2 and 3, each run only when stage 1's `exit_code` is 0. The leg's
-  provider, model, effort, evidence ref, permission set, containment block,
-  `leaf` + `leaf_sha256` and `enforced: false` travel as data.
+  model/effort, output schema `{exit_code, stderr, stdout}`) whose only action
+  is the call `scripts/goalforge-leaf-exec.sh <task_class> <provider> <model> <
+  <brief file>` — keyed by the admission row, with no hash and no table
+  argument. The brief is the WP overview.md bytes at HEAD, which the compile
+  writes to `plans/<feature>/<wp>/leaf-brief.txt` (a plans root outside a git
+  work tree exits 2). Gate B and gate C are stages 2 and 3, each run only when
+  stage 1's `exit_code` is 0. The leg's provider, model, effort (the runner
+  node's only; the leaf runs at its provider default), evidence ref,
+  permission set, containment block, `leaf` + `leaf_sha256` and
+  `enforced: false` travel as data.
 - **The wrapper.** `goalforge-leaf-exec.sh` accepts exactly the three row-key
-  arguments, reads the table only script-relative, re-derives `leaf` and
-  `leaf_sha256` from the HEAD-bound table, requires the leaf's real path to lie
-  under the leaf root, re-hashes it and exits 2 without running it on any
-  mismatch; otherwise it runs the leaf and returns its status.
+  arguments, reads the table only script-relative, re-derives `leaf`,
+  `leaf_sha256` and `leaf_closure` from the HEAD-bound table, requires the
+  leaf's real path to lie under the leaf root, re-hashes the leaf and its
+  closure and exits 2 without running it on any mismatch. A brief over
+  `goalforge-second-opinion.sh`'s `MAX_PAYLOAD_CEILING` raw bytes or holding a
+  NUL also exits 2. Otherwise it runs the leaf per leaf-interface v1 as
+  `--model <model> --provider <provider> --prompt <brief> --output <tmp file>`,
+  prints the `--output` file to stdout and returns the leaf's status.
 - **`--test-tiers`** has no WP and so no task class. It applies the
   EXISTENTIAL rule: a non-native implement row passes iff SOME admission row,
   for any task class, binds its provider, model, the provider row's leaf, a
-  current `leaf_sha256` and `max_egress >= egress`. The per-WP task-class
+  current `leaf_sha256` and `leaf_closure`, and `max_egress >= egress`. The per-WP task-class
   decision, the HEAD binding and the wrapper stay with the compile.
 - **Advisor-only.** An implement row whose model is `fable` exits 2 on both
   the admitted and the native path.

@@ -46,7 +46,7 @@ export GOALFORGE_DISPATCH_LEDGER="$LEDGER"
 export CLAUDE_CONFIG_DIR="$T/cfg"
 LEAF_REL="skills/agent-dispatch/ollama/scripts/headless_dispatch"
 mkdir -p "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")"
-cp "$F/leaf/headless_dispatch" "$CLAUDE_CONFIG_DIR/$LEAF_REL"
+cp -r "$F/leaf/." "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")/"
 
 # `admitted_source` is package-relative, never the absolute host path (S-9).
 FIXTURE_SRC="scripts/tests/fixtures/admission/admitted-ok.yaml"
@@ -164,7 +164,8 @@ for pair in \
     "bad-self-report.yaml|evidence.kind" \
     "bad-permission-set-string.yaml|permission_set" \
     "bad-missing-leaf.yaml|leaf" \
-    "bad-missing-max-egress.yaml|max_egress"; do
+    "bad-missing-max-egress.yaml|max_egress" \
+    "bad-missing-leaf-closure.yaml|leaf_closure"; do
     FILE="${pair%%|*}"; KEY="${pair##*|}"
     ERR="$(python3 "$ADM" --table "$F/$FILE" 2>&1)"
     RC=$?

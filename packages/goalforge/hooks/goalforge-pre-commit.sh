@@ -8,8 +8,8 @@
 #   - any internal error in this hook → exit 0 (never break commit flow)
 #
 # ONE guard runs FIRST and FAILS CLOSED (wp-08 T7): a staged change that adds
-# or changes an `admitted:` row of references/admitted-providers.yaml (package
-# or plugin mirror) is BLOCKED unless the user confirms INTERACTIVELY on the
+# or changes an `admitted:` row of any staged path ending
+# references/admitted-providers.yaml is BLOCKED unless the user confirms INTERACTIVELY on the
 # controlling terminal (/dev/tty). A commit-message trailer and an environment
 # variable are NOT accepted — an agent can write either. A headless commit that
 # adds an admitted row is therefore ALWAYS blocked; that is the guarantee. Any
@@ -91,8 +91,10 @@ _gf_hr_value() {
 }
 
 # ── admitted-providers.yaml guard (wp-08 T7; ruling 3, 2026-09-22) ────────────
-# The staged paths it guards: the package table and its plugin mirror.
-_GF_ADMITTED_RE='(^|/)(packages|plugins)/goalforge/references/admitted-providers\.yaml$'
+# The staged paths it guards: ANY path ending references/admitted-providers.yaml
+# (the package table, its plugin mirror, a vendored copy). An over-match only
+# costs a prompt, which is fail-safe.
+_GF_ADMITTED_RE='(^|/)references/admitted-providers\.yaml$'
 
 # Row detection compares the PARSED YAML of the HEAD blob and the index blob:
 # an index row equal to no HEAD row is an add or a change (block-style,
@@ -135,7 +137,7 @@ _gf_admitted_confirm() {
 _gf_admitted_guard() {
     set -uo pipefail
     git rev-parse --git-dir >/dev/null 2>&1 || return 0
-    local staged path verdict work head_arg
+    local staged path verdict work head_arg entry
     staged=$(git diff --cached --name-only 2>/dev/null) || {
         echo "goalforge-pre-commit: BLOCKED — cannot list staged paths to check admitted-providers.yaml — failed closed" >&2
         return 2
@@ -143,9 +145,15 @@ _gf_admitted_guard() {
     work=$(mktemp -d) || return 2
     while IFS= read -r -u 3 path; do
         [[ -n "$path" && "$path" =~ $_GF_ADMITTED_RE ]] || continue
-        # Not in the index: a staged deletion. A removal adds no row.
-        git cat-file -e ":$path" 2>/dev/null || continue
-        git show ":$path" > "$work/index" 2>/dev/null || { rm -rf "$work"; return 2; }
+        # No index ENTRY: a staged deletion, which adds no row. A still-indexed
+        # table whose blob cannot be read is an evaluation error, never a removal.
+        entry=$(git ls-files --cached -- ":(top,literal)$path" 2>/dev/null) || { rm -rf "$work"; return 2; }
+        [[ -n "$entry" ]] || continue
+        git show ":$path" > "$work/index" 2>/dev/null || {
+            echo "goalforge-pre-commit: BLOCKED — cannot read the staged blob of $path — failed closed" >&2
+            rm -rf "$work"
+            return 2
+        }
         head_arg="-"
         if git cat-file -e "HEAD:$path" 2>/dev/null; then
             git show "HEAD:$path" > "$work/head" 2>/dev/null || { rm -rf "$work"; return 2; }

@@ -14,12 +14,20 @@
 #     model: glm-5.3:cloud             # the provider's own model id — admission
 #                                      # binds (task_class, provider, model)
 #     leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
-#                                      # the EXECUTABLE the evidence was gathered
+#                                      # the entry file the evidence was gathered
 #                                      # against, relative to CLAUDE_CONFIG_DIR;
 #                                      # must equal the provider row's `leaf`
 #     leaf_sha256: <64 hex>            # that file's content hash at admission
 #                                      # time — a repointed or edited leaf is
 #                                      # refused, it does not inherit the row
+#     leaf_closure:                    # the leaf CLOSURE: every regular file
+#       skills/agent-dispatch/ollama/scripts/headless_dispatch: <64 hex>
+#       skills/agent-dispatch/ollama/scripts/lib/x.sh: <64 hex>
+#                                      # under the entry file's directory,
+#                                      # recursively, CLAUDE_CONFIG_DIR-relative
+#                                      # path -> sha256; a changed, missing or
+#                                      # unlisted file, or a symlink out of the
+#                                      # root / to a directory, is refused
 #     evidence:
 #       kind: user-experience          # user-experience | benchmark | user-addition
 #       ref: <locator>                 # where the evidence lives

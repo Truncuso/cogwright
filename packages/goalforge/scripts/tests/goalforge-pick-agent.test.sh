@@ -201,7 +201,7 @@ D_ADM="$DISPATCH_FIXTURES/dispatch-admitted.yaml"
 export CLAUDE_CONFIG_DIR="$T/cfg"
 LEAF_REL="skills/agent-dispatch/ollama/scripts/headless_dispatch"
 mkdir -p "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")"
-cp "$ADM_FX/leaf/headless_dispatch" "$CLAUDE_CONFIG_DIR/$LEAF_REL"
+cp -r "$ADM_FX/leaf/." "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")/"
 
 tiers() { # <name> <dispatch|-> <table|-> -> RC; $T/<name>.out (stdout+stderr)
     python3 "$TIERS" "$SCRIPT" "$2" "$3" >"$T/$1.out" 2>&1

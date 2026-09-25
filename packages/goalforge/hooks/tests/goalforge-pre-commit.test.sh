@@ -297,6 +297,22 @@ rc=$(cond_i "$repo")
 if [[ "$rc" -eq 2 ]] && grep -q 'load failure' "$TMP9/err"; then ok "b9 G malformed staged table -> exit 2 with a load-failure reason (fail closed)"
 else no "b9 G malformed staged table" "rc=$rc err=$(cat "$TMP9/err")"; fi
 
+# (J) any staged path ending references/admitted-providers.yaml is guarded — a
+# vendored layout, not only the packages/ and plugins/ paths.
+repo="$(fixture_repo J "vendor/goalforge/references/admitted-providers.yaml" "$ONE_ROW" "$TWO_ROWS")"
+rc=$(cond_i "$repo")
+if [[ "$rc" -eq 2 ]] && grep -q 'admitted-providers.yaml' "$TMP9/err"; then ok "b9 J vendored path vendor/goalforge/... -> block naming admitted-providers.yaml"
+else no "b9 J vendored path" "rc=$rc err=$(cat "$TMP9/err")"; fi
+
+# (K) fixture A staged, then its index blob removed from .git/objects: the table
+# is still indexed but unreadable — an evaluation error (2), never a removal.
+repo="$(fixture_repo K "$TBL" "$ONE_ROW" "$TWO_ROWS")"
+blob="$("${GQ[@]}" -C "$repo" ls-files -s -- "$TBL" | awk '{print $2}')"
+rm -f "$repo/.git/objects/${blob:0:2}/${blob:2}"
+rc=$(cond_i "$repo")
+if [[ -n "$blob" && ! -e "$repo/.git/objects/${blob:0:2}/${blob:2}" && "$rc" -eq 2 ]]; then ok "b9 K unreadable index blob of a still-indexed table -> exit 2 (fail closed, not a removal)"
+else no "b9 K unreadable index blob" "blob=$blob rc=$rc err=$(cat "$TMP9/err")"; fi
+
 # Structural: the confirmation function reads ONLY the literal /dev/tty, with
 # no expansion in any input redirect and no GOALFORGE_* read inside it; and it
 # is defined unconditionally (no `declare -F ... ||` guard).

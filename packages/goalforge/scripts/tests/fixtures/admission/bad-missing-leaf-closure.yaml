@@ -1,0 +1,15 @@
+# b10 (iii): admitted-ok.yaml with NO leaf_closure key — the loader must exit 2
+# naming it, never default it (e.g. to the entry file alone).
+schema_version: 1
+
+admitted:
+  - task_class: code/py
+    max_egress: overview
+    provider: ollama
+    model: glm-5.3:cloud
+    leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
+    leaf_sha256: 1171ae396b110f29d27a68d495a4ee72f917b2de4e5735105e94fe5e3fbda6c7
+    evidence:
+      kind: user-experience
+      ref: fixtures/admission#missing-leaf-closure
+    permission_set: [read, write]

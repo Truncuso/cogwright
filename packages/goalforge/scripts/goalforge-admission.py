@@ -21,9 +21,10 @@ Public API:
 
     resolve(role, task_class, provider, model, table, *, leaf_root) -> Admission
         The verdict. ``provider`` is a dispatch.yaml ``providers[]`` row.
-        Admission binds the EXECUTABLE as well as the triple: the row's
+        Admission binds the leaf closure as well as the triple: the row's
         ``leaf``/``leaf_sha256`` must match the provider row's leaf path and
-        that file's current content.
+        that file's current content, and ``leaf_closure`` must hash every
+        regular file under the leaf's directory tree.
 
 CLI:
     python3 goalforge-admission.py [--table <yaml>]      # validate, exit 0|2
@@ -59,8 +60,11 @@ EVIDENCE_KINDS: frozenset[str] = frozenset(
 # Every key a row must carry. `evidence` is checked structurally below.
 # `max_egress` (wp-08) is appended LAST: the declared egress ceiling of the
 # admitted dispatch, checked against the dispatch row's declared `egress`.
+# `leaf_closure` follows it: leaf-root-relative path -> sha256 of every regular
+# file under the leaf's directory tree (see closure_mismatch).
 REQUIRED_KEYS: tuple[str, ...] = (
     "task_class", "provider", "model", "evidence", "permission_set", "max_egress",
+    "leaf_closure",
 )
 
 # The egress classes in their total order (execute/references/dispatch-resolution.md
@@ -150,9 +154,15 @@ def validate(rows: object) -> list[dict]:
             if not isinstance(row.get(key), str) or not row[key].strip():
                 raise _row_error(
                     index, key,
-                    "missing or not a string — an admitted row binds the EXECUTABLE "
-                    "(leaf path + leaf_sha256), not just the provider name",
+                    "missing or not a string — an admitted row binds the leaf "
+                    "closure (leaf path + leaf_sha256 + leaf_closure), not just "
+                    "the provider name",
                 )
+        closure = row["leaf_closure"]
+        if not isinstance(closure, dict) or not all(
+            isinstance(k, str) and isinstance(v, str) for k, v in closure.items()
+        ):
+            raise _row_error(index, "leaf_closure", "not a mapping of path -> sha256")
         validated.append(row)
     return validated
 
@@ -165,6 +175,55 @@ def default_leaf_root() -> Path:
 def _leaf_digest(path: Path) -> str:
     """sha256 of the leaf executable. Raises OSError when it cannot be read."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def closure_mismatch(row: dict, root: Path) -> str | None:
+    """Why the files under the leaf's directory tree differ from ``leaf_closure``.
+
+    The closure is every regular file under the entry file's directory,
+    recursively, keyed leaf-root-relative; no ``source`` line is parsed. Each
+    is a mismatch: (a) a listed file missing or unreadable, (b) a file under
+    the tree absent from the manifest, (c) a file symlink resolving outside the
+    leaf root, (d) a symlink whose target is a directory, or a tree whose real
+    path is outside the root. Returns None when the closure holds."""
+    root_real = os.path.realpath(root)
+    rel_dir = Path(str(row["leaf"])).parent
+    tree = Path(root) / rel_dir
+    manifest = {str(k): str(v).strip().lower() for k, v in row["leaf_closure"].items()}
+
+    def outside(path: str) -> bool:
+        return os.path.commonpath([root_real, os.path.realpath(path)]) != root_real
+
+    if outside(str(tree)):
+        return f"leaf_closure mismatch: {tree} resolves outside the leaf root {root_real}"
+    errors: list[OSError] = []
+    found: dict[str, Path] = {}
+    for dirpath, dirnames, filenames in os.walk(tree, onerror=errors.append):
+        for name in dirnames:
+            if os.path.islink(os.path.join(dirpath, name)):
+                return (f"leaf_closure mismatch: {os.path.join(dirpath, name)} is a "
+                        "symlink to a directory")
+        for name in filenames:
+            path = os.path.join(dirpath, name)
+            if os.path.islink(path) and outside(path):
+                return (f"leaf_closure mismatch: {path} is a symlink resolving "
+                        f"outside the leaf root {root_real}")
+            key = (rel_dir / os.path.relpath(path, tree)).as_posix()
+            if key not in manifest:
+                return f"leaf_closure mismatch: {key} is under the leaf tree but not listed"
+            found[key] = Path(path)
+    if errors:
+        return f"leaf_closure mismatch: the leaf tree cannot be walked: {errors[0]}"
+    for key, want in sorted(manifest.items()):
+        if key not in found or not found[key].is_file():
+            return f"leaf_closure mismatch: listed file {key} is missing"
+        try:
+            digest = _leaf_digest(found[key])
+        except OSError as exc:
+            return f"leaf_closure mismatch: listed file {key} cannot be read: {exc}"
+        if digest != want:
+            return f"leaf_closure mismatch: {key} hashes to {digest}, the row records {want}"
+    return None
 
 
 def load(path: Path | None = None, *, required: bool = False) -> list[dict]:
@@ -303,36 +362,46 @@ def _guard_reason(table_dir: Path) -> str | None:
     )
 
 
-def verify_head_binding(path: Path, raw: bytes) -> None:
-    """Refuse table bytes that are not the table's committed HEAD content.
+def head_bytes(path: Path, what: str = "admission table") -> tuple[bytes, str]:
+    """``(git show HEAD:<path> bytes, the HEAD-relative path)``, read FAIL-CLOSED.
 
-    ``raw`` are the bytes the caller already read and parsed (read once). The
-    repository is anchored at the table's OWN directory with every ``GIT_*``
-    variable scrubbed; absent from HEAD is a mismatch, never a skipped check;
-    and the repository must carry the goalforge pre-commit guard. Raises
-    AdmissionTableError with a distinct reason per failure."""
-    table_dir = Path(path).resolve().parent
+    The repository is anchored at the file's OWN directory with every ``GIT_*``
+    variable scrubbed; outside a work tree and absent from HEAD each raise
+    AdmissionTableError with its own reason, never a skipped read."""
+    file_dir = Path(path).resolve().parent
     name = Path(path).name
     try:
-        prefix = _git(["rev-parse", "--show-prefix"], table_dir)
+        prefix = _git(["rev-parse", "--show-prefix"], file_dir)
     except OSError as exc:
         raise AdmissionTableError(
-            f"admission table {path}: git is not runnable ({exc}) — HEAD binding "
+            f"{what} {path}: git is not runnable ({exc}) — HEAD binding "
             "failed CLOSED"
         ) from exc
     if prefix.returncode != 0:
         raise AdmissionTableError(
-            f"admission table {path} is outside a git work tree — the HEAD "
+            f"{what} {path} is outside a git work tree — the HEAD "
             "binding cannot be checked, failed CLOSED"
         )
     rel = prefix.stdout.decode("utf-8", "replace").strip() + name
-    head = _git(["show", f"HEAD:{rel}"], table_dir)
+    head = _git(["show", f"HEAD:{rel}"], file_dir)
     if head.returncode != 0:
         raise AdmissionTableError(
-            f"admission table {path} is absent from HEAD (git show HEAD:{rel} "
-            "found nothing) — an uncommitted table is a HEAD mismatch, refused"
+            f"{what} {path} is absent from HEAD (git show HEAD:{rel} "
+            f"found nothing) — an uncommitted {what} is a HEAD mismatch, refused"
         )
-    if head.stdout != raw:
+    return head.stdout, rel
+
+
+def verify_head_binding(path: Path, raw: bytes) -> None:
+    """Refuse table bytes that are not the table's committed HEAD content.
+
+    ``raw`` are the bytes the caller already read and parsed (read once); the
+    HEAD read is ``head_bytes``; and the repository must carry the goalforge
+    pre-commit guard. Raises AdmissionTableError with a distinct reason per
+    failure."""
+    head, rel = head_bytes(path)
+    table_dir = Path(path).resolve().parent
+    if head != raw:
         raise AdmissionTableError(
             f"admission table {path} differs from git show HEAD:{rel} — HEAD "
             "mismatch: only the committed table admits, refused"
@@ -414,7 +483,7 @@ def _leaf_incoherence(row: dict, provider: dict, root: Path | None) -> str | Non
             f"{name!r} records {row.get('leaf_sha256')!r} — refused (the "
             "evidence was gathered against different content)"
         )
-    return None
+    return closure_mismatch(row, root or default_leaf_root())
 
 
 def resolve(role: str, klass: str, provider: dict, model: str,
@@ -506,9 +575,10 @@ def verify_leaf(table_path: Path, klass: str, provider: str, model: str, *,
     """Re-derive and re-check the admitted leaf for one row key (the wrapper).
 
     Reads the table once, requires those bytes to be the committed HEAD
-    content (``verify_head_binding``), takes the row's ``leaf`` and
-    ``leaf_sha256`` from THAT table only, requires the leaf's real path to lie
-    under the leaf root and re-hashes it. Returns the real path to execute.
+    content (``verify_head_binding``), takes the row's ``leaf``,
+    ``leaf_sha256`` and ``leaf_closure`` from THAT table only, requires the
+    leaf's real path to lie under the leaf root and re-hashes it and its
+    closure (``closure_mismatch``). Returns the real path to execute.
     Raises AdmissionTableError on any failure — the leaf is never run then."""
     raw = read_table(table_path)
     verify_head_binding(table_path, raw)
@@ -542,6 +612,9 @@ def verify_leaf(table_path: Path, klass: str, provider: str, model: str, *,
             f"HEAD-bound admission row records {row['leaf_sha256']!r} — "
             "refused, not executed"
         )
+    unbound = closure_mismatch(row, root)
+    if unbound:
+        raise AdmissionTableError(f"{unbound} — refused, not executed")
     return target
 
 

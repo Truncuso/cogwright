@@ -9,12 +9,16 @@ Every admission fixture names its task class in the LITERAL-extension spelling
 * `dispatch-*.yaml` — dispatch configs whose `implement` row names a provider.
 * `wp-*.md` — WP frontmatter: task class, owned_files, verification command.
 
-Fix lap (S-1/S-2/S-3): admission binds the EXECUTABLE and derives the provider
-kind, so these carry the trust-boundary cases:
+Fix lap (S-1/S-2/S-3): admission binds the leaf closure and derives the
+provider kind, so these carry the trust-boundary cases:
 
-* `leaf/headless_dispatch` — the executable `admitted-ok.yaml` binds. The test
-  installs it under a temp `CLAUDE_CONFIG_DIR`, so the leaf hash never depends
-  on the host's corpus; editing it means re-recording `leaf_sha256`.
+* `leaf/` — the tree `admitted-ok.yaml` binds: `headless_dispatch` (the entry
+  file, `leaf_sha256`), `helper.sh` and `lib/common.sh` (with the entry file,
+  the `leaf_closure` manifest). The tests install the whole tree under a temp
+  `CLAUDE_CONFIG_DIR`, so no hash depends on the host's corpus; editing any
+  file under `leaf/` means re-recording `leaf_sha256` / `leaf_closure` in every
+  `admitted-*` / `bad-*` fixture. The entry file enforces leaf-interface v1 §3
+  (exit 1 without `--model`, `--prompt`, `--output`).
 * `admitted-leaf-repoint.yaml` / `admitted-leaf-stale-hash.yaml` /
   `bad-missing-leaf.yaml` — the leaf binding refused three ways.
 * `dispatch-native-with-leaf.yaml` (loader), `dispatch-native-endpoint-leaf.yaml`
@@ -22,9 +26,11 @@ kind, so these carry the trust-boundary cases:
   a self-declared `kind: native` that would skip the table.
 * `dispatch-dup-names.yaml` — two provider rows, one name.
 
-wp-08 (admitted execution): every row carries the required `max_egress`, and
-`leaf/headless_dispatch` touches `$LEAF_MARKER` and exits `${LEAF_EXIT:-0}`
-when run, so the leaf-wrapper cases can tell "executed" from "refused".
+wp-08 (admitted execution): every row carries the required `max_egress` and
+`leaf_closure`, and `leaf/headless_dispatch` writes its argv (NUL-separated)
+to `$LEAF_MARKER`, a JSON envelope to `--output`, and exits
+`${LEAF_EXIT:-0}` when run, so the leaf-wrapper cases can tell "executed"
+from "refused" and read the argv the wrapper built.
 
 * `admitted-egress-{none,diff-only,full}.yaml` — `admitted-ok.yaml` differing
   only in `max_egress` (coherence pairs; `--test-tiers` egress case).
@@ -32,7 +38,8 @@ when run, so the leaf-wrapper cases can tell "executed" from "refused".
 * `admitted-fable.yaml` — admits `fable`; the compile must still refuse it.
 * `admitted-other-model.yaml` / `admitted-code-sh.yaml` — same provider,
   another model / another task class only (`--test-tiers` existential rule).
-* `bad-missing-max-egress.yaml` / `bad-max-egress-enum.yaml` — loader refusals.
+* `bad-missing-max-egress.yaml` / `bad-max-egress-enum.yaml` /
+  `bad-missing-leaf-closure.yaml` — loader refusals.
 * `compile_seam.py` / `tiers_seam.py` — drive the compiler and `--test-tiers`
   in process through `goalforge_admission.ADMITTED_PATH` (and the dispatch
   loader's path); no CLI flag exists for either.
