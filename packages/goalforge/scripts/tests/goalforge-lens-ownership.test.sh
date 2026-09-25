@@ -53,7 +53,7 @@ PINNED_CLASSES=(correctness error-handling complexity-delta root-cause-ai-slop \
 # separator row.
 extract_rows() {
   awk -F'|' '
-    !active && /^## Concern-class ownership table/ { seen = 1; next }
+    !active && /^## Concern-class ownership table[ \t]*$/ { seen = 1; next }
     seen && !active && /^[ \t]*\|/ { active = 1; next }
     active && /^[ \t]*\| *-/ { next }
     active && /^[ \t]*\|/ {
@@ -170,6 +170,9 @@ expect_bad check_b1 "$FIX/bad-missing-pinned-class.md"
 expect_bad check_b1 "$FIX/bad-unbackticked-row.md"
 expect_bad check_b1 "$FIX/bad-decoy-table-before-real.md"
 expect_bad check_b1 "$FIX/bad-indented-duplicate-row.md"
+expect_bad check_b1 "$FIX/bad-decoy-heading-prefix.md"
+expect_bad check_b1 "$FIX/bad-full-decoy-before-real.md"
+expect_bad check_b1 "$FIX/bad-decoy-table-after-real.md"
 
 echo "[ b2: owners in the closed set ]"
 expect_ok  check_b2 "$TABLE"
