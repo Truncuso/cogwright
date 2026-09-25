@@ -93,9 +93,10 @@ refuses (exit 1, no write) when `RATIFIED` is absent or malformed (any of
 applied state (`sha256=`) nor the ratified base (`base_sha256=`), or, from the
 base, when a changed goal facet has no added `## Goal Changelog` row.
 
-From the base it then takes `flock` on the feature's transition lock file (the
-same lock `goalforge-transition.sh` holds while it writes a status) and holds
-it through its last write, so no status write lands between the check and the
+It takes `flock` on the feature's transition lock file (the same lock
+`goalforge-transition.sh` holds while it writes a status) before it reads
+the `spec.md` state and holds it through its last write, so two applies on
+one base cannot both apply, no status write lands between the check and the
 writes, and no supersede write reverts a concurrent status write. A
 read-only pre-pass over every WP computes every remaining refusal before the
 first write:
@@ -110,10 +111,20 @@ first write:
   `dropped` or `ambiguous[].dropped` key refuses the apply, naming the WP.
   The renumber rule: an `ambiguous` pair's dropped id counts as affected for
   this refusal only; supersede and reharden still leave `ambiguous` keys
-  untouched. The walk-back target is `ready`: the human walks each named WP
-  back to `ready` (`goalforge-transition.sh <wp> ready --reason "<respec>"`)
-  and reruns the apply, whose reharden step then writes that WP's durable
-  evidence file.
+  untouched. The walk-back target depends on the status: a `hardened` WP
+  walks back to `spec` (`goalforge-transition.sh <wp> spec --reason
+  "<respec>"`), where harden redevelops it against the new spec.md; an
+  `executing` or `implemented` WP walks back to `ready`
+  (`goalforge-transition.sh <wp> ready --reason "<respec>"`). The human then
+  reruns the apply, whose reharden step writes each `ready` WP's durable
+  evidence file. A status line with a trailing ` # comment` is read without
+  it, so `status: executing # note` still refuses.
+- **Reharden gate.** `goalforge-transition.sh` refuses to move a `ready` WP
+  forward (`executing`, `implemented`, `verified`) while a
+  `reharden/*-respec-*` file is newer than the WP's last `-> ready` ledger
+  row, the row the G4 goal-hash record gates. The refusal names the file and
+  the re-harden step (`ready -> hardened --mode evidence --evidence <file>`).
+  A read-time check: no new edge, no new trace event.
 
 Then, each step skip-if-present so a partial apply resumes:
 

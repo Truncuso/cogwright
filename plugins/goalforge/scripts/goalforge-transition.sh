@@ -409,6 +409,45 @@ transition() {
         echo "ERROR: reverse transition $FROM -> $TO requires --reason" >&2; return 1
     fi
 
+    # ── respec reharden gate (wp-10 H1-r2, human ruling option 2) ────────────
+    # A `ready` WP leaves forward only when no reharden/*-respec-* evidence file
+    # is newer than its last `-> ready` ledger row, the row the G4 goal-hash
+    # record gates. A newer file means a ratified respec changed its contract
+    # slice after its goal was approved: re-harden first. Read-time check; no
+    # ledger row at all with such a file present refuses (fail-closed).
+    if [[ "$KIND" == "wp" && "$FROM" == "ready" && "$TO" =~ ^(executing|implemented|verified)$ ]]; then
+        local STALE_EV
+        STALE_EV="$(python3 - "$WP_DIR" "$FEATURE_DIR/.sdd-transitions.jsonl" <<'PY'
+import sys, json, os, glob
+from datetime import datetime, timezone
+wp_dir, ledger = sys.argv[1], sys.argv[2]
+evs = glob.glob(os.path.join(wp_dir, "reharden", "*-respec-*"))
+if not evs:
+    sys.exit(0)
+last = None
+if os.path.isfile(ledger):
+    for ln in open(ledger, encoding="utf-8"):
+        try:
+            row = json.loads(ln)
+        except ValueError:
+            continue
+        if row.get("wp") == os.path.basename(wp_dir) and row.get("to") == "ready":
+            last = row.get("ts")
+try:
+    since = datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+except (TypeError, ValueError):
+    since = None
+newest = max(evs, key=os.path.getmtime)
+if since is None or os.path.getmtime(newest) >= since:
+    print(newest)
+PY
+)" || { echo "ERROR: respec reharden check failed for $WP_DIR; refused" >&2; return 1; }
+        if [[ -n "$STALE_EV" ]]; then
+            echo "ERROR: $FROM -> $TO refused: $STALE_EV is newer than this WP's last -> ready (G4 goal-hash) record; re-harden it first (goalforge-transition.sh $WP_DIR hardened --mode evidence --evidence $STALE_EV)" >&2
+            return 1
+        fi
+    fi
+
     # ── ready→hardened evidence-gated revert exception (wp-02) ────────────────
     # This one reverse edge — re-opening a `ready` WP to `hardened` to re-develop
     # its goals — is NOT a bare FREE-REVERSE: `--reason` alone (which satisfies

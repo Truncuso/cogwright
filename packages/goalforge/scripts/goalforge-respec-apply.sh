@@ -18,7 +18,8 @@
 # <feature>/.sdd-transitions.lock, in a read-only pre-pass before the first
 # write — when any WP's contract_slice does not parse into C<n> ids, or when a
 # WP at hardened|executing|implemented names a changed, dropped or
-# ambiguous[].dropped key (in flight: walk it back to `ready` first).
+# ambiguous[].dropped key (in flight: walk it back first, a hardened WP to
+# `spec`, an executing or implemented WP to `ready`).
 #
 # Steps (base state only), each skip-if-present so a partial apply resumes:
 #   1. supersede in place each `verified` WP whose contract_slice names a
@@ -109,6 +110,12 @@ if sha(PROPOSED) != marker["sha256"]:
 if sha(DIFF) != marker["diff_sha256"]:
     refuse("RATIFIED diff_sha256= does not match diff.json (stale or edited diff)")
 
+# Held from the base-state check through the last write: two applies on one
+# base cannot both see `unapplied`, no status write by goalforge-transition.sh
+# lands between the pre-pass and the writes, and no supersede write reverts a
+# concurrent status write.
+lock_fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+fcntl.flock(lock_fd, fcntl.LOCK_EX)
 current = sha(SPEC)
 if current == marker["sha256"]:
     state = "applied"
@@ -235,12 +242,13 @@ def wp_plan():
         if ids is None:
             problems.append("%s: contract_slice does not parse into C<n> ids (fail-closed)" % wp.name)
             continue
-        status = fm.get("status", "").strip("'\"")
+        status = fm.get("status", "").split("#", 1)[0].strip().strip("'\"")
         if in_flight(status, ids):
-            problems.append("%s is in flight at %s and names %s: walk it back to `ready` first "
-                            "(goalforge-transition.sh %s ready --reason \"<respec>\"), then rerun, "
-                            "and the reharden step writes its evidence file"
-                            % (wp.name, status, ",".join(sorted(ids & flight_keys, key=c_order)), wp.name))
+            back = "spec" if status == "hardened" else "ready"
+            problems.append("%s is in flight at %s and names %s: walk it back to `%s` first "
+                            "(goalforge-transition.sh %s %s --reason \"<respec>\"), then rerun"
+                            % (wp.name, status, ",".join(sorted(ids & flight_keys, key=c_order)),
+                               back, wp.name, back))
             continue
         hit = sorted(keys & ids, key=c_order)
         if hit:
@@ -251,13 +259,7 @@ def wp_plan():
 
 
 superseded, reharden, other = [], [], []
-lock_fd = None
 if state == "unapplied":
-    # Held through the last write: no status write by goalforge-transition.sh
-    # lands between the pre-pass and the writes, and no supersede write
-    # reverts a concurrent status write.
-    lock_fd = os.open(str(LOCK), os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-    fcntl.flock(lock_fd, fcntl.LOCK_EX)
     plan = wp_plan()
 else:
     plan = []  # applied: the spec copy is the last step, so the WP steps already ran
@@ -319,8 +321,7 @@ for ov, text, end, fm, status, ids, hit in plan:
 
 if state == "unapplied":
     write_atomic(SPEC, PROPOSED.read_bytes())
-if lock_fd is not None:
-    os.close(lock_fd)
+os.close(lock_fd)
 
 print(json.dumps({
     "feature": feature.name,

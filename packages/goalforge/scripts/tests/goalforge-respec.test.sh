@@ -302,11 +302,45 @@ b5_case() {  # $1 apply SUT, $2 variant name (a variant adding wp-06-zeta must n
   if [[ -f "$v/wp-06-zeta/overview.md" ]] && ! grep -qF 'wp-06-zeta' "$T/b5.err"; then
     why "$2: the refusal does not name wp-06-zeta on stderr"; rc=1
   fi
+  if [[ "$2" == *-hardened ]] && ! grep -qF 'goalforge-transition.sh wp-06-zeta spec ' "$T/b5.err"; then
+    why "$2: the refusal does not walk the hardened WP back to spec"; rc=1
+  fi
   return "$rc"
 }
 VARIANTS=(01-no-ratified 02-missing-date 03-missing-diff-sha 04-missing-base-sha 05-sha-mismatch 06-no-changelog-row 07-stale-diff 08-base-edited)
-INFLIGHT=(09-inflight-hardened 10-inflight-executing 11-inflight-implemented 12-inflight-dropped-key 13-inflight-block-zero-indent 14-inflight-renumber)
+INFLIGHT=(09-inflight-hardened 10-inflight-executing 11-inflight-implemented 12-inflight-dropped-key 13-inflight-block-zero-indent 14-inflight-renumber 16-inflight-status-comment)
 VARIANTS+=("${INFLIGHT[@]}" 15-unparseable-slice)
+
+# M1-r2: the lock is taken before the base-state sha is read.
+lock_order_case() {  # $1 apply SUT
+  local l s
+  l="$(grep -n 'fcntl.flock(lock_fd' "$1" | head -1 | cut -d: -f1)"
+  s="$(grep -n '^current = sha(SPEC)' "$1" | head -1 | cut -d: -f1)"
+  [[ -n "$l" && -n "$s" && "$l" -lt "$s" ]] || { why "flock (line ${l:-none}) does not precede the base-state sha (line ${s:-none})"; return 1; }
+}
+
+# H1-r2: a ready WP with a reharden/*-respec-* file newer than its last
+# -> ready ledger row does not move forward; an older file does not block.
+reharden_gate_case() {  # $1 transition SUT
+  local c f rc=0 lrc
+  c="$(pkg_mirror goalforge-transition.sh "$1")"
+  f="$(mktemp -d "$T/plans.XXXXXX")/feat"
+  mkdir -p "$f/wp-01-a/reharden"
+  printf -- '---\nname: feat\ntitle: gate fixture\nstatus: active\nfeature: feat\nwork_packages: [wp-01-a]\n---\n' >"$f/overview.md"
+  printf -- '---\nname: wp-01-a\ntitle: gate fixture\nstatus: ready\nplan: feat\n---\n' >"$f/wp-01-a/overview.md"
+  printf '{"ts": "2026-09-01T10:00:00Z", "wp": "wp-01-a", "from": "hardened", "to": "ready"}\n' >"$f/.sdd-transitions.jsonl"
+  printf -- '---\nkind: execution-learning\n---\n' >"$f/wp-01-a/reharden/2026-09-02-respec-x.md"
+  bash "$c/scripts/goalforge-transition.sh" "$f/wp-01-a" executing >"$T/gate.out" 2>&1; lrc=$?
+  [[ "$lrc" -ne 0 ]] && grep -qx 'status: ready' "$f/wp-01-a/overview.md" \
+    || { why "gate: newer respec file, ready -> executing not refused (rc=$lrc)"; rc=1; }
+  grep -qF 'reharden/2026-09-02-respec-x.md' "$T/gate.out" && grep -qF 're-harden' "$T/gate.out" \
+    || { why "gate: refusal does not name the file and the re-harden step: $(tail -1 "$T/gate.out")"; rc=1; }
+  touch -d '2026-08-01' "$f/wp-01-a/reharden/2026-09-02-respec-x.md"
+  bash "$c/scripts/goalforge-transition.sh" "$f/wp-01-a" executing >"$T/gate.out" 2>&1 \
+    && grep -qx 'status: executing' "$f/wp-01-a/overview.md" \
+    || { why "gate: older respec file, ready -> executing refused: $(tail -1 "$T/gate.out")"; rc=1; }
+  return "$rc"
+}
 
 # ── b6 ───────────────────────────────────────────────────────────────────────
 rows_of() { awk '/^## /{ inside = ($0 ~ /^## Goal Changelog/); next } inside && /^- v[0-9]+ /' "$1"; }
@@ -339,6 +373,8 @@ selftest_case "$RESPEC_TRANSITION_SUT" && ok "b4 goalforge-transition.sh --self-
 for v in "${VARIANTS[@]}"; do
   b5_case "$RESPEC_APPLY" "$v" && ok "b5 apply refuses $v, tree byte-identical" || bad "b5 apply refuses $v"
 done
+lock_order_case "$RESPEC_APPLY" && ok "M1-r2 apply takes the lock before the base-state sha" || bad "M1-r2 lock order"
+reharden_gate_case "$RESPEC_TRANSITION_SUT" && ok "H1-r2 transition refuses a ready WP with a newer respec reharden file" || bad "H1-r2 reharden gate"
 b6_case "$RESPEC_APPLY" && ok "b6 ratified apply writes the proposal and one outcome row" || bad "b6 ratified apply"
 if bash "$PKG/spec/evals/run.sh" >"$T/spec-evals.out" 2>&1; then ok "spec/evals/run.sh rc 0"; else bad "spec/evals/run.sh"; sed 's/^/      /' "$T/spec-evals.out"; fi
 
@@ -399,6 +435,15 @@ red "b5j-apply-slice-skip on 15-unparseable-slice" --why "15-unparseable-slice: 
 red "b5k-apply-inflight-any-slice on b3" --why "first run exited non-zero" b3_case "$KB/b5k-apply-inflight-any-slice.sh"
 red "b5k-apply-inflight-any-slice on b6" --why "ratified apply exited non-zero" b6_case "$KB/b5k-apply-inflight-any-slice.sh"
 red "b5l-apply-no-ambiguous-dropped on 14-inflight-renumber" --why "14-inflight-renumber: apply exited 0" b5_case "$KB/b5l-apply-no-ambiguous-dropped.sh" 14-inflight-renumber
+# Patch-sized mutants of the live files, made at test time (no frozen copies).
+sed '/^current = sha(SPEC)$/d; /^lock_fd = os.open/i current = sha(SPEC)' "$RESPEC_APPLY" >"$T/m-lock-late.sh"
+red m-apply-sha-before-lock --why "does not precede" lock_order_case "$T/m-lock-late.sh"
+sed 's/\.split("#", 1)\[0\]//' "$RESPEC_APPLY" >"$T/m-raw-status.sh"
+red m-apply-raw-status --why "16-inflight-status-comment: apply exited 0" b5_case "$T/m-raw-status.sh" 16-inflight-status-comment
+sed 's/back = "spec" if status == "hardened" else "ready"/back = "ready"/' "$RESPEC_APPLY" >"$T/m-hardened-ready.sh"
+red m-apply-hardened-to-ready --why "back to spec" b5_case "$T/m-hardened-ready.sh" 09-inflight-hardened
+sed 's/if \[\[ -n "\$STALE_EV" \]\]; then/if false; then/' "$RESPEC_TRANSITION_SUT" >"$T/m-no-gate.sh"
+red m-transition-no-reharden-gate --why "not refused" reharden_gate_case "$T/m-no-gate.sh"
 red b6-apply-noop b6_case "$KB/b6-apply-noop.sh"
 
 echo ""
