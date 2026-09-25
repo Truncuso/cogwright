@@ -25,7 +25,7 @@
 #   1. supersede in place each `verified` WP whose contract_slice names a
 #      changed/dropped key (superseded_by: <latest proposal> + one dated note
 #      per proposal under a single ## Supersession section)
-#   2. write <wp>/reharden/<date>-respec-<slug>.md for each such `ready` WP,
+#   2. write <wp>/reharden/<date>-respec-<proposal-dir>.md for each such `ready` WP,
 #      recording since_ready_ts: (its last `-> ready` ledger ts, or none)
 #   3. copy proposed-spec.md over spec.md byte for byte
 # Every date written is RATIFIED date=, never the wall clock. `ambiguous` keys
@@ -102,7 +102,6 @@ for p in (SPEC, PROPOSED, DIFF):
 m = re.fullmatch(r"\d{4}-\d{2}-\d{2}-([A-Za-z0-9._-]+)", proposal.name)
 if not m or proposal.parent != feature / "respec":
     refuse("proposal dir must be <feature>/respec/<YYYY-MM-DD>-<slug>/")
-SLUG = m.group(1)
 REL = "respec/%s" % proposal.name
 
 marker = read_marker()
@@ -313,12 +312,12 @@ for ov, text, end, fm, status, ids, hit in plan:
             write_atomic(ov, new.encode("utf-8"))
     elif status == "ready":
         reharden.append(wp.name)
-        ev = wp / "reharden" / ("%s-respec-%s.md" % (DATE, SLUG))
+        ev = wp / "reharden" / ("%s-respec-%s.md" % (DATE, proposal.name))
         if not ev.exists():
             ev.parent.mkdir(exist_ok=True)
             write_atomic(ev, (
                 "---\n"
-                "name: %s-respec-%s\n" % (DATE, SLUG)
+                "name: %s-respec-%s\n" % (DATE, proposal.name)
                 + 'title: "ratified spec revision %s changes this WP\'s contract slice"\n' % REL
                 + "kind: execution-learning\n"
                 + "locator: %s/diff.json\n" % REL

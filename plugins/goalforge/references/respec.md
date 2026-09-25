@@ -130,7 +130,8 @@ Then, each step skip-if-present so a partial apply resumes:
    proposal, and the one `## Supersession` section keeps one note per
    proposal (a note already present for this proposal is skipped).
 2. **Reharden evidence.** Each such `ready` WP gains
-   `<wp>/reharden/<YYYY-MM-DD>-respec-<slug>.md` with
+   `<wp>/reharden/<YYYY-MM-DD>-respec-<proposal-dir>.md` (one file per
+   proposal) with
    `kind: execution-learning`, `locator:` the proposal's `diff.json`, and
    `since_ready_ts:` the WP's last `-> ready` ledger ts read under the lock
    (`none` when it has no such row). The
@@ -149,13 +150,14 @@ superseded and reharden WPs.
 **Reharden gate (`goalforge-transition.sh`).** A transition, not an apply,
 check. Inside its flock section, transition.sh re-reads the WP's status and
 refuses to move a `ready` WP forward (`executing`, `implemented`, `verified`)
-unless a `-> ready` ledger row with ts strictly greater than the
-`since_ready_ts:` of its newest (by filename) `reharden/*-respec-*` file
-exists. A file without that value refuses (fail-closed). The ordering uses
-recorded values only, never file mtime, so a checkout or copy does not
-re-block a re-approved WP. The refusal names the file and the re-harden step
-(`ready -> hardened --mode evidence --evidence <file>`). No new edge, no new
-trace event.
+unless a `-> ready` ledger row with ts strictly greater than the maximum
+`since_ready_ts:` over every `reharden/*-respec-*` file exists. Any file
+without that value refuses (fail-closed); the refusal says to record in it the
+ts of the WP's `-> ready` row preceding the file's creation. The ordering uses
+recorded values only, never file mtime or name, so a checkout or copy does
+not re-block a re-approved WP. The stale refusal names the file and the
+re-harden step (`ready -> hardened --mode evidence --evidence <file>`). No new
+edge, no new trace event.
 
 ## Ledger
 

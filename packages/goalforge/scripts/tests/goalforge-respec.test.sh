@@ -130,13 +130,13 @@ b3_case() {
   else
     why "C2 verified WP overview is gone (evidence removed)"; rc=1
   fi
-  ev="$r/feat/wp-02-beta/reharden/$RAT_DATE-respec-tighten-c2.md"
+  ev="$r/feat/wp-02-beta/reharden/$RAT_DATE-respec-${PROP_REL#respec/}.md"
   if [[ -f "$ev" ]]; then
     has "$ev" 'kind: execution-learning' || { why "reharden evidence kind is not execution-learning"; rc=1; }
     has "$ev" "locator: $PROP_REL/diff.json" || { why "reharden evidence locator is not the diff.json"; rc=1; }
     grep -qx 'since_ready_ts: none' "$ev" || { why "reharden evidence does not record since_ready_ts: none (no -> ready row)"; rc=1; }
   else
-    why "missing reharden/$RAT_DATE-respec-tighten-c2.md"; rc=1
+    why "missing reharden/$RAT_DATE-respec-${PROP_REL#respec/}.md"; rc=1
   fi
   cmp -s "$T/gamma.before" "$r/feat/wp-03-gamma/overview.md" || { why "unrelated WP changed"; rc=1; }
   cmp -s "$T/feat-overview.before" "$r/feat/overview.md" || { why "feature overview changed (status write)"; rc=1; }
@@ -182,7 +182,7 @@ b3_case() {
   [[ "$(jq -c '.reharden' <<<"$out" 2>/dev/null)" == '["wp-02-beta"]' ]] || { why "block-list run: report .reharden is not [wp-02-beta]"; rc=1; }
   has "$bl/feat/wp-01-alpha/overview.md" 'superseded_by:' || { why "block-list run: wp-01-alpha lacks superseded_by:"; rc=1; }
   [[ "$(grep -c '^## Supersession' "$bl/feat/wp-01-alpha/overview.md")" -eq 1 ]] || { why "block-list run: wp-01-alpha does not carry exactly one ## Supersession"; rc=1; }
-  [[ -f "$bl/feat/wp-02-beta/reharden/$RAT_DATE-respec-tighten-c2.md" ]] || { why "block-list run: missing wp-02-beta reharden file"; rc=1; }
+  [[ -f "$bl/feat/wp-02-beta/reharden/$RAT_DATE-respec-${PROP_REL#respec/}.md" ]] || { why "block-list run: missing wp-02-beta reharden file"; rc=1; }
   [[ "$(manifest "$bl" | grep -v -e ' ./feat/wp-01-alpha/overview.md$' -e ' ./feat/wp-02-beta/overview.md$')" \
      == "$(grep -v -e ' ./feat/wp-01-alpha/overview.md$' -e ' ./feat/wp-02-beta/overview.md$' <<<"$m1")" ]] \
     || { why "block-list run: tree differs from the first run's result beyond the two block-list overviews"; rc=1; }
@@ -352,14 +352,14 @@ reharden_record_case() {  # $1 apply SUT
     '{"ts": "2026-08-03T09:00:00Z", "wp": "wp-03-gamma", "from": "hardened", "to": "ready"}' \
     '{"ts": "2026-08-04T09:00:00Z", "wp": "wp-02-beta", "from": "ready", "to": "hardened"}' >>"$r/feat/.sdd-transitions.jsonl"
   bash "$1" "$r/feat" "$r/feat/$PROP_REL" >/dev/null 2>&1 || { why "record: apply exited non-zero"; return 1; }
-  ev="$r/feat/wp-02-beta/reharden/$RAT_DATE-respec-tighten-c2.md"
+  ev="$r/feat/wp-02-beta/reharden/$RAT_DATE-respec-${PROP_REL#respec/}.md"
   grep -qx 'since_ready_ts: 2026-08-02T09:00:00Z' "$ev" 2>/dev/null \
     || { why "record: reharden file does not record the last -> ready ts ($(grep '^since_ready_ts' "$ev" 2>/dev/null))"; return 1; }
 }
 
-# H1-r2 / M1-l7: a ready WP whose newest (by filename) reharden/*-respec-* file
-# is not answered by a -> ready row after its since_ready_ts: does not move
-# forward; mtime plays no part; a real re-harden recovers it.
+# H1-r2 / M1-l7 / H1-l8: a ready WP does not move forward until a -> ready row
+# follows the max since_ready_ts: over every reharden/*-respec-* file; neither
+# mtime nor name order plays a part; a real re-harden recovers it.
 gate_fx() {  # $1 ledger rows (one per line) -> prints a feature dir holding ready wp-01-a
   local f; f="$(mktemp -d "$T/plans.XXXXXX")/feat"
   mkdir -p "$f/wp-01-a/reharden"
@@ -373,11 +373,12 @@ gate_ev() {  # $1 file, [$2 since_ready_ts value; omitted = no key]
     [[ $# -lt 2 ]] || printf 'since_ready_ts: %s\n' "$2"
     printf -- '---\n'; } >"$1"
 }
-gate_refuses() {  # $1 transition, $2 wp dir, $3 to, $4 file the refusal must name, $5 label
+gate_row() { printf '{"ts": "%s", "wp": "wp-01-a", "from": "%s", "to": "%s"}\n' "$1" "$2" "$3"; }
+gate_refuses() {  # $1 transition, $2 wp dir, $3 to, $4 file the refusal must name, $5 label, [$6 recovery text]
   bash "$1" "$2" "$3" >"$T/gate.out" 2>&1 && { why "gate $5: ready -> $3 not refused"; return 1; }
   grep -qx 'status: ready' "$2/overview.md" || { why "gate $5: status moved off ready"; return 1; }
-  grep -qF "$4" "$T/gate.out" && grep -qF 're-harden' "$T/gate.out" \
-    || { why "gate $5: refusal does not name $4 and the re-harden step: $(tail -1 "$T/gate.out")"; return 1; }
+  grep -qF "$4" "$T/gate.out" && grep -qF "${6:-re-harden}" "$T/gate.out" \
+    || { why "gate $5: refusal does not name $4 and '${6:-re-harden}': $(tail -1 "$T/gate.out")"; return 1; }
 }
 reharden_gate_case() {  # $1 transition SUT
   local c tr f ev x y rc=0
@@ -395,18 +396,57 @@ reharden_gate_case() {  # $1 transition SUT
     && bash "$tr" "$f/wp-01-a" executing >>"$T/gate.out" 2>&1 \
     && grep -qx 'status: executing' "$f/wp-01-a/overview.md" \
     || { why "gate recovery: re-harden then ready did not let ready -> executing pass: $(tail -1 "$T/gate.out")"; rc=1; }
-  # the newest file by name decides, not the newest by mtime
-  f="$(gate_fx "$(printf '%s\n' '{"ts": "2026-09-01T10:00:00Z", "wp": "wp-01-a", "from": "hardened", "to": "ready"}' \
-                               '{"ts": "2026-09-03T10:00:00Z", "wp": "wp-01-a", "from": "hardened", "to": "ready"}')")"
-  x="$f/wp-01-a/reharden/2026-09-02-respec-x.md"; y="$f/wp-01-a/reharden/2026-09-04-respec-y.md"
-  gate_ev "$x" 2026-09-01T10:00:00Z; gate_ev "$y" 2026-09-03T10:00:00Z
-  touch -d '2026-08-01' "$y"
-  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-04-respec-y.md" "two files" || rc=1
-  # a file with no recorded value refuses, fail-closed, naming the file
-  f="$(gate_fx '{"ts": "2026-09-01T10:00:00Z", "wp": "wp-01-a", "from": "hardened", "to": "ready"}')"
+  # H1-l8 reproduced: an older answered file must not hide a newer unanswered one
+  f="$(gate_fx "$(gate_row 2026-09-01T10:00:00Z hardened ready; gate_row 2026-09-02T11:00:00Z ready hardened
+                  gate_row 2026-09-02T12:00:00Z hardened ready)")"
+  gate_ev "$f/wp-01-a/reharden/2026-09-02-respec-zeta.md" 2026-09-01T10:00:00Z
+  gate_ev "$f/wp-01-a/reharden/2026-09-02-respec-alpha.md" 2026-09-02T12:00:00Z
+  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-02-respec-alpha.md" "answered zeta hides alpha" || rc=1
+  # ... nor a later-applied proposal carrying an earlier RATIFIED date
+  f="$(gate_fx "$(gate_row 2026-09-05T10:00:00Z hardened ready; gate_row 2026-09-06T10:00:00Z ready hardened
+                  gate_row 2026-09-06T11:00:00Z hardened ready)")"
+  gate_ev "$f/wp-01-a/reharden/2026-09-05-respec-a.md" 2026-09-05T10:00:00Z
+  gate_ev "$f/wp-01-a/reharden/2026-09-04-respec-b.md" 2026-09-06T11:00:00Z
+  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-04-respec-b.md" "earlier-dated b applied later" || rc=1
+  # control: every file answered -> the transition passes
+  printf '%s\n' "$(gate_row 2026-09-07T10:00:00Z hardened ready)" >>"$f/.sdd-transitions.jsonl"
+  bash "$tr" "$f/wp-01-a" executing >"$T/gate.out" 2>&1 && grep -qx 'status: executing' "$f/wp-01-a/overview.md" \
+    || { why "gate all answered: ready -> executing refused: $(tail -1 "$T/gate.out")"; rc=1; }
+  # any file with no recorded value refuses, fail-closed, naming the real recovery
+  f="$(gate_fx "$(gate_row 2026-09-01T10:00:00Z hardened ready)")"
+  gate_ev "$f/wp-01-a/reharden/2026-09-01-respec-y.md" 2026-08-01T10:00:00Z
   gate_ev "$f/wp-01-a/reharden/2026-09-02-respec-z.md"
-  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-02-respec-z.md" "no value" || rc=1
-  grep -qF 'since_ready_ts' "$T/gate.out" || { why "gate no value: refusal does not name since_ready_ts: $(tail -1 "$T/gate.out")"; rc=1; }
+  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-02-respec-z.md" "no value" "preceding the file's creation" || rc=1
+  grep -qE "re-harden|\bnone\b" "$T/gate.out" && { why "gate no value: refusal suggests re-harden or none: $(tail -1 "$T/gate.out")"; rc=1; }
+  return "$rc"
+}
+
+# M1-l8: the FROM re-read and the gate run inside flock 9. A transition queued
+# on the lock the test holds must see a status flip and a respec file written
+# while it waited.
+inlock_trial() {  # $1 transition, $2 feature dir, $3 edit made while queued
+  local ino i pid
+  exec 8>"$2/.sdd-transitions.lock"; flock 8
+  bash "$1" "$2/wp-01-a" executing >"$T/inlock.out" 2>&1 8>&- & pid=$!
+  ino="$(stat -c %i "$2/.sdd-transitions.lock")"
+  for i in $(seq 100); do
+    [[ "$(grep -c -- "-> FLOCK .*:$ino " /proc/locks 2>/dev/null)" -ge 1 ]] && break
+    sleep 0.05
+  done
+  eval "$3"
+  flock -u 8; exec 8>&-
+  wait "$pid" && { why "in-lock: ready -> executing not refused after: $3"; return 1; }
+  return 0
+}
+inlock_case() {  # $1 transition SUT
+  local c tr f rc=0
+  c="$(pkg_mirror goalforge-transition.sh "$1")"; tr="$c/scripts/goalforge-transition.sh"
+  f="$(gate_fx "$(gate_row 2026-09-01T10:00:00Z hardened ready)")"
+  inlock_trial "$tr" "$f" 'gate_ev "$f/wp-01-a/reharden/2026-09-02-respec-q.md" 2026-09-01T10:00:00Z' || rc=1
+  grep -qx 'status: ready' "$f/wp-01-a/overview.md" || { why "in-lock respec file: status moved off ready"; rc=1; }
+  f="$(gate_fx "$(gate_row 2026-09-01T10:00:00Z hardened ready)")"
+  inlock_trial "$tr" "$f" 'sed -i "s/^status: ready$/status: hardened/" "$f/wp-01-a/overview.md"' || rc=1
+  grep -qx 'status: hardened' "$f/wp-01-a/overview.md" || { why "in-lock status flip: the write overwrote the flipped status"; rc=1; }
   return "$rc"
 }
 
@@ -443,7 +483,8 @@ for v in "${VARIANTS[@]}"; do
 done
 race_case "$RESPEC_APPLY" && ok "M1-r2 two applies on one base released together: exactly one writes, the other refuses (3 trials)" || bad "M1-r2 apply race"
 reharden_record_case "$RESPEC_APPLY" && ok "M1-l7 apply records the WP's last -> ready ts as since_ready_ts:" || bad "M1-l7 since_ready_ts record"
-reharden_gate_case "$RESPEC_TRANSITION_SUT" && ok "H1-r2 transition refuses ready -> executing|implemented|verified until a -> ready row follows the recorded ts; newest file by name; re-harden recovers" || bad "H1-r2 reharden gate"
+reharden_gate_case "$RESPEC_TRANSITION_SUT" && ok "H1-r2/H1-l8 transition refuses ready -> executing|implemented|verified until a -> ready row follows the max recorded ts over every file; re-harden recovers" || bad "H1-r2 reharden gate"
+inlock_case "$RESPEC_TRANSITION_SUT" && ok "M1-l8 a transition queued on the lock sees a respec file and a status flip written while it waited" || bad "M1-l8 in-lock re-read"
 b6_case "$RESPEC_APPLY" && ok "b6 ratified apply writes the proposal and one outcome row" || bad "b6 ratified apply"
 if bash "$PKG/spec/evals/run.sh" >"$T/spec-evals.out" 2>&1; then ok "spec/evals/run.sh rc 0"; else bad "spec/evals/run.sh"; sed 's/^/      /' "$T/spec-evals.out"; fi
 
@@ -519,6 +560,10 @@ sed 's/if \[\[ -n "\$STALE_EV" \]\]; then/if false; then/' "$RESPEC_TRANSITION_S
 red m-transition-no-reharden-gate --why "not refused" reharden_gate_case "$T/m-no-gate.sh"
 sed 's/if t is not None and (since is None or t > since):/if t is not None:/' "$RESPEC_TRANSITION_SUT" >"$T/m-gate-ignores-recorded.sh"
 red m-transition-gate-ignores-recorded-ts --why "not refused" reharden_gate_case "$T/m-gate-ignores-recorded.sh"
+sed 's/for ev in sorted(glob\.glob(os\.path\.join(wp_dir, "reharden", "\*-respec-\*"))):/for ev in sorted(glob.glob(os.path.join(wp_dir, "reharden", "*-respec-*")))[-1:]:/' "$RESPEC_TRANSITION_SUT" >"$T/m-gate-one-file.sh"
+red m-transition-gate-selects-one-file --why "not refused" reharden_gate_case "$T/m-gate-one-file.sh"
+sed 's/if \[\[ "\$FROM_NOW" != "\$FROM" \]\]; then/if false; then/' "$RESPEC_TRANSITION_SUT" >"$T/m-no-from-reread.sh"
+red m-transition-no-in-lock-from-reread --why "in-lock" inlock_case "$T/m-no-from-reread.sh"
 red b6-apply-noop b6_case "$KB/b6-apply-noop.sh"
 
 echo ""

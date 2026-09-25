@@ -293,12 +293,12 @@ for ov, text, end, fm, status, ids, hit in plan:
             write_atomic(ov, new.encode("utf-8"))
     elif status == "ready":
         reharden.append(wp.name)
-        ev = wp / "reharden" / ("%s-respec-%s.md" % (__import__("datetime").date.today().isoformat(), SLUG))
+        ev = wp / "reharden" / ("%s-respec-%s.md" % (__import__("datetime").date.today().isoformat(), proposal.name))
         if not ev.exists():
             ev.parent.mkdir(exist_ok=True)
             write_atomic(ev, (
                 "---\n"
-                "name: %s-respec-%s\n" % (DATE, SLUG)
+                "name: %s-respec-%s\n" % (DATE, proposal.name)
                 + 'title: "ratified spec revision %s changes this WP\'s contract slice"\n' % REL
                 + "kind: execution-learning\n"
                 + "locator: %s/diff.json\n" % REL

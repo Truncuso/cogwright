@@ -528,7 +528,6 @@ transition() {
     local LEDGER="$FEATURE_DIR/.sdd-transitions.jsonl"
     local TODAY TS COMMIT WP_NAME
     TODAY="$(date +%F)"
-    TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     COMMIT="$(git -C "$FEATURE_DIR" rev-parse --short HEAD 2>/dev/null || true)"
     WP_NAME="$(basename "$WP_DIR")"
 
@@ -560,39 +559,32 @@ transition() {
         flock -u 9; exec 9>&-
         echo "ERROR: status of $OVERVIEW changed from $FROM to ${FROM_NOW:-<none>} before the write; refused" >&2; return 1
     fi
-    # ── respec reharden gate (wp-10 H1-r2, M1-l7) ────────────────────────────
-    # A `ready` WP leaves forward only when its newest (by filename)
-    # reharden/*-respec-* evidence file is answered by a `-> ready` ledger row
-    # with ts strictly greater than the file's since_ready_ts: (the last
-    # `-> ready` ts the apply read under this lock; `none` = no row then).
-    # Ordered by recorded values, never by mtime. A file without a parseable
-    # since_ready_ts: refuses (fail-closed).
+    # ── respec reharden gate (wp-10 H1-r2, M1-l7, H1-l8) ─────────────────────
+    # A `ready` WP leaves forward only when a `-> ready` ledger row has ts
+    # strictly greater than the MAXIMUM since_ready_ts: (the last `-> ready`
+    # ts the apply read under this lock; `none` = no row then) over EVERY
+    # reharden/*-respec-* file. Recorded values only, never mtime or name
+    # order. Any file without a parseable since_ready_ts: refuses (fail-closed).
     if [[ "$KIND" == "wp" && "$FROM" == "ready" && "$TO" =~ ^(executing|implemented|verified)$ ]]; then
         STALE_EV="$(python3 - "$WP_DIR" "$LEDGER" <<'PY'
 import sys, json, os, glob, re
 from datetime import datetime
 wp_dir, ledger = sys.argv[1], sys.argv[2]
-evs = glob.glob(os.path.join(wp_dir, "reharden", "*-respec-*"))
-if not evs:
-    sys.exit(0)
-newest = max(evs, key=os.path.basename)
 def ts(v):
     try:
         return datetime.strptime(v, "%Y-%m-%dT%H:%M:%SZ")
     except (TypeError, ValueError):
         return None
-recorded = None
-lines = open(newest, encoding="utf-8").read().split("\n")
-if lines and lines[0].strip() == "---":
-    for ln in lines[1:]:
-        if ln.strip() == "---":
-            break
-        m = re.match(r"^since_ready_ts:\s*(\S+)", ln)
-        if m:
-            recorded = m.group(1).strip("'\"")
-since = None if recorded == "none" else ts(recorded)
-if recorded != "none" and since is None:
-    print("%s\tcarries no since_ready_ts: value (fail-closed; record the WP's last -> ready ledger ts, or none)" % newest)
+since, last = None, None
+for ev in sorted(glob.glob(os.path.join(wp_dir, "reharden", "*-respec-*"))):
+    fm = open(ev, encoding="utf-8").read().split("\n---", 1)[0]
+    m = re.search(r"^since_ready_ts:\s*['\"]?([^'\"\s]+)", fm, re.M) if fm.startswith("---") else None
+    t = ts(m.group(1)) if m else None
+    if t is None and not (m and m.group(1) == "none"):
+        sys.exit(print("%s carries no parseable since_ready_ts: (fail-closed); record in it the ts of the WP's -> ready ledger row preceding the file's creation" % ev))
+    if last is None or (t is not None and (since is None or t > since)):
+        since, last = t, ev
+if last is None:
     sys.exit(0)
 if os.path.isfile(ledger):
     for ln in open(ledger, encoding="utf-8"):
@@ -605,15 +597,16 @@ if os.path.isfile(ledger):
         t = ts(row.get("ts"))
         if t is not None and (since is None or t > since):
             sys.exit(0)
-print("%s\thas no -> ready ledger row after its since_ready_ts: %s" % (newest, recorded))
+print("%s has no -> ready ledger row after the max since_ready_ts: %s; re-harden it first (goalforge-transition.sh %s hardened --mode evidence --evidence %s)"
+      % (last, since.strftime("%Y-%m-%dT%H:%M:%SZ") if since else "none", wp_dir, last))
 PY
 )" || { flock -u 9; exec 9>&-; echo "ERROR: respec reharden check failed for $WP_DIR; refused" >&2; return 1; }
         if [[ -n "$STALE_EV" ]]; then
             flock -u 9; exec 9>&-
-            echo "ERROR: $FROM -> $TO refused: ${STALE_EV%%$'\t'*} ${STALE_EV#*$'\t'}; re-harden it first (goalforge-transition.sh $WP_DIR hardened --mode evidence --evidence ${STALE_EV%%$'\t'*})" >&2
-            return 1
+            echo "ERROR: $FROM -> $TO refused: $STALE_EV" >&2; return 1
         fi
     fi
+    TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"  # inside the lock: ts order == ledger order (L1-l8)
     do_write "$OVERVIEW" "$TO" "$TODAY" "$LEDGER" "$WP_NAME" "$FROM" \
              "$REASON" "$ACTOR" "$OVERRIDE" "$COMMIT" "$TS" \
              "$SESSION" "$MODEL" "$PROVIDER" "$AGENT" "$MODE" "$DECISION_REF"
