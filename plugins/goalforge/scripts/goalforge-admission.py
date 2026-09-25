@@ -180,22 +180,22 @@ def _leaf_digest(path: Path) -> str:
 def closure_mismatch(row: dict, root: Path) -> str | None:
     """Why the files under the leaf's directory tree differ from ``leaf_closure``.
 
-    The closure is every regular file under the entry file's directory,
-    recursively, keyed leaf-root-relative; no ``source`` line is parsed. Each
-    is a mismatch: (a) a listed file missing or unreadable, (b) a file under
-    the tree absent from the manifest, (c) a file symlink resolving outside the
-    leaf root, (d) a symlink whose target is a directory, or a tree whose real
-    path is outside the root. Returns None when the closure holds."""
+    The closure is every regular file under the EXECUTED entry file's real
+    parent directory, recursively, keyed relative to the real leaf root; no
+    ``source`` line is parsed. The walked tree is therefore the tree the leaf
+    runs from. Each is a mismatch: (a) a listed file missing or unreadable,
+    (b) a file under the tree absent from the manifest, (c) ANY symlink under
+    the tree or at the entry path itself (file or directory), (d) a tree whose
+    real path is outside the root. Returns None when the closure holds."""
     root_real = os.path.realpath(root)
-    rel_dir = Path(str(row["leaf"])).parent
-    tree = Path(root) / rel_dir
+    entry = os.path.join(root, str(row["leaf"]))
+    if os.path.islink(entry):
+        return f"leaf_closure mismatch: the entry file {entry} is a symlink"
+    tree = os.path.dirname(os.path.realpath(entry))
     manifest = {str(k): str(v).strip().lower() for k, v in row["leaf_closure"].items()}
-
-    def outside(path: str) -> bool:
-        return os.path.commonpath([root_real, os.path.realpath(path)]) != root_real
-
-    if outside(str(tree)):
+    if os.path.commonpath([root_real, tree]) != root_real:
         return f"leaf_closure mismatch: {tree} resolves outside the leaf root {root_real}"
+    rel_dir = Path(os.path.relpath(tree, root_real))
     errors: list[OSError] = []
     found: dict[str, Path] = {}
     for dirpath, dirnames, filenames in os.walk(tree, onerror=errors.append):
@@ -205,9 +205,8 @@ def closure_mismatch(row: dict, root: Path) -> str | None:
                         "symlink to a directory")
         for name in filenames:
             path = os.path.join(dirpath, name)
-            if os.path.islink(path) and outside(path):
-                return (f"leaf_closure mismatch: {path} is a symlink resolving "
-                        f"outside the leaf root {root_real}")
+            if os.path.islink(path):
+                return f"leaf_closure mismatch: {path} is a symlink"
             key = (rel_dir / os.path.relpath(path, tree)).as_posix()
             if key not in manifest:
                 return f"leaf_closure mismatch: {key} is under the leaf tree but not listed"
@@ -367,9 +366,17 @@ def head_bytes(path: Path, what: str = "admission table") -> tuple[bytes, str]:
 
     The repository is anchored at the file's OWN directory with every ``GIT_*``
     variable scrubbed; outside a work tree and absent from HEAD each raise
-    AdmissionTableError with its own reason, never a skipped read."""
-    file_dir = Path(path).resolve().parent
-    name = Path(path).name
+    AdmissionTableError with its own reason, never a skipped read. A symlinked
+    file, or a path whose real path differs from its unresolved absolute path,
+    is refused: the HEAD path read must be the path the guard filters."""
+    absolute = Path(os.path.abspath(path))
+    if absolute.is_symlink() or os.path.realpath(absolute) != str(absolute):
+        raise AdmissionTableError(
+            f"{what} {path} is a symlink or resolves through one (real path "
+            f"{os.path.realpath(absolute)}) — HEAD binding refused"
+        )
+    file_dir = absolute.parent
+    name = absolute.name
     try:
         prefix = _git(["rev-parse", "--show-prefix"], file_dir)
     except OSError as exc:

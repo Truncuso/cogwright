@@ -81,6 +81,7 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import re
 import shlex
 import sys
@@ -393,7 +394,12 @@ def write_leaf_brief(module, overview: Path) -> Path:
         raise ValueError(f"leaf brief: {exc}") from None
     target = overview.resolve().parent / LEAF_BRIEF_NAME
     try:
-        target.write_bytes(brief)
+        # Unlink, then create exclusively: a pre-planted symlink is removed,
+        # never followed, so its target is never written.
+        target.unlink(missing_ok=True)
+        fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o666)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(brief)
     except OSError as exc:
         raise ValueError(f"leaf brief: cannot write {target}: {exc}") from None
     return target

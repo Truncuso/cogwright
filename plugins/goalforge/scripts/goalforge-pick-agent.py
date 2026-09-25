@@ -979,7 +979,9 @@ def resolve_and_log(
     )
     decision = resolution.get("admission_decision")
     if bind_head and decision == "admitted":
-        admission.verify_head_binding(table_path, raw)
+        # The UNRESOLVED canonical path: head_bytes refuses a symlinked table,
+        # so a link to an unguarded path cannot redirect the HEAD read.
+        admission.verify_head_binding(admission.ADMITTED_PATH, raw)
     if decision or resolution["propose_only"]:
         append_ledger_row(ledger_row(
             resolution, wp=wp, admitted_source=admitted_source,

@@ -710,6 +710,17 @@ ln -s "$T/outside/lib" "$LEAF_DIR/lib"
 # Rule (d) by name: a walker that merely skipped the symlink would still exit 2
 # (lib/common.sh then reads as missing), so the reason itself is pinned.
 closure_case "ix) lib/ -> out-of-root directory symlink to a byte-identical copy" "symlink to a directory"
+# (x) N1 lap 7: the entry file itself -> an IN-root symlink to a byte-identical
+# copy whose sibling differs. The executed file's real parent is the tree that
+# must match; a walk of the declared directory would pass and run the copy.
+EVIL="$CLAUDE_CONFIG_DIR/evil-copy"
+mkdir -p "$EVIL"
+cp -r "$ADM_FX/leaf/." "$EVIL/"
+printf '# attacker sibling\n' >> "$EVIL/helper.sh"
+rm -f "$LEAF_FILE"
+ln -s "$EVIL/$(basename "$LEAF_FILE")" "$LEAF_FILE"
+closure_case "x) entry -> in-root symlink to a byte-identical copy whose sibling differs" "is a symlink"
+rm -rf "$EVIL"
 
 # --- b14: the leaf-interface v1 argv and the HEAD brief --------------------------
 # The fixture leaf enforces §3 (exit 1 unless --model, --prompt, --output) and
@@ -853,6 +864,34 @@ if [ "$RC" -eq 0 ] && [ -f "$T/b13-viib/wp-fx-admitted.js" ]; then
     ok "b13 (vii-b) a clean redirected home admits exactly as b1"
 else
     bad "b13 (vii-b) clean-config control (rc=$RC): $(cat "$T/b13-viib.err")"
+fi
+# (viii) N2 lap 7: the canonical table replaced, uncommitted, by a symlink to
+# an admitting table committed at an UNGUARDED path. The HEAD read must be of
+# the canonical path itself, so a symlinked table is refused outright.
+mkdir -p "$R/evil"
+cp "$RFX/admitted-ok.yaml" "$R/evil/admitted-providers.yaml"
+"${GITQ[@]}" -C "$R" add evil/admitted-providers.yaml
+( cd "$R" && "${GITQ[@]}" commit -qm "evil table" </dev/null >/dev/null 2>&1 )
+"${GITQ[@]}" -C "$R" cat-file -e HEAD:evil/admitted-providers.yaml 2>/dev/null \
+    && ok "b13 (viii) setup: the admitting table is committed at the unguarded evil/ path" \
+    || bad "b13 (viii) setup: evil/admitted-providers.yaml not in HEAD"
+rm -f "$R/references/admitted-providers.yaml"
+ln -s ../evil/admitted-providers.yaml "$R/references/admitted-providers.yaml"
+seam_compile b13-viii - "$D_ADM"
+b13_expect b13-viii "is a symlink or resolves through one"
+rm -f "$R/references/admitted-providers.yaml"
+"${GITQ[@]}" -C "$R" checkout -q -- references/admitted-providers.yaml
+# N5 lap 7: a pre-planted leaf-brief.txt symlink is removed, never followed —
+# the compile creates the brief exclusively and the link's target is untouched.
+BRIEF_PATH="$(realpath "$(dirname "$WPA")")/leaf-brief.txt"
+printf 'VICTIM\n' > "$T/brief-victim"
+rm -f "$BRIEF_PATH"
+ln -s "$T/brief-victim" "$BRIEF_PATH"
+seam_compile brief-link - "$D_ADM"
+if [ "$RC" -eq 0 ] && [ "$(cat "$T/brief-victim")" = "VICTIM" ] && [ -f "$BRIEF_PATH" ] && [ ! -L "$BRIEF_PATH" ]; then
+    ok "b14 a pre-planted leaf-brief.txt symlink is not followed (target untouched, brief a regular file)"
+else
+    bad "b14 pre-planted leaf-brief.txt symlink (rc=$RC, victim='$(cat "$T/brief-victim")'): $(cat "$T/brief-link.err")"
 fi
 
 echo

@@ -137,13 +137,15 @@ _gf_admitted_confirm() {
 _gf_admitted_guard() {
     set -uo pipefail
     git rev-parse --git-dir >/dev/null 2>&1 || return 0
-    local staged path verdict work head_arg entry
-    staged=$(git diff --cached --name-only 2>/dev/null) || {
+    local path verdict work head_arg entry
+    work=$(mktemp -d) || return 2
+    # -z: NUL-delimited raw names, so core.quotePath quoting cannot defeat the regex.
+    git diff --cached --name-only -z > "$work/staged" 2>/dev/null || {
         echo "goalforge-pre-commit: BLOCKED — cannot list staged paths to check admitted-providers.yaml — failed closed" >&2
+        rm -rf "$work"
         return 2
     }
-    work=$(mktemp -d) || return 2
-    while IFS= read -r -u 3 path; do
+    while IFS= read -r -d '' -u 3 path; do
         [[ -n "$path" && "$path" =~ $_GF_ADMITTED_RE ]] || continue
         # No index ENTRY: a staged deletion, which adds no row. A still-indexed
         # table whose blob cannot be read is an evaluation error, never a removal.
@@ -177,7 +179,7 @@ _gf_admitted_guard() {
         } >&2
         rm -rf "$work"
         return 2
-    done 3<<< "$staged"   # fd 3: the loop never consumes stdin
+    done 3< "$work/staged"   # fd 3: the loop never consumes stdin
     rm -rf "$work"
     return 0
 }

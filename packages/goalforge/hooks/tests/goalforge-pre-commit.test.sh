@@ -313,6 +313,25 @@ rc=$(cond_i "$repo")
 if [[ -n "$blob" && ! -e "$repo/.git/objects/${blob:0:2}/${blob:2}" && "$rc" -eq 2 ]]; then ok "b9 K unreadable index blob of a still-indexed table -> exit 2 (fail closed, not a removal)"
 else no "b9 K unreadable index blob" "blob=$blob rc=$rc err=$(cat "$TMP9/err")"; fi
 
+# (L) a non-ASCII parent directory: core.quotePath would quote the name
+# ("vend\303\266r/..."), so only a NUL-delimited raw name list meets the regex.
+repo="$(fixture_repo L "vendör/references/admitted-providers.yaml" "$ONE_ROW" "$TWO_ROWS")"
+rc=$(cond_i "$repo")
+if [[ "$rc" -eq 2 ]] && grep -q 'admitted-providers.yaml' "$TMP9/err"; then ok "b9 L non-ASCII parent vendör/references/... -> block naming admitted-providers.yaml"
+else no "b9 L non-ASCII parent directory" "rc=$rc err=$(cat "$TMP9/err")"; fi
+
+# (M) a commit THROUGH a symlink: the canonical table staged as a symlink to an
+# admitting table at an unguarded path (../evil/...), headless -> blocked.
+repo="$(fixture_repo M "$TBL" "$EMPTY_FLOW" "$EMPTY_FLOW")"
+mkdir -p "$repo/evil"
+printf '%s' "$ONE_ROW" > "$repo/evil/admitted-providers.yaml"
+rm -f "$repo/$TBL"
+ln -s ../../../evil/admitted-providers.yaml "$repo/$TBL"
+"${GQ[@]}" -C "$repo" add -A
+rc=$(cond_i "$repo")
+if [[ "$rc" -eq 2 ]] && grep -q 'admitted-providers.yaml' "$TMP9/err"; then ok "b9 M headless commit of the table as a symlink to ../evil/admitted-providers.yaml -> blocked"
+else no "b9 M symlinked table" "rc=$rc err=$(cat "$TMP9/err")"; fi
+
 # Structural: the confirmation function reads ONLY the literal /dev/tty, with
 # no expansion in any input redirect and no GOALFORGE_* read inside it; and it
 # is defined unconditionally (no `declare -F ... ||` guard).
