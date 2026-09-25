@@ -25,7 +25,8 @@
 #   1. supersede in place each `verified` WP whose contract_slice names a
 #      changed/dropped key (superseded_by: <latest proposal> + one dated note
 #      per proposal under a single ## Supersession section)
-#   2. write <wp>/reharden/<date>-respec-<slug>.md for each such `ready` WP
+#   2. write <wp>/reharden/<date>-respec-<slug>.md for each such `ready` WP,
+#      recording since_ready_ts: (its last `-> ready` ledger ts, or none)
 #   3. copy proposed-spec.md over spec.md byte for byte
 # Every date written is RATIFIED date=, never the wall clock. `ambiguous` keys
 # are reported, never acted on. On the applied state the WP steps are skipped
@@ -51,6 +52,7 @@ PROPOSED = proposal / "proposed-spec.md"
 DIFF = proposal / "diff.json"
 RAT = proposal / "RATIFIED"
 LOCK = feature / ".sdd-transitions.lock"
+LEDGER = feature / ".sdd-transitions.jsonl"
 FIELDS = ("date", "sha256", "diff_sha256", "base_sha256")
 IN_FLIGHT = ("hardened", "executing", "implemented")
 
@@ -219,6 +221,22 @@ def slice_ids(fm_lines):
     return set()
 
 
+def last_ready_ts(wp_name):
+    """ts of the WP's last `-> ready` ledger row, read under the lock; "none"
+    when there is no such row. The reharden gate in goalforge-transition.sh
+    orders against this recorded value, never against file mtime."""
+    last = "none"
+    if LEDGER.is_file():
+        for ln in LEDGER.read_text(encoding="utf-8").splitlines():
+            try:
+                row = json.loads(ln)
+            except ValueError:
+                continue
+            if isinstance(row, dict) and row.get("wp") == wp_name and row.get("to") == "ready" and row.get("ts"):
+                last = str(row["ts"])
+    return last
+
+
 def c_order(k):
     return int(k[1:])
 
@@ -308,6 +326,7 @@ for ov, text, end, fm, status, ids, hit in plan:
                 + "plan: %s\n" % feature.name
                 + "wp: %s\n" % wp.name
                 + "created: %s\n" % DATE
+                + "since_ready_ts: %s\n" % last_ready_ts(wp.name)
                 + "---\n\n"
                 "<!-- Template: reharden-evidence v4 (frontmatter-first, flat layout) -->\n\n"
                 "## Evidence\n\n"

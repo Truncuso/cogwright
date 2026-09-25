@@ -119,12 +119,6 @@ first write:
   reruns the apply, whose reharden step writes each `ready` WP's durable
   evidence file. A status line with a trailing ` # comment` is read without
   it, so `status: executing # note` still refuses.
-- **Reharden gate.** `goalforge-transition.sh` refuses to move a `ready` WP
-  forward (`executing`, `implemented`, `verified`) while a
-  `reharden/*-respec-*` file is newer than the WP's last `-> ready` ledger
-  row, the row the G4 goal-hash record gates. The refusal names the file and
-  the re-harden step (`ready -> hardened --mode evidence --evidence <file>`).
-  A read-time check: no new edge, no new trace event.
 
 Then, each step skip-if-present so a partial apply resumes:
 
@@ -137,7 +131,9 @@ Then, each step skip-if-present so a partial apply resumes:
    proposal (a note already present for this proposal is skipped).
 2. **Reharden evidence.** Each such `ready` WP gains
    `<wp>/reharden/<YYYY-MM-DD>-respec-<slug>.md` with
-   `kind: execution-learning` and `locator:` the proposal's `diff.json`. The
+   `kind: execution-learning`, `locator:` the proposal's `diff.json`, and
+   `since_ready_ts:` the WP's last `-> ready` ledger ts read under the lock
+   (`none` when it has no such row). The
    revert itself (`ready -> hardened --mode evidence`) runs at the next harden
    entry; re-promotion keeps its human gate.
 3. **Copy** `proposed-spec.md` over `spec.md` byte for byte.
@@ -149,6 +145,17 @@ copy is the last step, so `applied` means the WP steps already ran, and they
 are skipped entirely (a WP whose status moved since is not touched). The apply
 makes no status write and no transition, and prints a JSON report naming the
 superseded and reharden WPs.
+
+**Reharden gate (`goalforge-transition.sh`).** A transition, not an apply,
+check. Inside its flock section, transition.sh re-reads the WP's status and
+refuses to move a `ready` WP forward (`executing`, `implemented`, `verified`)
+unless a `-> ready` ledger row with ts strictly greater than the
+`since_ready_ts:` of its newest (by filename) `reharden/*-respec-*` file
+exists. A file without that value refuses (fail-closed). The ordering uses
+recorded values only, never file mtime, so a checkout or copy does not
+re-block a re-approved WP. The refusal names the file and the re-harden step
+(`ready -> hardened --mode evidence --evidence <file>`). No new edge, no new
+trace event.
 
 ## Ledger
 
