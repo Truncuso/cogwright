@@ -90,7 +90,9 @@ Six event types are added by wp-01 (C6/D13): `gate.disabled` (producer:
 `goalforge-gate-budget.sh`, T19), `harden.parked`/`harden.round` (producer:
 `goalforge-harden-stop.sh`, T14), `wp.verified` (producer: `verify/SKILL.md`
 Gate C completion, T18), `second_opinion.ok`/`second_opinion.skipped`
-(producer: `verify/SKILL.md` Gate C second-opinion slot, T18). `gate.result`
+(producer: `verify/SKILL.md` Gate C second-opinion slot, T18).
+`second_opinion.invalid` is added by wp-15 (C6) alongside them, same producer,
+for a leaf reply with no usable verdict. `gate.result`
 gains a `warn` value on its existing `result` enum this WP
 (`pass`\|`fail`\|`warn`) — no new field, no schema-shape change; `wp`/`gate`/
 `result` stay all-required, unchanged from the pre-wp-01 contract. `warn` is
@@ -292,6 +294,27 @@ review and it returned a usable verdict.
 | `model` | string | no | Second-opinion model id. |
 | `reason` | string | no | Detail (a truncated excerpt of the leaf result). |
 | `decision_ref` | string | no | Path to the persisted full leaf output JSON, relative to the feature dir (e.g. `second-opinions/wp-01-example-20260924T091000-4211.json`), or `""`. |
+
+Plus attribution fields.
+
+### `second_opinion.invalid`
+
+Gate C's second-opinion slot ran an external model review, but the leaf's
+`result` text was not a usable verdict — no `status` of `success`/`partial`
+with a non-empty `summary`, and no non-empty `verdict` string, in either the
+raw text or a fenced ```json block. A `status` of `failed` (the provider's
+own task-completion enum, not an opinion) counts as non-verdict too. Fires on
+the exit-0 leaf call and on the exit-4 budget-overspend leaf call alike; never
+fires when the leaf never returns (that stays `second_opinion.skipped`).
+Consumers treat it like a skip: no usable opinion, no disagreement escalation.
+
+| Field | Type | Required | Semantics |
+|---|---|---|---|
+| `wp` | string | no | WP under review, if known. |
+| `provider` | string | no | Second-opinion provider. |
+| `model` | string | no | Second-opinion model id. |
+| `reason` | string | no | Detail (a truncated excerpt of the leaf result, plus `non-verdict-result`). |
+| `decision_ref` | string | no | Path to the persisted full leaf output JSON, relative to the feature dir, or `""`. |
 
 Plus attribution fields.
 
@@ -533,6 +556,7 @@ these; validators select the branch set by the row's `schema_version`.
         "wp.verified",
         "second_opinion.ok",
         "second_opinion.skipped",
+        "second_opinion.invalid",
         "stage.report"
       ]
     },
@@ -748,6 +772,22 @@ these; validators select the branch set by the row's `schema_version`.
     {
       "properties": {
         "type": { "const": "second_opinion.ok" },
+        "seq": {}, "ts": {}, "schema_version": {},
+        "wp": { "type": "string" },
+        "provider": { "type": "string" },
+        "model": { "type": "string" },
+        "reason": { "type": "string" },
+        "actor": { "type": "string" },
+        "session": { "type": "string" },
+        "agent": { "type": "string" },
+        "decision_ref": { "type": "string" }
+      },
+      "required": ["type"],
+      "additionalProperties": false
+    },
+    {
+      "properties": {
+        "type": { "const": "second_opinion.invalid" },
         "seq": {}, "ts": {}, "schema_version": {},
         "wp": { "type": "string" },
         "provider": { "type": "string" },

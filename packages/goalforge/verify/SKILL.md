@@ -99,7 +99,7 @@ payload is deterministic input, not derived from the working tree; with neither
 present the script records `second_opinion.skipped reason=no-payload` and calls
 no provider. The call is otherwise **skip-when-absent**: while the script does
 not exist, record `second_opinion.skipped reason=dispatcher-absent` and continue. Otherwise record `second_opinion.ok` with the verdict quoted; a skip
-is legal, a silent omission is not. **Judge/second-opinion disagreement
+is legal, a silent omission is not. A reply without a verdict records `second_opinion.invalid` instead of `.ok` — treated like a skip: no disagreement escalation. **Judge/second-opinion disagreement
 escalates to the human** (unattended: park with both verdicts in `findings.md`);
 never break the tie yourself.
 

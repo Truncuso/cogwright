@@ -37,11 +37,6 @@ providers:                        # preference order; first = default. No budget
     kind: native
     leaf: null                    # native has no agent-dispatch leaf
     propose_only: false
-  - name: ollama                  # local models (incl. cloud-hosted ids) via the ollama leaf.
-    kind: local
-    leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
-    max_budget_usd: 2.00           # measured: a 4-item review batch cost 0.69 USD (2026-09-12); 0.10 killed 3 of 4 legs
-    propose_only: true            # default verdict while no admission row admits this provider; the admission table decides the resolver verdict
   - name: zai                     # GLM family, Anthropic-compatible transport.
     kind: foreign
     leaf: skills/agent-dispatch/zai/scripts/headless_dispatch
@@ -56,7 +51,7 @@ providers:                        # preference order; first = default. No budget
     kind: foreign
     leaf: skills/agent-dispatch/codex/scripts/headless_dispatch
     max_budget_usd: 0.10
-    propose_only: true
+    propose_only: true            # default verdict while no admission row admits this provider; the admission table decides the resolver verdict
 
 stages:
   implement:                      # code-writing role: tier defers to the WP register/severity.
@@ -114,9 +109,9 @@ stages:
     endpoint: session
     egress: none
   second_opinion:                 # the one non-native leg shipped; propose-only FOR THIS ROLE (a second opinion is advice, never a gate decision), model id overridable in wp-05.
-    model: glm-5.3:cloud          # a PROVIDER model id (ollama), not a Claude tier — a tier here exits 2 at the leaf.
+    model: gpt-6-astra            # a PROVIDER model id (codex), not a Claude tier — a tier here exits 2 at the leaf.
     effort: low
-    provider: ollama
+    provider: codex
     endpoint: leaf
     egress: overview
 

@@ -15,6 +15,12 @@
 #                cap ABOVE the argv ceiling is clamped with a WARN (honouring
 #                200000 killed the exec itself: "Argument list too long"); and a
 #                non-integer cap WARNs instead of defaulting in silence.
+#   wp-15      : the leaf's `result` text is checked before a completed leaf
+#                call counts as `second_opinion.ok` — a non-verdict reply
+#                (recorded glm prose, or a `status:"failed"` codex reply)
+#                yields `second_opinion.invalid` instead, on both the exit-0
+#                and exit-4 budget-overspend paths; a real verdict (raw JSON,
+#                as codex actually replies, or fenced) still yields `.ok`.
 #
 # Everything runs under one mktemp -d root: the stub leaf, CLAUDE_CONFIG_DIR,
 # the feature dir, and GOALFORGE_DISPATCH_LEDGER. Nothing touches the live
@@ -24,6 +30,7 @@ set -uo pipefail
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SECOND_OPINION="$SD/../goalforge-second-opinion.sh"
 FIXTURES="$SD/fixtures/dispatch"
+SO_FIXTURES="$SD/../../evals/fixtures/second-opinion"
 PASS=0; FAIL=0
 
 ok()  { echo "  PASS: $1"; PASS=$((PASS+1)); }
@@ -48,13 +55,14 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --prompt) PROMPT="${2:-}"; SAW="--prompt"; shift 2 ;;
         --prompt-file)
-            # The stub models the leaves the SHIPPED row can select — ollama,
-            # zai, deepseek — where the flag is a STRUCTURED handoff-brief path
-            # through _core/prompt_file.py (base-dir allowlist + frontmatter
-            # contract) and a raw payload file exits 3 (verified 2026-09-13).
-            # The codex leaf reads it raw and would accept one; the script must
-            # not depend on which, so the stub reproduces the exit-3 leaf and
-            # the script can never regress to the flag behind a faked stub.
+            # The stub models the leaves a `second_opinion` row COULD select —
+            # ollama, zai, deepseek — where the flag is a STRUCTURED
+            # handoff-brief path through _core/prompt_file.py (base-dir
+            # allowlist + frontmatter contract) and a raw payload file exits 3
+            # (verified 2026-09-13). Other leaves (e.g. codex) read it raw and
+            # would accept one; the script must not depend on which, so the
+            # stub reproduces the exit-3 leaf and the script can never regress
+            # to the flag behind a faked stub.
             echo "--prompt-file" > "$STUB_FLAG"
             echo "stub leaf: --prompt-file is a structured handoff brief, not a payload" >&2
             exit 3 ;;
@@ -67,8 +75,24 @@ printf '%s' "$PROMPT" > "$STUB_CAPTURE"
 echo "call" >> "$STUB_CALLS"
 STUB_EXIT="${STUB_EXIT:-0}"
 STUB_REASON="${STUB_REASON:-}"
-STUB_RESULT="${STUB_RESULT:-stub second opinion: verdict looks sound}"
-printf '{"type":"result","subtype":"success","is_error":false,"result":"%s","codex":{"reason":"%s"}}\n' "$STUB_RESULT" "$STUB_REASON" > "$OUTPUT"
+# The "result" field on a real envelope is itself JSON-encoded text (see any
+# plans/goalforge-overhaul/second-opinions/*.json), so the stub must
+# JSON-encode STUB_RESULT rather than splice it in with printf %s: a raw
+# splice breaks the outer envelope the moment STUB_RESULT contains a quote —
+# exactly what a verdict-shaped or sabotage fixture does.
+if [[ -z "${STUB_RESULT:-}" ]]; then
+    STUB_RESULT='{"status":"success","summary":"stub second opinion: verdict looks sound"}'
+fi
+STUB_RESULT="$STUB_RESULT" STUB_REASON="$STUB_REASON" python3 -c '
+import json, os
+print(json.dumps({
+    "type": "result",
+    "subtype": "success",
+    "is_error": False,
+    "result": os.environ["STUB_RESULT"],
+    "codex": {"reason": os.environ["STUB_REASON"]},
+}))
+' > "$OUTPUT"
 echo "EXIT_CODE=$STUB_EXIT" >> "$OUTPUT"
 exit "$STUB_EXIT"
 STUBEOF
@@ -306,20 +330,86 @@ else
     cat "$T/stderr.txt"
 fi
 
+# --- case 14a (wp-15/b1): known-bad non-verdict prose -----------------------
+# the actual recorded glm reply this WP guards against: prose, no JSON at all.
+NON_VERDICT="$(cat "$SO_FIXTURES/known-bad-non-verdict.txt")"
+STUB_RESULT="$NON_VERDICT" run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.invalid' && trace_has 'non-verdict-result' \
+   && ! trace_has 'second_opinion.ok'; then
+    ok "known-bad non-verdict prose -> second_opinion.invalid, reason non-verdict-result"
+else
+    bad "known-bad non-verdict prose -> second_opinion.invalid, reason non-verdict-result"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 14b (wp-15/b1): known-bad status:"failed" reply -------------------
+# a task-completion outcome, not an opinion: must not count as a verdict.
+FAILED_STATUS="$(cat "$SO_FIXTURES/known-bad-failed-status.txt")"
+STUB_RESULT="$FAILED_STATUS" run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.invalid' && trace_has 'non-verdict-result' \
+   && ! trace_has 'second_opinion.ok'; then
+    ok "known-bad status:failed reply -> second_opinion.invalid (not an opinion)"
+else
+    bad "known-bad status:failed reply -> second_opinion.invalid (not an opinion)"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 14c (wp-15/b2): known-good verdict, raw JSON, no fence ------------
+# verbatim result text from a recorded codex envelope — real replies are raw
+# JSON, not fenced, so this is the common path, not a fallback.
+GOOD_VERDICT="$(cat "$SO_FIXTURES/known-good-verdict.txt")"
+STUB_RESULT="$GOOD_VERDICT" run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.ok' && ! trace_has 'second_opinion.invalid'; then
+    ok "known-good verdict fixture (raw, unfenced JSON) -> second_opinion.ok"
+else
+    bad "known-good verdict fixture (raw, unfenced JSON) -> second_opinion.ok"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 14d (wp-15/b2): known-good verdict inside a fenced ```json block --
+GOOD_FENCED="$(cat "$SO_FIXTURES/known-good-fenced.txt")"
+STUB_RESULT="$GOOD_FENCED" run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.ok' && ! trace_has 'second_opinion.invalid'; then
+    ok "known-good verdict fixture (fenced json block) -> second_opinion.ok"
+else
+    bad "known-good verdict fixture (fenced json block) -> second_opinion.ok"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 14e (wp-15/T2/b1): exit-4 budget_exceeded + non-verdict reply -----
+# the budget-overspend branch applies the SAME verdict check as exit-0, and
+# keeps its `; overspend: <reason>` suffix on the invalid row too.
+STUB_EXIT=4 STUB_REASON=budget_exceeded STUB_RESULT="$NON_VERDICT" \
+    run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.invalid' && trace_has 'non-verdict-result' \
+   && trace_has 'overspend: budget_exceeded' && ! trace_has 'second_opinion.ok'; then
+    ok "exit-4 budget_exceeded + non-verdict reply -> second_opinion.invalid, overspend suffix kept"
+else
+    bad "exit-4 budget_exceeded + non-verdict reply -> second_opinion.invalid, overspend suffix kept"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
 # --- case 15 (issue 579): the full leaf result is recoverable, not just the --
 # --- 200-char excerpt kept in the trace row's `reason` ----------------------
 # A leaf result over 200 chars must still be fully recoverable afterwards: the
 # `second_opinion.ok` row's `reason` stays a short excerpt (readability), but
 # the row also carries a `decision_ref` pointing at a file under
 # `<feature-dir>/second-opinions/` that holds the leaf's FULL, untruncated
-# JSON envelope.
-LONG_RESULT="$(printf 'one minor oracle gap finding %.0s' $(seq 1 20))"
+# JSON envelope. (wp-15/T5b: LONG_RESULT is now verdict-shaped JSON — a bare
+# prose string would now read as a non-verdict — and MARKER sits well past
+# character 200 of the whitespace-collapsed result, so its absence from
+# `reason` and presence in the decision_ref file is what proves the excerpt
+# really stops at 200 chars; a check on the raw $LONG_RESULT string would pass
+# vacuously since decision_ref holds the whole JSON-escaped text anyway.)
+MARKER="ISSUE579-RECOVERABILITY-MARKER"
+FILLER="$(printf 'pad %.0s' $(seq 1 60))"
+LONG_RESULT="$(printf '{"status":"success","summary":"%s%s"}' "$FILLER" "$MARKER")"
 STUB_RESULT="$LONG_RESULT" run_so_pinned dispatch-default.yaml spec-no-egress.md
 DECISION_REF_LINE="$(grep 'second_opinion.ok' "$FEATURE/trace-events.jsonl" | tail -1)"
 REF_REL="$(printf '%s' "$DECISION_REF_LINE" | grep -o '"decision_ref":"[^"]*"' | cut -d'"' -f4)"
 if [[ -n "$REF_REL" ]] && [[ -f "$FEATURE/$REF_REL" ]] \
-   && grep -q "$LONG_RESULT" "$FEATURE/$REF_REL" \
-   && ! grep -q "$LONG_RESULT" "$FEATURE/trace-events.jsonl"; then
+   && grep -q "$MARKER" "$FEATURE/$REF_REL" \
+   && ! grep -q "$MARKER" "$FEATURE/trace-events.jsonl"; then
     ok "full leaf result recoverable via decision_ref (reason stays a short excerpt)"
 else
     bad "full leaf result recoverable via decision_ref (reason stays a short excerpt)"
@@ -337,8 +427,8 @@ STUB_EXIT=4 STUB_REASON=budget_exceeded STUB_RESULT="$LONG_RESULT" \
 BUDGET_LINE="$(grep 'second_opinion.ok' "$FEATURE/trace-events.jsonl" | tail -1)"
 BUDGET_REF="$(printf '%s' "$BUDGET_LINE" | grep -o '"decision_ref":"[^"]*"' | cut -d'"' -f4)"
 if [[ -n "$BUDGET_REF" ]] && [[ -f "$FEATURE/$BUDGET_REF" ]] \
-   && grep -q "$LONG_RESULT" "$FEATURE/$BUDGET_REF" \
-   && ! grep -q "$LONG_RESULT" "$FEATURE/trace-events.jsonl"; then
+   && grep -q "$MARKER" "$FEATURE/$BUDGET_REF" \
+   && ! grep -q "$MARKER" "$FEATURE/trace-events.jsonl"; then
     ok "exit-4 budget_exceeded also persists + references the full leaf result"
 else
     bad "exit-4 budget_exceeded also persists + references the full leaf result"
@@ -358,13 +448,13 @@ else
 fi
 
 # ledger accumulated exactly one row per leaf call (cases 2,3,4,6,7,8,10,12,13,
-# 14,15,16a,16b = 13; cases 1, 5, 9 and 11 never reach the leaf. 16b reaches
-# the leaf — STUB_EXIT=1 — but its second_opinion.skipped emit carries no
-# decision_ref, which is exactly the case it asserts)
-if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "13" ]]; then
-    ok "ledger row count equals leaf-call count (13)"
+# 14,14a,14b,14c,14d,14e,15,16a,16b = 18; cases 1, 5, 9 and 11 never reach the
+# leaf. 16b reaches the leaf — STUB_EXIT=1 — but its second_opinion.skipped
+# emit carries no decision_ref, which is exactly the case it asserts)
+if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "18" ]]; then
+    ok "ledger row count equals leaf-call count (18)"
 else
-    bad "ledger row count equals leaf-call count (13): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
+    bad "ledger row count equals leaf-call count (18): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
 fi
 
 echo

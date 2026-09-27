@@ -266,8 +266,8 @@ import sys
 from importlib.machinery import SourceFileLoader
 mod = SourceFileLoader("emit", sys.argv[1]).load_module()
 s = mod.load_schema()
-assert len(s.get("oneOf", [])) == 20, "expected 20 schema branches"
-print("  ok embedded schema parses (20 branches)")
+assert len(s.get("oneOf", [])) == 21, "expected 21 schema branches"
+print("  ok embedded schema parses (21 branches)")
 PY
     then :; else echo "  SCHEMA PARSE FAILED"; ok=1; fi
     if _validate_log "$FIXTURES/all-events.jsonl" >/dev/null 2>&1; then

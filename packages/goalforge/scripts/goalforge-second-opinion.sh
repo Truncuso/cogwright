@@ -26,11 +26,22 @@
 #                noted in the reason)
 #
 # Trace rows (via scripts/goalforge-trace-emit, best-effort):
-#   second_opinion.ok      — leaf ran and its turn completed (exit 0, or exit 4
+#   second_opinion.ok      — leaf ran, its turn completed (exit 0, or exit 4
 #                            budget_exceeded/budget_check_failed: the result is
-#                            kept, the overspend named in the reason). `reason`
-#                            is a 200-char excerpt; the full leaf envelope is
+#                            kept, the overspend named in the reason), AND the
+#                            leaf's `result` text is a usable verdict (a
+#                            `status` of `success`/`partial` with a non-empty
+#                            `summary`, or a non-empty `verdict` string — raw
+#                            or inside a fenced ```json block). `reason` is a
+#                            200-char excerpt; the full leaf envelope is
 #                            persisted and pointed to via `decision_ref` (issue 579).
+#   second_opinion.invalid — leaf ran and completed (same two exit paths as
+#                            `.ok`, overspend suffix included) but `result` is
+#                            NOT a usable verdict — prose, or a `status` of
+#                            `failed` (a task-completion outcome, not an
+#                            opinion). `reason` carries the same 200-char
+#                            excerpt plus `non-verdict-result`; `decision_ref`
+#                            still points at the full leaf envelope.
 #   second_opinion.skipped — reason `no-payload` (neither --verdict nor --diff
 #                            resolves to a non-empty file: there is nothing to
 #                            take an opinion ON), `dispatcher-absent` (leaf
@@ -41,8 +52,9 @@
 # The payload is handed to the leaf as a `--prompt` argv VALUE — the only
 # payload flag inside leaf-interface v1.
 #
-# NOT `--prompt-file`, because of what the CONFIGURED provider's leaf does with
-# it (verified 2026-09-13 by reading the leaves, not the interface doc):
+# NOT `--prompt-file`: leaf-interface v1 must behave the same no matter which
+# provider dispatch.yaml's `second_opinion` row currently names (verified
+# 2026-09-13 by reading the leaves, not the interface doc):
 #   ollama, zai, deepseek -> `_core/prompt_file.py`, a *structured handoff-brief*
 #       parser (base-dir allowlist, frontmatter contract, exit 2/3) — a raw
 #       payload file handed to it dies leaf-exit-3
@@ -50,11 +62,10 @@
 #   codex                 -> reads the file RAW (`PROMPT="$(cat ...)"`,
 #       codex/scripts/headless_dispatch:313-315), so a payload file WOULD work
 #       there
-# leaf-interface v1 therefore does admit a payload file on SOME leaf; the cap
-# exists because the shipped `second_opinion` row runs on `ollama`, one of the
-# three that route the flag through prompt_file.py. Re-point that row at codex
-# and `--prompt-file` becomes available — a config-dependent fact, not a
-# property of the interface.
+# leaf-interface v1 therefore does admit a payload file on SOME leaf, but not
+# on every leaf the row could name; `--prompt` (an argv value) is the one flag
+# every leaf accepts identically, so the script never has to know which kind
+# the CONFIGURED provider is.
 #
 # The size cap is CONFIGURED, not hardcoded: `second_opinion.max_payload_bytes`
 # in the dispatch file (default and reviewed MAXIMUM 102400, inside
@@ -354,20 +365,29 @@ fi
 
 # --- call the leaf -----------------------------------------------------------
 # `--prompt` (an argv VALUE), the only payload flag in leaf-interface.md v1.
-# NOT `--prompt-file`: on the leaves the shipped row can select (ollama, zai,
+# NOT `--prompt-file`: on some leaves the row could select (ollama, zai,
 # deepseek — verified 2026-09-13) that flag is a structured handoff-brief path
 # through `_core/prompt_file.py` (base-dir allowlist + frontmatter contract,
-# exit 2/3), so a raw payload file handed to it dies leaf-exit-3. The codex leaf
-# reads it raw (codex/scripts/headless_dispatch:313-315) and would accept one —
-# which is why the cap is keyed to the CONFIGURED provider, not to the
-# interface. The cap above keeps the argv value inside MAX_ARG_STRLEN.
+# exit 2/3), so a raw payload file handed to it dies leaf-exit-3. Other leaves
+# (e.g. codex, codex/scripts/headless_dispatch:313-315) read it raw and would
+# accept one — the interface picks `--prompt` because it works the same on
+# EVERY leaf, not because of which one dispatch.yaml currently names. The cap
+# above keeps the argv value inside MAX_ARG_STRLEN regardless of provider.
 OUT="$TMP/out.json"
 "$LEAF" --model "$MODEL" --prompt "$(cat "$PAYLOAD")" --output "$OUT" --max-budget-usd "$BUDGET"
 LEAF_EXIT=$?
 
 # leaf-interface.md §6 hazard 1: the EXIT_CODE trailer is not valid JSON.
+#
+# Verdict check (wp-15/T1): the leaf's `result` text counts as a usable
+# opinion when either (a) the WHOLE text, trimmed, parses as a JSON object
+# where `status` is `success`/`partial` with a non-empty `summary`, or
+# `verdict` is a non-empty string, or (b) it contains a fenced ```json block
+# whose object meets that same test. `status: "failed"` (a task-completion
+# outcome, not an opinion) and anything else — prose, no JSON at all — is a
+# non-verdict. Checked against the FULL result, never the 200-char excerpt.
 DECODED="$(OUT="$OUT" python3 -c '
-import json, os, sys
+import json, os, re, sys
 try:
     raw = open(os.environ["OUT"], encoding="utf-8").read()
 except OSError:
@@ -377,13 +397,43 @@ try:
     env = json.loads(body)
 except json.JSONDecodeError:
     sys.exit(0)
-result = env.get("result") or ""
+result = str(env.get("result") or "")
 reason = (env.get("codex") or {}).get("reason") or ""
+
+def _obj_is_verdict(obj):
+    if not isinstance(obj, dict):
+        return False
+    status = obj.get("status")
+    summary = obj.get("summary")
+    if status in ("success", "partial") and isinstance(summary, str) and summary.strip():
+        return True
+    verdict = obj.get("verdict")
+    return isinstance(verdict, str) and bool(verdict.strip())
+
+def _is_verdict(text):
+    trimmed = text.strip()
+    if trimmed:
+        try:
+            if _obj_is_verdict(json.loads(trimmed)):
+                return True
+        except (json.JSONDecodeError, TypeError):
+            pass
+    for m in re.finditer(r"```json\s*(.*?)```", text, re.DOTALL):
+        try:
+            obj = json.loads(m.group(1).strip())
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if _obj_is_verdict(obj):
+            return True
+    return False
+
 print(reason)
-print(" ".join(str(result).split())[:200])
+print(" ".join(result.split())[:200])
+print("1" if _is_verdict(result) else "0")
 ' 2>/dev/null)"
 LEAF_REASON="$(printf '%s\n' "$DECODED" | sed -n 1p)"
 LEAF_RESULT="$(printf '%s\n' "$DECODED" | sed -n 2p)"
+LEAF_VERDICT="$(printf '%s\n' "$DECODED" | sed -n 3p)"
 
 # --- propose-only ledger row (every leaf call) -------------------------------
 LEDGER="${GOALFORGE_DISPATCH_LEDGER:-$CORPUS_ROOT/data/dispatch-decisions.jsonl}"
@@ -412,10 +462,18 @@ except OSError as exc:
 
 if [[ "$LEAF_EXIT" -eq 0 ]]; then
     DECISION_REF="$(persist_leaf_output)"
-    emit second_opinion.ok "${LEAF_RESULT}${REASON_SUFFIX}" "$DECISION_REF"
+    if [[ "$LEAF_VERDICT" == "1" ]]; then
+        emit second_opinion.ok "${LEAF_RESULT}${REASON_SUFFIX}" "$DECISION_REF"
+    else
+        emit second_opinion.invalid "${LEAF_RESULT}${REASON_SUFFIX}; non-verdict-result" "$DECISION_REF"
+    fi
 elif [[ "$LEAF_EXIT" -eq 4 && ( "$LEAF_REASON" == "budget_exceeded" || "$LEAF_REASON" == "budget_check_failed" ) ]]; then
     DECISION_REF="$(persist_leaf_output)"
-    emit second_opinion.ok "${LEAF_RESULT}${REASON_SUFFIX}; overspend: $LEAF_REASON" "$DECISION_REF"
+    if [[ "$LEAF_VERDICT" == "1" ]]; then
+        emit second_opinion.ok "${LEAF_RESULT}${REASON_SUFFIX}; overspend: $LEAF_REASON" "$DECISION_REF"
+    else
+        emit second_opinion.invalid "${LEAF_RESULT}${REASON_SUFFIX}; overspend: $LEAF_REASON; non-verdict-result" "$DECISION_REF"
+    fi
 else
     emit second_opinion.skipped "leaf-exit-${LEAF_EXIT}${REASON_SUFFIX}"
 fi
