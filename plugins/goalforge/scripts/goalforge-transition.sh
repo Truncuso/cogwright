@@ -726,6 +726,25 @@ EOF
 
     echo "=== goalforge-transition.sh --self-test ==="
 
+    # (l) legacy WP status `draft`: only `draft -> spec` is legal (human ruling 2026-09-27)
+    local lg="$feat/wp-09-legacy"
+    mkdir -p "$lg"
+    sed -e 's/^status: .*/status: draft/' -e 's/^name: .*/name: wp-09-legacy/' "$wp/overview.md" > "$lg/overview.md"
+    if bash "$SELF" "$lg" ready >/dev/null 2>&1; then
+        no "(l1) legacy draft WP must not take draft -> ready"
+    elif [[ "$(read_status "$lg/overview.md")" == "draft" ]]; then
+        ok "(l1) legacy draft WP refused draft -> ready (status unchanged)"
+    else
+        no "(l1) draft -> ready refused but status mutated"
+    fi
+    if bash "$SELF" "$lg" spec >/dev/null 2>&1 \
+       && [[ "$(read_status "$lg/overview.md")" == "spec" ]]; then
+        ok "(l2) legacy draft WP takes draft -> spec"
+    else
+        no "(l2) legacy draft WP should take draft -> spec"
+    fi
+    rm -rf "$lg"
+
     # (a) forward edge succeeds + writes a ledger row
     if bash "$SELF" "$wp" hardened --reason "fwd" >/dev/null 2>&1 \
        && [[ "$(read_status "$wp/overview.md")" == "hardened" ]] \

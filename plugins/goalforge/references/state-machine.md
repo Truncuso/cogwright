@@ -23,7 +23,10 @@ is no WP-level `draft`; `implemented`/`abandoned` are new):
 
 A schema-5 WP still carrying the legacy `draft` status is read-only
 compatible: it sorts before `spec` (order -1) for any script that must order
-it, but no goalforge script writes `draft` to a WP going forward.
+it, but no goalforge script writes `draft` to a WP going forward. Its one
+exit is the forward edge `draft -> spec` (human ruling 2026-09-27), which
+lifts a legacy WP onto the current chain; every other edge out of `draft`
+is illegal.
 
 - **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no`.
 - **Reverse** edge (`order(to) < order(from)`, e.g. `verified→spec`,
@@ -78,6 +81,7 @@ under `--supersedes`, the superseded feature's overview; never on a
 
 | from | to | reason_required | human_gated |
 |---|---|---|---|
+| draft | spec | no | no |
 | spec | hardened | no | no |
 | spec | ready | no | no |
 | spec | executing | no | no |
