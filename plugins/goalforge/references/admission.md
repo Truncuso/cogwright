@@ -32,7 +32,7 @@ From `plans/ideas/foreign-implement-dispatch-gated.md` (user direction
 | `model` | string | The provider's own model id. Admission binds the TRIPLE `(task_class, provider, model)`, never `(task_class, provider)` alone: a different model on the same provider is a different capability and needs its own evidence. |
 | `leaf` | string | The agent-dispatch executable the evidence was gathered against, relative to `CLAUDE_CONFIG_DIR` (default `~/.claude`). Must equal the `providers[].leaf` of the dispatch row being resolved. |
 | `leaf_sha256` | string | That file's sha256 at admission time. |
-| `leaf_closure` | mapping | The leaf CLOSURE: leaf-root-relative path → sha256 for EVERY regular file under the `leaf` entry file's REAL parent directory (the directory the executed file runs from), recursively (the entry file included; no `source` line is parsed). A listed file missing or unreadable, a file under the tree absent from the manifest, or any symlink — at the entry path itself or anywhere under the tree — is a mismatch — refused, and `scripts/goalforge-leaf-exec.sh` exits 2 without running the leaf. Any edit under the leaf's tree therefore needs a re-pinned manifest. |
+| `leaf_closure` | mapping | The leaf CLOSURE: leaf-root-relative path → sha256 for EVERY regular file under the `leaf` entry file's REAL parent directory (the directory the executed file runs from), recursively (the entry file included; no `source` line is parsed). A listed file missing or unreadable, a file under the tree absent from the manifest, or any symlink — at the entry path itself or anywhere under the entry's real parent tree — is a mismatch — refused (a symlinked ancestor above the leaf root, or an in-root symlinked directory between the root and the entry's directory, is resolved: the real path re-keys the closure), and `scripts/goalforge-leaf-exec.sh` exits 2 without running the leaf. Any edit under the leaf's tree therefore needs a re-pinned manifest. |
 | `evidence.kind` | enum | `user-experience` \| `benchmark` \| `user-addition`. A closed set: `self-report` is not evidence. |
 | `evidence.ref` | string | Where the evidence lives (a locator the user can re-read). |
 | `permission_set` | list | The permission posture the admitted dispatch is meant to run under. Must be a LIST — a bare string is truthy but would explode into per-character permissions. POSTURE DOCUMENTATION, declared data — see "Declared, not enforced". |
@@ -141,6 +141,9 @@ row per dispatch decision. The keys are the writer's existing
 * `admitted_override` is `true` iff `--admitted` was passed — so a reader can
   tell a production decision from a fixture one.
 * `reason`/`evidence_ref` are empty strings on a `propose-only` row.
+* `brief_source` (`head` | `worktree`) appears only on the workflow compile's
+  implement row: where the admitted leaf's brief came from (the tracked
+  overview at HEAD, or an untracked/gitignored overview's working-tree bytes).
 
 ## Declared, not enforced
 

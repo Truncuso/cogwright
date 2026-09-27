@@ -382,17 +382,35 @@ def runner_prompt(wp_name: str, call: str) -> str:
     ])
 
 
-def write_leaf_brief(module, overview: Path) -> Path:
-    """Write the WP overview.md bytes AT HEAD to ``leaf-brief.txt`` beside it.
+def read_leaf_brief(module, overview: Path) -> tuple[Path, bytes, str]:
+    """``(the overview's real path, brief bytes, brief_source)``.
 
-    Never the working-tree overview.md: the brief is read through the same
-    scrubbed-``GIT_*`` HEAD read as the admission table, and an overview
-    outside a git work tree or absent from HEAD fails CLOSED (ValueError)."""
+    The overview is resolved ONCE; that one path serves the tracked check, the
+    HEAD read, the working-tree read and (``write_leaf_brief``) the brief's
+    directory. Tracked = in the index of the repository enclosing that real
+    path (possibly a nested plans/ repository): the brief is its bytes AT HEAD
+    through the same scrubbed-``GIT_*`` read as the admission table, and a
+    failing HEAD read (e.g. staged, never committed) fails CLOSED — never a
+    working-tree fallback. Untracked or gitignored: the working-tree bytes,
+    ``brief_source: worktree``. Outside any git work tree fails CLOSED."""
+    adm = module.admission
+    real = overview.resolve()
     try:
-        brief, _ = module.admission.head_bytes(overview, "WP overview")
-    except module.admission.AdmissionTableError as exc:
+        if adm.is_tracked(real, "WP overview"):
+            brief, _ = adm.head_bytes(real, "WP overview")
+            return real, brief, "head"
+    except adm.AdmissionTableError as exc:
         raise ValueError(f"leaf brief: {exc}") from None
-    target = overview.resolve().parent / LEAF_BRIEF_NAME
+    try:
+        return real, real.read_bytes(), "worktree"
+    except OSError as exc:
+        raise ValueError(f"leaf brief: cannot read {real}: {exc}") from None
+
+
+def write_leaf_brief(real_overview: Path, brief: bytes) -> Path:
+    """Write ``brief`` to ``leaf-brief.txt`` beside the (already resolved)
+    WP overview.md."""
+    target = real_overview.parent / LEAF_BRIEF_NAME
     try:
         # Unlink, then create exclusively: a pre-planted symlink is removed,
         # never followed, so its target is never written.
@@ -421,12 +439,25 @@ def compile_admitted_script(
     impl_row = module.stage_row(dispatch, "implement")
     provider = str(impl_row.get("provider"))
     print(f"admitted table: {module.admission.ADMITTED_PATH}", file=sys.stderr)
+    # The brief source is decided BEFORE the one ledger row is written, so
+    # that row carries it (brief_source: head | worktree). A brief failure is
+    # raised only after the verdict, so a refused row still names the missing
+    # admission.
+    brief_error: ValueError | None = None
+    brief_source = None
+    try:
+        real_overview, brief_bytes, brief_source = read_leaf_brief(module, overview)
+    except ValueError as exc:
+        brief_error = exc
     resolution = module.resolve_and_log(
         "implement", frontmatter, touched, dispatch, expertise_map,
         profile="semi-autonomous", wp=wp_name, bind_head=True,
+        brief_source=brief_source,
     )
     if resolution.get("admission_decision") != "admitted":
         raise ValueError(admitted_failure(resolution, provider, str(impl_row.get("model"))))
+    if brief_error is not None:
+        raise brief_error
 
     runner = module.stage_row(dispatch, RUNNER_ROLE)
     runner_model, runner_effort = runner.get("model"), runner.get("effort")
@@ -436,7 +467,7 @@ def compile_admitted_script(
 
     key = [str(resolution["task_class"]), provider, str(resolution["model"])]
     gates = dict(gate_calls(module, dispatch, wp_name))
-    brief = write_leaf_brief(module, overview)
+    brief = write_leaf_brief(real_overview, brief_bytes)
     call = (" ".join(shlex.quote(part) for part in [LEAF_EXEC_SCRIPT, *key])
             + " < " + shlex.quote(str(brief)))
     leg = {

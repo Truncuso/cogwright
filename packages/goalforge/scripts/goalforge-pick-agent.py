@@ -27,7 +27,7 @@ Public API:
         overspend was kept).
 
     resolve_and_log(role, frontmatter, touched_files, dispatch, expertise_map,
-                    *, profile, wp, bind_head) -> dict
+                    *, profile, wp, bind_head, brief_source) -> dict
         resolve_stage against the DEFAULT admission table
         (`admission.ADMITTED_PATH`, read at call time, fail closed) plus the
         one ledger row — the path goalforge-workflow-compile.py takes, so an
@@ -955,6 +955,7 @@ def resolve_and_log(
     profile: str = "semi-autonomous",
     wp: str = "",
     bind_head: bool = False,
+    brief_source: str | None = None,
 ) -> dict:
     """Resolve one stage against the DEFAULT admission table and log it.
 
@@ -968,6 +969,8 @@ def resolve_and_log(
     (`admission.verify_head_binding`); a failure raises AdmissionTableError
     and writes no `admitted` row. Otherwise one ledger row is appended per
     admission decision through `append_ledger_row`, the one writer.
+    ``brief_source`` (`head` | `worktree`, decided by the compile BEFORE this
+    call) is carried into that one row when given.
 
     Returns the resolution plus `admission_table_rows` (the table's row count)."""
     table_path, admitted_source = resolve_admitted_path(None)
@@ -979,14 +982,19 @@ def resolve_and_log(
     )
     decision = resolution.get("admission_decision")
     if bind_head and decision == "admitted":
-        # The UNRESOLVED canonical path: head_bytes refuses a symlinked table,
-        # so a link to an unguarded path cannot redirect the HEAD read.
-        admission.verify_head_binding(admission.ADMITTED_PATH, raw)
+        # The ONE resolved table path (resolve_admitted_path): the bytes read
+        # above, the HEAD read and the guard check all anchor at it, and the
+        # HEAD read's guard-set match refuses a real path the pre-commit guard
+        # never filters.
+        admission.verify_head_binding(table_path, raw)
     if decision or resolution["propose_only"]:
-        append_ledger_row(ledger_row(
+        row = ledger_row(
             resolution, wp=wp, admitted_source=admitted_source,
             admitted_override=False,
-        ))
+        )
+        if brief_source is not None:
+            row["brief_source"] = brief_source
+        append_ledger_row(row)
     return {**resolution, "admission_table_rows": len(table)}
 
 

@@ -177,23 +177,38 @@ def _leaf_digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def closure_mismatch(row: dict, root: Path) -> str | None:
+def leaf_target(root: Path, leaf: str) -> tuple[Path, Path]:
+    """``(real leaf root, real entry file)`` — the ONE resolution of the leaf.
+
+    Callers resolve here once and pass both paths on (``closure_mismatch``
+    resolves nothing), so the path that is hashed, walked and executed is one
+    path, not two realpath calls apart (T9; the remaining window is the
+    accepted TOCTOU residual)."""
+    root_real = Path(os.path.realpath(root))
+    return root_real, Path(os.path.realpath(root_real / leaf))
+
+
+def closure_mismatch(row: dict, root_real: Path, target: Path) -> str | None:
     """Why the files under the leaf's directory tree differ from ``leaf_closure``.
 
-    The closure is every regular file under the EXECUTED entry file's real
-    parent directory, recursively, keyed relative to the real leaf root; no
-    ``source`` line is parsed. The walked tree is therefore the tree the leaf
-    runs from. Each is a mismatch: (a) a listed file missing or unreadable,
-    (b) a file under the tree absent from the manifest, (c) ANY symlink under
-    the tree or at the entry path itself (file or directory), (d) a tree whose
-    real path is outside the root. Returns None when the closure holds."""
-    root_real = os.path.realpath(root)
-    entry = os.path.join(root, str(row["leaf"]))
-    if os.path.islink(entry):
+    ``root_real`` and ``target`` are the caller's ONE resolution
+    (``leaf_target``); nothing here resolves the entry again. The closure is
+    every regular file under the EXECUTED entry file's real parent directory
+    (``target.parent``), recursively, keyed relative to the real leaf root; no
+    ``source`` line is parsed. Each is a mismatch: (a) a listed file missing or
+    unreadable, (b) a file under the tree absent from the manifest, (c) a
+    symlink at the entry path or anywhere under the entry's real parent tree
+    (file or directory). A symlinked ancestor above the leaf root, and an
+    in-root symlinked directory between the root and the entry's directory,
+    are RESOLVED (the real path re-keys the closure, so (b) catches a
+    repoint). A tree outside the real root is refused (the leaf-root pin).
+    Returns None when the closure holds."""
+    entry = root_real / str(row["leaf"])
+    if entry.is_symlink():
         return f"leaf_closure mismatch: the entry file {entry} is a symlink"
-    tree = os.path.dirname(os.path.realpath(entry))
+    tree = str(target.parent)
     manifest = {str(k): str(v).strip().lower() for k, v in row["leaf_closure"].items()}
-    if os.path.commonpath([root_real, tree]) != root_real:
+    if os.path.commonpath([str(root_real), tree]) != str(root_real):
         return f"leaf_closure mismatch: {tree} resolves outside the leaf root {root_real}"
     rel_dir = Path(os.path.relpath(tree, root_real))
     errors: list[OSError] = []
@@ -361,35 +376,84 @@ def _guard_reason(table_dir: Path) -> str | None:
     )
 
 
-def head_bytes(path: Path, what: str = "admission table") -> tuple[bytes, str]:
-    """``(git show HEAD:<path> bytes, the HEAD-relative path)``, read FAIL-CLOSED.
+# The pre-commit guard's own path set (hooks/goalforge-pre-commit.sh): a table
+# admits only from a HEAD path this set matches END TO END — ``re.fullmatch``,
+# never ``re.search`` with ``$`` / ``\Z`` (a newline-suffixed or
+# ``evilreferences/`` name defeats those).
+TABLE_GUARD_SET = re.compile(r"(?:.*/)?references/admitted-providers\.yaml")
 
-    The repository is anchored at the file's OWN directory with every ``GIT_*``
-    variable scrubbed; outside a work tree and absent from HEAD each raise
-    AdmissionTableError with its own reason, never a skipped read. A symlinked
-    file, or a path whose real path differs from its unresolved absolute path,
-    is refused: the HEAD path read must be the path the guard filters."""
-    absolute = Path(os.path.abspath(path))
-    if absolute.is_symlink() or os.path.realpath(absolute) != str(absolute):
-        raise AdmissionTableError(
-            f"{what} {path} is a symlink or resolves through one (real path "
-            f"{os.path.realpath(absolute)}) — HEAD binding refused"
-        )
-    file_dir = absolute.parent
-    name = absolute.name
+
+def _control_char(text: str) -> bool:
+    return any(ord(c) < 32 or ord(c) == 127 for c in text)
+
+
+def repo_rel(path: Path, what: str) -> tuple[Path, str]:
+    """``(file directory, path relative to its PHYSICAL work-tree toplevel)``.
+
+    ``path`` is the caller's ONE resolution of the file (a real path); nothing
+    here resolves it again. ``git rev-parse --show-toplevel`` is always
+    physical, so a symlinked ancestor is not refused. Outside a work tree
+    raises AdmissionTableError (failed CLOSED)."""
+    file_dir = path.parent
     try:
-        prefix = _git(["rev-parse", "--show-prefix"], file_dir)
+        top = _git(["rev-parse", "--show-toplevel"], file_dir)
     except OSError as exc:
         raise AdmissionTableError(
             f"{what} {path}: git is not runnable ({exc}) — HEAD binding "
             "failed CLOSED"
         ) from exc
-    if prefix.returncode != 0:
+    if top.returncode != 0:
         raise AdmissionTableError(
             f"{what} {path} is outside a git work tree — the HEAD "
             "binding cannot be checked, failed CLOSED"
         )
-    rel = prefix.stdout.decode("utf-8", "replace").strip() + name
+    toplevel = top.stdout.decode("utf-8", "surrogateescape").rstrip("\n")
+    rel = os.path.relpath(path, toplevel)
+    if not path.is_absolute() or rel == os.pardir or rel.startswith(os.pardir + os.sep):
+        raise AdmissionTableError(
+            f"{what} {path} is not under its work tree's toplevel {toplevel} — "
+            "HEAD binding failed CLOSED"
+        )
+    return file_dir, Path(rel).as_posix()
+
+
+def is_tracked(path: Path, what: str) -> bool:
+    """Whether ``path`` (a real path, resolved by the caller) is in the INDEX
+    of the repository enclosing it (``git ls-files --error-unmatch``).
+
+    A staged-but-uncommitted file IS tracked. Outside a work tree, or a
+    git failure other than "not in the index", raises AdmissionTableError
+    (failed CLOSED)."""
+    file_dir, _ = repo_rel(path, what)
+    res = _git(["ls-files", "--error-unmatch", "--", path.name], file_dir)
+    if res.returncode == 0:
+        return True
+    if res.returncode == 1:
+        return False
+    raise AdmissionTableError(
+        f"{what} {path}: git ls-files failed (exit {res.returncode}) — failed CLOSED"
+    )
+
+
+def head_bytes(path: Path, what: str = "admission table", *,
+               guard_set: bool = False) -> tuple[bytes, str]:
+    """``(git show HEAD:<rel> bytes, rel)``, read FAIL-CLOSED.
+
+    ``path`` is the caller's ONE resolution (``resolve_admitted_path``, one
+    realpath in ``verify_leaf``, ``write_leaf_brief``); this resolves nothing.
+    The repository is the one enclosing that real path, read with every
+    ``GIT_*`` variable scrubbed; outside a work tree and absent from HEAD each
+    raise AdmissionTableError with its own reason, never a skipped read. With
+    ``guard_set`` (the admission table), ``rel`` must FULLY match the pre-commit
+    guard's path set and carry no control character — a table whose real path
+    the guard never filters does not admit."""
+    file_dir, rel = repo_rel(path, what)
+    if guard_set and (_control_char(rel) or not TABLE_GUARD_SET.fullmatch(rel)):
+        raise AdmissionTableError(
+            f"{what} {path} resolves to {rel!r} in its repository, outside the "
+            "guarded set (?:.*/)?references/admitted-providers.yaml — the "
+            "pre-commit guard never filters it, HEAD binding refused"
+        )
     head = _git(["show", f"HEAD:{rel}"], file_dir)
     if head.returncode != 0:
         raise AdmissionTableError(
@@ -402,12 +466,14 @@ def head_bytes(path: Path, what: str = "admission table") -> tuple[bytes, str]:
 def verify_head_binding(path: Path, raw: bytes) -> None:
     """Refuse table bytes that are not the table's committed HEAD content.
 
-    ``raw`` are the bytes the caller already read and parsed (read once); the
-    HEAD read is ``head_bytes``; and the repository must carry the goalforge
-    pre-commit guard. Raises AdmissionTableError with a distinct reason per
-    failure."""
-    head, rel = head_bytes(path)
-    table_dir = Path(path).resolve().parent
+    ``path`` is the caller's ONE resolution of the table (the same path the
+    bytes were read from); ``raw`` are the bytes the caller already read and
+    parsed (read once); the HEAD read is ``head_bytes`` with the guard-set
+    match; and the repository enclosing that path must carry the goalforge
+    pre-commit guard. Nothing here resolves the table path again. Raises
+    AdmissionTableError with a distinct reason per failure."""
+    head, rel = head_bytes(path, guard_set=True)
+    table_dir = path.parent
     if head != raw:
         raise AdmissionTableError(
             f"admission table {path} differs from git show HEAD:{rel} — HEAD "
@@ -476,7 +542,7 @@ def _leaf_incoherence(row: dict, provider: dict, root: Path | None) -> str | Non
             f"dispatch file's provider row runs {configured!r} — refused "
             "(a repointed leaf does not inherit the admission)"
         )
-    target = (root or default_leaf_root()) / declared
+    root_real, target = leaf_target(root or default_leaf_root(), declared)
     try:
         digest = _leaf_digest(target)
     except OSError as exc:
@@ -490,7 +556,7 @@ def _leaf_incoherence(row: dict, provider: dict, root: Path | None) -> str | Non
             f"{name!r} records {row.get('leaf_sha256')!r} — refused (the "
             "evidence was gathered against different content)"
         )
-    return closure_mismatch(row, root or default_leaf_root())
+    return closure_mismatch(row, root_real, target)
 
 
 def resolve(role: str, klass: str, provider: dict, model: str,
@@ -587,6 +653,9 @@ def verify_leaf(table_path: Path, klass: str, provider: str, model: str, *,
     leaf's real path to lie under the leaf root and re-hashes it and its
     closure (``closure_mismatch``). Returns the real path to execute.
     Raises AdmissionTableError on any failure — the leaf is never run then."""
+    # The table path's ONE resolution: the byte read, the HEAD read and the
+    # guard check below all take this path and resolve nothing again.
+    table_path = Path(os.path.realpath(table_path))
     raw = read_table(table_path)
     verify_head_binding(table_path, raw)
     rows = [
@@ -600,8 +669,7 @@ def verify_leaf(table_path: Path, klass: str, provider: str, model: str, *,
             f"HEAD-bound table {table_path} — refused"
         )
     row = rows[0]
-    root = Path(os.path.realpath(leaf_root or default_leaf_root()))
-    target = Path(os.path.realpath(root / str(row["leaf"])))
+    root, target = leaf_target(leaf_root or default_leaf_root(), str(row["leaf"]))
     if root not in target.parents:
         raise AdmissionTableError(
             f"leaf {row['leaf']!r} resolves to {target}, outside the leaf root "
@@ -619,7 +687,7 @@ def verify_leaf(table_path: Path, klass: str, provider: str, model: str, *,
             f"HEAD-bound admission row records {row['leaf_sha256']!r} — "
             "refused, not executed"
         )
-    unbound = closure_mismatch(row, root)
+    unbound = closure_mismatch(row, root, target)
     if unbound:
         raise AdmissionTableError(f"{unbound} — refused, not executed")
     return target

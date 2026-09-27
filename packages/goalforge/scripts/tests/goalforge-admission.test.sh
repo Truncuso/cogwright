@@ -49,7 +49,7 @@ mkdir -p "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")"
 cp -r "$F/leaf/." "$CLAUDE_CONFIG_DIR/$(dirname "$LEAF_REL")/"
 
 # `admitted_source` is package-relative, never the absolute host path (S-9).
-FIXTURE_SRC="scripts/tests/fixtures/admission/admitted-ok.yaml"
+FIXTURE_SRC="scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml"
 SHIPPED_SRC="references/admitted-providers.yaml"
 
 jget()  { python3 -c 'import json,sys; print(json.load(sys.stdin).get(sys.argv[1],""))' "$1"; }
@@ -60,7 +60,7 @@ reset() { rm -rf "$T/ledger"; }
 # ── b1: refused — the WP's task class has no row ─────────────────────────
 reset
 OUT="$(python3 "$PICK" --task "$F/wp-code-sh.md" --role implement \
-       --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok.yaml" \
+       --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok/references/admitted-providers.yaml" \
        --wp wp-fx 2>"$T/err")"
 RC=$?
 PROV="$(printf '%s' "$OUT" | jget provider)"
@@ -103,7 +103,7 @@ fi
 # ── b2: admitted ─────────────────────────────────────────────────────────
 reset
 OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
-       --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok.yaml" \
+       --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok/references/admitted-providers.yaml" \
        --wp wp-fx 2>"$T/err")"
 RC=$?
 if [[ "$RC" -eq 0 ]] \
@@ -338,7 +338,7 @@ fi
 # ── b5: admission binds (task_class, provider, MODEL) ────────────────────
 reset
 OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
-       --dispatch "$F/dispatch-ollama-qwen.yaml" --admitted "$F/admitted-ok.yaml" 2>/dev/null)"
+       --dispatch "$F/dispatch-ollama-qwen.yaml" --admitted "$F/admitted-ok/references/admitted-providers.yaml" 2>/dev/null)"
 REASON="$(printf '%s' "$OUT" | jget admission_reason)"
 if [[ "$(printf '%s' "$OUT" | jget provider)" == "anthropic" ]] \
    && [[ "$REASON" == *"glm-5.3:cloud"* && "$REASON" == *"qwen3-coder:cloud"* ]]; then
@@ -370,7 +370,7 @@ fi
 reset
 OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
        --dispatch "$F/dispatch-ollama-egress-none.yaml" \
-       --admitted "$F/admitted-ok.yaml" --wp wp-fx 2>/dev/null)"
+       --admitted "$F/admitted-ok/references/admitted-providers.yaml" --wp wp-fx 2>/dev/null)"
 RC=$?
 REASON="$(printf '%s' "$OUT" | jget admission_reason)"
 if [[ "$RC" -eq 0 ]] \
@@ -472,7 +472,7 @@ fi
 reset
 mv "$CLAUDE_CONFIG_DIR/$LEAF_REL" "$CLAUDE_CONFIG_DIR/$LEAF_REL.away"
 OUT="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
-       --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok.yaml" 2>/dev/null)"
+       --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok/references/admitted-providers.yaml" 2>/dev/null)"
 mv "$CLAUDE_CONFIG_DIR/$LEAF_REL.away" "$CLAUDE_CONFIG_DIR/$LEAF_REL"
 if [[ "$(printf '%s' "$OUT" | jget provider)" == "anthropic" ]] \
    && [[ "$(printf '%s' "$OUT" | jget admission_reason)" == *"cannot be read"* ]]; then
@@ -483,7 +483,7 @@ fi
 
 # S-13: `--admitted` is a test seam, not an arbitrary-file read. A table
 # outside the package root (or the plans root) decides nothing.
-cp "$F/admitted-ok.yaml" "$T/outside-table.yaml"
+cp "$F/admitted-ok/references/admitted-providers.yaml" "$T/outside-table.yaml"
 ERR="$(python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
        --dispatch "$F/dispatch-ollama.yaml" --admitted "$T/outside-table.yaml" 2>&1)"
 RC=$?
@@ -509,7 +509,7 @@ fi
 # S-13: an active override is announced, and recorded package-relative (S-9).
 reset
 python3 "$PICK" --task "$F/wp-code-py.md" --role implement \
-    --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok.yaml" \
+    --dispatch "$F/dispatch-ollama.yaml" --admitted "$F/admitted-ok/references/admitted-providers.yaml" \
     --wp wp-fx >/dev/null 2>"$T/err"
 if [[ "$(grep -c -- '--admitted override active' "$T/err")" == "1" ]] \
    && [[ "$(lget admitted_source <"$LEDGER")" == "$FIXTURE_SRC" ]]; then

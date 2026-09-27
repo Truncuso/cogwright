@@ -133,10 +133,16 @@ exits 2 naming the missing `(task_class, provider, model)` admission.
   unreadable table fails CLOSED with its own reason, never as an empty table.
 - **Coherence.** The dispatch row's `egress` must be `<=` the admitting row's
   `max_egress` over `none < diff-only < overview < full`.
-- **HEAD binding.** The admitting table's bytes (read once) must equal
-  `git show HEAD:<path>` in the table's own repository, resolved with every
-  `GIT_*` variable scrubbed; outside a git work tree, or absent from HEAD, the
-  compile exits 2. That repository must also carry the goalforge pre-commit
+- **HEAD binding.** The table path is resolved exactly ONCE, by the caller,
+  and that one real path serves the byte read, the HEAD read and the guard
+  check. The admitting table's bytes (read once) must equal
+  `git show HEAD:<rel>` in the repository enclosing that real path, read with
+  every `GIT_*` variable scrubbed, `<rel>` taken against the physical
+  `--show-toplevel` (a symlinked ancestor is fine) and required to match the
+  pre-commit guard's set `(?:.*/)?references/admitted-providers\.yaml` end to
+  end, with no control character; outside a git work tree, absent from HEAD,
+  or a real path outside that set, the compile exits 2. That repository must
+  also carry the goalforge pre-commit
   (`scripts/goalforge-install-hooks.sh`'s marker block invoking this package's
   `hooks/goalforge-pre-commit.sh`), and no global or system `core.hooksPath`
   may be set. Consequence: admitted execution needs a git checkout with the
@@ -148,9 +154,13 @@ exits 2 naming the missing `(task_class, provider, model)` admission.
   model/effort, output schema `{exit_code, stderr, stdout}`) whose only action
   is the call `scripts/goalforge-leaf-exec.sh <task_class> <provider> <model> <
   <brief file>` — keyed by the admission row, with no hash and no table
-  argument. The brief is the WP overview.md bytes at HEAD, which the compile
-  writes to `plans/<feature>/<wp>/leaf-brief.txt` (a plans root outside a git
-  work tree exits 2). Gate B and gate C are stages 2 and 3, each run only when
+  argument. The brief is the WP overview.md bytes at HEAD when the overview is
+  tracked (in the index of the repository enclosing its real path, which may
+  be a nested `plans/` repository; a tracked overview whose HEAD read fails,
+  e.g. staged but never committed, exits 2), else its working-tree bytes; the
+  one ledger row carries `brief_source: head|worktree`. The compile writes it
+  to `plans/<feature>/<wp>/leaf-brief.txt` (a plans root outside any git work
+  tree exits 2). Gate B and gate C are stages 2 and 3, each run only when
   stage 1's `exit_code` is 0. The leg's provider, model, effort (the runner
   node's only; the leaf runs at its provider default), evidence ref,
   permission set, containment block, `leaf` + `leaf_sha256` and

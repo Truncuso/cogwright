@@ -66,6 +66,9 @@ export HOME="$T/home"
 export XDG_CONFIG_HOME="$T/home/.config"
 export CLAUDE_CONFIG_DIR="$T/cfg"
 export GOALFORGE_DISPATCH_LEDGER="$T/ledger/dispatch-decisions.jsonl"
+# red() mutates replica sources in place and restores them: no bytecode cache
+# may outlive a mutant (a same-size, same-second restore would reuse it).
+export PYTHONDONTWRITEBYTECODE=1
 mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$CLAUDE_CONFIG_DIR"
 
 parse_check() { # $1 = script path
@@ -345,7 +348,7 @@ else
 fi
 
 # =============================================================================
-# wp-08 — ADMITTED execution (b1-b3, b5-b8, b10-b14)
+# wp-08 — ADMITTED execution (b1-b3, b5-b8, b10-b16)
 # =============================================================================
 # A non-native implement row compiles iff the DEFAULT admission table admits
 # it. Every case below drives that table through the ONE in-process seam,
@@ -393,9 +396,13 @@ mk_replica() {
     cp -r "$PKG/." "$1/"
     find "$1" -name __pycache__ -type d -prune -exec rm -rf {} +
     rm -rf "$1/run"
-    cp "$1/scripts/tests/fixtures/admission/admitted-ok.yaml" "$1/references/admitted-providers.yaml"
-    # b13 (iii): a table committed now and deleted by a later commit.
-    cp "$1/scripts/tests/fixtures/admission/admitted-ok.yaml" "$1/scripts/tests/fixtures/admission/admitted-absent.yaml"
+    cp "$1/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$1/references/admitted-providers.yaml"
+    # b13 (iii): a table committed now and deleted by a later commit. Every
+    # admitting fixture sits at a path ending references/admitted-providers.yaml
+    # (T12), so the HEAD read's guard-set match passes and the case reaches
+    # the check it exists to exercise.
+    mkdir -p "$1/scripts/tests/fixtures/admission/admitted-absent/references"
+    cp "$1/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$1/scripts/tests/fixtures/admission/admitted-absent/references/admitted-providers.yaml"
     [ "$2" = git ] || return 0
     "${GITQ[@]}" -C "$1" init -q
     "${GITQ[@]}" -C "$1" add -A
@@ -418,6 +425,7 @@ fi
 # replica's compiler in-process; sets RC, writes $T/<name>.err, out $T/<name>/.
 seam_compile() {
     local name="$1" table="$2" dispatch="$3"; shift 3
+    rm -rf "${T:?}/$name"   # a re-run (red()) never reads a stale earlier output
     env "$@" python3 "$SEAM" compile "$RCOMPILE" "$table" "$T/$name.spy" -- \
         "$WPA" --dispatch "$dispatch" --expertise "$EXPERTISE" --out "$T/$name" \
         >"$T/$name.out" 2>"$T/$name.err"
@@ -425,11 +433,48 @@ seam_compile() {
 }
 err_has() { grep -qF -- "$2" "$T/$1.err"; }
 
+# red <label> <why|-> <replica file>:<mutation>... -- <case fn> [args...]
+# A known-bad: applies each named fixtures/admission/mutate.py mutation to the
+# REPLICA's copy of the file, runs the case function in a subshell (its ok/bad
+# lines captured, its counters discarded) and restores every file. The
+# known-bad counts only when the case goes RED — and, with <why>, only when a
+# FAIL line carries that substring (so it is red for the stated reason).
+RED_N=0
+red() {
+    local label="$1" why="$2" out="" f applied=1; shift 2
+    local files=()
+    while [ "$1" != "--" ]; do
+        f="$R/${1%%:*}"
+        RED_N=$((RED_N+1))
+        cp "$f" "$T/red-$RED_N.orig"
+        files+=("$f" "$T/red-$RED_N.orig")
+        if ! python3 "$ADM_FX/mutate.py" "${1#*:}" "$T/red-$RED_N.orig" "$f" 2>"$T/red.err"; then
+            bad "known-bad $label: mutation ${1#*:} did not apply ($(cat "$T/red.err"))"
+            applied=0
+        fi
+        shift
+    done
+    shift
+    [ "$applied" -eq 1 ] && out="$("$@" 2>&1)"
+    for ((f = 0; f < ${#files[@]}; f += 2)); do cp "${files[f+1]}" "${files[f]}"; done
+    [ "$applied" -eq 1 ] || return 0
+    [ -n "${COMPILE_TEST_VERBOSE:-}" ] && printf '%s\n' "$out" | sed 's/^/    | /'
+    if ! grep -q '^  FAIL: ' <<<"$out"; then
+        bad "known-bad stays green: $label"; printf '%s\n' "$out" | sed 's/^/    /'
+    elif [ "$why" != - ] && ! grep '^  FAIL: ' <<<"$out" | grep -qF -- "$why"; then
+        bad "known-bad red, but not for '$why': $label"; printf '%s\n' "$out" | sed 's/^/    /'
+    elif [ "$why" != - ]; then
+        ok "known-bad red: $label (why: $why)"
+    else
+        ok "known-bad red: $label"
+    fi
+}
+
 # --- b1 / b5 / b6(ii) / b8: the admitted compile --------------------------------
 rm -rf "$T/ledger"
 HOST_LEDGER="$CLAUDE_CONFIG_DIR/data/dispatch-decisions.jsonl"
 HOST_BEFORE="$(sha256sum "$HOST_LEDGER" 2>/dev/null || echo absent)"
-seam_compile b1 "$RFX/admitted-ok.yaml" "$D_ADM"
+seam_compile b1 "$RFX/admitted-ok/references/admitted-providers.yaml" "$D_ADM"
 B1_JS="$T/b1/wp-fx-admitted.js"
 if [ "$RC" -eq 0 ] && [ -f "$B1_JS" ]; then
     ok "b1 admitted: compile exits 0 and writes the workflow"
@@ -477,7 +522,7 @@ else
 fi
 
 # b6 (ii): exactly one provenance line naming the patched default table.
-if [ "$(grep -cxF "admitted table: $RFX/admitted-ok.yaml" "$T/b1.err")" = "1" ]; then
+if [ "$(grep -cxF "admitted table: $RFX/admitted-ok/references/admitted-providers.yaml" "$T/b1.err")" = "1" ]; then
     ok "b6(ii) stderr carries ONE 'admitted table: <ADMITTED_PATH>' provenance line"
 else
     bad "b6(ii) provenance line (stderr: $(cat "$T/b1.err"))"
@@ -494,8 +539,9 @@ if [ "$LROWS" = "1" ] \
    && [ "$(lget task_class <"$GOALFORGE_DISPATCH_LEDGER")" = "code/py" ] \
    && [ "$(lget admitted_override <"$GOALFORGE_DISPATCH_LEDGER")" = "False" ] \
    && [ "$(lget evidence_ref <"$GOALFORGE_DISPATCH_LEDGER")" = "fixtures/admission#user-experience-2026-09-14" ] \
-   && [ "$(lget admitted_source <"$GOALFORGE_DISPATCH_LEDGER")" = "scripts/tests/fixtures/admission/admitted-ok.yaml" ]; then
-    ok "b8 exactly ONE ledger row: admitted, the fixture's provider/model/task_class/evidence_ref, override false, admitted_source = the patched fixture literal"
+   && [ "$(lget admitted_source <"$GOALFORGE_DISPATCH_LEDGER")" = "scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" ] \
+   && [ "$(lget brief_source <"$GOALFORGE_DISPATCH_LEDGER")" = "head" ]; then
+    ok "b8/b16(i) exactly ONE ledger row: admitted, the fixture's provider/model/task_class/evidence_ref, override false, admitted_source = the patched fixture literal, brief_source head (tracked overview)"
 else
     bad "b8 ledger row (rows=$LROWS): $(cat "$GOALFORGE_DISPATCH_LEDGER" 2>&1)"
 fi
@@ -556,10 +602,10 @@ b3_case() { # <name> <table> <dispatch> <want rc> [levels...]
     fi
     if [ "$good" -eq 1 ]; then ok "b3 $name -> exit $want"; else bad "b3 $name -> exit $want (rc=$RC): $(cat "$T/$name.err")"; fi
 }
-b3_case b3-none-vs-full      admitted-egress-none.yaml      dispatch-admitted-egress-full.yaml      2 none full
-b3_case b3-diffonly-vs-overview admitted-egress-diff-only.yaml dispatch-admitted.yaml              2 diff-only overview
-b3_case b3-equal-overview    admitted-ok.yaml               dispatch-admitted.yaml                  0
-b3_case b3-full-vs-diffonly  admitted-egress-full.yaml      dispatch-admitted-egress-diff-only.yaml 0
+b3_case b3-none-vs-full      admitted-egress-none/references/admitted-providers.yaml      dispatch-admitted-egress-full.yaml      2 none full
+b3_case b3-diffonly-vs-overview admitted-egress-diff-only/references/admitted-providers.yaml dispatch-admitted.yaml              2 diff-only overview
+b3_case b3-equal-overview    admitted-ok/references/admitted-providers.yaml               dispatch-admitted.yaml                  0
+b3_case b3-full-vs-diffonly  admitted-egress-full/references/admitted-providers.yaml      dispatch-admitted-egress-diff-only.yaml 0
 
 # --- b10: max_egress required + closed enum (loader substrings) ------------------
 seam_compile b10-missing "$RFX/bad-missing-max-egress.yaml" "$D_ADM"
@@ -583,7 +629,7 @@ fi
 
 # --- b11: fable is advisor-only on BOTH paths -------------------------------------
 FABLE_MSG="fable is advisor-only, never an implementer"
-seam_compile b11-admitted "$RFX/admitted-fable.yaml" "$FIXTURES/dispatch-admitted-fable.yaml"
+seam_compile b11-admitted "$RFX/admitted-fable/references/admitted-providers.yaml" "$FIXTURES/dispatch-admitted-fable.yaml"
 if [ "$RC" -eq 2 ] && err_has b11-admitted "$FABLE_MSG" && ! err_has b11-admitted "missing admission"; then
     ok "b11(i) an ADMITTED (code/py, ollama, fable) row -> exit 2, fable advisor-only"
 else
@@ -598,8 +644,8 @@ fi
 
 # --- b6 (iii): competing table routes never reach the resolver --------------------
 seam_compile b6-env "$RFX/admitted-empty.yaml" "$D_ADM" \
-    GOALFORGE_ADMITTED="$RFX/admitted-ok.yaml" GOALFORGE_ADMITTED_PATH="$RFX/admitted-ok.yaml" \
-    GOALFORGE_ADMISSION_TABLE="$RFX/admitted-ok.yaml"
+    GOALFORGE_ADMITTED="$RFX/admitted-ok/references/admitted-providers.yaml" GOALFORGE_ADMITTED_PATH="$RFX/admitted-ok/references/admitted-providers.yaml" \
+    GOALFORGE_ADMISSION_TABLE="$RFX/admitted-ok/references/admitted-providers.yaml"
 if [ "$RC" -eq 2 ] && err_has b6-env "missing admission $KEY_TRIPLE"; then
     ok "b6(iii)(a) a GOALFORGE_ADMITTED*-style env var does not supply the table"
 else
@@ -710,17 +756,71 @@ ln -s "$T/outside/lib" "$LEAF_DIR/lib"
 # Rule (d) by name: a walker that merely skipped the symlink would still exit 2
 # (lib/common.sh then reads as missing), so the reason itself is pinned.
 closure_case "ix) lib/ -> out-of-root directory symlink to a byte-identical copy" "symlink to a directory"
-# (x) N1 lap 7: the entry file itself -> an IN-root symlink to a byte-identical
-# copy whose sibling differs. The executed file's real parent is the tree that
-# must match; a walk of the declared directory would pass and run the copy.
-EVIL="$CLAUDE_CONFIG_DIR/evil-copy"
-mkdir -p "$EVIL"
-cp -r "$ADM_FX/leaf/." "$EVIL/"
-printf '# attacker sibling\n' >> "$EVIL/helper.sh"
-rm -f "$LEAF_FILE"
-ln -s "$EVIL/$(basename "$LEAF_FILE")" "$LEAF_FILE"
-closure_case "x) entry -> in-root symlink to a byte-identical copy whose sibling differs" "is a symlink"
-rm -rf "$EVIL"
+# Rule (c) (T8): a symlink AT the entry path or anywhere under the entry's real
+# parent tree is refused; a symlinked ancestor above the leaf root is resolved.
+# The mutated copies sit INSIDE the leaf root but OUTSIDE the entry's own
+# directory tree (pinned placement, C4/O3/S7).
+# (x) N1 lap 7: the entry file -> an in-root symlink to a byte-identical copy
+# whose sibling lib/ file (at the copy's location) is then changed. A walk of
+# the declared directory would pass and exec the copy.
+case_b12_x() {
+    local evil="$CLAUDE_CONFIG_DIR/evil-copy"
+    mkdir -p "$evil"
+    cp -r "$ADM_FX/leaf/." "$evil/"
+    printf '# attacker lib\n' >> "$evil/lib/common.sh"
+    rm -f "$LEAF_FILE"
+    ln -s "$evil/$(basename "$LEAF_FILE")" "$LEAF_FILE"
+    closure_case "x) entry -> in-root symlink to a byte-identical copy whose lib/ sibling differs" "is a symlink"
+    rm -rf "$evil"
+}
+# (xi) the closure sibling -> an in-root symlink to a byte-identical copy.
+case_b12_xi() {
+    local evil="$CLAUDE_CONFIG_DIR/evil-sibling"
+    mkdir -p "$evil"
+    cp "$LEAF_DIR/helper.sh" "$evil/helper.sh"
+    rm -f "$LEAF_DIR/helper.sh"
+    ln -s "$evil/helper.sh" "$LEAF_DIR/helper.sh"
+    closure_case "xi) closure sibling -> in-root symlink to a byte-identical copy" "is a symlink"
+    rm -rf "$evil"
+}
+# (xii) known-good: the leaf root reached through a symlinked ancestor
+# (CLAUDE_CONFIG_DIR itself a symlink), no symlink inside the closure.
+case_b12_xii() {
+    rm -f "$MARK" "$T/cfg-link"
+    ln -s "$CLAUDE_CONFIG_DIR" "$T/cfg-link"
+    ( cd "$R" && CLAUDE_CONFIG_DIR="$T/cfg-link" LEAF_MARKER="$MARK" LEAF_EXIT=7 bash -c "$CALL" ) \
+        >/dev/null 2>"$T/wrap.err"
+    RC=$?
+    if [ "$RC" -eq 7 ] && [ -f "$MARK" ]; then
+        ok "b12(xii) leaf root through a symlinked ancestor -> the leaf runs, exit status the leaf's (7)"
+    else
+        bad "b12(xii) symlinked-ancestor leaf root (rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/wrap.err")"
+    fi
+    rm -f "$T/cfg-link"
+}
+case_b12_x
+case_b12_xi
+case_b12_xii
+ADM_PY=scripts/goalforge-admission.py
+# (n) the full lap-7 N1 code: RED on (x) because the leaf RAN (marker written).
+red "b12(n) lap-7 N1 code (no entry check, declared-dir walk, out-of-root-only walker)" \
+    "marker=yes" "$ADM_PY:n1-lap7" -- case_b12_x
+# (l) a rule (c) refusing only out-of-root symlinks: marker-RED on (xi).
+red "b12(l) walker refusing only out-of-root symlinks" "marker=yes" \
+    "$ADM_PY:walker-out-of-root-only" -- case_b12_xi
+# (m) a refusal of any abspath != realpath, ancestors included: RED on (xii).
+red "b12(m) refusal of a symlinked ancestor above the leaf root" "b12(xii)" \
+    "$ADM_PY:refuse-symlinked-ancestor" -- case_b12_xii
+
+# T9 (no-discriminator, structural): the entry is resolved ONCE, by the caller.
+case_t9() {
+    local line
+    line="$(python3 "$ADM_FX/structural.py" closure-single-realpath "$R/$ADM_PY")"
+    case "$line" in ok*) ok "${line#ok }" ;; *) bad "${line#bad }" ;; esac
+}
+case_t9
+red "T9 closure_mismatch resolving the entry again" "T9 structural" \
+    "$ADM_PY:closure-realpath-entry" -- case_t9
 
 # --- b14: the leaf-interface v1 argv and the HEAD brief --------------------------
 # The fixture leaf enforces §3 (exit 1 unless --model, --prompt, --output) and
@@ -780,15 +880,16 @@ else
     bad "b14(v) HEAD brief (compile rc=$RC): $(cat "$T/b14v.err" "$T/wrap.err")"
 fi
 "${GITQ[@]}" -C "$R" checkout -q -- scripts/tests/fixtures/dispatch/wp-admitted.md
-# A plans root outside any git work tree has no HEAD brief: exit 2, fail closed.
+# b16 (iii): a plans root outside any git work tree: exit 2 naming the missing
+# work tree, fail closed (an agent-resolved reading, OQ11 (2)).
 mkdir -p "$T/nogit/plans/wp"
 cp "$WPA" "$T/nogit/plans/wp/overview.md"
 WPA_SAVE="$WPA"; WPA="$T/nogit/plans/wp/overview.md"
-seam_compile b14-nogit "$RFX/admitted-ok.yaml" "$D_ADM"
+seam_compile b14-nogit "$RFX/admitted-ok/references/admitted-providers.yaml" "$D_ADM"
 WPA="$WPA_SAVE"
 if [ "$RC" -eq 2 ] && err_has b14-nogit "leaf brief" && err_has b14-nogit "outside a git work tree" \
    && [ ! -f "$T/nogit/plans/wp/leaf-brief.txt" ] && [ ! -f "$T/b14-nogit/wp-fx-admitted.js" ]; then
-    ok "b14 a WP outside a git work tree -> exit 2 (no HEAD brief), nothing written"
+    ok "b16(iii) a WP outside a git work tree -> exit 2 naming the missing work tree, nothing written"
 else
     bad "b14 non-git plans root (rc=$RC): $(cat "$T/b14-nogit.err")"
 fi
@@ -802,24 +903,24 @@ b13_expect() { # <name> <substring>
     fi
 }
 # (i) edited after the replica's commit.
-printf '# edited after commit\n' >> "$RFX/admitted-ok.yaml"
-seam_compile b13-i "$RFX/admitted-ok.yaml" "$D_ADM"
+printf '# edited after commit\n' >> "$RFX/admitted-ok/references/admitted-providers.yaml"
+seam_compile b13-i "$RFX/admitted-ok/references/admitted-providers.yaml" "$D_ADM"
 b13_expect b13-i "differs from git show HEAD"
 # (iv) the same edit, with GIT_DIR / GIT_WORK_TREE pointing at a forged
 # repository whose HEAD holds the edited bytes: scrubbed, so still a mismatch
 # against the REAL replica.
 FORGED_GIT="$T/forged.git"
 "${GITQ[@]}" init -q --bare "$FORGED_GIT"
-"${GITQ[@]}" --git-dir="$FORGED_GIT" --work-tree="$R" add scripts/tests/fixtures/admission/admitted-ok.yaml
+"${GITQ[@]}" --git-dir="$FORGED_GIT" --work-tree="$R" add scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml
 "${GITQ[@]}" --git-dir="$FORGED_GIT" --work-tree="$R" commit -qm forged
-seam_compile b13-iv "$RFX/admitted-ok.yaml" "$D_ADM" GIT_DIR="$FORGED_GIT" GIT_WORK_TREE="$R"
+seam_compile b13-iv "$RFX/admitted-ok/references/admitted-providers.yaml" "$D_ADM" GIT_DIR="$FORGED_GIT" GIT_WORK_TREE="$R"
 b13_expect b13-iv "differs from git show HEAD"
-"${GITQ[@]}" -C "$R" checkout -q -- scripts/tests/fixtures/admission/admitted-ok.yaml
+"${GITQ[@]}" -C "$R" checkout -q -- scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml
 # (ii) a repository-free replica: no .git anywhere above it.
 R2="$T/nogit/replica"
 mk_replica "$R2" nogit
 RCOMPILE_SAVE="$RCOMPILE"; RCOMPILE="$R2/scripts/goalforge-workflow-compile.py"
-seam_compile b13-ii "$R2/scripts/tests/fixtures/admission/admitted-ok.yaml" "$D_ADM"
+seam_compile b13-ii "$R2/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$D_ADM"
 RCOMPILE="$RCOMPILE_SAVE"
 if [ -z "$(git -C "$R2" rev-parse --show-toplevel 2>/dev/null)" ]; then
     b13_expect b13-ii "outside a git work tree"
@@ -828,59 +929,325 @@ else
     bad "b13 (ii) setup: $R2 sits inside a git work tree"
 fi
 # (iii) absent from HEAD: committed, the deletion committed, then rewritten.
-"${GITQ[@]}" -C "$R" rm -q scripts/tests/fixtures/admission/admitted-absent.yaml
+"${GITQ[@]}" -C "$R" rm -q scripts/tests/fixtures/admission/admitted-absent/references/admitted-providers.yaml
 ( cd "$R" && "${GITQ[@]}" commit -qm "drop admitted-absent" </dev/null >/dev/null 2>&1 )
-cp "$RFX/admitted-ok.yaml" "$RFX/admitted-absent.yaml"
-seam_compile b13-iii "$RFX/admitted-absent.yaml" "$D_ADM"
+mkdir -p "$RFX/admitted-absent/references"
+cp "$RFX/admitted-ok/references/admitted-providers.yaml" "$RFX/admitted-absent/references/admitted-providers.yaml"
+seam_compile b13-iii "$RFX/admitted-absent/references/admitted-providers.yaml" "$D_ADM"
 b13_expect b13-iii "absent from HEAD"
-rm -f "$RFX/admitted-absent.yaml"
-# (v) a nested `git init` over the table's directory, no goalforge pre-commit.
-"${GITQ[@]}" -C "$RFX" init -q
-"${GITQ[@]}" -C "$RFX" add admitted-ok.yaml
-"${GITQ[@]}" -C "$RFX" commit -qm nested
-seam_compile b13-v "$RFX/admitted-ok.yaml" "$D_ADM"
-b13_expect b13-v "unguarded"
+rm -f "$RFX/admitted-absent/references/admitted-providers.yaml"
+# (v) a nested `git init` ONE level above the table's references/ directory
+# (T12), no goalforge pre-commit: the rel is references/admitted-providers.yaml,
+# so the guard-set match passes and the unguarded-repository reason fires.
+NEST="$RFX/admitted-ok"
+"${GITQ[@]}" -C "$NEST" init -q
+"${GITQ[@]}" -C "$NEST" add references/admitted-providers.yaml
+"${GITQ[@]}" -C "$NEST" commit -qm nested
+case_b13_v() {
+    seam_compile b13-v "$NEST/references/admitted-providers.yaml" "$D_ADM"
+    b13_expect b13-v "unguarded"
+}
+case_b13_v
+# T12 known-bad: the guard-set match kept, the guarded-repository check dropped.
+red "T12 compile keeping the guard-set match but dropping _guard_reason" "b13 b13-v" \
+    "$ADM_PY:drop-guard-reason" -- case_b13_v
 # (vi) the nested repository's pre-commit carries the installer's marker block,
 # but it invokes a STUB goalforge-pre-commit.sh outside PKG_ROOT/hooks/.
 mkdir -p "$T/stub-hooks"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$T/stub-hooks/goalforge-pre-commit.sh"
 printf '#!/usr/bin/env bash\n# >>> sdd-pre-commit >>>\nbash "%s" || exit $?\n# <<< sdd-pre-commit <<<\n' \
-    "$T/stub-hooks/goalforge-pre-commit.sh" > "$RFX/.git/hooks/pre-commit"
-chmod +x "$RFX/.git/hooks/pre-commit"
-seam_compile b13-vi "$RFX/admitted-ok.yaml" "$D_ADM"
+    "$T/stub-hooks/goalforge-pre-commit.sh" > "$NEST/.git/hooks/pre-commit"
+chmod +x "$NEST/.git/hooks/pre-commit"
+seam_compile b13-vi "$NEST/references/admitted-providers.yaml" "$D_ADM"
 b13_expect b13-vi "unguarded"
-rm -rf "$RFX/.git"
+rm -rf "$NEST/.git"
 # (vii-a) a forged GLOBAL core.hooksPath in the redirected temp home.
 mkdir -p "$T/home-forged/.config" "$T/elsewhere-hooks"
 printf '[core]\n\thooksPath = %s\n' "$T/elsewhere-hooks" > "$T/home-forged/.gitconfig"
-seam_compile b13-viia "$RFX/admitted-ok.yaml" "$D_ADM" HOME="$T/home-forged" XDG_CONFIG_HOME="$T/home-forged/.config"
+seam_compile b13-viia "$RFX/admitted-ok/references/admitted-providers.yaml" "$D_ADM" HOME="$T/home-forged" XDG_CONFIG_HOME="$T/home-forged/.config"
 b13_expect b13-viia "global core.hooksPath is set"
 if ! err_has b13-viia "unguarded"; then ok "b13 (vii-a) reason is distinct from the unguarded-repository reason"; else bad "b13 (vii-a) reused the unguarded reason"; fi
 # (vii-b) the same redirection with a CLEAN .gitconfig admits.
 mkdir -p "$T/home-clean/.config"
 printf '[user]\n\tname = fixture\n' > "$T/home-clean/.gitconfig"
-seam_compile b13-viib "$RFX/admitted-ok.yaml" "$D_ADM" HOME="$T/home-clean" XDG_CONFIG_HOME="$T/home-clean/.config"
+seam_compile b13-viib "$RFX/admitted-ok/references/admitted-providers.yaml" "$D_ADM" HOME="$T/home-clean" XDG_CONFIG_HOME="$T/home-clean/.config"
 if [ "$RC" -eq 0 ] && [ -f "$T/b13-viib/wp-fx-admitted.js" ]; then
     ok "b13 (vii-b) a clean redirected home admits exactly as b1"
 else
     bad "b13 (vii-b) clean-config control (rc=$RC): $(cat "$T/b13-viib.err")"
 fi
-# (viii) N2 lap 7: the canonical table replaced, uncommitted, by a symlink to
-# an admitting table committed at an UNGUARDED path. The HEAD read must be of
-# the canonical path itself, so a symlinked table is refused outright.
+# The pre-v10 b13 (viii) case (a symlinked canonical table refused as "a symlink
+# or resolves through one") is RETIRED (T10, C3/S5): v10 resolves the table
+# once and refuses a real path outside the guard set instead — b15 (iii)/(iv).
+
+# --- b15: the HEAD read under symlinks — ONE resolution, physical toplevel -------
+# The table path is resolved exactly once, by the caller; the byte read, the
+# HEAD read and the guard check share that one real path; the rel is taken
+# against the physical --show-toplevel and must FULLY match the pre-commit
+# guard's set (?:.*/)?references/admitted-providers\.yaml.
+TBL=references/admitted-providers.yaml
+CANON="$R/$TBL"
+# hcommit <path>... — commit into the replica HEADLESS, around the installed
+# goalforge pre-commit (the attacker's move the HEAD binding must not trust).
+hcommit() {
+    "${GITQ[@]}" -C "$R" add -- "$@"
+    "${GITQ[@]}" -C "$R" -c core.hooksPath=/dev/null commit -qm "headless" </dev/null >/dev/null 2>&1
+}
+canon_link() { rm -f "$CANON"; ln -s "$1" "$CANON"; }
+canon_restore() { rm -f "$CANON"; "${GITQ[@]}" -C "$R" checkout -q -- "$TBL"; }
+b15_refused() { # <name> <substring>
+    if [ "$RC" -eq 2 ] && err_has "$1" "$2" && [ ! -f "$T/$1/wp-fx-admitted.js" ]; then
+        ok "b15 $1 -> exit 2 ($2)"
+    else
+        bad "b15 $1 -> exit 2 ($2) (rc=$RC): $(cat "$T/$1.err")"
+    fi
+}
+# (i)/(ii) known-good: the committed replica reached through a symlinked parent
+# (the LOGICAL path is passed; PKG_ROOT is resolved in production, so this is
+# the only way the ancestor case is exercised, O7).
+RLINK="$T/replica-link"
+ln -s "$R" "$RLINK"
+case_b15_i() {
+    local RCOMPILE="$RLINK/scripts/goalforge-workflow-compile.py"
+    local WPA="$RLINK/scripts/tests/fixtures/dispatch/wp-admitted.md"
+    seam_compile b15-i "$RLINK/scripts/tests/fixtures/admission/admitted-ok/$TBL" "$D_ADM"
+    if [ "$RC" -eq 0 ] && [ -f "$T/b15-i/wp-fx-admitted.js" ]; then
+        ok "b15(i) a committed table reached through a symlinked ancestor admits exactly as b1"
+    else
+        bad "b15(i) symlinked-ancestor table (rc=$RC): $(cat "$T/b15-i.err")"
+    fi
+    "${GITQ[@]}" -C "$R" show HEAD:scripts/tests/fixtures/dispatch/wp-admitted.md > "$T/b15-head.md"
+    if [ "$RC" -eq 0 ] && cmp -s "$R/scripts/tests/fixtures/dispatch/leaf-brief.txt" "$T/b15-head.md"; then
+        ok "b15(ii) a tracked overview reached through a symlinked ancestor: brief = git show HEAD:<physical rel>"
+    else
+        bad "b15(ii) symlinked-ancestor overview brief (rc=$RC)"
+    fi
+}
+case_b15_i
+PICK_PY=scripts/goalforge-pick-agent.py
+COMPILE_PY=scripts/goalforge-workflow-compile.py
+# (a) the lap-7 code: a logical path reaches the HEAD read, which refuses any
+# path whose abspath differs from its realpath — RED on (i) and (ii).
+red "b15(a) lap-7 abspath-vs-realpath refusal" "b15(i)" \
+    "$ADM_PY:lap7-head-refusal" "$PICK_PY:head-read-unresolved-table" \
+    "$COMPILE_PY:brief-abspath" -- case_b15_i
+red "b15(a) lap-7 abspath-vs-realpath refusal, overview" "b15(ii)" \
+    "$ADM_PY:lap7-head-refusal" "$COMPILE_PY:brief-abspath" -- case_b15_i
+# (b) rel = relpath(abspath(path), physical --show-toplevel) — RED on (i).
+red "b15(b) HEAD read on the unresolved (logical) table path" "b15(i)" \
+    "$PICK_PY:head-read-unresolved-table" -- case_b15_i
+
+# (iii) the canonical table -> a symlink to a headless-committed evil/ table.
 mkdir -p "$R/evil"
-cp "$RFX/admitted-ok.yaml" "$R/evil/admitted-providers.yaml"
-"${GITQ[@]}" -C "$R" add evil/admitted-providers.yaml
-( cd "$R" && "${GITQ[@]}" commit -qm "evil table" </dev/null >/dev/null 2>&1 )
-"${GITQ[@]}" -C "$R" cat-file -e HEAD:evil/admitted-providers.yaml 2>/dev/null \
-    && ok "b13 (viii) setup: the admitting table is committed at the unguarded evil/ path" \
-    || bad "b13 (viii) setup: evil/admitted-providers.yaml not in HEAD"
-rm -f "$R/references/admitted-providers.yaml"
-ln -s ../evil/admitted-providers.yaml "$R/references/admitted-providers.yaml"
-seam_compile b13-viii - "$D_ADM"
-b13_expect b13-viii "is a symlink or resolves through one"
-rm -f "$R/references/admitted-providers.yaml"
-"${GITQ[@]}" -C "$R" checkout -q -- references/admitted-providers.yaml
+cp "$RFX/admitted-ok/$TBL" "$R/evil/admitted-providers.yaml"
+hcommit evil/admitted-providers.yaml
+case_b15_iii() {
+    canon_link ../evil/admitted-providers.yaml
+    seam_compile b15-iii - "$D_ADM"
+    b15_refused b15-iii "outside the guarded set"
+    canon_restore
+}
+# (iv) references/ -> a symlink to a headless-committed evil2/ directory.
+cp -r "$R/references" "$R/evil2"
+hcommit evil2
+case_b15_iv() {
+    mv "$R/references" "$T/references.real"
+    ln -s evil2 "$R/references"
+    seam_compile b15-iv - "$D_ADM"
+    b15_refused b15-iv "outside the guarded set"
+    rm -f "$R/references"
+    mv "$T/references.real" "$R/references"
+}
+case_b15_iii
+case_b15_iv
+# (c) no guard-set match on the resolved rel — RED on (iii) and (iv).
+red "b15(c) no guard-set match, (iii)" "b15 b15-iii" "$ADM_PY:no-guard-set" -- case_b15_iii
+red "b15(c) no guard-set match, (iv)" "b15 b15-iv" "$ADM_PY:no-guard-set" -- case_b15_iv
+
+# (v) the canonical table -> a symlink to an admitting table committed in a
+# SEPARATE, unguarded repository nested INSIDE PKG_ROOT (git init one level
+# above its own references/): containment and the guard-set match pass, and
+# the unguarded reason fires, because the byte read, HEAD read and guard check
+# share ONE resolution.
+mkdir -p "$R/nested/references"
+cp "$RFX/admitted-ok/$TBL" "$R/nested/$TBL"
+"${GITQ[@]}" -C "$R/nested" init -q
+"${GITQ[@]}" -C "$R/nested" add "$TBL"
+"${GITQ[@]}" -C "$R/nested" commit -qm nested
+case_b15_v() {
+    canon_link ../nested/references/admitted-providers.yaml
+    seam_compile b15-v - "$D_ADM"
+    b15_refused b15-v "unguarded"
+    canon_restore
+}
+case_b15_v
+# (d) a guard anchored at the unresolved path — RED on (v).
+red "b15(d) HEAD read + guard anchored at the unresolved canonical path" "b15 b15-v" \
+    "$PICK_PY:head-read-unresolved-table" -- case_b15_v
+rm -rf "$R/nested"
+
+# (vi) a headless-committed guard-set-looking name whose final byte is a newline.
+NL_DIR="$R/evil3/references"
+mkdir -p "$NL_DIR"
+cp "$RFX/admitted-ok/$TBL" "$NL_DIR/admitted-providers.yaml"$'\n'
+hcommit "evil3/references/admitted-providers.yaml"$'\n'
+case_b15_vi() {
+    canon_link "../evil3/references/admitted-providers.yaml"$'\n'
+    seam_compile b15-vi - "$D_ADM"
+    b15_refused b15-vi "outside the guarded set"
+    canon_restore
+}
+# (vii) evilreferences/ — a whole-string match refuses it.
+mkdir -p "$R/evilreferences"
+cp "$RFX/admitted-ok/$TBL" "$R/evilreferences/admitted-providers.yaml"
+hcommit evilreferences/admitted-providers.yaml
+case_b15_vii() {
+    canon_link ../evilreferences/admitted-providers.yaml
+    seam_compile b15-vii - "$D_ADM"
+    b15_refused b15-vii "outside the guarded set"
+    canon_restore
+}
+if "${GITQ[@]}" -C "$R" cat-file -e "HEAD:evil3/references/admitted-providers.yaml"$'\n' 2>/dev/null \
+   && "${GITQ[@]}" -C "$R" cat-file -e HEAD:evilreferences/admitted-providers.yaml 2>/dev/null \
+   && "${GITQ[@]}" -C "$R" cat-file -e HEAD:evil/admitted-providers.yaml 2>/dev/null \
+   && "${GITQ[@]}" -C "$R" cat-file -e HEAD:evil2/admitted-providers.yaml 2>/dev/null; then
+    ok "b15 setup: the attacker tables are committed headless (evil/, evil2/, newline name, evilreferences/)"
+else
+    bad "b15 setup: an attacker table is not in the replica's HEAD"
+fi
+case_b15_vi
+case_b15_vii
+# (e) re.search + a bare trailing `$` — RED on (vi); (f) unanchored + \Z — RED on (vii).
+red "b15(e) guard-set re.search with a trailing \$" "b15 b15-vi" \
+    "$ADM_PY:guard-set-search-dollar" -- case_b15_vi
+red "b15(f) guard-set unanchored re.search + \\Z" "b15 b15-vii" \
+    "$ADM_PY:guard-set-search-z" -- case_b15_vii
+
+# (viii) the WP overview.md itself a symlink to ANOTHER repository's tracked
+# overview: accepted (C8) — brief = the target's HEAD bytes, written beside it.
+OTHER="$T/other-repo"
+mkdir -p "$OTHER/wp" "$T/overview-link"
+cp "$WPA" "$OTHER/wp/overview.md"
+"${GITQ[@]}" -C "$OTHER" init -q
+"${GITQ[@]}" -C "$OTHER" add wp/overview.md
+"${GITQ[@]}" -C "$OTHER" commit -qm other
+printf '\nWORKING-TREE EDIT IN THE OTHER REPO\n' >> "$OTHER/wp/overview.md"
+ln -s "$OTHER/wp/overview.md" "$T/overview-link/overview.md"
+WPA_SAVE="$WPA"; WPA="$T/overview-link/overview.md"
+seam_compile b15-viii "$RFX/admitted-ok/$TBL" "$D_ADM"
+WPA="$WPA_SAVE"
+"${GITQ[@]}" -C "$OTHER" show HEAD:wp/overview.md > "$T/other-head.md"
+if [ "$RC" -eq 0 ] && cmp -s "$OTHER/wp/leaf-brief.txt" "$T/other-head.md" \
+   && [ ! -e "$T/overview-link/leaf-brief.txt" ]; then
+    ok "b15(viii) a symlinked overview.md -> exit 0, brief = the target repo's HEAD bytes, written in the target's directory"
+else
+    bad "b15(viii) symlinked overview (rc=$RC): $(cat "$T/b15-viii.err")"
+fi
+
+# single-resolution (named structural test, TABLE path only; no discriminator
+# for the swap race, which no deterministic case can show).
+case_single_resolution() {
+    local line
+    while IFS= read -r line; do
+        case "$line" in ok*) ok "${line#ok }" ;; *) bad "${line#bad }" ;; esac
+    done < <(python3 "$ADM_FX/structural.py" single-resolution "$R/$ADM_PY")
+}
+case_single_resolution
+red "single-resolution: the guard check re-resolving the table" "single-resolution" \
+    "$ADM_PY:resolve-table-dir" -- case_single_resolution
+
+# --- b16: the brief source — HEAD when tracked, else the working tree -----------
+# Tracked = in the index of the repository enclosing the overview's REAL path.
+last_ledger() { tail -1 "$GOALFORGE_DISPATCH_LEDGER" | lget "$1"; }
+brief_compile() { # <name> <overview>  -> RC, the brief file beside the overview
+    local WPA="$2"
+    seam_compile "$1" "$RFX/admitted-ok/$TBL" "$D_ADM"
+}
+# (i) tracked and committed.
+case_b16_i() {
+    brief_compile b16-i "$WPA"
+    "${GITQ[@]}" -C "$R" show HEAD:scripts/tests/fixtures/dispatch/wp-admitted.md > "$T/b16-head.md"
+    if [ "$RC" -eq 0 ] && cmp -s "$(dirname "$WPA")/leaf-brief.txt" "$T/b16-head.md" \
+       && [ "$(last_ledger brief_source)" = "head" ]; then
+        ok "b16(i) a tracked overview -> brief = git show HEAD:<overview>, ledger brief_source: head"
+    else
+        bad "b16(i) tracked overview (rc=$RC, brief_source=$(last_ledger brief_source)): $(cat "$T/b16-i.err")"
+    fi
+}
+# (ii) the replica's .gitignore ignores plans/ and plans/ has no repository.
+printf 'plans/\n' >> "$R/.gitignore"
+mkdir -p "$R/plans/feat/wp"
+cp "$WPA" "$R/plans/feat/wp/overview.md"
+printf '\nIGNORED WORKING-TREE OVERVIEW\n' >> "$R/plans/feat/wp/overview.md"
+case_b16_ii() {
+    local ov="$R/plans/feat/wp/overview.md" call
+    brief_compile b16-ii "$ov"
+    call="$(leg_field "$T/b16-ii/wp-fx-admitted.js" wrapper_call 2>/dev/null)"
+    rm -f "$MARK"
+    [ -n "$call" ] && ( cd "$R" && LEAF_MARKER="$MARK" bash -c "$call" ) >/dev/null 2>"$T/wrap.err"
+    if [ "$RC" -eq 0 ] && cmp -s "$R/plans/feat/wp/leaf-brief.txt" "$ov" \
+       && [ "$(last_ledger brief_source)" = "worktree" ] && [ -f "$MARK" ]; then
+        ok "b16(ii) a gitignored overview -> exit 0, brief = working-tree bytes, brief_source: worktree, the leaf runs"
+    else
+        bad "b16(ii) gitignored overview (rc=$RC, brief_source=$(last_ledger brief_source), marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/b16-ii.err" "$T/wrap.err" 2>/dev/null)"
+    fi
+}
+# (iv) staged but never committed: tracked, absent from HEAD -> exit 2.
+mkdir -p "$R/staged/wp"
+cp "$WPA" "$R/staged/wp/overview.md"
+"${GITQ[@]}" -C "$R" add staged/wp/overview.md
+case_b16_iv() {
+    brief_compile b16-iv "$R/staged/wp/overview.md"
+    if [ "$RC" -eq 2 ] && err_has b16-iv "leaf brief" && err_has b16-iv "absent from HEAD" \
+       && [ ! -f "$T/b16-iv/wp-fx-admitted.js" ]; then
+        ok "b16(iv) a staged, never-committed overview -> exit 2 (tracked, HEAD read fails closed)"
+    else
+        bad "b16(iv) staged overview (rc=$RC): $(cat "$T/b16-iv.err")"
+    fi
+}
+# (vi) untracked, not ignored, inside the work tree.
+mkdir -p "$R/untracked/wp"
+cp "$WPA" "$R/untracked/wp/overview.md"
+case_b16_vi() {
+    brief_compile b16-vi "$R/untracked/wp/overview.md"
+    if [ "$RC" -eq 0 ] && cmp -s "$R/untracked/wp/leaf-brief.txt" "$R/untracked/wp/overview.md" \
+       && [ "$(last_ledger brief_source)" = "worktree" ]; then
+        ok "b16(vi) an untracked overview -> exit 0, working-tree bytes, brief_source: worktree"
+    else
+        bad "b16(vi) untracked overview (rc=$RC, brief_source=$(last_ledger brief_source)): $(cat "$T/b16-vi.err")"
+    fi
+}
+case_b16_i
+case_b16_ii
+case_b16_iv
+case_b16_vi
+red "b16(a) a compile that always reads HEAD" "b16(ii)" "$COMPILE_PY:brief-always-head" -- case_b16_ii
+red "b16(b) a compile that always reads the working tree" "b16(i)" "$COMPILE_PY:brief-always-worktree" -- case_b16_i
+red "b16(c) a ledger row with no brief_source, (i)" "b16(i)" "$PICK_PY:brief-source-dropped" -- case_b16_i
+red "b16(c) a ledger row with no brief_source, (ii)" "b16(ii)" "$PICK_PY:brief-source-dropped" -- case_b16_ii
+red "b16(d) a worktree fallback on any HEAD-read failure" "b16(iv)" "$COMPILE_PY:brief-fail-open" -- case_b16_iv
+# (v) cogwright's layout: plans/ ignored by the outer repo but its OWN nested
+# repository tracks the overview -> the NESTED repository's HEAD, brief_source head.
+"${GITQ[@]}" -C "$R/plans" init -q
+"${GITQ[@]}" -C "$R/plans" add feat/wp/overview.md
+"${GITQ[@]}" -C "$R/plans" commit -qm plans
+"${GITQ[@]}" -C "$R/plans" show HEAD:feat/wp/overview.md > "$T/b16-nested-head.md"
+printf '\nUNCOMMITTED EDIT IN THE NESTED PLANS REPO\n' >> "$R/plans/feat/wp/overview.md"
+case_b16_v() {
+    brief_compile b16-v "$R/plans/feat/wp/overview.md"
+    if [ "$RC" -eq 0 ] && cmp -s "$R/plans/feat/wp/leaf-brief.txt" "$T/b16-nested-head.md" \
+       && [ "$(last_ledger brief_source)" = "head" ]; then
+        ok "b16(v) a nested plans/ repository tracking the overview -> the NESTED HEAD bytes, brief_source: head"
+    else
+        bad "b16(v) nested plans repository (rc=$RC, brief_source=$(last_ledger brief_source)): $(cat "$T/b16-v.err")"
+    fi
+}
+case_b16_v
+red "b16(e) tracked-ness asked of the OUTER repository" "b16(v)" "$ADM_PY:brief-outer-repo" -- case_b16_v
+rm -rf "$R/plans" "$R/untracked"
+"${GITQ[@]}" -C "$R" rm -q --cached staged/wp/overview.md
+rm -rf "$R/staged"
+"${GITQ[@]}" -C "$R" checkout -q -- .gitignore 2>/dev/null || rm -f "$R/.gitignore"
 # N5 lap 7: a pre-planted leaf-brief.txt symlink is removed, never followed —
 # the compile creates the brief exclusively and the link's target is untouched.
 BRIEF_PATH="$(realpath "$(dirname "$WPA")")/leaf-brief.txt"

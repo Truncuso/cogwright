@@ -99,5 +99,5 @@ second_opinion:
   max_payload_bytes: 102400
 
 # b6 (iii)(b): a competing table route. Nothing reads it.
-admitted_path: scripts/tests/fixtures/admission/admitted-ok.yaml
-admission_table: scripts/tests/fixtures/admission/admitted-ok.yaml
+admitted_path: scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml
+admission_table: scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml

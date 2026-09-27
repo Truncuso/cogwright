@@ -215,7 +215,7 @@ if [[ "$RC" -eq 0 ]] && grep -q "all role→tier invariants pass" "$T/b4-i.out";
 else
     bad "b4(i) shipped config (rc=$RC): $(cat "$T/b4-i.out")"
 fi
-tiers b4-ii "$D_ADM" "$ADM_FX/admitted-ok.yaml"
+tiers b4-ii "$D_ADM" "$ADM_FX/admitted-ok/references/admitted-providers.yaml"
 if [[ "$RC" -eq 0 && -z "$(impl_fails b4-ii)" ]]; then
     ok "b4(ii) a foreign implement row + an admitting table: no implement failure"
 else
@@ -246,7 +246,7 @@ if [[ "$RC" -eq 0 && -z "$(impl_fails b4-vi)" ]]; then
 else
     bad "b4(vi) other task class flagged: $(impl_fails b4-vi)"
 fi
-tiers b4-vii "$D_ADM" "$ADM_FX/admitted-egress-diff-only.yaml"
+tiers b4-vii "$D_ADM" "$ADM_FX/admitted-egress-diff-only/references/admitted-providers.yaml"
 if [[ "$RC" -ne 0 ]] && impl_fails b4-vii | grep -q "egress incoherent"; then
     ok "b4(vii) max_egress below the row's egress FLAGS the row naming the egress incoherence"
 else
