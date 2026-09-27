@@ -152,8 +152,12 @@ check. Inside its flock section, transition.sh re-reads the WP's status and
 refuses to move a `ready` WP forward (`executing`, `implemented`, `verified`)
 unless a `-> ready` ledger row with ts strictly greater than the maximum
 `since_ready_ts:` over every `reharden/*-respec-*` file exists. Any file
-without that value refuses (fail-closed); the refusal says to record in it the
-ts of the WP's `-> ready` row preceding the file's creation. The ordering uses
+without that value refuses (fail-closed), and the refusal branches on the WP's
+ledger: when it holds no `-> ready` row, it says to record
+`since_ready_ts: none` in that file (no re-harden instruction); otherwise it
+names the ts of the WP's latest `-> ready` row as the value to record. The
+maximum is taken over every file's recorded value, not the first file by name
+order (a `none` value ranks below any ts). The ordering uses
 recorded values only, never file mtime or name, so a checkout or copy does
 not re-block a re-approved WP. The stale refusal names the file and the
 re-harden step (`ready -> hardened --mode evidence --evidence <file>`). No new

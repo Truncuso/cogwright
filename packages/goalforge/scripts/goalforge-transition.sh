@@ -575,28 +575,38 @@ def ts(v):
         return datetime.strptime(v, "%Y-%m-%dT%H:%M:%SZ")
     except (TypeError, ValueError):
         return None
+def ready_rows():  # [(parsed ts, raw ts)] of this WP's `-> ready` ledger rows
+    rows = []
+    if os.path.isfile(ledger):
+        for ln in open(ledger, encoding="utf-8"):
+            try:
+                row = json.loads(ln)
+            except ValueError:
+                continue
+            if not isinstance(row, dict) or row.get("wp") != os.path.basename(wp_dir) or row.get("to") != "ready":
+                continue
+            t = ts(row.get("ts"))
+            if t is not None:
+                rows.append((t, row["ts"]))
+    return rows
 since, last = None, None
 for ev in sorted(glob.glob(os.path.join(wp_dir, "reharden", "*-respec-*"))):
     fm = open(ev, encoding="utf-8").read().split("\n---", 1)[0]
     m = re.search(r"^since_ready_ts:\s*['\"]?([^'\"\s]+)", fm, re.M) if fm.startswith("---") else None
     t = ts(m.group(1)) if m else None
     if t is None and not (m and m.group(1) == "none"):
-        sys.exit(print("%s carries no parseable since_ready_ts: (fail-closed); record in it the ts of the WP's -> ready ledger row preceding the file's creation" % ev))
+        # L1-l9: name a value the human can record — the latest -> ready ts, or none
+        latest = max(ready_rows(), default=(None, ""))[1]
+        if latest:
+            sys.exit(print("%s carries no parseable since_ready_ts: (fail-closed); record in it since_ready_ts: %s, the ts of the WP's latest -> ready ledger row" % (ev, latest)))
+        sys.exit(print("%s carries no parseable since_ready_ts: (fail-closed); the WP's ledger holds no -> ready row, so record in it since_ready_ts: none" % ev))
     if last is None or (t is not None and (since is None or t > since)):
         since, last = t, ev
 if last is None:
     sys.exit(0)
-if os.path.isfile(ledger):
-    for ln in open(ledger, encoding="utf-8"):
-        try:
-            row = json.loads(ln)
-        except ValueError:
-            continue
-        if not isinstance(row, dict) or row.get("wp") != os.path.basename(wp_dir) or row.get("to") != "ready":
-            continue
-        t = ts(row.get("ts"))
-        if t is not None and (since is None or t > since):
-            sys.exit(0)
+for t, _ in ready_rows():
+    if t is not None and (since is None or t > since):
+        sys.exit(0)
 print("%s has no -> ready ledger row after the max since_ready_ts: %s; re-harden it first (goalforge-transition.sh %s hardened --mode evidence --evidence %s)"
       % (last, since.strftime("%Y-%m-%dT%H:%M:%SZ") if since else "none", wp_dir, last))
 PY

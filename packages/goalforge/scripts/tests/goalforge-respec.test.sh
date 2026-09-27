@@ -375,7 +375,7 @@ gate_ev() {  # $1 file, [$2 since_ready_ts value; omitted = no key]
 }
 gate_row() { printf '{"ts": "%s", "wp": "wp-01-a", "from": "%s", "to": "%s"}\n' "$1" "$2" "$3"; }
 gate_refuses() {  # $1 transition, $2 wp dir, $3 to, $4 file the refusal must name, $5 label, [$6 recovery text]
-  bash "$1" "$2" "$3" >"$T/gate.out" 2>&1 && { why "gate $5: ready -> $3 not refused"; return 1; }
+  bash "$1" "$2" "$3" >"$T/gate.out" 2>&1 && { why "gate $5: ready -> $3 not refused (expected a refusal naming $4)"; return 1; }
   grep -qx 'status: ready' "$2/overview.md" || { why "gate $5: status moved off ready"; return 1; }
   grep -qF "$4" "$T/gate.out" && grep -qF "${6:-re-harden}" "$T/gate.out" \
     || { why "gate $5: refusal does not name $4 and '${6:-re-harden}': $(tail -1 "$T/gate.out")"; return 1; }
@@ -412,12 +412,38 @@ reharden_gate_case() {  # $1 transition SUT
   printf '%s\n' "$(gate_row 2026-09-07T10:00:00Z hardened ready)" >>"$f/.sdd-transitions.jsonl"
   bash "$tr" "$f/wp-01-a" executing >"$T/gate.out" 2>&1 && grep -qx 'status: executing' "$f/wp-01-a/overview.md" \
     || { why "gate all answered: ready -> executing refused: $(tail -1 "$T/gate.out")"; rc=1; }
-  # any file with no recorded value refuses, fail-closed, naming the real recovery
-  f="$(gate_fx "$(gate_row 2026-09-01T10:00:00Z hardened ready)")"
-  gate_ev "$f/wp-01-a/reharden/2026-09-01-respec-y.md" 2026-08-01T10:00:00Z
+  # M1-l9 (b7 i): the answered file sorts FIRST, the unanswered one is newer by
+  # recorded ts and sorts LAST — the max over every file, not the first, decides
+  f="$(gate_fx "$(gate_row 2026-09-01T10:00:00Z hardened ready; gate_row 2026-09-02T11:00:00Z ready hardened
+                  gate_row 2026-09-02T12:00:00Z hardened ready)")"
+  gate_ev "$f/wp-01-a/reharden/2026-09-03-respec-answered.md" 2026-09-01T10:00:00Z
+  gate_ev "$f/wp-01-a/reharden/2026-09-03-respec-unanswered.md" 2026-09-02T12:00:00Z
+  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-03-respec-unanswered.md" "answered-first, unanswered newer" || rc=1
+  return "$rc"
+}
+
+# L1-l9 (b7 ii, iii): a file with no parseable since_ready_ts: refuses
+# (fail-closed) with a value the human can record, branched on the ledger.
+reharden_msg_case() {  # $1 transition SUT
+  local c tr f rc=0
+  c="$(pkg_mirror goalforge-transition.sh "$1")"; tr="$c/scripts/goalforge-transition.sh"
+  # (ii) no -> ready row for this WP (another WP's row does not count): record none
+  f="$(gate_fx "$(gate_row 2026-09-01T09:00:00Z spec hardened
+                  printf '%s\n' '{"ts": "2026-09-01T10:00:00Z", "wp": "wp-02-b", "from": "hardened", "to": "ready"}')")"
   gate_ev "$f/wp-01-a/reharden/2026-09-02-respec-z.md"
-  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-02-respec-z.md" "no value" "preceding the file's creation" || rc=1
-  grep -qE "re-harden|\bnone\b" "$T/gate.out" && { why "gate no value: refusal suggests re-harden or none: $(tail -1 "$T/gate.out")"; rc=1; }
+  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-02-respec-z.md" "no-row" "since_ready_ts: none" \
+    || { why "gate no-row: refusal does not tell to record since_ready_ts: none"; rc=1; }
+  grep -qF "re-harden" "$T/gate.out" && { why "gate no-row: refusal says re-harden: $(tail -1 "$T/gate.out")"; rc=1; }
+  # (iii) two -> ready rows: name the LATEST row's ts, not the earlier, not none;
+  # an earlier parseable file does not mask the valueless one
+  f="$(gate_fx "$(gate_row 2026-09-01T10:00:00Z hardened ready; gate_row 2026-09-02T11:00:00Z ready hardened
+                  gate_row 2026-09-03T10:00:00Z hardened ready)")"
+  gate_ev "$f/wp-01-a/reharden/2026-09-01-respec-y.md" 2026-09-01T10:00:00Z
+  gate_ev "$f/wp-01-a/reharden/2026-09-02-respec-z.md"
+  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-02-respec-z.md" "two-row" "since_ready_ts: 2026-09-03T10:00:00Z" \
+    || { why "gate two-row: refusal does not name the latest -> ready ts 2026-09-03T10:00:00Z"; rc=1; }
+  grep -qF "2026-09-01T10:00:00Z" "$T/gate.out" && { why "gate two-row: refusal names the earlier -> ready ts: $(tail -1 "$T/gate.out")"; rc=1; }
+  grep -qE "re-harden|\bnone\b" "$T/gate.out" && { why "gate two-row: refusal says re-harden or none: $(tail -1 "$T/gate.out")"; rc=1; }
   return "$rc"
 }
 
@@ -484,6 +510,7 @@ done
 race_case "$RESPEC_APPLY" && ok "M1-r2 two applies on one base released together: exactly one writes, the other refuses (3 trials)" || bad "M1-r2 apply race"
 reharden_record_case "$RESPEC_APPLY" && ok "M1-l7 apply records the WP's last -> ready ts as since_ready_ts:" || bad "M1-l7 since_ready_ts record"
 reharden_gate_case "$RESPEC_TRANSITION_SUT" && ok "H1-r2/H1-l8 transition refuses ready -> executing|implemented|verified until a -> ready row follows the max recorded ts over every file; re-harden recovers" || bad "H1-r2 reharden gate"
+reharden_msg_case "$RESPEC_TRANSITION_SUT" && ok "L1-l9 a valueless reharden file refuses naming since_ready_ts: none (no -> ready row) or the latest -> ready ts" || bad "L1-l9 reharden gate message"
 inlock_case "$RESPEC_TRANSITION_SUT" && ok "M1-l8 a transition queued on the lock sees a respec file and a status flip written while it waited" || bad "M1-l8 in-lock re-read"
 b6_case "$RESPEC_APPLY" && ok "b6 ratified apply writes the proposal and one outcome row" || bad "b6 ratified apply"
 if bash "$PKG/spec/evals/run.sh" >"$T/spec-evals.out" 2>&1; then ok "spec/evals/run.sh rc 0"; else bad "spec/evals/run.sh"; sed 's/^/      /' "$T/spec-evals.out"; fi
@@ -562,6 +589,13 @@ sed 's/if t is not None and (since is None or t > since):/if t is not None:/' "$
 red m-transition-gate-ignores-recorded-ts --why "not refused" reharden_gate_case "$T/m-gate-ignores-recorded.sh"
 sed 's/for ev in sorted(glob\.glob(os\.path\.join(wp_dir, "reharden", "\*-respec-\*"))):/for ev in sorted(glob.glob(os.path.join(wp_dir, "reharden", "*-respec-*")))[-1:]:/' "$RESPEC_TRANSITION_SUT" >"$T/m-gate-one-file.sh"
 red m-transition-gate-selects-one-file --why "not refused" reharden_gate_case "$T/m-gate-one-file.sh"
+# b7: take-first-file comparator, and each no-value message branch forced on
+sed 's/if last is None or (t is not None and (since is None or t > since)):/if last is None:/' "$RESPEC_TRANSITION_SUT" >"$T/m-gate-take-first.sh"
+red m-transition-gate-take-first-file --why "2026-09-03-respec-unanswered.md" reharden_gate_case "$T/m-gate-take-first.sh"
+sed 's/^        if latest:$/        if True:/' "$RESPEC_TRANSITION_SUT" >"$T/m-msg-always-row.sh"
+red m-transition-msg-always-row-ts --why none reharden_msg_case "$T/m-msg-always-row.sh"
+sed 's/^        if latest:$/        if False:/' "$RESPEC_TRANSITION_SUT" >"$T/m-msg-always-none.sh"
+red m-transition-msg-always-none --why "2026-09-03T10:00:00Z" reharden_msg_case "$T/m-msg-always-none.sh"
 sed 's/if \[\[ "\$FROM_NOW" != "\$FROM" \]\]; then/if false; then/' "$RESPEC_TRANSITION_SUT" >"$T/m-no-from-reread.sh"
 red m-transition-no-in-lock-from-reread --why "in-lock" inlock_case "$T/m-no-from-reread.sh"
 red b6-apply-noop b6_case "$KB/b6-apply-noop.sh"
