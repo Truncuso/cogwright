@@ -44,6 +44,46 @@ offending key (`missing required key 'max_egress'`, `missing required key
 `max_egress '<v>' not in {none, diff-only, overview, full}`); nothing is
 resolved from a table that failed validation.
 
+## The table's HEAD binding (wp-08 T13)
+
+An admitting table must be the committed HEAD content of the package's OWN
+checkout, at the canonical table's own repository path. One shared helper,
+`bind_table` in `scripts/goalforge-admission.py`, binds it for both bound
+callers: the workflow compile (`resolve_and_log(bind_head=True)`) and the leaf
+wrapper (`verify_leaf`). `resolve_admitted_path` stays unbound, so
+`--test-tiers` and pick-agent's CLI need no git work tree.
+
+1. The top level is the physical `git rev-parse --show-toplevel` of
+   realpath(PKG_ROOT); no top level exits 2, failed CLOSED.
+2. The table path is walked component by component. A symlink at or below
+   that top level (the table file, `references/`, or any directory between)
+   exits 2 naming the symlink; a symlink above it (`~/.claude ->
+   dotfiles/claude`) is resolved.
+3. The walked path must lie inside realpath(PKG_ROOT); its rel is taken
+   against the top level.
+4. The HEAD read and the guarded-repository check run `git -C <top level>`
+   with that rel, never at the table's own directory. So neither a linked
+   worktree, a nested or foreign repository, nor a path swapped in after the
+   walk supplies the bytes: a swap can only cause a mismatch.
+5. Every HEAD read (table and brief) runs with `GIT_NO_REPLACE_OBJECTS=1`, set
+   after the `GIT_*` scrub, so a `refs/replace` entry cannot substitute bytes
+   the pre-commit guard never saw.
+
+The guard-set `re.fullmatch` of `(?:.*/)?references/admitted-providers\.yaml`
+and the refusal of a rel holding a control character are defense in depth:
+with the production path fixed by the walk, they are reachable only through
+the in-process `ADMITTED_PATH` seam, not the binding.
+
+This binding and the `leaf_closure` rule (c) govern different paths and do not
+conflict. Rule (c) governs the LEAF path under the leaf root, where an in-root
+symlinked directory between the root and the entry's directory is RESOLVED:
+the leaf's integrity rests on content (the entry hash plus a closure manifest
+keyed by real path, so a repoint changes the keys and is caught). The table
+binding governs the TABLE path under PKG_ROOT, where every in-tree symlink is
+REFUSED: the table's integrity rests on location (the HEAD read of the one
+path the pre-commit guard watches, at the package's own top level). Both
+resolve ancestors above their root.
+
 ## The task-class key
 
 Deterministic, derived from the WP frontmatter alone:

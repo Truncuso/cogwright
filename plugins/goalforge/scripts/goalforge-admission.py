@@ -305,8 +305,11 @@ def _git_env(*, isolate_config: bool) -> dict[str, str]:
     An agent-settable ``GIT_DIR`` / ``GIT_WORK_TREE`` would point the HEAD read
     at a forged repository. ``isolate_config`` additionally hides global and
     system config for the HEAD read itself; the ``core.hooksPath`` lookup runs
-    WITHOUT it, because hiding that setting would hide what `git commit` runs."""
+    WITHOUT it, because hiding that setting would hide what `git commit` runs.
+    ``GIT_NO_REPLACE_OBJECTS`` is set AFTER the scrub: a ``refs/replace`` entry
+    would otherwise substitute HEAD bytes the pre-commit guard never saw."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+    env["GIT_NO_REPLACE_OBJECTS"] = "1"
     if isolate_config:
         env["GIT_CONFIG_NOSYSTEM"] = "1"
         env["GIT_CONFIG_GLOBAL"] = os.devnull
@@ -435,51 +438,135 @@ def is_tracked(path: Path, what: str) -> bool:
     )
 
 
-def head_bytes(path: Path, what: str = "admission table", *,
-               guard_set: bool = False) -> tuple[bytes, str]:
-    """``(git show HEAD:<rel> bytes, rel)``, read FAIL-CLOSED.
-
-    ``path`` is the caller's ONE resolution (``resolve_admitted_path``, one
-    realpath in ``verify_leaf``, ``write_leaf_brief``); this resolves nothing.
-    The repository is the one enclosing that real path, read with every
-    ``GIT_*`` variable scrubbed; outside a work tree and absent from HEAD each
-    raise AdmissionTableError with its own reason, never a skipped read. With
-    ``guard_set`` (the admission table), ``rel`` must FULLY match the pre-commit
-    guard's path set and carry no control character — a table whose real path
-    the guard never filters does not admit."""
-    file_dir, rel = repo_rel(path, what)
-    if guard_set and (_control_char(rel) or not TABLE_GUARD_SET.fullmatch(rel)):
-        raise AdmissionTableError(
-            f"{what} {path} resolves to {rel!r} in its repository, outside the "
-            "guarded set (?:.*/)?references/admitted-providers.yaml — the "
-            "pre-commit guard never filters it, HEAD binding refused"
-        )
-    head = _git(["show", f"HEAD:{rel}"], file_dir)
+def _show_head(cwd: Path, rel: str, what: str, path: Path) -> bytes:
+    """``git -C <cwd> show HEAD:<rel>`` bytes; absent from HEAD raises."""
+    head = _git(["show", f"HEAD:{rel}"], cwd)
     if head.returncode != 0:
         raise AdmissionTableError(
             f"{what} {path} is absent from HEAD (git show HEAD:{rel} "
             f"found nothing) — an uncommitted {what} is a HEAD mismatch, refused"
         )
-    return head.stdout, rel
+    return head.stdout
 
 
-def verify_head_binding(path: Path, raw: bytes) -> None:
+def head_bytes(path: Path, what: str = "WP overview") -> tuple[bytes, str]:
+    """``(git show HEAD:<rel> bytes, rel)`` of the repository enclosing ``path``.
+
+    The BRIEF's HEAD read (the table is bound by ``bind_table`` instead).
+    ``path`` is the caller's ONE resolution; this resolves nothing. Read with
+    every ``GIT_*`` variable scrubbed; outside a work tree and absent from HEAD
+    each raise AdmissionTableError with its own reason, never a skipped read."""
+    file_dir, rel = repo_rel(path, what)
+    return _show_head(file_dir, rel, what, path), rel
+
+
+@dataclass(frozen=True)
+class TableBinding:
+    """The HEAD-bound table's ONE resolution (``bind_table``)."""
+
+    path: Path   # the walked physical table path, inside realpath(PKG_ROOT)
+    top: Path    # the physical work-tree top level of realpath(PKG_ROOT)
+    rel: str     # ``path`` relative to ``top``
+
+
+def _within(root: Path, path: Path) -> bool:
+    return os.path.commonpath([str(root), str(path)]) == str(root)
+
+
+def _walk_table(table_path: Path, top: Path) -> Path:
+    """Walk ``table_path`` component by component (no full realpath).
+
+    A symlink located at or below the physical top level ``top`` — the table
+    file, ``references/`` or any directory between — is refused; a symlink
+    above ``top`` (``~/.claude -> dotfiles/claude``) is resolved. Returns the
+    walked physical path."""
+    table_path = Path(table_path)
+    walked = Path(table_path.anchor) if table_path.is_absolute() else Path(os.getcwd())
+    parts = table_path.parts[1:] if table_path.is_absolute() else table_path.parts
+    last = len(parts) - 1
+    for i, part in enumerate(parts):
+        if part == os.pardir:
+            walked = walked.parent
+            continue
+        step = walked / part
+        if step.is_symlink() and _within(top, step):
+            raise AdmissionTableError(
+                f"admission table {table_path}: {step} is a symlink located inside "
+                f"the package work tree {top} (component {i + 1} of {last + 1}) — "
+                "the table binding refuses it, HEAD binding refused"
+            )
+        if step.is_symlink():
+            step = Path(os.path.realpath(step))
+        walked = step
+    return walked
+
+
+def bind_table(table_path: Path) -> TableBinding:
+    """The ONE shared binding of the HEAD-bound table (wp-08 T13, H1-v8).
+
+    Called by BOTH bound callers — the compile's
+    ``resolve_and_log(bind_head=True)`` and the wrapper's ``verify_leaf`` —
+    never by ``resolve_admitted_path`` (``--test-tiers`` and pick-agent
+    ``main()`` need no git work tree). The top level is that of
+    realpath(PKG_ROOT) (``git rev-parse --show-toplevel``; none fails CLOSED).
+    The walk (``_walk_table``) refuses any symlink at or below it; the walked
+    path must lie inside realpath(PKG_ROOT); rel is taken against the top
+    level. Every git call of the binding then runs ``git -C <top>`` with that
+    rel, so no linked worktree, nested or foreign repository, and no path
+    swapped in after the walk supplies the HEAD bytes."""
+    pkg_real = Path(os.path.realpath(PKG_ROOT))
+    try:
+        res = _git(["rev-parse", "--show-toplevel"], pkg_real)
+    except OSError as exc:
+        raise AdmissionTableError(
+            f"admission table {table_path}: git is not runnable ({exc}) — HEAD "
+            "binding failed CLOSED"
+        ) from exc
+    if res.returncode != 0:
+        raise AdmissionTableError(
+            f"admission table {table_path}: the package root {pkg_real} is outside "
+            "a git work tree — the HEAD binding cannot be checked, failed CLOSED"
+        )
+    top = Path(res.stdout.decode("utf-8", "surrogateescape").rstrip("\n"))
+    walked = _walk_table(table_path, top)
+    if not _within(pkg_real, walked):
+        raise AdmissionTableError(
+            f"admission table {table_path} walks to {walked}, outside the package "
+            f"root {pkg_real} — HEAD binding refused"
+        )
+    rel = os.path.relpath(walked, top)
+    return TableBinding(walked, top, Path(rel).as_posix())
+
+
+def verify_head_binding(binding: TableBinding, raw: bytes) -> None:
     """Refuse table bytes that are not the table's committed HEAD content.
 
-    ``path`` is the caller's ONE resolution of the table (the same path the
-    bytes were read from); ``raw`` are the bytes the caller already read and
-    parsed (read once); the HEAD read is ``head_bytes`` with the guard-set
-    match; and the repository enclosing that path must carry the goalforge
-    pre-commit guard. Nothing here resolves the table path again. Raises
-    AdmissionTableError with a distinct reason per failure."""
-    head, rel = head_bytes(path, guard_set=True)
-    table_dir = path.parent
+    ``binding`` is the caller's ONE resolution (``bind_table``); ``raw`` are
+    the bytes the caller already read from ``binding.path`` and parsed (read
+    once). The HEAD read and the guarded-repository check run at the
+    binding's top level with its rel — never at the table's own directory —
+    and resolve nothing. The guard-set ``fullmatch`` and the control-character
+    refusal are defense in depth (the walk already pins the production path).
+    Raises AdmissionTableError with a distinct reason per failure."""
+    path, top, rel = binding.path, binding.top, binding.rel
+    if _control_char(rel):
+        raise AdmissionTableError(
+            f"admission table {path}: its repository path {rel!r} contains a "
+            "control character — HEAD binding refused"
+        )
+    if not TABLE_GUARD_SET.fullmatch(rel):
+        raise AdmissionTableError(
+            f"admission table {path} resolves to {rel!r} in its repository, outside the "
+            "guarded set (?:.*/)?references/admitted-providers.yaml — the "
+            "pre-commit guard never filters it, HEAD binding refused"
+        )
+    head = _show_head(top, rel, "admission table", path)
     if head != raw:
         raise AdmissionTableError(
             f"admission table {path} differs from git show HEAD:{rel} — HEAD "
             "mismatch: only the committed table admits, refused"
         )
-    unguarded = _guard_reason(table_dir)
+    unguarded = _guard_reason(top)
     if unguarded:
         raise AdmissionTableError(f"admission table {path}: {unguarded}")
 
@@ -647,17 +734,20 @@ def verify_leaf(table_path: Path, klass: str, provider: str, model: str, *,
                 leaf_root: Path | None = None) -> Path:
     """Re-derive and re-check the admitted leaf for one row key (the wrapper).
 
-    Reads the table once, requires those bytes to be the committed HEAD
-    content (``verify_head_binding``), takes the row's ``leaf``,
+    Binds the table through ``bind_table`` (walk, package-root containment,
+    git at the package's top level), reads it once, requires those bytes to be
+    the committed HEAD content (``verify_head_binding``), takes the row's ``leaf``,
     ``leaf_sha256`` and ``leaf_closure`` from THAT table only, requires the
     leaf's real path to lie under the leaf root and re-hashes it and its
     closure (``closure_mismatch``). Returns the real path to execute.
     Raises AdmissionTableError on any failure — the leaf is never run then."""
-    # The table path's ONE resolution: the byte read, the HEAD read and the
-    # guard check below all take this path and resolve nothing again.
-    table_path = Path(os.path.realpath(table_path))
+    # The table path's ONE resolution is the shared binding helper, the same
+    # one the compile uses: the byte read, the HEAD read and the guard check
+    # below all take it and resolve nothing again.
+    binding = bind_table(table_path)
+    table_path = binding.path
     raw = read_table(table_path)
-    verify_head_binding(table_path, raw)
+    verify_head_binding(binding, raw)
     rows = [
         r for r in parse(raw, table_path)
         if r.get("task_class") == klass and r.get("provider") == provider

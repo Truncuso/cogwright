@@ -388,25 +388,29 @@ LEAF_FILE="$CLAUDE_CONFIG_DIR/$LEAF_REL"
 LEAF_ORIG="$T/leaf.orig"
 cp "$LEAF_FILE" "$LEAF_ORIG"
 
-# mk_replica <dir> git|nogit — a temp copy of packages/goalforge/ whose
-# canonical references/admitted-providers.yaml holds b1's admitting fixture;
-# `git` also inits, commits once and installs the goalforge pre-commit.
+# mk_replica <dir> git|nogit|nohook [empty] — a temp copy of packages/goalforge/
+# whose canonical references/admitted-providers.yaml holds b1's admitting
+# fixture (`empty`: the shipped EMPTY table stays, so an attack is the only
+# admitting route); `git` also inits, commits once and installs the goalforge
+# pre-commit; `nohook` inits and commits with no pre-commit installed.
 mk_replica() {
     mkdir -p "$1"
     cp -r "$PKG/." "$1/"
     find "$1" -name __pycache__ -type d -prune -exec rm -rf {} +
     rm -rf "$1/run"
-    cp "$1/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$1/references/admitted-providers.yaml"
+    [ "${3:-}" = empty ] \
+        || cp "$1/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$1/references/admitted-providers.yaml"
     # b13 (iii): a table committed now and deleted by a later commit. Every
     # admitting fixture sits at a path ending references/admitted-providers.yaml
     # (T12), so the HEAD read's guard-set match passes and the case reaches
     # the check it exists to exercise.
     mkdir -p "$1/scripts/tests/fixtures/admission/admitted-absent/references"
     cp "$1/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$1/scripts/tests/fixtures/admission/admitted-absent/references/admitted-providers.yaml"
-    [ "$2" = git ] || return 0
+    [ "$2" = nogit ] && return 0
     "${GITQ[@]}" -C "$1" init -q
     "${GITQ[@]}" -C "$1" add -A
     "${GITQ[@]}" -C "$1" commit -qm "replica"
+    [ "$2" = nohook ] && return 0
     env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
         bash "$1/scripts/goalforge-install-hooks.sh" "$1" >/dev/null
 }
@@ -444,7 +448,7 @@ red() {
     local label="$1" why="$2" out="" f applied=1; shift 2
     local files=()
     while [ "$1" != "--" ]; do
-        f="$R/${1%%:*}"
+        f="${RED_ROOT:-$R}/${1%%:*}"
         RED_N=$((RED_N+1))
         cp "$f" "$T/red-$RED_N.orig"
         files+=("$f" "$T/red-$RED_N.orig")
@@ -456,7 +460,8 @@ red() {
     done
     shift
     [ "$applied" -eq 1 ] && out="$("$@" 2>&1)"
-    for ((f = 0; f < ${#files[@]}; f += 2)); do cp "${files[f+1]}" "${files[f]}"; done
+    # Reverse order: two mutations of ONE file restore to the original last.
+    for ((f = ${#files[@]} - 2; f >= 0; f -= 2)); do cp "${files[f+1]}" "${files[f]}"; done
     [ "$applied" -eq 1 ] || return 0
     [ -n "${COMPILE_TEST_VERBOSE:-}" ] && printf '%s\n' "$out" | sed 's/^/    | /'
     if ! grep -q '^  FAIL: ' <<<"$out"; then
@@ -936,31 +941,38 @@ cp "$RFX/admitted-ok/references/admitted-providers.yaml" "$RFX/admitted-absent/r
 seam_compile b13-iii "$RFX/admitted-absent/references/admitted-providers.yaml" "$D_ADM"
 b13_expect b13-iii "absent from HEAD"
 rm -f "$RFX/admitted-absent/references/admitted-providers.yaml"
-# (v) a nested `git init` ONE level above the table's references/ directory
-# (T12), no goalforge pre-commit: the rel is references/admitted-providers.yaml,
-# so the guard-set match passes and the unguarded-repository reason fires.
-NEST="$RFX/admitted-ok"
-"${GITQ[@]}" -C "$NEST" init -q
-"${GITQ[@]}" -C "$NEST" add references/admitted-providers.yaml
-"${GITQ[@]}" -C "$NEST" commit -qm nested
+# (v) a THIRD whole replica with NO goalforge pre-commit, compiled by its own
+# scripts (v13: a nested repository inside PKG_ROOT is now refused by the
+# table binding before _guard_reason, b15 v-a), so the unguarded-repository
+# reason fires on the package's own work tree.
+R3="$T/replica3"
+mk_replica "$R3" nohook
 case_b13_v() {
-    seam_compile b13-v "$NEST/references/admitted-providers.yaml" "$D_ADM"
+    local RCOMPILE="$R3/scripts/goalforge-workflow-compile.py"
+    local WPA="$R3/scripts/tests/fixtures/dispatch/wp-admitted.md"
+    seam_compile b13-v "$R3/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$D_ADM"
     b13_expect b13-v "unguarded"
 }
 case_b13_v
 # T12 known-bad: the guard-set match kept, the guarded-repository check dropped.
-red "T12 compile keeping the guard-set match but dropping _guard_reason" "b13 b13-v" \
+RED_ROOT="$R3" red "T12 compile keeping the guard-set match but dropping _guard_reason" "b13 b13-v" \
     "$ADM_PY:drop-guard-reason" -- case_b13_v
-# (vi) the nested repository's pre-commit carries the installer's marker block,
-# but it invokes a STUB goalforge-pre-commit.sh outside PKG_ROOT/hooks/.
+# (vi) a FOURTH whole replica whose pre-commit carries the installer's marker
+# block but invokes a STUB goalforge-pre-commit.sh outside PKG_ROOT/hooks/.
+R4="$T/replica4"
+mk_replica "$R4" nohook
 mkdir -p "$T/stub-hooks"
 printf '#!/usr/bin/env bash\nexit 0\n' > "$T/stub-hooks/goalforge-pre-commit.sh"
 printf '#!/usr/bin/env bash\n# >>> sdd-pre-commit >>>\nbash "%s" || exit $?\n# <<< sdd-pre-commit <<<\n' \
-    "$T/stub-hooks/goalforge-pre-commit.sh" > "$NEST/.git/hooks/pre-commit"
-chmod +x "$NEST/.git/hooks/pre-commit"
-seam_compile b13-vi "$NEST/references/admitted-providers.yaml" "$D_ADM"
-b13_expect b13-vi "unguarded"
-rm -rf "$NEST/.git"
+    "$T/stub-hooks/goalforge-pre-commit.sh" > "$R4/.git/hooks/pre-commit"
+chmod +x "$R4/.git/hooks/pre-commit"
+case_b13_vi() {
+    local RCOMPILE="$R4/scripts/goalforge-workflow-compile.py"
+    local WPA="$R4/scripts/tests/fixtures/dispatch/wp-admitted.md"
+    seam_compile b13-vi "$R4/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$D_ADM"
+    b13_expect b13-vi "unguarded"
+}
+case_b13_vi
 # (vii-a) a forged GLOBAL core.hooksPath in the redirected temp home.
 mkdir -p "$T/home-forged/.config" "$T/elsewhere-hooks"
 printf '[core]\n\thooksPath = %s\n' "$T/elsewhere-hooks" > "$T/home-forged/.gitconfig"
@@ -1026,16 +1038,36 @@ case_b15_i() {
 case_b15_i
 PICK_PY=scripts/goalforge-pick-agent.py
 COMPILE_PY=scripts/goalforge-workflow-compile.py
-# (a) the lap-7 code: a logical path reaches the HEAD read, which refuses any
-# path whose abspath differs from its realpath — RED on (i) and (ii).
+# (a) the lap-7 code: a logical path reaches the table binding / the overview's
+# HEAD read, which refuse any path whose abspath differs from its realpath —
+# RED on (i) and (ii).
 red "b15(a) lap-7 abspath-vs-realpath refusal" "b15(i)" \
-    "$ADM_PY:lap7-head-refusal" "$PICK_PY:head-read-unresolved-table" \
+    "$ADM_PY:lap7-head-refusal" "$ADM_PY:lap7-table-refusal" \
     "$COMPILE_PY:brief-abspath" -- case_b15_i
 red "b15(a) lap-7 abspath-vs-realpath refusal, overview" "b15(ii)" \
     "$ADM_PY:lap7-head-refusal" "$COMPILE_PY:brief-abspath" -- case_b15_i
 # (b) rel = relpath(abspath(path), physical --show-toplevel) — RED on (i).
-red "b15(b) HEAD read on the unresolved (logical) table path" "b15(i)" \
-    "$PICK_PY:head-read-unresolved-table" -- case_b15_i
+red "b15(b) table rel from the logical path against the physical toplevel" "b15(i)" \
+    "$ADM_PY:table-rel-logical" -- case_b15_i
+
+# setup_commit <repo> <path>... — an admitting / guard-set-matching SETUP
+# commit made around the installed guard with core.hooksPath=/dev/null (setup
+# only, never a weakened hook); preflight: git show HEAD:<path> returns the
+# working-tree bytes, or the harness fails loudly.
+setup_commit() {
+    local repo="$1" p; shift
+    "${GITQ[@]}" -C "$repo" add -- "$@"
+    "${GITQ[@]}" -C "$repo" -c core.hooksPath=/dev/null commit -qm "setup" </dev/null >/dev/null 2>&1
+    for p in "$@"; do
+        if [ -f "$repo/$p" ] && ! cmp -s <("${GITQ[@]}" -C "$repo" show "HEAD:$p" 2>/dev/null) "$repo/$p"; then
+            bad "setup preflight: git show HEAD:$p in $repo does not return the intended bytes"
+        fi
+    done
+}
+b15_rej() { # <name> — no workflow written, compile refused
+    [ "$RC" -eq 2 ] && [ ! -f "$T/$1/wp-fx-admitted.js" ]
+}
+INSIDE="is a symlink located inside the package work tree"
 
 # (iii) the canonical table -> a symlink to a headless-committed evil/ table.
 mkdir -p "$R/evil"
@@ -1044,7 +1076,7 @@ hcommit evil/admitted-providers.yaml
 case_b15_iii() {
     canon_link ../evil/admitted-providers.yaml
     seam_compile b15-iii - "$D_ADM"
-    b15_refused b15-iii "outside the guarded set"
+    b15_refused b15-iii "$INSIDE"
     canon_restore
 }
 # (iv) references/ -> a symlink to a headless-committed evil2/ directory.
@@ -1054,74 +1086,289 @@ case_b15_iv() {
     mv "$R/references" "$T/references.real"
     ln -s evil2 "$R/references"
     seam_compile b15-iv - "$D_ADM"
-    b15_refused b15-iv "outside the guarded set"
+    b15_refused b15-iv "$INSIDE"
     rm -f "$R/references"
     mv "$T/references.real" "$R/references"
 }
 case_b15_iii
 case_b15_iv
-# (c) no guard-set match on the resolved rel — RED on (iii) and (iv).
-red "b15(c) no guard-set match, (iii)" "b15 b15-iii" "$ADM_PY:no-guard-set" -- case_b15_iii
-red "b15(c) no guard-set match, (iv)" "b15 b15-iv" "$ADM_PY:no-guard-set" -- case_b15_iv
 
-# (v) the canonical table -> a symlink to an admitting table committed in a
-# SEPARATE, unguarded repository nested INSIDE PKG_ROOT (git init one level
-# above its own references/): containment and the guard-set match pass, and
-# the unguarded reason fires, because the byte read, HEAD read and guard check
-# share ONE resolution.
+# (v-a) the seam pointed DIRECTLY at an admitting table committed in a
+# SEPARATE, GUARDED repository nested inside PKG_ROOT (git init one level above
+# its own references/; admitting commit first, goalforge pre-commit installed
+# after): its own HEAD would admit and its own guard pass, but the binding's
+# git calls run at the package's top level, where the rel is absent from HEAD.
 mkdir -p "$R/nested/references"
 cp "$RFX/admitted-ok/$TBL" "$R/nested/$TBL"
 "${GITQ[@]}" -C "$R/nested" init -q
-"${GITQ[@]}" -C "$R/nested" add "$TBL"
-"${GITQ[@]}" -C "$R/nested" commit -qm nested
-case_b15_v() {
-    canon_link ../nested/references/admitted-providers.yaml
-    seam_compile b15-v - "$D_ADM"
-    b15_refused b15-v "unguarded"
-    canon_restore
+setup_commit "$R/nested" "$TBL"
+env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    bash "$R/scripts/goalforge-install-hooks.sh" "$R/nested" >/dev/null
+case_b15_va() {
+    seam_compile b15-va "$R/nested/$TBL" "$D_ADM"
+    b15_refused b15-va "absent from HEAD"
 }
-case_b15_v
-# (d) a guard anchored at the unresolved path — RED on (v).
-red "b15(d) HEAD read + guard anchored at the unresolved canonical path" "b15 b15-v" \
-    "$PICK_PY:head-read-unresolved-table" -- case_b15_v
-rm -rf "$R/nested"
+case_b15_va
+# (d) git anchored at the resolved table's own directory (the 03dcf88
+# anchoring) — RED on (v-a) (compile rc 0); (v-b) below.
+red "b15(d) table binding anchored at the table's own directory, (v-a)" "b15 b15-va" \
+    "$ADM_PY:anchor-at-table-dir" -- case_b15_va
 
-# (vi) a headless-committed guard-set-looking name whose final byte is a newline.
+# (vi) the seam DIRECTLY at a headless-committed guard-set-looking name whose
+# final byte is a newline (refused by the control-character check).
 NL_DIR="$R/evil3/references"
 mkdir -p "$NL_DIR"
 cp "$RFX/admitted-ok/$TBL" "$NL_DIR/admitted-providers.yaml"$'\n'
 hcommit "evil3/references/admitted-providers.yaml"$'\n'
 case_b15_vi() {
-    canon_link "../evil3/references/admitted-providers.yaml"$'\n'
-    seam_compile b15-vi - "$D_ADM"
-    b15_refused b15-vi "outside the guarded set"
-    canon_restore
+    seam_compile b15-vi "$NL_DIR/admitted-providers.yaml"$'\n' "$D_ADM"
+    b15_refused b15-vi "HEAD binding refused"
 }
-# (vii) evilreferences/ — a whole-string match refuses it.
+# (vii) the seam DIRECTLY at evilreferences/ — a whole-string match refuses it.
 mkdir -p "$R/evilreferences"
 cp "$RFX/admitted-ok/$TBL" "$R/evilreferences/admitted-providers.yaml"
 hcommit evilreferences/admitted-providers.yaml
 case_b15_vii() {
-    canon_link ../evilreferences/admitted-providers.yaml
-    seam_compile b15-vii - "$D_ADM"
+    seam_compile b15-vii "$R/evilreferences/admitted-providers.yaml" "$D_ADM"
     b15_refused b15-vii "outside the guarded set"
-    canon_restore
+}
+# (xiv) the seam DIRECTLY at evil<TAB>/references/admitted-providers.yaml: a
+# rel re.fullmatch admits (`.` matches a tab); only the control-character
+# refusal rejects it.
+TAB_DIR="$R/evil"$'\t'"/references"
+mkdir -p "$TAB_DIR"
+cp "$RFX/admitted-ok/$TBL" "$TAB_DIR/admitted-providers.yaml"
+hcommit "evil"$'\t'"/references/admitted-providers.yaml"
+case_b15_xiv() {
+    seam_compile b15-xiv "$TAB_DIR/admitted-providers.yaml" "$D_ADM"
+    b15_refused b15-xiv "control character"
 }
 if "${GITQ[@]}" -C "$R" cat-file -e "HEAD:evil3/references/admitted-providers.yaml"$'\n' 2>/dev/null \
    && "${GITQ[@]}" -C "$R" cat-file -e HEAD:evilreferences/admitted-providers.yaml 2>/dev/null \
    && "${GITQ[@]}" -C "$R" cat-file -e HEAD:evil/admitted-providers.yaml 2>/dev/null \
-   && "${GITQ[@]}" -C "$R" cat-file -e HEAD:evil2/admitted-providers.yaml 2>/dev/null; then
-    ok "b15 setup: the attacker tables are committed headless (evil/, evil2/, newline name, evilreferences/)"
+   && "${GITQ[@]}" -C "$R" cat-file -e HEAD:evil2/admitted-providers.yaml 2>/dev/null \
+   && "${GITQ[@]}" -C "$R" cat-file -e "HEAD:evil"$'\t'"/references/admitted-providers.yaml" 2>/dev/null; then
+    ok "b15 setup: the attacker tables are committed headless (evil/, evil2/, newline name, evilreferences/, TAB name)"
 else
     bad "b15 setup: an attacker table is not in the replica's HEAD"
 fi
 case_b15_vi
 case_b15_vii
-# (e) re.search + a bare trailing `$` — RED on (vi); (f) unanchored + \Z — RED on (vii).
-red "b15(e) guard-set re.search with a trailing \$" "b15 b15-vi" \
+case_b15_xiv
+# (c) single-condition: no fullmatch, control-character refusal kept — RED on (vii).
+red "b15(c) no guard-set fullmatch" "b15 b15-vii" "$ADM_PY:no-guard-set" -- case_b15_vii
+# (e) historical regression lock: re.search + `$` AND no control-char check — RED on (vi).
+red "b15(e) guard-set re.search with a trailing \$, no control-char check" "b15 b15-vi" \
     "$ADM_PY:guard-set-search-dollar" -- case_b15_vi
+# (f) unanchored re.search + \Z — RED on (vii).
 red "b15(f) guard-set unanchored re.search + \\Z" "b15 b15-vii" \
     "$ADM_PY:guard-set-search-z" -- case_b15_vii
+# (l) control-character refusal dropped, fullmatch kept — RED on (xiv).
+red "b15(l) no control-character refusal" "b15 b15-xiv" \
+    "$ADM_PY:no-control-char" -- case_b15_xiv
+
+# --- b15 (ix)-(xiii), (xv), (v-b): H1-v8 attacks on an EMPTY-table replica -------
+# The replica's setup commit holds the shipped EMPTY table at the canonical
+# path (admitting fixtures only at their T12 paths), so each attack is the only
+# admitting route. Each runs the compile AND the wrapper call verbatim with the
+# leaf marker checked.
+RA="$T/replica-attack"
+mk_replica "$RA" git empty
+RA_CANON="$RA/$TBL"
+ADMIT_SRC="$RA/scripts/tests/fixtures/admission/admitted-ok/$TBL"
+printf 'attack brief\n' > "$T/attack-brief.txt"
+RA_CALL="scripts/goalforge-leaf-exec.sh code/py ollama glm-5.3:cloud < $T/attack-brief.txt"
+if cmp -s <("${GITQ[@]}" -C "$RA" show "HEAD:$TBL") "$PKG/$TBL" \
+   && cmp -s <("${GITQ[@]}" -C "$RA" show "HEAD:scripts/tests/fixtures/admission/admitted-ok/$TBL") "$ADMIT_SRC" \
+   && ! cmp -s "$PKG/$TBL" "$ADMIT_SRC"; then
+    ok "b15 attack setup: HEAD holds the shipped empty table at the canonical path, the admitting fixture at its T12 path"
+else
+    bad "b15 attack setup: the attack replica's HEAD is not as pinned"
+fi
+ra_canon_link() { rm -f "$RA_CANON"; ln -s "$1" "$RA_CANON"; }
+ra_canon_restore() { rm -f "$RA_CANON"; "${GITQ[@]}" -C "$RA" checkout -q -- "$TBL"; }
+# attack <name> <label> <compile substring|-> <wrapper substring>
+attack() {
+    local RCOMPILE="$RA/scripts/goalforge-workflow-compile.py"
+    local WPA="$RA/scripts/tests/fixtures/dispatch/wp-admitted.md" crc good=1
+    seam_compile "$1" - "$D_ADM"; crc=$RC
+    rm -f "$MARK"
+    ( cd "$RA" && LEAF_MARKER="$MARK" LEAF_EXIT=7 bash -c "$RA_CALL" ) >/dev/null 2>"$T/$1.wrap.err"
+    RC=$?
+    [ "$crc" -eq 2 ] && [ ! -f "$T/$1/wp-fx-admitted.js" ] || good=0
+    [ "$3" = - ] || err_has "$1" "$3" || good=0
+    [ "$RC" -eq 2 ] && [ ! -f "$MARK" ] && grep -qF -- "$4" "$T/$1.wrap.err" || good=0
+    if [ "$good" -eq 1 ]; then
+        ok "b15 $1 $2 -> compile exit 2, wrapper exit 2, leaf marker absent"
+    else
+        bad "b15 $1 $2 (compile rc=$crc, wrapper rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/$1.err" "$T/$1.wrap.err")"
+    fi
+}
+# evil_commit <parent|-> — a commit of HEAD's tree with the canonical table
+# admitting, built with hash-object + commit-tree; no ref moves.
+evil_commit() {
+    local idx="$T/evil.idx" blob tree
+    rm -f "$idx"
+    blob="$("${GITQ[@]}" -C "$RA" hash-object -w "$ADMIT_SRC")"
+    env GIT_INDEX_FILE="$idx" "${GITQ[@]}" -C "$RA" read-tree HEAD
+    env GIT_INDEX_FILE="$idx" "${GITQ[@]}" -C "$RA" update-index --cacheinfo "100644,$blob,$TBL"
+    tree="$(env GIT_INDEX_FILE="$idx" "${GITQ[@]}" -C "$RA" write-tree)"
+    if [ "$1" = - ]; then
+        "${GITQ[@]}" -C "$RA" commit-tree "$tree" -m evil
+    else
+        "${GITQ[@]}" -C "$RA" commit-tree "$tree" -p "$1" -m evil
+    fi
+}
+
+# (ix) the canonical table -> a FILE symlink to the committed admitting fixture.
+case_b15_ix() {
+    ra_canon_link ../scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml
+    attack b15-ix "canonical table -> committed fixture (file symlink)" "$INSIDE" "$INSIDE"
+    ra_canon_restore
+}
+# (x) references/ -> a DIRECTORY symlink to the committed fixture's references/.
+case_b15_x() {
+    mv "$RA/references" "$T/ra-references.real"
+    ln -s scripts/tests/fixtures/admission/admitted-ok/references "$RA/references"
+    attack b15-x "references/ -> committed fixture directory (dir symlink)" "$INSIDE" "$INSIDE"
+    rm -f "$RA/references"
+    mv "$T/ra-references.real" "$RA/references"
+}
+# (xi) revocation replay: an admitting canonical table committed, then revoked
+# (the empty table committed back); a linked worktree at the pre-revocation
+# commit supplies the bytes through a canonical-table symlink.
+cp "$ADMIT_SRC" "$RA_CANON"
+setup_commit "$RA" "$TBL"
+PRE_REVOKE="$("${GITQ[@]}" -C "$RA" rev-parse HEAD)"
+cp "$PKG/$TBL" "$RA_CANON"
+setup_commit "$RA" "$TBL"
+rm -f "$MARK"
+( cd "$RA" && LEAF_MARKER="$MARK" bash -c "$RA_CALL" ) >/dev/null 2>"$T/revoked.wrap.err"
+if [ "$?" -eq 2 ] && [ ! -f "$MARK" ]; then
+    ok "b15(xi) control: after the revocation commit the wrapper alone exits 2, leaf NOT executed"
+else
+    bad "b15(xi) control: the revoked table still runs the leaf: $(cat "$T/revoked.wrap.err")"
+fi
+"${GITQ[@]}" -C "$RA" worktree add -q --detach "$RA/.wt-old" "$PRE_REVOKE" >/dev/null 2>&1
+case_b15_xi() {
+    ra_canon_link ../.wt-old/references/admitted-providers.yaml
+    attack b15-xi "revocation replay through a linked worktree at the pre-revocation commit" "$INSIDE" "$INSIDE"
+    ra_canon_restore
+}
+# (xii) an unguarded commit-tree commit (no branch moves) checked out as a
+# linked worktree .wt inside PKG_ROOT; the canonical table links into it.
+EVIL_SHA="$(evil_commit HEAD)"
+"${GITQ[@]}" -C "$RA" worktree add -q --detach "$RA/.wt" "$EVIL_SHA" >/dev/null 2>&1
+case_b15_xii() {
+    ra_canon_link ../.wt/references/admitted-providers.yaml
+    attack b15-xii "commit-tree linked worktree" "$INSIDE" "$INSIDE"
+    ra_canon_restore
+}
+# (xiii) a fresh repository OUTSIDE PKG_ROOT: table committed first, the
+# goalforge marker hook written afterwards; the canonical table links to it.
+OUTREPO="$T/outrepo"
+mkdir -p "$OUTREPO/references"
+cp "$ADMIT_SRC" "$OUTREPO/$TBL"
+"${GITQ[@]}" -C "$OUTREPO" init -q
+setup_commit "$OUTREPO" "$TBL"
+printf '#!/usr/bin/env bash\n# >>> sdd-pre-commit >>>\nbash "%s" || exit $?\n# <<< sdd-pre-commit <<<\n' \
+    "$(realpath "$RA")/hooks/goalforge-pre-commit.sh" > "$OUTREPO/.git/hooks/pre-commit"
+chmod +x "$OUTREPO/.git/hooks/pre-commit"
+case_b15_xiii() {
+    ra_canon_link "$OUTREPO/$TBL"
+    attack b15-xiii "out-of-root repository behind a canonical-table symlink" - "$INSIDE"
+    ra_canon_restore
+}
+if cmp -s <("${GITQ[@]}" -C "$RA" show "$PRE_REVOKE:$TBL") "$ADMIT_SRC" \
+   && cmp -s <("${GITQ[@]}" -C "$RA" show "$EVIL_SHA:$TBL") "$ADMIT_SRC" \
+   && cmp -s "$RA/.wt/$TBL" "$ADMIT_SRC" && cmp -s "$RA/.wt-old/$TBL" "$ADMIT_SRC" \
+   && [ "$("${GITQ[@]}" -C "$RA" rev-parse HEAD)" != "$EVIL_SHA" ]; then
+    ok "b15 attack setup: pre-revocation and commit-tree commits admit, worktrees checked out, the branch never at the commit-tree commit"
+else
+    bad "b15 attack setup: a linked worktree or its commit is not as pinned"
+fi
+case_b15_ix
+case_b15_x
+case_b15_xi
+case_b15_xii
+case_b15_xiii
+# (v-b) the seam DIRECTLY (no symlink) at .wt's table: the rel .wt/references/…
+# is absent from the package HEAD, since git runs at the package's top level.
+case_b15_vb() {
+    local RCOMPILE="$RA/scripts/goalforge-workflow-compile.py"
+    local WPA="$RA/scripts/tests/fixtures/dispatch/wp-admitted.md"
+    seam_compile b15-vb "$RA/.wt/$TBL" "$D_ADM"
+    b15_refused b15-vb "absent from HEAD"
+}
+case_b15_vb
+RED_ROOT="$RA" red "b15(d) table binding anchored at the table's own directory, (v-b)" "b15 b15-vb" \
+    "$ADM_PY:anchor-at-table-dir" -- case_b15_vb
+
+# (xv) replace objects, no symlink and no worktree; the branch ref never moves.
+case_b15_xva() {
+    local old blob
+    old="$("${GITQ[@]}" -C "$RA" rev-parse "HEAD:$TBL")"
+    blob="$("${GITQ[@]}" -C "$RA" hash-object -w "$ADMIT_SRC")"
+    "${GITQ[@]}" -C "$RA" replace "$old" "$blob"
+    cp "$ADMIT_SRC" "$RA_CANON"
+    attack b15-xva "git replace <HEAD table blob> <admitting blob>" "differs from git show HEAD" "differs from git show HEAD"
+    "${GITQ[@]}" -C "$RA" replace -d "$old" >/dev/null
+    ra_canon_restore
+}
+case_b15_xvb() {
+    local head evil
+    head="$("${GITQ[@]}" -C "$RA" rev-parse HEAD)"
+    evil="$(evil_commit -)"
+    "${GITQ[@]}" -C "$RA" replace "$head" "$evil"
+    cp "$ADMIT_SRC" "$RA_CANON"
+    "${GITQ[@]}" -C "$RA" add -- "$TBL"
+    if [ -z "$("${GITQ[@]}" -C "$RA" status --short --untracked-files=no)" ]; then
+        ok "b15(xv-b) setup: git status is clean under the replaced HEAD"
+    else
+        bad "b15(xv-b) setup: git status is not clean: $("${GITQ[@]}" -C "$RA" status --short --untracked-files=no)"
+    fi
+    attack b15-xvb "git replace <HEAD> <admitting commit>" "differs from git show HEAD" "differs from git show HEAD"
+    "${GITQ[@]}" -C "$RA" replace -d "$head" >/dev/null
+    "${GITQ[@]}" -C "$RA" reset -q -- "$TBL"
+    ra_canon_restore
+}
+case_b15_xva
+case_b15_xvb
+
+# Known-bads, RED by compile rc 0 plus the wrapper marker written (g, h, i, m)
+# or by the marker alone (k).
+for c in ix x xi xii; do
+    RED_ROOT="$RA" red "b15(g) historical lock: the 03dcf88 binding, ($c)" "marker=yes" \
+        "$ADM_PY:binding-03dcf88" -- "case_b15_$c"
+done
+RED_ROOT="$RA" red "b15(h) a walk refusing a symlink only at the table file" "marker=yes" \
+    "$ADM_PY:walk-file-only" -- case_b15_x
+for c in ix x; do
+    RED_ROOT="$RA" red "b15(i) the walk replaced by one full realpath, ($c)" "marker=yes" \
+        "$ADM_PY:walk-full-realpath" -- "case_b15_$c"
+done
+RED_ROOT="$RA" red "b15(k) verify_leaf binding as the 03dcf88 wrapper did" "marker=yes" \
+    "$ADM_PY:verify-leaf-own-binding" -- case_b15_xiii
+RED_ROOT="$RA" red "b15(m) _git_env without GIT_NO_REPLACE_OBJECTS, (xv-a)" "marker=yes" \
+    "$ADM_PY:no-replace-flag" -- case_b15_xva
+RED_ROOT="$RA" red "b15(m) _git_env without GIT_NO_REPLACE_OBJECTS, (xv-b)" "marker=yes" \
+    "$ADM_PY:no-replace-flag" -- case_b15_xvb
+
+# Structural (T13): table-anchor and shared-binding, each with its mutant.
+structural_case() { # <mode>
+    local line
+    while IFS= read -r line; do
+        case "$line" in ok*) ok "${line#ok }" ;; *) bad "${line#bad }" ;; esac
+    done < <(python3 "$ADM_FX/structural.py" "$1" "$R/$ADM_PY")
+}
+case_table_anchor() { structural_case table-anchor; }
+case_shared_binding() { structural_case shared-binding; }
+case_table_anchor
+case_shared_binding
+red "b15(d) structural: the HEAD read anchored at the table's directory" "table-anchor" \
+    "$ADM_PY:anchor-at-table-dir" -- case_table_anchor
+red "b15(k) structural: verify_leaf with its own table resolution" "shared-binding" \
+    "$ADM_PY:verify-leaf-own-binding" -- case_shared_binding
 
 # (viii) the WP overview.md itself a symlink to ANOTHER repository's tracked
 # overview: accepted (C8) — brief = the target's HEAD bytes, written beside it.
@@ -1260,6 +1507,41 @@ if [ "$RC" -eq 0 ] && [ "$(cat "$T/brief-victim")" = "VICTIM" ] && [ -f "$BRIEF_
 else
     bad "b14 pre-planted leaf-brief.txt symlink (rc=$RC, victim='$(cat "$T/brief-victim")'): $(cat "$T/brief-link.err")"
 fi
+
+# --- b12 (xiii): an in-root intermediate symlinked directory on the LEAF path ----
+# Rule (c) (OQ11 item 3): <leaf root>/alias -> <leaf root>/real sits BETWEEN the
+# leaf root and the entry's directory; the row names alias/<entry dir>/<entry>,
+# its closure keyed by the real path, committed in the replica's canonical
+# table as setup (core.hooksPath=/dev/null). Known-good: the leaf runs. Last in
+# the file: the re-pinned canonical table no longer matches the dispatch row.
+mkdir -p "$CLAUDE_CONFIG_DIR/real/$(dirname "$LEAF_REL")"
+cp -r "$ADM_FX/leaf/." "$CLAUDE_CONFIG_DIR/real/$(dirname "$LEAF_REL")/"
+chmod +x "$CLAUDE_CONFIG_DIR/real/$LEAF_REL"
+ln -s real "$CLAUDE_CONFIG_DIR/alias"
+python3 -c '
+import sys, yaml
+path, leaf = sys.argv[1], sys.argv[2]
+data = yaml.safe_load(open(path, encoding="utf-8"))
+for row in data["admitted"]:
+    row["leaf"] = "alias/" + leaf
+    row["leaf_closure"] = {"real/" + k: v for k, v in row["leaf_closure"].items()}
+open(path, "w", encoding="utf-8").write(yaml.safe_dump(data, sort_keys=False))
+' "$CANON" "$LEAF_REL"
+setup_commit "$R" "$TBL"
+case_b12_xiii() {
+    rm -f "$MARK"
+    ( cd "$R" && LEAF_MARKER="$MARK" LEAF_EXIT=7 bash -c "$CALL" ) >/dev/null 2>"$T/wrap.err"
+    RC=$?
+    if [ "$RC" -eq 7 ] && [ -f "$MARK" ]; then
+        ok "b12(xiii) an in-root symlinked directory between the leaf root and the entry's directory is resolved -> the leaf runs (7)"
+    else
+        bad "b12(xiii) in-root intermediate directory symlink (rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/wrap.err")"
+    fi
+}
+case_b12_xiii
+# (o) a rule (c) refusing that intermediate directory symlink — marker-RED on (xiii).
+red "b12(o) rule (c) refusing an in-root intermediate directory symlink" "b12(xiii)" \
+    "$ADM_PY:leaf-refuse-intermediate-dir" -- case_b12_xiii
 
 echo
 echo "goalforge-workflow-compile.test.sh: $PASS passed, $FAIL failed"

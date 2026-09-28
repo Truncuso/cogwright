@@ -76,7 +76,20 @@ _FILE_WALK_OUT_OF_ROOT_ONLY = (
     '            if os.path.islink(path) and os.path.commonpath('
     '[str(root_real), os.path.realpath(path)]) != str(root_real):'
 )
-_GUARD_SET = '    if guard_set and (_control_char(rel) or not TABLE_GUARD_SET.fullmatch(rel)):'
+_GUARD_SET = '    if not TABLE_GUARD_SET.fullmatch(rel):'
+_CONTROL_CHAR = '    if _control_char(rel):'
+_BINDING_UNPACK = '    path, top, rel = binding.path, binding.top, binding.rel\n'
+_WALK_CALL = '    walked = _walk_table(table_path, top)\n'
+_REPLACE_FLAG = '    env["GIT_NO_REPLACE_OBJECTS"] = "1"\n'
+# b15 (d): the 03dcf88 anchoring — git at the resolved table's own directory.
+_ANCHOR_AT_TABLE_DIR = (
+    _BINDING_UNPACK,
+    '    path = binding.path\n    top, rel = repo_rel(path, "admission table")\n',
+)
+# b15 (i): the walk replaced by one full realpath (anchoring kept).
+_FULL_REALPATH = (_WALK_CALL, '    walked = Path(os.path.realpath(table_path))\n')
+# b15 (m): no replace-object flag after the GIT_* scrub (the 03dcf88 _git_env).
+_NO_REPLACE_FLAG = (_REPLACE_FLAG, "")
 
 MUTATIONS.update({
     # b12 known-bad (n): the full lap-7 N1 code — no entry islink check, a walk
@@ -106,12 +119,13 @@ MUTATIONS.update({
         "    tree = str(target.parent)\n",
         "    tree = os.path.dirname(os.path.realpath(entry))\n",
     ),
-    # T10 single-resolution structural: the guard check re-resolves the table.
+    # T10 single-resolution structural: the HEAD binding re-resolves the table.
     "resolve-table-dir": (
-        "    table_dir = path.parent\n",
-        "    table_dir = path.resolve().parent\n",
+        _BINDING_UNPACK,
+        "    path, top, rel = binding.path.resolve(), binding.top, binding.rel\n",
     ),
-    # b15 known-bad (a), admission half: the lap-7 abspath-vs-realpath refusal.
+    # b15 known-bad (a): the lap-7 abspath-vs-realpath refusal, on the table's
+    # binding and on the overview's HEAD read.
     "lap7-head-refusal": (
         "    file_dir = path.parent\n    try:\n        top = ",
         "    if path.is_symlink() or os.path.realpath(path) != os.path.abspath(path):\n"
@@ -119,33 +133,79 @@ MUTATIONS.update({
         "            f'{what} {path} is a symlink or resolves through one — HEAD binding refused')\n"
         "    file_dir = path.parent\n    try:\n        top = ",
     ),
-    # b15 known-bads (a) pick-agent half, (b) and (d): the HEAD read and guard
-    # check take the UNRESOLVED canonical path, not the one resolved path.
-    "head-read-unresolved-table": (
-        "        admission.verify_head_binding(table_path, raw)",
-        "        admission.verify_head_binding(admission.ADMITTED_PATH, raw)",
+    "lap7-table-refusal": (
+        "    pkg_real = Path(os.path.realpath(PKG_ROOT))\n",
+        "    if os.path.realpath(table_path) != os.path.abspath(table_path):\n"
+        "        raise AdmissionTableError(\n"
+        "            f'admission table {table_path} is a symlink or resolves through one — HEAD binding refused')\n"
+        "    pkg_real = Path(os.path.realpath(PKG_ROOT))\n",
     ),
     # b15 known-bad (a) compile half: the overview is never resolved.
     "brief-abspath": (
         "    real = overview.resolve()",
         "    real = Path(os.path.abspath(overview))",
     ),
-    # b15 known-bad (c): no guard-set match on the resolved rel.
-    "no-guard-set": (_GUARD_SET, "    if False:"),
-    # b15 known-bad (e): re.search with a bare trailing `$`, no control-char check.
-    "guard-set-search-dollar": (
-        _GUARD_SET,
-        '    if guard_set and not re.search(r"(^|/)references/admitted-providers\\.yaml$", rel):',
+    # b15 known-bad (b): rel = relpath(abspath(path), physical toplevel).
+    "table-rel-logical": (
+        "    rel = os.path.relpath(walked, top)\n",
+        "    rel = os.path.relpath(os.path.abspath(table_path), top)\n",
     ),
-    # b15 known-bad (f): an unanchored re.search + \Z.
+    # b15 known-bad (c), single-condition (v14): no guard-set fullmatch, the
+    # control-character refusal kept.
+    "no-guard-set": (_GUARD_SET, "    if False:"),
+    # b15 known-bad (l): the control-character refusal dropped, fullmatch kept.
+    "no-control-char": (_CONTROL_CHAR, "    if False:"),
+    # b15 known-bad (e), historical regression lock (the S1 code, two
+    # conditions): re.search with a bare trailing `$` AND no control-char check.
+    "guard-set-search-dollar": [
+        (_CONTROL_CHAR, "    if False:"),
+        (_GUARD_SET,
+         '    if not re.search(r"(^|/)references/admitted-providers\\.yaml$", rel):'),
+    ],
+    # b15 known-bad (f): an unanchored re.search + \Z, control-char check kept.
     "guard-set-search-z": (
         _GUARD_SET,
-        '    if guard_set and (_control_char(rel) or not re.search('
-        'r"references/admitted-providers\\.yaml\\Z", rel)):',
+        '    if not re.search(r"references/admitted-providers\\.yaml\\Z", rel):',
+    ),
+    # b15 known-bad (d): git anchored at the resolved table's own directory.
+    "anchor-at-table-dir": _ANCHOR_AT_TABLE_DIR,
+    # b15 known-bad (g), historical regression lock: the 03dcf88 binding — one
+    # full realpath (no walk), git at the table's directory, no replace flag.
+    "binding-03dcf88": [_NO_REPLACE_FLAG, _FULL_REALPATH, _ANCHOR_AT_TABLE_DIR],
+    # b15 known-bad (h): the walk refuses a symlink only at the table FILE and
+    # resolves in-tree directory symlinks.
+    "walk-file-only": (
+        "        if step.is_symlink() and _within(top, step):\n",
+        "        if step.is_symlink() and _within(top, step) and i == last:\n",
+    ),
+    # b15 known-bad (i): the walk replaced by one full realpath, anchoring kept.
+    "walk-full-realpath": _FULL_REALPATH,
+    # b15 known-bad (k): verify_leaf binds as the 03dcf88 wrapper did (one
+    # realpath of the table, git at its directory), not through bind_table.
+    "verify-leaf-own-binding": (
+        "    binding = bind_table(table_path)\n",
+        "    table_path = Path(os.path.realpath(table_path))\n"
+        '    binding = TableBinding(table_path, *repo_rel(table_path, "admission table"))\n',
+    ),
+    # b15 known-bad (m): _git_env without GIT_NO_REPLACE_OBJECTS=1.
+    "no-replace-flag": _NO_REPLACE_FLAG,
+    # b4 known-bad (g): the T13 binding placed in the shared, UNBOUND
+    # resolve_admitted_path — fails closed with no work-tree top level.
+    "bind-in-resolve-admitted-path": (
+        "    target = (Path(raw) if raw else admission.ADMITTED_PATH).resolve()\n",
+        "    target = admission.bind_table(Path(raw) if raw else admission.ADMITTED_PATH).path\n",
+    ),
+    # b12 known-bad (o): rule (c) refusing an in-root symlinked directory
+    # BETWEEN the leaf root and the entry's directory.
+    "leaf-refuse-intermediate-dir": (
+        '    entry = root_real / str(row["leaf"])\n',
+        '    entry = root_real / str(row["leaf"])\n'
+        "    if os.path.realpath(entry.parent) != str(entry.parent):\n"
+        '        return f"leaf_closure mismatch: {entry.parent} resolves through a symlinked directory"\n',
     ),
     # T12 known-bad: the guard-set match kept, the guarded-repository check dropped.
     "drop-guard-reason": (
-        "    unguarded = _guard_reason(table_dir)\n",
+        "    unguarded = _guard_reason(top)\n",
         "    unguarded = None\n",
     ),
     # b16 known-bads (a)/(b): the brief always from HEAD / always the work tree.

@@ -252,6 +252,43 @@ if [[ "$RC" -ne 0 ]] && impl_fails b4-vii | grep -q "egress incoherent"; then
 else
     bad "b4(vii) egress (rc=$RC): $(impl_fails b4-vii)"
 fi
+# (viii) known-good (v14): the (ii) pair in a REPOSITORY-FREE replica (no .git
+# above it), run as that replica's own --test-tiers subprocess — the T13 table
+# binding is compile-only, so --test-tiers needs no git work tree.
+NOGIT_REP="$T/nogit-replica"
+mkdir -p "$NOGIT_REP"
+cp -r "$PKG/." "$NOGIT_REP/"
+find "$NOGIT_REP" -name __pycache__ -type d -prune -exec rm -rf {} +
+cp "$D_ADM" "$NOGIT_REP/references/dispatch.yaml"
+cp "$ADM_FX/admitted-ok/references/admitted-providers.yaml" "$NOGIT_REP/references/admitted-providers.yaml"
+case_b4_viii() {
+    python3 "$NOGIT_REP/scripts/goalforge-pick-agent.py" --test-tiers >"$T/b4-viii.out" 2>&1
+    RC=$?
+    if [[ "$RC" -eq 0 && -z "$(impl_fails b4-viii)" ]]; then
+        ok "b4(viii) a repository-free replica's own --test-tiers: no implement failure, no git work tree needed"
+    else
+        bad "b4(viii) repository-free --test-tiers (rc=$RC): $(tail -5 "$T/b4-viii.out")"
+    fi
+}
+if [[ -z "$(git -C "$NOGIT_REP" rev-parse --show-toplevel 2>/dev/null)" ]]; then
+    case_b4_viii
+    # known-bad (g): the T13 binding placed in the shared resolve_admitted_path.
+    PICK_REP="$NOGIT_REP/scripts/goalforge-pick-agent.py"
+    cp "$PICK_REP" "$T/pick.orig"
+    if python3 "$ADM_FX/mutate.py" bind-in-resolve-admitted-path "$T/pick.orig" "$PICK_REP"; then
+        OUT="$( (case_b4_viii) 2>&1 )"
+        if grep -q "FAIL: b4(viii)" <<<"$OUT"; then
+            ok "known-bad red: b4(g) the T13 binding in resolve_admitted_path (why: b4(viii))"
+        else
+            bad "known-bad stays green: b4(g) the T13 binding in resolve_admitted_path"
+        fi
+    else
+        bad "known-bad b4(g): mutation bind-in-resolve-admitted-path did not apply"
+    fi
+    cp "$T/pick.orig" "$PICK_REP"
+else
+    bad "b4(viii) setup: $NOGIT_REP sits inside a git work tree"
+fi
 
 echo
 echo "goalforge-pick-agent.test.sh: $PASS passed, $FAIL failed"

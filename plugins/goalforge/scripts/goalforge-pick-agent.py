@@ -973,7 +973,22 @@ def resolve_and_log(
     call) is carried into that one row when given.
 
     Returns the resolution plus `admission_table_rows` (the table's row count)."""
-    table_path, admitted_source = resolve_admitted_path(None)
+    # The bound path's ONE resolution is the shared binding helper
+    # (admission.bind_table, also used by the wrapper), never
+    # resolve_admitted_path. A binding failure is raised only for an admitted
+    # verdict: a refused row needs no HEAD binding, so it still names the
+    # missing admission (read through the unbound resolver).
+    binding = bind_error = None
+    if bind_head:
+        try:
+            binding = admission.bind_table(admission.ADMITTED_PATH)
+        except admission.AdmissionTableError as exc:
+            bind_error = exc
+    if binding is not None:
+        table_path = binding.path
+        admitted_source = str(table_path.relative_to(PKG_ROOT))
+    else:
+        table_path, admitted_source = resolve_admitted_path(None)
     raw = admission.read_table(table_path)
     table = admission.parse(raw, table_path)
     resolution = resolve_stage(
@@ -982,11 +997,11 @@ def resolve_and_log(
     )
     decision = resolution.get("admission_decision")
     if bind_head and decision == "admitted":
-        # The ONE resolved table path (resolve_admitted_path): the bytes read
-        # above, the HEAD read and the guard check all anchor at it, and the
-        # HEAD read's guard-set match refuses a real path the pre-commit guard
-        # never filters.
-        admission.verify_head_binding(table_path, raw)
+        # The bytes read above, the HEAD read and the guard check all take
+        # the one binding; its git calls run at the package's top level.
+        if bind_error is not None:
+            raise bind_error
+        admission.verify_head_binding(binding, raw)
     if decision or resolution["propose_only"]:
         row = ledger_row(
             resolution, wp=wp, admitted_source=admitted_source,
