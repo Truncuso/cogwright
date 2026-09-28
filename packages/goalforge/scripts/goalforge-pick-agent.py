@@ -981,7 +981,7 @@ def resolve_and_log(
     binding = bind_error = None
     if bind_head:
         try:
-            binding = admission.bind_table(admission.ADMITTED_PATH)
+            binding = admission.bind_table()
         except admission.AdmissionTableError as exc:
             bind_error = exc
     if binding is not None:

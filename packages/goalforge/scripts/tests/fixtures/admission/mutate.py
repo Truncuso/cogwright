@@ -90,6 +90,8 @@ _ANCHOR_AT_TABLE_DIR = (
 _FULL_REALPATH = (_WALK_CALL, '    walked = Path(os.path.realpath(table_path))\n')
 # b15 (m): no replace-object flag after the GIT_* scrub (the 03dcf88 _git_env).
 _NO_REPLACE_FLAG = (_REPLACE_FLAG, "")
+# b15 (q): _git without `-c core.useReplaceRefs=false` (the cd3fe47 _git).
+_NO_REPLACE_CONFIG = ('["git", "-c", "core.useReplaceRefs=false", "-C",', '["git", "-C",')
 
 MUTATIONS.update({
     # b12 known-bad (n): the full lap-7 N1 code — no entry islink check, a walk
@@ -183,12 +185,32 @@ MUTATIONS.update({
     # b15 known-bad (k): verify_leaf binds as the 03dcf88 wrapper did (one
     # realpath of the table, git at its directory), not through bind_table.
     "verify-leaf-own-binding": (
-        "    binding = bind_table(table_path)\n",
-        "    table_path = Path(os.path.realpath(table_path))\n"
+        "    binding = bind_table()\n",
+        "    table_path = Path(os.path.realpath(ADMITTED_PATH))\n"
         '    binding = TableBinding(table_path, *repo_rel(table_path, "admission table"))\n',
     ),
-    # b15 known-bad (m): _git_env without GIT_NO_REPLACE_OBJECTS=1.
-    "no-replace-flag": _NO_REPLACE_FLAG,
+    # b15 known-bad (m), historical regression lock (v15): the 03dcf88 replace
+    # handling — no GIT_NO_REPLACE_OBJECTS=1 AND no -c core.useReplaceRefs=false.
+    "no-replace-flag": [_NO_REPLACE_FLAG, _NO_REPLACE_CONFIG],
+    # b15 known-bad (q): _git without the -c flag, the env var kept (cd3fe47).
+    "no-replace-config": _NO_REPLACE_CONFIG,
+    # b15 known-bad (r): the top-level-contains-realpath(PKG_ROOT) check dropped.
+    "no-top-contains-pkg": ("    if not _within(top, pkg_real):\n", "    if False:\n"),
+    # b15 known-bad (p), admission half: the cd3fe47 --verify-leaf TABLE
+    # argument, bound as the table (ADMITTED_PATH rebound to the caller's path).
+    "caller-table": [
+        ('"--verify-leaf", nargs=3,', '"--verify-leaf", nargs=4,'),
+        ('metavar=("TASK_CLASS", "PROVIDER", "MODEL")',
+         'metavar=("TABLE", "TASK_CLASS", "PROVIDER", "MODEL")'),
+        ("            klass, provider, model = args.verify_leaf\n",
+         "            table, klass, provider, model = args.verify_leaf\n"
+         '            globals()["ADMITTED_PATH"] = Path(table)\n'),
+    ],
+    # b15 known-bad (p), wrapper half: the cd3fe47 $0-derived TABLE argument.
+    "wrapper-table-arg": (
+        '--verify-leaf "$1"',
+        '--verify-leaf "$(dirname "$0")/../references/admitted-providers.yaml" "$1"',
+    ),
     # b4 known-bad (g): the T13 binding placed in the shared, UNBOUND
     # resolve_admitted_path — fails closed with no work-tree top level.
     "bind-in-resolve-admitted-path": (

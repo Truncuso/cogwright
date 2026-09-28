@@ -11,7 +11,7 @@
 # table argument: an actor who can edit the leaf can also rewrite an argument in
 # the emitted workflow file, so nothing on the command line is trusted. The
 # expected `leaf`, `leaf_sha256` and `leaf_closure` are re-derived from the
-# admission table resolved script-relative below, and only when that table's
+# package's canonical admission table (never a path derived from $0), and only when that table's
 # bytes are its committed HEAD content in a goalforge-guarded repository
 # (goalforge-admission.py verify_leaf / verify_head_binding). The leaf's real
 # path must lie under the leaf root, it must hash to the recorded value, and
@@ -36,8 +36,6 @@ if [[ $# -ne 3 ]]; then
     exit 2
 fi
 
-TABLE="$(dirname "$0")/../references/admitted-providers.yaml"
-
 refuse() { echo "goalforge-leaf-exec: refused — $1; the leaf was not executed" >&2; exit 2; }
 
 # The brief cap has ONE home: goalforge-second-opinion.sh's MAX_PAYLOAD_CEILING.
@@ -58,7 +56,7 @@ if (( $(tr -d '\000' < "$WORK/brief" | wc -c) != BRIEF_BYTES )); then
     refuse "the brief contains a NUL byte, which an argv value cannot carry"
 fi
 
-LEAF="$(python3 "$(dirname "$0")/goalforge-admission.py" --verify-leaf "$TABLE" "$1" "$2" "$3")" \
+LEAF="$(python3 "$(dirname "$0")/goalforge-admission.py" --verify-leaf "$1" "$2" "$3")" \
     || refuse "the admission check failed"
 
 # $(...) strips every trailing newline; the sentinel keeps all but ONE.

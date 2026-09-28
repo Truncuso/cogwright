@@ -667,10 +667,10 @@ fi
 WRAPPER_SRC="$PKG/scripts/goalforge-leaf-exec.sh"
 CODE_LINES="$(grep -v '^[[:space:]]*#' "$WRAPPER_SRC")"
 if grep -qF 'if [[ $# -ne 3 ]]; then' <<<"$CODE_LINES" \
-   && grep -qF 'TABLE="$(dirname "$0")/../references/admitted-providers.yaml"' <<<"$CODE_LINES" \
-   && [ "$(grep -c 'admitted-providers' <<<"$CODE_LINES")" = "1" ] \
+   && grep -qF -- '--verify-leaf "$1" "$2" "$3")' <<<"$CODE_LINES" \
+   && [ "$(grep -c 'admitted-providers\|TABLE' <<<"$CODE_LINES")" = "0" ] \
    && ! grep -q 'GOALFORGE_' <<<"$CODE_LINES"; then
-    ok "b12 structural: exactly three positionals, table ONLY \$(dirname \"\$0\")/../references/admitted-providers.yaml, no GOALFORGE_* read"
+    ok "b12 structural: exactly three positionals, no table path (v15 (a): the canonical table only), no GOALFORGE_* read"
 else
     bad "b12 structural assertion over scripts/goalforge-leaf-exec.sh"
 fi
@@ -1122,7 +1122,7 @@ cp "$RFX/admitted-ok/$TBL" "$NL_DIR/admitted-providers.yaml"$'\n'
 hcommit "evil3/references/admitted-providers.yaml"$'\n'
 case_b15_vi() {
     seam_compile b15-vi "$NL_DIR/admitted-providers.yaml"$'\n' "$D_ADM"
-    b15_refused b15-vi "HEAD binding refused"
+    b15_refused b15-vi "control character"
 }
 # (vii) the seam DIRECTLY at evilreferences/ — a whole-string match refuses it.
 mkdir -p "$R/evilreferences"
@@ -1166,6 +1166,9 @@ red "b15(f) guard-set unanchored re.search + \\Z" "b15 b15-vii" \
 # (l) control-character refusal dropped, fullmatch kept — RED on (xiv).
 red "b15(l) no control-character refusal" "b15 b15-xiv" \
     "$ADM_PY:no-control-char" -- case_b15_xiv
+# v15 (d): (vi) pins "control character", so (l) goes RED on (vi) as well.
+red "b15(l) no control-character refusal, (vi)" "b15 b15-vi" \
+    "$ADM_PY:no-control-char" -- case_b15_vi
 
 # --- b15 (ix)-(xiii), (xv), (v-b): H1-v8 attacks on an EMPTY-table replica -------
 # The replica's setup commit holds the shipped EMPTY table at the canonical
@@ -1311,7 +1314,7 @@ case_b15_xva() {
     blob="$("${GITQ[@]}" -C "$RA" hash-object -w "$ADMIT_SRC")"
     "${GITQ[@]}" -C "$RA" replace "$old" "$blob"
     cp "$ADMIT_SRC" "$RA_CANON"
-    attack b15-xva "git replace <HEAD table blob> <admitting blob>" "differs from git show HEAD" "differs from git show HEAD"
+    attack "b15-xva${XV:-}" "git replace <HEAD table blob> <admitting blob>" "differs from git show HEAD" "differs from git show HEAD"
     "${GITQ[@]}" -C "$RA" replace -d "$old" >/dev/null
     ra_canon_restore
 }
@@ -1327,13 +1330,74 @@ case_b15_xvb() {
     else
         bad "b15(xv-b) setup: git status is not clean: $("${GITQ[@]}" -C "$RA" status --short --untracked-files=no)"
     fi
-    attack b15-xvb "git replace <HEAD> <admitting commit>" "differs from git show HEAD" "differs from git show HEAD"
+    attack "b15-xvb${XV:-}" "git replace <HEAD> <admitting commit>" "differs from git show HEAD" "differs from git show HEAD"
     "${GITQ[@]}" -C "$RA" replace -d "$head" >/dev/null
     "${GITQ[@]}" -C "$RA" reset -q -- "$TBL"
     ra_canon_restore
 }
 case_b15_xva
 case_b15_xvb
+# (xv-c) v15 (b): (xv-a)/(xv-b) under a repository-local core.useReplaceRefs=true
+# (setup only), which re-enables replace refs over GIT_NO_REPLACE_OBJECTS=1.
+case_b15_xvc() {
+    "${GITQ[@]}" -C "$RA" config core.useReplaceRefs true
+    if [ "$("${GITQ[@]}" -C "$RA" config --local --get core.useReplaceRefs)" = true ]; then
+        ok "b15(xv-c) setup: core.useReplaceRefs=true is set repository-local"
+    else
+        bad "b15(xv-c) setup: core.useReplaceRefs is not set repository-local"
+    fi
+    XV=-c case_b15_xva
+    XV=-c case_b15_xvb
+    "${GITQ[@]}" -C "$RA" config --unset core.useReplaceRefs
+}
+case_b15_xvc
+
+# (xvi) v15 (a): an UNTRACKED shim of FILE symlinks to the package's own
+# scripts inside the committed admitted-ok fixture directory; the wrapper must
+# bind the package's EMPTY canonical table whatever directory $0 names.
+ADMIT_DIR="$RA/scripts/tests/fixtures/admission/admitted-ok"
+shim() { # <name> <label> <shim subdir> <call>
+    local s
+    mkdir -p "$ADMIT_DIR/$3"
+    for s in goalforge-leaf-exec.sh goalforge-admission.py goalforge-second-opinion.sh; do
+        ln -s "$RA/scripts/$s" "$ADMIT_DIR/$3/$s"
+    done
+    rm -f "$MARK"
+    ( cd "$ADMIT_DIR" && LEAF_MARKER="$MARK" LEAF_EXIT=7 \
+        bash -c "$4 code/py ollama glm-5.3:cloud < $T/attack-brief.txt" ) >/dev/null 2>"$T/$1.wrap.err"
+    RC=$?
+    rm -rf "${ADMIT_DIR:?}/$3"
+    if [ "$RC" -eq 2 ] && [ ! -f "$MARK" ] && grep -qF "no single admission row" "$T/$1.wrap.err"; then
+        ok "b15 $1 $2 -> wrapper exit 2 on the canonical table, leaf marker absent"
+    else
+        bad "b15 $1 $2 (wrapper rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/$1.wrap.err")"
+    fi
+}
+case_b15_xvia() { shim b15-xvi-a "shim admitted-ok/sub/, bash sub/goalforge-leaf-exec.sh" sub "bash sub/goalforge-leaf-exec.sh"; }
+case_b15_xvib() { shim b15-xvi-b "shim admitted-ok/scripts/, verbatim call" scripts "scripts/goalforge-leaf-exec.sh"; }
+case_b15_xvia
+case_b15_xvib
+
+# (xvii) v15 (c): core.worktree forged BELOW the package (setup only) turns the
+# in-tree canonical-table symlink into a resolved "ancestor".
+case_b15_xvii() {
+    local sub="$RA/sub/scripts/tests/fixtures/admission/admitted-ok/references"
+    mkdir -p "$sub"
+    cp "$ADMIT_SRC" "$sub/admitted-providers.yaml"
+    ra_canon_link ../sub/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml
+    "${GITQ[@]}" -C "$RA" config core.worktree "$RA/sub"
+    if [ "$("${GITQ[@]}" -C "$RA" config --local --get core.worktree)" = "$RA/sub" ]; then
+        ok "b15(xvii) setup: core.worktree=<pkg>/sub is set repository-local"
+    else
+        bad "b15(xvii) setup: core.worktree is not set repository-local"
+    fi
+    attack b15-xvii "core.worktree below the package + canonical-table symlink" - \
+        "does not contain the package root"
+    "${GITQ[@]}" -C "$RA" config --unset core.worktree
+    rm -rf "${RA:?}/sub"
+    ra_canon_restore
+}
+case_b15_xvii
 
 # Known-bads, RED by compile rc 0 plus the wrapper marker written (g, h, i, m)
 # or by the marker alone (k).
@@ -1349,10 +1413,19 @@ for c in ix x; do
 done
 RED_ROOT="$RA" red "b15(k) verify_leaf binding as the 03dcf88 wrapper did" "marker=yes" \
     "$ADM_PY:verify-leaf-own-binding" -- case_b15_xiii
-RED_ROOT="$RA" red "b15(m) _git_env without GIT_NO_REPLACE_OBJECTS, (xv-a)" "marker=yes" \
+RED_ROOT="$RA" red "b15(m) historical lock: no GIT_NO_REPLACE_OBJECTS and no -c core.useReplaceRefs=false, (xv-a)" "marker=yes" \
     "$ADM_PY:no-replace-flag" -- case_b15_xva
-RED_ROOT="$RA" red "b15(m) _git_env without GIT_NO_REPLACE_OBJECTS, (xv-b)" "marker=yes" \
+RED_ROOT="$RA" red "b15(m) historical lock: no GIT_NO_REPLACE_OBJECTS and no -c core.useReplaceRefs=false, (xv-b)" "marker=yes" \
     "$ADM_PY:no-replace-flag" -- case_b15_xvb
+# v15 known-bads (p), (q), (r).
+for c in xvia xvib; do
+    RED_ROOT="$RA" red "b15(p) the cd3fe47 caller-passed TABLE, ($c)" "marker=yes" \
+        "$ADM_PY:caller-table" "scripts/goalforge-leaf-exec.sh:wrapper-table-arg" -- "case_b15_$c"
+done
+RED_ROOT="$RA" red "b15(q) _git without -c core.useReplaceRefs=false, env var kept, (xv-c)" "marker=yes" \
+    "$ADM_PY:no-replace-config" -- case_b15_xvc
+RED_ROOT="$RA" red "b15(r) no top-level-contains-package check, (xvii)" "marker=yes" \
+    "$ADM_PY:no-top-contains-pkg" -- case_b15_xvii
 
 # Structural (T13): table-anchor and shared-binding, each with its mutant.
 structural_case() { # <mode>
@@ -1363,8 +1436,12 @@ structural_case() { # <mode>
 }
 case_table_anchor() { structural_case table-anchor; }
 case_shared_binding() { structural_case shared-binding; }
+case_canonical_only() { structural_case canonical-only; }
 case_table_anchor
 case_shared_binding
+case_canonical_only
+red "b15(p) structural: the cd3fe47 caller-passed TABLE" "canonical-only" \
+    "$ADM_PY:caller-table" "scripts/goalforge-leaf-exec.sh:wrapper-table-arg" -- case_canonical_only
 red "b15(d) structural: the HEAD read anchored at the table's directory" "table-anchor" \
     "$ADM_PY:anchor-at-table-dir" -- case_table_anchor
 red "b15(k) structural: verify_leaf with its own table resolution" "shared-binding" \

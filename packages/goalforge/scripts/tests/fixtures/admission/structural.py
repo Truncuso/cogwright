@@ -17,10 +17,14 @@ swap race they narrow); each prints one `ok ...` / `bad ...` line per check.
         binding's top level (`top`, bound only from `binding.top`).
     python3 structural.py shared-binding <goalforge-admission.py>
         T13 (1): verify_leaf calls bind_table and resolves nothing itself.
+    python3 structural.py canonical-only <goalforge-admission.py>
+        v15 (a): no table-path parameter on bind_table / verify_leaf /
+        --verify-leaf, and the sibling wrapper passes only the row key.
 """
 from __future__ import annotations
 
 import ast
+import os
 import sys
 
 RESOLVERS = {"resolve", "realpath", "abspath"}
@@ -164,10 +168,47 @@ def shared_binding(path: str) -> bool:
     return False
 
 
+_WRAPPER_CALL = '--verify-leaf "$1" "$2" "$3")'
+
+
+def canonical_only(path: str) -> bool:
+    """v15 (a): bind_table and verify_leaf take no table-path parameter,
+    ``--verify-leaf`` takes exactly the 3-part row key, and the sibling
+    goalforge-leaf-exec.sh passes exactly that key."""
+    fns = _functions(path)
+    good = True
+    bind, leaf = fns.get("bind_table"), fns.get("verify_leaf")
+    if bind is None or bind.args.args or bind.args.kwonlyargs:
+        print(f"bad canonical-only: bind_table takes parameters or is missing in {path}")
+        good = False
+    if leaf is None or [a.arg for a in leaf.args.args] != ["klass", "provider", "model"]:
+        print(f"bad canonical-only: verify_leaf positional parameters are not "
+              f"(klass, provider, model) in {path}")
+        good = False
+    nargs = [kw.value.value for n in ast.walk(ast.parse(open(path, encoding="utf-8").read()))
+             if isinstance(n, ast.Call) and n.args
+             and isinstance(n.args[0], ast.Constant) and n.args[0].value == "--verify-leaf"
+             for kw in n.keywords if kw.arg == "nargs" and isinstance(kw.value, ast.Constant)]
+    if nargs != [3]:
+        print(f"bad canonical-only: --verify-leaf nargs {nargs}, want [3]")
+        good = False
+    wrapper = os.path.join(os.path.dirname(path), "goalforge-leaf-exec.sh")
+    text = open(wrapper, encoding="utf-8").read()
+    if text.count("--verify-leaf") != 1 or _WRAPPER_CALL not in text:
+        print(f"bad canonical-only: {wrapper} does not pass exactly the row key "
+              f"({_WRAPPER_CALL!r})")
+        good = False
+    if good:
+        print("ok canonical-only: bind_table and verify_leaf take no table path, "
+              "--verify-leaf and the wrapper pass only the row key")
+    return good
+
+
 if __name__ == "__main__":
     mode, target = sys.argv[1], sys.argv[2]
     check = {"closure-single-realpath": closure_single_realpath,
              "single-resolution": single_resolution,
              "table-anchor": table_anchor,
-             "shared-binding": shared_binding}[mode]
+             "shared-binding": shared_binding,
+             "canonical-only": canonical_only}[mode]
     sys.exit(0 if check(target) else 1)

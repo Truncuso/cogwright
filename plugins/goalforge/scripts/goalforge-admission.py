@@ -307,7 +307,10 @@ def _git_env(*, isolate_config: bool) -> dict[str, str]:
     system config for the HEAD read itself; the ``core.hooksPath`` lookup runs
     WITHOUT it, because hiding that setting would hide what `git commit` runs.
     ``GIT_NO_REPLACE_OBJECTS`` is set AFTER the scrub: a ``refs/replace`` entry
-    would otherwise substitute HEAD bytes the pre-commit guard never saw."""
+    would otherwise substitute HEAD bytes the pre-commit guard never saw.
+    ``_git`` also passes ``-c core.useReplaceRefs=false``: a repository-local
+    ``core.useReplaceRefs=true`` overrides the variable, command-line config
+    outranks it (v15 (b))."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     env["GIT_NO_REPLACE_OBJECTS"] = "1"
     if isolate_config:
@@ -318,7 +321,8 @@ def _git_env(*, isolate_config: bool) -> dict[str, str]:
 
 def _git(args: list[str], cwd: Path, *, isolate_config: bool = True):
     return subprocess.run(
-        ["git", "-C", str(cwd), *args], env=_git_env(isolate_config=isolate_config),
+        ["git", "-c", "core.useReplaceRefs=false", "-C", str(cwd), *args],
+        env=_git_env(isolate_config=isolate_config),
         capture_output=True, check=False,
     )
 
@@ -501,19 +505,23 @@ def _walk_table(table_path: Path, top: Path) -> Path:
     return walked
 
 
-def bind_table(table_path: Path) -> TableBinding:
+def bind_table() -> TableBinding:
     """The ONE shared binding of the HEAD-bound table (wp-08 T13, H1-v8).
 
     Called by BOTH bound callers — the compile's
     ``resolve_and_log(bind_head=True)`` and the wrapper's ``verify_leaf`` —
     never by ``resolve_admitted_path`` (``--test-tiers`` and pick-agent
-    ``main()`` need no git work tree). The top level is that of
-    realpath(PKG_ROOT) (``git rev-parse --show-toplevel``; none fails CLOSED).
-    The walk (``_walk_table``) refuses any symlink at or below it; the walked
-    path must lie inside realpath(PKG_ROOT); rel is taken against the top
-    level. Every git call of the binding then runs ``git -C <top>`` with that
+    ``main()`` need no git work tree). It binds ONLY the canonical table,
+    ``ADMITTED_PATH`` read at call time — no caller selects a table (v15 (a)).
+    The top level is that of realpath(PKG_ROOT) (``git rev-parse
+    --show-toplevel``; none fails CLOSED) and must contain realpath(PKG_ROOT):
+    a repository-local ``core.worktree`` can move it below the package (v15
+    (c)). The walk (``_walk_table``) refuses any symlink at or below it; the
+    walked path must equal realpath(ADMITTED_PATH) and lie inside
+    realpath(PKG_ROOT); rel is taken against the top level. Every git call of the binding then runs ``git -C <top>`` with that
     rel, so no linked worktree, nested or foreign repository, and no path
     swapped in after the walk supplies the HEAD bytes."""
+    table_path = ADMITTED_PATH
     pkg_real = Path(os.path.realpath(PKG_ROOT))
     try:
         res = _git(["rev-parse", "--show-toplevel"], pkg_real)
@@ -528,7 +536,17 @@ def bind_table(table_path: Path) -> TableBinding:
             "a git work tree — the HEAD binding cannot be checked, failed CLOSED"
         )
     top = Path(res.stdout.decode("utf-8", "surrogateescape").rstrip("\n"))
+    if not _within(top, pkg_real):
+        raise AdmissionTableError(
+            f"admission table {table_path}: the work-tree top level {top} does not "
+            f"contain the package root {pkg_real} — HEAD binding failed CLOSED"
+        )
     walked = _walk_table(table_path, top)
+    if walked != Path(os.path.realpath(table_path)):
+        raise AdmissionTableError(
+            f"admission table {table_path} walks to {walked}, not the package "
+            "canonical table — HEAD binding refused"
+        )
     if not _within(pkg_real, walked):
         raise AdmissionTableError(
             f"admission table {table_path} walks to {walked}, outside the package "
@@ -730,11 +748,11 @@ def admits_any(provider: dict, model: str, egress: str,
     return "; ".join(reasons)
 
 
-def verify_leaf(table_path: Path, klass: str, provider: str, model: str, *,
+def verify_leaf(klass: str, provider: str, model: str, *,
                 leaf_root: Path | None = None) -> Path:
     """Re-derive and re-check the admitted leaf for one row key (the wrapper).
 
-    Binds the table through ``bind_table`` (walk, package-root containment,
+    Binds the canonical table through ``bind_table`` (walk, package-root containment,
     git at the package's top level), reads it once, requires those bytes to be
     the committed HEAD content (``verify_head_binding``), takes the row's ``leaf``,
     ``leaf_sha256`` and ``leaf_closure`` from THAT table only, requires the
@@ -744,7 +762,7 @@ def verify_leaf(table_path: Path, klass: str, provider: str, model: str, *,
     # The table path's ONE resolution is the shared binding helper, the same
     # one the compile uses: the byte read, the HEAD read and the guard check
     # below all take it and resolve nothing again.
-    binding = bind_table(table_path)
+    binding = bind_table()
     table_path = binding.path
     raw = read_table(table_path)
     verify_head_binding(binding, raw)
@@ -808,8 +826,8 @@ def main(argv: list[str] | None = None) -> int:
                         "references/admitted-providers.yaml).")
     p.add_argument("--task-class", metavar="FILE", default=None,
                    help="Print the task class derived from this WP's frontmatter.")
-    p.add_argument("--verify-leaf", nargs=4,
-                   metavar=("TABLE", "TASK_CLASS", "PROVIDER", "MODEL"),
+    p.add_argument("--verify-leaf", nargs=3,
+                   metavar=("TASK_CLASS", "PROVIDER", "MODEL"),
                    default=None,
                    help="scripts/goalforge-leaf-exec.sh's check: print the real "
                         "path of the admitted leaf for this row key, exit 2 "
@@ -819,8 +837,8 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.verify_leaf:
-            table, klass, provider, model = args.verify_leaf
-            print(verify_leaf(Path(table), klass, provider, model))
+            klass, provider, model = args.verify_leaf
+            print(verify_leaf(klass, provider, model))
             return 0
         if args.task_class:
             print(task_class(_frontmatter(Path(args.task_class))))
