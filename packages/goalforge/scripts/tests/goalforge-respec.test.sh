@@ -419,6 +419,13 @@ reharden_gate_case() {  # $1 transition SUT
   gate_ev "$f/wp-01-a/reharden/2026-09-03-respec-answered.md" 2026-09-01T10:00:00Z
   gate_ev "$f/wp-01-a/reharden/2026-09-03-respec-unanswered.md" 2026-09-02T12:00:00Z
   gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-03-respec-unanswered.md" "answered-first, unanswered newer" || rc=1
+  # M1-v8: an explicit since_ready_ts: none file sorting LAST, after an
+  # unanswered ts file, must not reset the tracked maximum -- a `none` value
+  # ranks below any ts, so the refusal still names the unanswered ts file
+  f="$(gate_fx '{"ts": "2026-09-01T09:00:00Z", "wp": "wp-01-a", "from": "hardened", "to": "ready"}')"
+  gate_ev "$f/wp-01-a/reharden/2026-09-02-respec-a.md" 2026-09-02T10:00:00Z
+  gate_ev "$f/wp-01-a/reharden/2026-09-03-respec-b.md" none
+  gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-02-respec-a.md" "unanswered-ts-then-none" || rc=1
   return "$rc"
 }
 
@@ -592,6 +599,9 @@ red m-transition-gate-selects-one-file --why "not refused" reharden_gate_case "$
 # b7: take-first-file comparator, and each no-value message branch forced on
 sed 's/if last is None or (t is not None and (since is None or t > since)):/if last is None:/' "$RESPEC_TRANSITION_SUT" >"$T/m-gate-take-first.sh"
 red m-transition-gate-take-first-file --why "2026-09-03-respec-unanswered.md" reharden_gate_case "$T/m-gate-take-first.sh"
+# M1-v8: a later-sorted `none` file must not reset the tracked maximum
+sed 's/if last is None or (t is not None and (since is None or t > since)):/if last is None or (t is None or since is None or t > since):/' "$RESPEC_TRANSITION_SUT" >"$T/m-gate-none-resets.sh"
+red m-transition-gate-none-resets --why "2026-09-02-respec-a.md" reharden_gate_case "$T/m-gate-none-resets.sh"
 sed 's/^        if latest:$/        if True:/' "$RESPEC_TRANSITION_SUT" >"$T/m-msg-always-row.sh"
 red m-transition-msg-always-row-ts --why none reharden_msg_case "$T/m-msg-always-row.sh"
 sed 's/^        if latest:$/        if False:/' "$RESPEC_TRANSITION_SUT" >"$T/m-msg-always-none.sh"
