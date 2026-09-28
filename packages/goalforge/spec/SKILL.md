@@ -28,14 +28,16 @@ and the skill halts and asks for explicit approval before taking that edge.
   `yes` writes `RATIFIED`, runs `goalforge-respec-apply.sh`, then takes
   `spec -> ready --mode human`. Contract: `references/respec.md`.
 
-**Full route only.** A `route: fast` feature (overview frontmatter, stamped by
-`goalforge-capture`) has no `spec.md` by design — its single WP carries the complete
-goal block. Invoking goalforge-spec on a fast feature is the deliberate promotion
-path (the feature outgrew the fast route — e.g. 3+ WPs or a cross-WP
-contract): author the spec retroactively and flip `route: standard` with a note.
+**Full route only.** A fast-path feature (routed fast in-session by
+`goalforge-capture`'s classifier; nothing is persisted) has no `spec.md` by
+design — its single WP carries the complete goal block. Invoking goalforge-spec
+on a fast feature is the deliberate promotion path (the feature outgrew the fast
+route — e.g. 3+ WPs or a cross-WP contract): author the spec retroactively and
+note the promotion; the new `spec.md` itself moves the feature onto the
+standard chain.
 
-Schema reference: `~/.claude/skills/goalforge/references/schema.md`.
-Templates: `~/.claude/skills/goalforge/references/templates/`.
+Schema reference: `${CLAUDE_PLUGIN_ROOT}/references/schema.md`.
+Templates: `${CLAUDE_PLUGIN_ROOT}/references/templates/`.
 
 ## Unattended mode (`SDD_AUTONOMY=unattended`)
 
@@ -106,7 +108,7 @@ Conduct a design pass to produce the content of `spec.md`. This involves:
 
 If a section is blocked by a question that meets the **spike-candidate trigger**
 — a how-should-it-look / behave / perform question that more talking will not
-settle (criterion: `~/.claude/skills/goalforge/references/fidelity.md`) — spike it to
+settle (criterion: `${CLAUDE_PLUGIN_ROOT}/references/fidelity.md`) — spike it to
 unblock the section instead of writing the section around the gap; the findings
 feed the spec text and any ADR candidates. Most blockers do not qualify and stay
 in `## Open Questions` for `goalforge-harden` — this is guidance, not a step.
@@ -115,7 +117,7 @@ in `## Open Questions` for `goalforge-harden` — this is guidance, not a step.
 
 Author the **feature-level goal block** in the `spec.md` frontmatter. This is
 the parent goal each WP may inherit unset fields from (via `inherits_from`).
-Schema: `~/.claude/skills/goalforge/references/schema.md` §Goal object. Set:
+Schema: `${CLAUDE_PLUGIN_ROOT}/references/schema.md` §Goal object. Set:
 
 - **`task_type`** — `code | research | ops | writing | optimization | analysis`.
   The dominant nature of the work; defaults to `code`. Picked here so dispatch
@@ -123,7 +125,7 @@ Schema: `~/.claude/skills/goalforge/references/schema.md` §Goal object. Set:
 - **`goal.outcome`** — one measurable sentence stating what is true when the
   feature is done. Not a task list — the end state. An outcome facet that is
   itself a spike-candidate question belongs in `## Open Questions`, flagged as
-  such (criterion: `~/.claude/skills/goalforge/references/fidelity.md`).
+  such (criterion: `${CLAUDE_PLUGIN_ROOT}/references/fidelity.md`).
 - **`goal.verification.strategy`** — `deterministic | numeric | judge | human`,
   and **`goal.verification.check`** in that strategy's shape (see the
   per-strategy `check` table in the schema). This is the Verification Surface
@@ -317,12 +319,12 @@ approval, not just a confirmation dialog — the user must see the full proposal
 ## Plans root
 
 Resolve `<PLANS_ROOT>` at runtime per the priority rules in
-`~/.claude/skills/goalforge/references/schema.md` §PLANS_ROOT resolution:
+`${CLAUDE_PLUGIN_ROOT}/references/schema.md` §PLANS_ROOT resolution:
 env `SDD_PLANS_DIR` → project git-root `plans/` → global `~/.claude/plans/`.
 
 ## Template reference
 
-Templates at `~/.claude/skills/goalforge/references/templates/`. Stamped files carry:
+Templates at `${CLAUDE_PLUGIN_ROOT}/references/templates/`. Stamped files carry:
 
 ```
 <!-- Template: feature-spec v4 (frontmatter-first, flat layout) -->

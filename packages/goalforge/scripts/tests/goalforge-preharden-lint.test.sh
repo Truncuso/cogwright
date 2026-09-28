@@ -100,6 +100,64 @@ else
     sed 's/^/        /' /tmp/phl-selftest.out
 fi
 
+# ── V7/V8 + V2 git whitelist (wp-11 b2) ─────────────────────────────────────
+# These WP fixtures are written here, one condition per known-bad, into a temp
+# git repo (V7 resolves revisions against the WP's own repository). The
+# evals/fixtures/preharden-lint/ tree is outside wp-11's owned files.
+W="$FIX_TMP_ROOT/v78"
+mkdir -p "$W"
+mkwp() {  # $1 name, $2 goal.constraints flow list ('' = none), $3 task verify body ('' = no task)
+    mkdir -p "$W/$1"
+    {
+        printf -- '---\nname: %s\nstatus: spec\nsha: 0123abc\ngoal:\n  outcome: "fixture"\n' "$1"
+        printf '  verification:\n    strategy: deterministic\n    command: "bash run.sh"\n'
+        [ -z "$2" ] || printf '  constraints: %s\n' "$2"
+        printf -- '---\n\n## Goal\n\nfixture T1\n'
+    } >"$W/$1/overview.md"
+    [ -z "$3" ] || printf -- '---\nname: task-01-a\nverify: |\n  %s\n---\nbody\n' "$3" >"$W/$1/task-01-a.md"
+}
+mkwp v7-failing-gate   '' "test -f no-such-file.txt"
+mkwp v7-bad-revision   '' "git rev-parse --verify deadbeefdeadbeefdeadbeef^{commit}"
+mkwp v8-placeholder    '["baseline pinned at <base_sha>"]' ''
+mkwp v8-missing-artifact '["the contract in `docs/no-such-contract.md` stays unchanged"]' ''
+mkwp v2-git-external   '["baseline pinned at <sha>, contract `overview.md`"]' \
+    "grep -q T1 overview.md
+  git rev-parse --verify --quiet HEAD"
+git -C "$W" init -q && git -C "$W" add -A \
+    && git -C "$W" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture \
+    || bad "v78 fixture repo could not be committed"
+
+v78() {  # $1 lint, $2 wp, $3 want rc, $4 want check id ('' = no finding)
+    local out rc
+    out="$(bash "$1" "$W/$2" 2>&1)"; rc=$?
+    [ "$rc" -eq "$3" ] || { echo "rc=$rc want $3: $out"; return 1; }
+    if [ -n "$4" ]; then
+        printf '%s' "$out" | grep -q "ERROR \[$4\] $2" || { echo "no [$4] line: $out"; return 1; }
+    else
+        ! printf '%s' "$out" | grep -qE '^(WARN|ERROR) ' || { echo "unexpected finding: $out"; return 1; }
+    fi
+}
+for c in "v7-failing-gate 2 V7" "v7-bad-revision 2 V7" "v8-placeholder 2 V8" "v8-missing-artifact 2 V8" "v2-git-external 0 -"; do
+    set -- $c; id="$3"; [ "$id" = - ] && id=""
+    if r="$(v78 "$LINT" "$1" "$2" "$id")"; then ok "$1 -> exit $2${id:+, $id finding}"
+    else bad "$1 -> exit $2${id:+, $id finding}"; printf '%s\n' "$r" | sed 's/^/        /'; fi
+done
+OUT="$(bash "$LINT" "$W/v7-bad-revision" 2>&1)"
+if printf '%s' "$OUT" | grep -q 'ERROR \[V7\] v7-bad-revision: .*unresolvable revision'; then
+    ok "v7-bad-revision names the unresolvable revision"
+else bad "v7-bad-revision names the unresolvable revision"; fi
+for c in V7 V8; do
+    grep -q "^#   $c " "$LINT" && ok "script header names $c in its check list" || bad "script header names $c"
+done
+grep -qE '^# Exit: .*' "$LINT" && sed -n '/^# Exit:/,/^# Offline/p' "$LINT" | grep -q 'V7' \
+    && sed -n '/^# Exit:/,/^# Offline/p' "$LINT" | grep -q 'V8' \
+    && ok "exit-code contract names V7 and V8" || bad "exit-code contract names V7 and V8"
+# A judge/human strategy exempts V7 (OQ4): the failing gate under strategy judge.
+cp -R "$W/v7-failing-gate" "$W/v7-judge-exempt"
+sed -i 's/strategy: deterministic/strategy: judge/' "$W/v7-judge-exempt/overview.md"
+if r="$(v78 "$LINT" v7-judge-exempt 0 "")"; then ok "v7-judge-exempt (strategy: judge) -> V7 not run, exit 0"
+else bad "v7-judge-exempt -> exit 0"; printf '%s\n' "$r" | sed 's/^/        /'; fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

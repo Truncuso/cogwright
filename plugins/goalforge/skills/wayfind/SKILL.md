@@ -47,8 +47,8 @@ The same `<effort-slug>` becomes the feature slug — **graduation is in-place**
 `map.md` is a **pointer-index**: decision bodies live in tickets/findings, never
 in the map.
 
-Resolve `<PLANS_ROOT>` per `${CLAUDE_PLUGIN_ROOT}/references/schema.md`
-§PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
+Resolve `<PLANS_ROOT>` per the goalforge/references/schema.md
+(`${CLAUDE_PLUGIN_ROOT}/references/schema.md`) §PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
 global `~/.claude/plans/`. Wayfind cites that rule, never its own convention.
 
 **Auto-phase (`/wayfind <effort-slug>`):** no `wayfind/` map present → **chart**;
@@ -82,6 +82,8 @@ created: YYYY-MM-DD
 context_pointers: []            # paths/globs the blind-spot pass sweeps (set at chart, editable)
 references: []                  # provenance; bridges into the graduated feature's sources[]
 ```
+`destination:` is written once at chart time; it is recommitted only through a
+grilling ticket shaped like ticket-31 (grill the old destination, record the new).
 
 `references[]` uses the CANONICAL typed shape — cited, never re-invented:
 `~/.claude/skills/idea/references/provenance-mapping.md` (`id` / `type` /

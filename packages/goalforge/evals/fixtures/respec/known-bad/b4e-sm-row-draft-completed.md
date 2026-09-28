@@ -23,7 +23,10 @@ is no WP-level `draft`; `implemented`/`abandoned` are new):
 
 A schema-5 WP still carrying the legacy `draft` status is read-only
 compatible: it sorts before `spec` (order -1) for any script that must order
-it, but no goalforge script writes `draft` to a WP going forward.
+it, but no goalforge script writes `draft` to a WP going forward. Its one
+exit is the forward edge `draft -> spec` (human ruling 2026-09-27), which
+lifts a legacy WP onto the current chain; every other edge out of `draft`
+is illegal.
 
 - **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no`.
 - **Reverse** edge (`order(to) < order(from)`, e.g. `verified→spec`,
@@ -78,6 +81,7 @@ under `--supersedes`, the superseded feature's overview; never on a
 
 | from | to | reason_required | human_gated |
 |---|---|---|---|
+| draft | spec | no | no |
 | spec | hardened | no | no |
 | spec | ready | no | no |
 | spec | executing | no | no |
@@ -139,11 +143,12 @@ Feature states are linearly ordered:
 | completed | 5 |
 
 - **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no` —
-  except out of `draft` and `spec`: for a feature that is not `route: fast`,
-  the only forward edge out of `draft` is `draft -> spec` and the only one out
-  of `spec` is `spec -> ready`. There is no `draft -> ready` row and no
-  `draft|spec -> active|executing` or `spec -> completed` row, and the one
-  `draft -> completed` row is scoped to `route: fast`, so for a feature that is not `route: fast`, every path from `draft` or `spec` onward passes `spec -> ready`.
+  except out of `draft` and `spec`: for a feature outside the
+  `draft -> completed` guard below, the only forward edge out of `draft` is
+  `draft -> spec` and the only one out of `spec` is `spec -> ready`. There is
+  no `draft -> ready` row and no `draft|spec -> active|executing` or
+  `spec -> completed` row, and the one `draft -> completed` row carries a
+  three-condition guard, so for a feature outside that three-condition guard, every path from `draft` or `spec` onward passes `spec -> ready`.
 - **Reverse** edge (`order(to) < order(from)`): legal, `reason_required: yes` —
   mirrors the WP FREE-REVERSE policy (every later→earlier edge is sanctioned; a
   reverse feature transition needs a `--reason`).
@@ -158,20 +163,21 @@ Feature states are linearly ordered:
   ratification". Proposal, ratification marker and apply:
   `references/respec.md`.
 - **`completed`** is reached from `executing` or `active` (and, forward-skipping,
-  from `ready` or later). One exit is route-scoped: `draft -> completed` is legal only for a `route: fast` feature with no `spec.md`
-  (human ruling H3, "Scoped exit for fast": a fast feature is never specced,
-  so this exit bypasses no spec-approval gate). `goalforge-transition.sh`
-  takes a row whose `route` is not `any` only when the feature overview's
-  top-level `route:` scalar (trailing ` # comment` and quotes stripped) equals
-  it — a missing `route:` never matches — and, for `fast`, only when
-  `<feature>/spec.md` is absent. `archived` is a terminal state reached ONLY via
+  from `ready` or later). One exit is guarded: `draft -> completed` is legal only for a feature with no `spec.md`, and exactly one `wp-*/overview.md`
+  (human ruling H3, "Scoped exit for fast", closed to three conditions by
+  OQ8: the fast path is never specced and its one WP cannot reach `verified`
+  without clearing harden G1-G4 and verify A/B/C, so this exit bypasses no
+  spec-approval gate). `goalforge-transition.sh` checks the three conditions
+  on this one edge and names the unmet one in its refusal; no `route:`
+  frontmatter is read. `archived` is a terminal state reached ONLY via
   `goalforge-archive` — it is intentionally **not** an edge target here, so the
   transition mechanism never moves a feature to/from `archived`.
 
 ## Feature edges
 
-The fifth column `route` scopes a row to features whose overview carries that
-`route:` value; `any` applies to every feature. Every row here carries five
+The fifth column `route` is vestigial but kept: every row reads `any`, since
+`route:` is retired and no row is scoped by it any more (the `draft -> completed`
+guard is the three-condition check above). Every row here still carries five
 cells: a row with fewer is an `edge_lookup` error (refused), never read as
 `any`. (The WP `## Edges` table above has four columns and reads as `any`.)
 

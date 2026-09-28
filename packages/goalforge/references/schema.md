@@ -127,7 +127,7 @@ feature: <feature>
 # read; old plans may still carry `route:` in frontmatter, ignored.
 # ticket-62: the DISPATCH sense of "route" is now `endpoint:` and lives in
 #     references/dispatch.yaml (`endpoint: session | leaf`), never in
-#     frontmatter. The chain sense of `route` (fast|standard|wave) is unrelated.
+#     frontmatter. The chain sense of `route` (fast|standard) is unrelated.
 #     The frontmatter key `route:` stays RETIRED under both readings.
 egress: overview                  # optional; read from the feature's `spec.md`
                                   # frontmatter (mirrored here when authored on

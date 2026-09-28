@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# goalforge-route.sh — capture-time chain-route classifier (fast|standard|wave).
+# goalforge-route.sh — capture-time chain-route classifier (fast|standard).
 #
 # Reads a feature overview.md and emits one JSON object:
-#   {"route":"fast"|"standard"|"wave","confidence":"clear"|"borderline"|"pinned",
+#   {"route":"fast"|"standard","confidence":"clear"|"borderline"|"pinned",
 #    "tripped":["R1",...],"signals":{...}}
 #
 # Baseline is FAST (small clean goal). Route escalates to STANDARD when ANY
@@ -12,22 +12,21 @@
 #   R3  bullets under ## Open Questions >= SDD_ROUTE_NQ (3)  (strong)
 #   R4  distinct path-like tokens in body >= SDD_ROUTE_NF (5)(strong)
 #   R5  blast-radius keyword in Problem/Goal text             (weak)
-# and escalates to WAVE when ANY wave signal trips (multi-feature /
-# cross-spec / parallel fan-out markers — WAVE dominates STANDARD):
-#   W1  bullets under ## Scope In >= SDD_ROUTE_NW (default 8) (wave)
-#   W2  parallel/fan-out keyword in Goal + Scope In text       (wave)
-# R2/W1 count only bullets before a bold **Out:** sub-heading under ## Scope;
-# exclusions are not scope work.
+#   R6  parallel/fan-out keyword in Goal + Scope In text       (strong)
+# R2 counts only bullets before a bold **Out:** sub-heading under ## Scope;
+# exclusions are not scope work. The wave route is retired (2026-09-27,
+# ticket-84): its former signals — >=8 scope bullets (subsumed by R2) and the
+# parallel/fan-out keywords (now R6) — classify `standard`, never `fast`.
 #
 # Confidence:
-#   pinned     — frontmatter already carries route: (echoed back; idempotent).
-#                Legacy vocab normalizes on read: full->standard, one-go->fast
-#                (never a 4th enum value). NEW vocab (fast|standard|wave)
-#                echoes as-is. A route: line with an UNRECOGNIZED value (e.g. a
+#   pinned     — a legacy plan's frontmatter still carries route: (read only;
+#                capture no longer stamps it). Legacy vocab normalizes on read:
+#                full->standard, one-go->fast, and the retired wave->standard
+#                with one WARN line to stderr (never a silent echo). fast and
+#                standard echo as-is. A route: line with an UNRECOGNIZED value (e.g. a
 #                `route: fsat` typo) is not a valid pin: one WARN line to stderr,
 #                the pin is discarded, and classification proceeds normally.
-#   clear      — no signal (fast), >=1 strong signal (standard), or a wave
-#                signal (wave).
+#   clear      — no signal (fast), or >=1 strong signal (standard).
 #   borderline — only weak signal(s) tripped, or ## Goal missing/empty
 #                (unclassifiable => safe default standard). Caller confirms with
 #                the human on borderline; clear routes silently.
@@ -41,7 +40,7 @@ usage() { echo "usage: goalforge-route.sh <feature-overview.md> | --self-test" >
 classify() {
     # arg: <overview.md path>
     SDD_ROUTE_NS="${SDD_ROUTE_NS:-4}" SDD_ROUTE_NQ="${SDD_ROUTE_NQ:-3}" \
-    SDD_ROUTE_NF="${SDD_ROUTE_NF:-5}" SDD_ROUTE_NW="${SDD_ROUTE_NW:-8}" \
+    SDD_ROUTE_NF="${SDD_ROUTE_NF:-5}" \
     python3 - "$1" <<'PY'
 import json, os, re, sys
 
@@ -55,7 +54,6 @@ except OSError as e:
 NS = int(os.environ.get("SDD_ROUTE_NS", 4))
 NQ = int(os.environ.get("SDD_ROUTE_NQ", 3))
 NF = int(os.environ.get("SDD_ROUTE_NF", 5))
-NW = int(os.environ.get("SDD_ROUTE_NW", 8))
 
 # Split frontmatter / body.
 fm, body = "", text
@@ -63,12 +61,16 @@ m = re.match(r"^---\n(.*?)\n---\n(.*)$", text, re.DOTALL)
 if m:
     fm, body = m.group(1), m.group(2)
 
-# Pinned route: echo back, no re-classification (idempotent). Legacy vocab
-# normalizes on read (full->standard, one-go->fast); never a 4th enum value.
+# Pinned route (legacy plans only): echo back, no re-classification. Legacy
+# vocab normalizes on read (full->standard, one-go->fast); the retired wave
+# route remaps to standard with a WARN, never a silent echo (ticket-84).
 mr = re.search(r"^route:\s*['\"]?(fast|standard|wave|full|one-go)", fm, re.MULTILINE)
 if mr:
-    LEGACY = {"full": "standard", "one-go": "fast"}
+    LEGACY = {"full": "standard", "one-go": "fast", "wave": "standard"}
     route = LEGACY.get(mr.group(1), mr.group(1))
+    if mr.group(1) == "wave":
+        print("WARN: pinned route: 'wave' is retired (ticket-84) — remapped to "
+              "standard", file=sys.stderr)
     print(json.dumps({"route": route, "confidence": "pinned",
                       "tripped": [], "signals": {"pinned": True}}))
     sys.exit(0)
@@ -98,7 +100,7 @@ def bullets(lines):
 
 def in_scope_lines(lines):
     """Lines under ## Scope before a bold **Out** sub-heading. Exclusions are
-    not scope work: counting them inflates R2/W1
+    not scope work: counting them inflates R2
     (goalforge-route-scope-bullet-overcount.md:53-55)."""
     out = []
     for ln in lines:
@@ -130,27 +132,23 @@ probe = " ".join(section("problem") + goal_lines).lower()
 kw = re.findall(r"\b(auth|migration|schema|security|breaking|public api|exported)\b", probe)
 r5 = bool(kw)
 
-# Wave signals (multi-feature / cross-spec / parallel fan-out markers).
-w1 = scope_bullets >= NW
-# W2 probes Goal + Scope-In prose only, matching how R5 already probes only
-# Problem + Goal (:114) — a hazard noted elsewhere in the body (e.g. Notes)
-# is not a fan-out signal (goalforge-route-scope-bullet-overcount.md:56-58).
-wave_probe = " ".join(goal_lines + in_scope).lower()
-wkw = re.findall(
-    r"\b(parallel|fan[- ]?out|cross-spec|multi-feature|multiple spec\w*|concurrent\w*|wave)\b",
-    wave_probe)
-w2 = bool(wkw)
+# R6: parallel/fan-out keywords (the retired wave route's W2 signal, now a
+# strong standard signal). Probes Goal + Scope-In prose only, matching how R5
+# probes only Problem + Goal — a hazard noted elsewhere in the body (e.g.
+# Notes) is not a fan-out signal (goalforge-route-scope-bullet-overcount.md:56-58).
+fanout_probe = " ".join(goal_lines + in_scope).lower()
+fkw = re.findall(
+    r"\b(parallel|fan[- ]?out|cross-spec|multi-feature|multiple spec\w*|concurrent\w*)\b",
+    fanout_probe)
+r6 = bool(fkw)
 
 tripped = [s for s, hit in
            [("R1", r1), ("R2", r2), ("R3", r3), ("R4", r4), ("R5", r5),
-            ("W1", w1), ("W2", w2)] if hit]
-wave = [s for s in tripped if s in ("W1", "W2")]
-strong = [s for s in tripped if s in ("R1", "R2", "R3", "R4")]
+            ("R6", r6)] if hit]
+strong = [s for s in tripped if s in ("R1", "R2", "R3", "R4", "R6")]
 goal_missing = not goal_lines
 
-if wave:
-    route, confidence = "wave", "clear"
-elif strong:
+if strong:
     route, confidence = "standard", "clear"
 elif goal_missing or tripped:          # unclassifiable, or weak-only
     route, confidence = "standard", "borderline"
@@ -162,7 +160,7 @@ print(json.dumps({
     "signals": {"task_type": mt.group(1) if mt else None,
                 "scope_bullets": scope_bullets, "oq_bullets": oq_bullets,
                 "path_tokens": len(paths), "keywords": sorted(set(kw)),
-                "wave_keywords": sorted(set(wkw)), "goal_missing": goal_missing},
+                "fanout_keywords": sorted(set(fkw)), "goal_missing": goal_missing},
 }))
 PY
 }
@@ -243,18 +241,20 @@ EOF
         ok "F7 5 paths -> standard/R4 ok"
     else no "F7 5 paths -> $out"; fi
 
-    # F8: parallel fan-out keyword -> wave/clear via W2
-    printf -- '## Goal\n\ndeliver via parallel spec authors with cross-spec judge\n' > "$d/wavekw.md"
-    out="$(classify "$d/wavekw.md")"
-    if [[ "$(field "$out" .route)" == "wave" && "$(field "$out" .confidence)" == "clear" ]]; then
-        ok "F8 fan-out keyword -> wave/clear ok"
+    # F8: parallel fan-out keyword (the retired wave route's W2) -> standard/clear
+    #     via R6 — remapped to standard, never falling through to fast
+    printf -- '## Goal\n\ndeliver via parallel spec authors with cross-spec judge\n' > "$d/fanoutkw.md"
+    out="$(classify "$d/fanoutkw.md")"
+    if [[ "$(field "$out" .route)" == "standard" && "$(field "$out" .confidence)" == "clear" \
+          && "$(field "$out" '.tripped | index("R6")')" != "null" ]]; then
+        ok "F8 fan-out keyword -> standard/clear (R6) ok"
     else no "F8 fan-out keyword -> $out"; fi
 
-    # F9: >=8 scope bullets -> wave/clear via W1 (multi-feature)
-    printf -- '## Goal\n\nbroad program\n\n## Scope\n\n- a\n- b\n- c\n- d\n- e\n- f\n- g\n- h\n' > "$d/wavescope.md"
-    out="$(classify "$d/wavescope.md")"
-    if [[ "$(field "$out" .route)" == "wave" && "$(field "$out" .confidence)" == "clear" ]]; then
-        ok "F9 8 scope bullets -> wave/clear ok"
+    # F9: >=8 scope bullets (the retired wave route's W1) -> standard/clear
+    printf -- '## Goal\n\nbroad program\n\n## Scope\n\n- a\n- b\n- c\n- d\n- e\n- f\n- g\n- h\n' > "$d/widescope.md"
+    out="$(classify "$d/widescope.md")"
+    if [[ "$(field "$out" .route)" == "standard" && "$(field "$out" .confidence)" == "clear" ]]; then
+        ok "F9 8 scope bullets -> standard/clear ok"
     else no "F9 8 scope bullets -> $out"; fi
 
     # F10: legacy pinned full -> normalizes to standard, pinned (idempotent)
@@ -278,12 +278,15 @@ EOF
         ok "F12 pinned standard -> echoed ok"
     else no "F12 pinned standard -> $out"; fi
 
-    # F13: pinned NEW-vocab wave -> echoed as-is, pinned
+    # F13: pinned legacy wave (route retired, ticket-84) -> WARN + remapped
+    #      to standard, pinned — never a silent echo of the retired value
     printf -- '---\nroute: wave\n---\n## Goal\n\nanything\n' > "$d/pinwave.md"
-    out="$(classify "$d/pinwave.md")"
-    if [[ "$(field "$out" .route)" == "wave" && "$(field "$out" .confidence)" == "pinned" ]]; then
-        ok "F13 pinned wave -> echoed ok"
-    else no "F13 pinned wave -> $out"; fi
+    err="$(classify "$d/pinwave.md" 2>&1 >/dev/null)"
+    out="$(classify "$d/pinwave.md" 2>/dev/null)"
+    if echo "$err" | grep -q "route: 'wave' is retired" \
+       && [[ "$(field "$out" .route)" == "standard" && "$(field "$out" .confidence)" == "pinned" ]]; then
+        ok "F13 pinned wave -> WARN + standard/pinned ok"
+    else no "F13 pinned wave -> err='$err' out='$out'"; fi
 
     # F14: unrecognized pinned route -> WARN on stderr, pin discarded,
     #      classification still succeeds (small clean goal -> fast/clear).
@@ -299,7 +302,7 @@ EOF
     #      (plans/ideas/goalforge-route-scope-bullet-overcount.md). 6 In +
     #      5 Out scope bullets (In-scope alone trips R2, not W1) and a
     #      coordination-hazard sentence with "parallel" outside Goal/Scope
-    #      (in Notes). Must route standard/clear, not wave.
+    #      (in Notes). Must route standard/clear with R6 untripped.
     cat > "$d/handoff.md" <<'EOF'
 ## Goal
 
@@ -331,8 +334,9 @@ it before migrating.
 EOF
     out="$(classify "$d/handoff.md")"
     if [[ "$(field "$out" .route)" == "standard" && "$(field "$out" .confidence)" == "clear" \
-          && "$(field "$out" .signals.scope_bullets)" == "6" ]]; then
-        ok "F15 handoff-thread-layout regression -> standard/clear (In-only scope, W2 scoped) ok"
+          && "$(field "$out" .signals.scope_bullets)" == "6" \
+          && "$(field "$out" '.tripped | index("R6")')" == "null" ]]; then
+        ok "F15 handoff-thread-layout regression -> standard/clear (In-only scope, R6 scoped) ok"
     else no "F15 handoff-thread-layout regression -> $out"; fi
 
     echo ""

@@ -7,7 +7,8 @@ guards. Nothing here is a rule the flows do not already point at.
 
 **Name:** *ticket fan-out*. It is a THIRD, ticket-level dispatch variant,
 explicitly distinct from goalforge's **planning-wave** (parallel WP decomposition
-at plan time) and **execute-wave** (parallel WP implementation at build time).
+at plan time) and the former **execute-wave** (parallel WP implementation at
+build time; retired 2026-09-27, ticket-84).
 Fan-out never crosses ticket boundaries: it parallelises the interior of ONE
 research ticket and resolves that one ticket. Parallel claiming of multiple
 frontier tickets remains out of scope.

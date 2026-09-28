@@ -9,8 +9,9 @@
 #       post-status-flip no-op on the applied state, re-supersede by a second
 #       proposal, partial apply resumed (static fixture partial/), block-list
 #       contract_slice (static fixture blocklist/)
-#   b4  Feature edges table (route column) + Feature policy prose (F1-F3);
-#       goalforge-smoke.sh walk; transition.sh route legs, four-cell Feature
+#   b4  Feature edges table (vestigial all-any route column) + Feature policy
+#       prose (F1-F3); goalforge-smoke.sh walk; transition.sh draft -> completed
+#       legs (no spec.md + one WP + that WP verified), four-cell Feature
 #       row refused, --self-test — every transition.sh run in a package mirror
 #   b5  apply refuses each of fifteen broken proposals (ratification, in-flight
 #       WP, unparseable slice), tree byte-identical
@@ -208,15 +209,15 @@ policy_bullet() {  # $1 file, $2 bullet label -> the Feature policy bullet text
 b4_case() {
   local sm="$1" rc=0 rows out_draft out_spec scoped gated e hum fwd
   rows="$(feature_rows "$sm")"
-  out_draft="$(awk '$1=="draft" && $5=="any"{print $2}' <<<"$rows" | sort | tr '\n' ' ')"
-  out_spec="$(awk '$1=="spec" && $5=="any"{print $2}' <<<"$rows" | sort | tr '\n' ' ')"
-  [[ "$out_draft" == "spec " ]] || { why "draft out-edges (route any) are {$out_draft}, expected {spec}"; rc=1; }
-  [[ "$out_spec" == "draft ready " ]] || { why "spec out-edges (route any) are {$out_spec}, expected {draft ready}"; rc=1; }
+  out_draft="$(awk '$1=="draft"{print $2}' <<<"$rows" | sort | tr '\n' ' ')"
+  out_spec="$(awk '$1=="spec"{print $2}' <<<"$rows" | sort | tr '\n' ' ')"
+  [[ "$out_draft" == "completed spec " ]] || { why "draft out-edges are {$out_draft}, expected {completed spec}"; rc=1; }
+  [[ "$out_spec" == "draft ready " ]] || { why "spec out-edges are {$out_spec}, expected {draft ready}"; rc=1; }
   scoped="$(awk '$5!="any"{print $1"->"$2":"$5}' <<<"$rows" | sort | tr '\n' ' ')"
-  [[ "$scoped" == "draft->completed:fast " ]] || { why "route-scoped rows are {$scoped}, expected {draft->completed:fast}"; rc=1; }
-  has "$sm" '`draft -> completed` is legal only for a `route: fast` feature with no `spec.md`' \
-    || { why "policy prose lacks F1 (the route: fast draft -> completed exit)"; rc=1; }
-  has "$sm" 'for a feature that is not `route: fast`, every path from `draft` or `spec` onward passes `spec -> ready`' \
+  [[ -z "$scoped" ]] || { why "route cells other than any: {$scoped}, expected none (the column is vestigial)"; rc=1; }
+  has "$sm" '`draft -> completed` is legal only for a feature with no `spec.md`, exactly one `wp-*/overview.md`, and that sole WP at `status: verified`' \
+    || { why "policy prose lacks F1 (the three-condition draft -> completed exit)"; rc=1; }
+  has "$sm" 'for a feature outside that three-condition guard, every path from `draft` or `spec` onward passes `spec -> ready`' \
     || { why "policy prose lacks F2 (the qualified path claim)"; rc=1; }
   has "$sm" 'so every path from `draft` or `spec` onward passes' \
     && { why "policy prose still carries F3 (the unqualified path claim)"; rc=1; }
@@ -242,19 +243,28 @@ pkg_mirror() {  # $1 script basename, $2 SUT copied over it, [$3 table over refe
   printf '%s\n' "$c"
 }
 smoke_case() {  # run a smoke SUT inside a throwaway copy of the package scripts
-  local c
+  # Bare mode into a temp git root, so the feature ledger can be read back: the
+  # fixture (no spec.md, one WP at verified) may legally take draft -> completed
+  # since wp-11's OQ8 edge, so only the ledger shows the walk passed spec -> ready.
+  local c p e rc=0
   c="$(pkg_mirror goalforge-smoke.sh "$1")"
-  bash "$c/scripts/goalforge-smoke.sh" --throwaway >"$T/smoke.out" 2>&1 || { why "smoke --throwaway exited non-zero: $(tail -1 "$T/smoke.out")"; return 1; }
+  p="$(mktemp -d "$T/smoke.XXXXXX")"; git -C "$p" init -q
+  SDD_PLANS_DIR="$p" bash "$c/scripts/goalforge-smoke.sh" >"$T/smoke.out" 2>&1 || { why "smoke exited non-zero: $(tail -1 "$T/smoke.out")"; return 1; }
+  for e in '"from": "draft", "to": "spec"' '"from": "spec", "to": "ready"' '"from": "ready", "to": "completed"'; do
+    cat "$p"/*/.sdd-transitions.jsonl 2>/dev/null | grep -qF -- "$e" || { why "smoke feature ledger lacks $e"; rc=1; }
+  done
+  return "$rc"
 }
-route_leg() {  # $1 mirror, $2 leg, $3 route: line ('' = none), $4 spec.md? (0|1), $5 take|refuse, [$6 stderr substring]
-  local f lrc st
+route_leg() {  # $1 mirror, $2 leg, $3 spec.md? (0|1), $4 WP statuses ('' = no WP), $5 take|refuse, [$6 stderr substring]
+  local f lrc st n=0 s
   f="$(mktemp -d "$T/plans.XXXXXX")/feat-$2"
   mkdir -p "$f"
-  { printf -- '---\nname: feat-%s\ntitle: route leg fixture\nstatus: draft\n' "$2"
-    [[ -z "$3" ]] || printf '%s\n' "$3"
-    printf 'feature: feat-%s\nwork_packages: []\n---\n\n# route leg\n' "$2"
-  } >"$f/overview.md"
-  [[ "$4" == 0 ]] || printf -- '---\nname: feat-%s-spec\n---\n' "$2" >"$f/spec.md"
+  printf -- '---\nname: feat-%s\ntitle: draft -> completed leg fixture\nstatus: draft\nfeature: feat-%s\nwork_packages: []\n---\n\n# leg\n' "$2" "$2" >"$f/overview.md"
+  [[ "$3" == 0 ]] || printf -- '---\nname: feat-%s-spec\n---\n' "$2" >"$f/spec.md"
+  for s in $4; do
+    n=$((n + 1)); mkdir -p "$f/wp-0$n-leg"
+    printf -- '---\nname: wp-0%s-leg\nstatus: %s\nplan: feat-%s\n---\n' "$n" "$s" "$2" >"$f/wp-0$n-leg/overview.md"
+  done
   bash "$1/scripts/goalforge-transition.sh" "$f" completed >"$T/leg.out" 2>&1; lrc=$?
   st="$(grep -m1 '^status:' "$f/overview.md")"
   if [[ "$5" == take ]]; then
@@ -263,24 +273,24 @@ route_leg() {  # $1 mirror, $2 leg, $3 route: line ('' = none), $4 spec.md? (0|1
   fi
   [[ "$lrc" -ne 0 && "$st" == "status: draft" ]] || { why "leg $2: expected refusal with status: draft unchanged, got rc=$lrc $st"; return 1; }
   [[ -z "${6:-}" ]] || grep -qF -- "$6" "$T/leg.out" || { why "leg $2: refusal does not say '$6': $(tail -1 "$T/leg.out")"; return 1; }
+  ! grep -qF -- "(route"": fast)" "$T/leg.out" || { why "leg $2: refusal still reads the retired route-fast wording"; return 1; }
 }
-transition_case() {  # $1 transition SUT: the six route legs over the live table
+transition_case() {  # $1 transition SUT: the draft -> completed legs, one per unmet condition, over the live table
   local c rc=0
   c="$(pkg_mirror goalforge-transition.sh "$1")"
-  route_leg "$c" standard       "route: standard"          0 refuse || rc=1
-  route_leg "$c" no-route       ""                         0 refuse || rc=1
-  route_leg "$c" fast-with-spec "route: fast"              1 refuse || rc=1
-  route_leg "$c" fast           "route: fast"              0 take   || rc=1
-  route_leg "$c" fast-comment   "route: fast  # re-routed" 0 take   || rc=1
-  route_leg "$c" fast-quoted    "route: 'fast'"            0 take   || rc=1
+  route_leg "$c" spec-present   1 verified          refuse "requires no spec.md" || rc=1
+  route_leg "$c" zero-wps       0 ""                refuse "exactly one wp-*/overview.md" || rc=1
+  route_leg "$c" two-wps        0 "verified verified" refuse "exactly one wp-*/overview.md" || rc=1
+  route_leg "$c" wp-implemented 0 implemented       refuse "status: verified" || rc=1
+  route_leg "$c" fast-shape     0 verified          take   || rc=1
   return "$rc"
 }
-fast_leg_case() {  # $1 transition SUT: the bare route: fast leg alone
-  route_leg "$(pkg_mirror goalforge-transition.sh "$1")" fast "route: fast" 0 take
+fast_leg_case() {  # $1 transition SUT: the fast-path shape leg alone (no spec.md, one WP at verified)
+  route_leg "$(pkg_mirror goalforge-transition.sh "$1")" fast-shape 0 verified take
 }
 fourcell_case() {  # $1 transition SUT over the mirror table whose draft -> completed row has four cells
   route_leg "$(pkg_mirror goalforge-transition.sh "$1" "$FX/four-cell-state-machine.md")" \
-    four-cell-standard "route: standard" 0 refuse "edge_lookup error"
+    four-cell 0 verified refuse "edge_lookup error"
 }
 selftest_case() {  # $1 transition SUT: --self-test rc 0 inside a mirror
   local c
@@ -506,9 +516,9 @@ echo "=== goalforge-respec.test.sh ==="
 b1_case "$RESPEC_DIFF" && ok "b1 diff buckets over every pair; fixture tree untouched" || bad "b1 diff buckets"
 b2_live && ok "b2 documentation literal list (L1-L4, N1-N3, R1, S1)" || bad "b2 documentation literal list"
 b3_case "$RESPEC_APPLY" && ok "b3 apply effects, no status write, rerun + post-flip no-op, re-supersede, partial resumed, block-list slice" || bad "b3 apply effects"
-b4_case "$STATE_MACHINE_MD" && ok "b4 feature edge table (route column) + policy prose (F1-F3)" || bad "b4 feature edge table + policy prose"
-smoke_case "$SMOKE" && ok "b4 goalforge-smoke.sh --throwaway walks draft -> spec -> ready -> completed" || bad "b4 smoke walk"
-transition_case "$RESPEC_TRANSITION_SUT" && ok "b4 transition.sh route legs: draft -> completed only for route: fast with no spec.md" || bad "b4 transition.sh route legs"
+b4_case "$STATE_MACHINE_MD" && ok "b4 feature edge table (vestigial all-any route column) + policy prose (F1-F3)" || bad "b4 feature edge table + policy prose"
+smoke_case "$SMOKE" && ok "b4 goalforge-smoke.sh walks draft -> spec -> ready -> completed (feature ledger read back)" || bad "b4 smoke walk"
+transition_case "$RESPEC_TRANSITION_SUT" && ok "b4 transition.sh draft -> completed legs: only no spec.md + exactly one WP + that WP verified; each unmet condition named" || bad "b4 transition.sh draft -> completed legs"
 fourcell_case "$RESPEC_TRANSITION_SUT" && ok "b4 transition.sh refuses a four-cell Feature row as an edge_lookup error" || bad "b4 four-cell Feature row"
 selftest_case "$RESPEC_TRANSITION_SUT" && ok "b4 goalforge-transition.sh --self-test rc 0" || bad "b4 transition --self-test"
 for v in "${VARIANTS[@]}"; do
@@ -557,13 +567,18 @@ red b3i-apply-second-h2 --why "## Supersession headings" b3_case "$KB/b3i-apply-
 red b3j-apply-flow-only --why "block-list run: report .superseded" b3_case "$KB/b3j-apply-flow-only.sh"
 for k in "$KB"/b4[a-e]-*.md; do red "$(basename "$k" .md)" b4_case "$k"; done
 red b4f-smoke-draft-completed smoke_case "$KB/b4f-smoke-draft-completed.sh"
-red b4g-transition-ignore-route --why "leg standard:" transition_case "$KB/b4g-transition-ignore-route.sh"
-red b4h-transition-missing-route-fast --why "leg no-route:" transition_case "$KB/b4h-transition-missing-route-fast.sh"
-red b4i-transition-four-cell-any --why "leg four-cell-standard:" fourcell_case "$KB/b4i-transition-four-cell-any.sh"
-red b4j-transition-no-spec-check --why "leg fast-with-spec:" transition_case "$KB/b4j-transition-no-spec-check.sh"
-red b4k-transition-raw-route --why "leg fast-comment:" transition_case "$KB/b4k-transition-raw-route.sh"
+# b4g/b4h are one-edit copies of the live transition.sh: b4g drops the
+# exactly-one-WP check, b4h drops the sole-WP-verified check. b4e-sm-row-draft-
+# completed drops the verified condition from the F1 prose (two-condition edge).
+red b4g-transition-ignore-route --why "leg two-wps:" transition_case "$KB/b4g-transition-ignore-route.sh"
+red b4h-transition-missing-route-fast --why "leg wp-implemented:" transition_case "$KB/b4h-transition-missing-route-fast.sh"
+red b4i-transition-four-cell-any --why "leg four-cell:" fourcell_case "$KB/b4i-transition-four-cell-any.sh"
+# b4j/b4k are frozen pre-wp-11 transition copies whose route-scoped check sits
+# inside `ROUTE != any`; over the all-any table they take every draft -> completed.
+red b4j-transition-no-spec-check --why "leg spec-present:" transition_case "$KB/b4j-transition-no-spec-check.sh"
+red b4k-transition-raw-route --why "leg zero-wps:" transition_case "$KB/b4k-transition-raw-route.sh"
 for k in b4g-transition-ignore-route b4h-transition-missing-route-fast b4j-transition-no-spec-check b4k-transition-raw-route; do
-  fast_leg_case "$KB/$k.sh" >/dev/null && ok "known-bad keeps the bare route: fast leg green: $k" || bad "known-bad breaks the bare route: fast leg: $k"
+  fast_leg_case "$KB/$k.sh" >/dev/null && ok "known-bad keeps the fast-shape leg green: $k" || bad "known-bad breaks the fast-shape leg: $k"
 done
 red b4l-sm-unqualified-path-claim --why "F3" b4_case "$KB/b4l-sm-unqualified-path-claim.md"
 KB5=(b5a-apply-absent-pass b5b-apply-default-date b5c-apply-default-diff-sha b5d-apply-default-base-sha

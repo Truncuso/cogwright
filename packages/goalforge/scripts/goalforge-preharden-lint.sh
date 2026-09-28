@@ -40,11 +40,24 @@
 #       `known-bad`/`exit 2`/`sabotage`/… — was removed: a keyword grep on prose
 #       is not evidence a known-bad input exists. Measured on the live corpus it
 #       flagged 7 of 11 rows, several of them compliant.)
+#   V7  execute the gate: each task `verify:` block whose every command's first
+#       word is in V2's command whitelist (grep cat test [ bash sh python3
+#       pytest git) is run read-only in a temp copy of the WP dir (git reads the
+#       WP's own repository), under a 60s timeout, and its exit code recorded
+#       (`INFO [V7]`). A non-zero exit, a timeout, or an unresolvable revision
+#       is an ERROR. Exempt: `goal.verification.strategy` judge or human.
+#   V8  resolve the referent: every `<placeholder>`-shaped token in
+#       `goal.constraints` must name a populated top-level frontmatter field of
+#       the WP, and every backticked file-shaped token (contains `/` or ends in
+#       .md/.sh/.py/.json/.yaml/.yml/.txt/.toml) must exist under the WP dir or
+#       one of its ancestors. An unresolved token is an ERROR.
 #
 # Usage: goalforge-preharden-lint.sh <wp-dir> | --self-test
 # Exit: 0 clean; 1 findings (WARN lines on stdout, gate-consumable);
-#       2 usage/internal error, OR a V5 ERROR (schema-6 command-shape or
-#       section-lint failure — fail-closed, distinct from the WARN channel).
+#       2 usage/internal error, OR an ERROR — V5 (schema-6 command-shape or
+#       section-lint failure), V7 (a gate that fails or names an unresolvable
+#       revision) or V8 (an unresolved placeholder or missing named artifact);
+#       fail-closed, distinct from the WARN channel.
 # Offline, deterministic, no LLM. sdd-* diagnostic prefix per CLI-surface freeze.
 set -uo pipefail
 
@@ -313,6 +326,141 @@ lint_wp_verification() {
     esac
 }
 
+# V2's command whitelist — the commands that count as executable evidence (V2)
+# and the only first words V7 will execute.
+V2_WHITELIST='grep|cat|test|\[|bash|sh|python3|pytest|git'
+
+# V7/V8 helper — prints the WP overview's goal.verification.strategy (STRATEGY:)
+# and one CONSTRAINT: line per goal.constraints entry (flow or block list), and
+# one FIELD:<key>=<value> line per top-level frontmatter scalar.
+extract_goal_refs() {
+    python3 - "$1" <<'PY'
+import sys, re
+try:
+    lines = open(sys.argv[1], encoding='utf-8').read().split('\n')
+except OSError:
+    sys.exit(0)
+if not lines or lines[0].strip() != '---':
+    sys.exit(0)
+end = next((i for i in range(1, len(lines)) if lines[i].strip() == '---'), None)
+if end is None:
+    sys.exit(0)
+fm = lines[1:end]
+
+def unquote(v):
+    v = v.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in '"\'':
+        v = v[1:-1]
+    return v
+
+for ln in fm:
+    m = re.match(r'^([A-Za-z_][\w-]*):\s*(.*)$', ln)
+    if m:
+        val = unquote(re.sub(r'\s+#.*$', '', m.group(2)))
+        print("FIELD:" + m.group(1) + "=" + val)
+
+in_goal = in_ver = in_con = False
+for ln in fm:
+    if re.match(r'^goal:\s*$', ln):
+        in_goal = True
+        continue
+    if in_goal and re.match(r'^[A-Za-z_]', ln):
+        in_goal = in_ver = in_con = False
+    if not in_goal:
+        continue
+    if re.match(r'^  [A-Za-z_]', ln):
+        in_ver = bool(re.match(r'^  verification:\s*$', ln))
+        in_con = False
+        m = re.match(r'^  constraints:\s*(.*)$', ln)
+        if m:
+            val = m.group(1).strip()
+            if val.startswith('['):
+                for item in re.findall(r'"((?:[^"\\]|\\.)*)"|\'([^\']*)\'', val):
+                    print("CONSTRAINT:" + (item[0] or item[1]))
+            else:
+                in_con = True
+        continue
+    if in_ver:
+        m = re.match(r'^    strategy:\s*(\S+)', ln)
+        if m:
+            print("STRATEGY:" + unquote(m.group(1)))
+    if in_con:
+        m = re.match(r'^    - (.*)$', ln)
+        if m:
+            print("CONSTRAINT:" + unquote(m.group(1)))
+PY
+}
+
+# V7 — execute each whitelisted task verify: block in a temp copy of the WP dir.
+lint_wp_gates() {
+    local wp="$1" refs strategy f base vb cmds first ok_words gitdir tmp rc errf wpn
+    refs="$(extract_goal_refs "$wp/overview.md" 2>/dev/null)"
+    strategy="$(printf '%s\n' "$refs" | sed -n 's/^STRATEGY://p' | head -1)"
+    case "$strategy" in judge|human) return 0 ;; esac
+    gitdir="$(git -C "$wp" rev-parse --absolute-git-dir 2>/dev/null)" || gitdir=""
+    wpn="$(basename -- "$wp")"
+    for f in "$wp"/task-*.md; do
+        [ -f "$f" ] || continue
+        base="$(basename -- "$f")"
+        vb="$(verify_block "$f")"
+        cmds="$(printf '%s\n' "$vb" | grep -vE '^\s*(#|$)')"
+        [ -n "$cmds" ] || continue
+        ok_words=1
+        while IFS= read -r first; do
+            printf '%s' "$first" | grep -qxE "$V2_WHITELIST" || { ok_words=0; break; }
+        done <<EOF
+$(printf '%s\n' "$cmds" | awk '{print $1}')
+EOF
+        [ "$ok_words" -eq 1 ] || continue
+        tmp="$(mktemp -d)"; errf="$tmp.err"
+        cp -R "$wp/." "$tmp/"
+        ( cd "$tmp" && if [ -n "$gitdir" ]; then export GIT_DIR="$gitdir"; fi
+          timeout 60 bash -c "$cmds" ) >/dev/null 2>"$errf" </dev/null
+        rc=$?
+        if [ "$rc" -eq 0 ]; then
+            echo "INFO [V7] $wpn: $base: gate exit 0"
+        elif grep -qiE 'unknown revision|bad revision|needed a single revision|ambiguous argument|not a valid object name|bad object' "$errf"; then
+            err V7 "$wpn: $base: gate names an unresolvable revision (exit $rc)"
+        elif [ "$rc" -eq 124 ]; then
+            err V7 "$wpn: $base: gate timed out after 60s"
+        else
+            err V7 "$wpn: $base: gate exits $rc"
+        fi
+        rm -rf "$tmp" "$errf"
+    done
+}
+
+# V8 — every placeholder and file-shaped named artifact in goal.constraints resolves.
+lint_wp_referents() {
+    local wp="$1" refs con tok key val dir found
+    refs="$(extract_goal_refs "$wp/overview.md" 2>/dev/null)"
+    while IFS= read -r con; do
+        [ -n "$con" ] || continue
+        while IFS= read -r tok; do
+            [ -n "$tok" ] || continue
+            key="${tok#<}"; key="${key%>}"
+            val="$(printf '%s\n' "$refs" | sed -n "s/^FIELD:$key=//p" | head -1)"
+            case "$val" in ""|null|"<"*) err V8 "$(basename -- "$wp"): constraint placeholder $tok resolves to no populated frontmatter field" ;; esac
+        done <<EOF
+$(printf '%s' "$con" | grep -oE '<[A-Za-z_][A-Za-z0-9_-]*>')
+EOF
+        while IFS= read -r tok; do
+            [ -n "$tok" ] || continue
+            found=0; dir="$(cd "$wp" && pwd)"
+            while :; do
+                [ -e "$dir/$tok" ] && { found=1; break; }
+                [ "$dir" = / ] && break
+                dir="$(dirname "$dir")"
+            done
+            [ "$found" -eq 1 ] || err V8 "$(basename -- "$wp"): constraint names artifact \`$tok\`, which does not exist"
+        done <<EOF
+$(printf '%s' "$con" | grep -oE '`[^`[:space:]<>$*{}]+`' | tr -d '`' | grep -E '/|\.(md|sh|py|json|yaml|yml|txt|toml)$')
+EOF
+    done <<EOF
+$(printf '%s\n' "$refs" | sed -n 's/^CONSTRAINT://p')
+EOF
+}
+
 lint_wp() {
     local wp="$1" f base vb
     [ -d "$wp" ] || { echo "sdd-preharden-lint: not a directory: $wp" >&2; return 2; }
@@ -345,7 +493,7 @@ lint_wp() {
         if [ -n "$cmds" ]; then
             # V2: every referenced path token that exists points inside the WP's own docs
             if printf '%s\n' "$cmds" | grep -qE '(grep|cat|test -f|\[ -f)' \
-               && ! printf '%s\n' "$cmds" | grep -vE '(overview\.md|task-[a-z0-9-]*\.md|findings\.md|todo\.md)' | grep -qE '(grep|cat|test -f|\[ -f|bash|python3|pytest|sh )'; then
+               && ! printf '%s\n' "$cmds" | grep -vE '(overview\.md|task-[a-z0-9-]*\.md|findings\.md|todo\.md)' | grep -qE '(grep|cat|test -f|\[ -f|bash|python3|pytest|sh |git )'; then
                 warn V2 "$base: verify only inspects the WP's own planning docs (self-referential)"
             fi
             # V3: only echo/printf lines
@@ -370,6 +518,11 @@ EOF
     # V6 — heuristic live-corpus-root lint (WARN channel).
     lint_wp_behaviors "$wp"
 
+    # V7 — execute the whitelisted task gates; V8 — resolve constraint
+    # referents (ERROR channel).
+    lint_wp_gates "$wp"
+    lint_wp_referents "$wp"
+
     if [ "$err_count" -gt 0 ]; then
         return 2
     fi
@@ -385,7 +538,7 @@ self_test() {
 
     # dirty fixture: trips P1, V1, V2, V3, V4
     mkdir -p "$d/dirty"
-    printf -- '---\nname: wp-x\n---\npath $COGWRIGHT_ROOT/scripts\n' > "$d/dirty/overview.md"
+    printf -- '---\nname: wp-x\n---\n## Goal\npath $COGWRIGHT_ROOT/scripts\n' > "$d/dirty/overview.md"
     printf -- '---\nname: task-01-a\nverify: |\n  bash run.sh || true\n---\nbody\n' > "$d/dirty/task-01-a.md"
     printf -- '---\nname: task-02-b\nverify: |\n  grep -q Goal overview.md\n---\nbody\n' > "$d/dirty/task-02-b.md"
     printf -- '---\nname: task-03-c\nverify: |\n  echo done\n---\nbody\n' > "$d/dirty/task-03-c.md"
@@ -401,6 +554,10 @@ self_test() {
     mkdir -p "$d/clean"
     printf -- '---\nname: wp-y\n---\nlocal paths only\n' > "$d/clean/overview.md"
     printf -- '---\nname: task-01-real\nverify: |\n  bash scripts/run-tests.sh\n  grep -q slug src/slugger.py\n---\nbody\n' > "$d/clean/task-01-real.md"
+    # V7 executes the clean gate, so the files it names exist (exit 0).
+    mkdir -p "$d/clean/scripts" "$d/clean/src"
+    printf 'exit 0\n' > "$d/clean/scripts/run-tests.sh"
+    printf 'slug\n' > "$d/clean/src/slugger.py"
     out="$(warn_count=0; lint_wp "$d/clean")"; rc=$?
     [ "$rc" -eq 0 ] && ok "clean WP -> exit 0" || no "clean WP -> exit $rc (want 0): $out"
 

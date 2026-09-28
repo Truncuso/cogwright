@@ -23,11 +23,13 @@ and the skill halts and asks for explicit approval before taking that edge.
   `yes` writes `RATIFIED`, runs `goalforge-respec-apply.sh`, then takes
   `spec -> ready --mode human`. Contract: `references/respec.md`.
 
-**Full route only.** A `route: fast` feature (overview frontmatter, stamped by
-`goalforge-capture`) has no `spec.md` by design — its single WP carries the complete
-goal block. Invoking goalforge-spec on a fast feature is the deliberate promotion
-path (the feature outgrew the fast route — e.g. 3+ WPs or a cross-WP
-contract): author the spec retroactively and flip `route: standard` with a note.
+**Full route only.** A fast-path feature (routed fast in-session by
+`goalforge-capture`'s classifier; nothing is persisted) has no `spec.md` by
+design — its single WP carries the complete goal block. Invoking goalforge-spec
+on a fast feature is the deliberate promotion path (the feature outgrew the fast
+route — e.g. 3+ WPs or a cross-WP contract): author the spec retroactively and
+note the promotion; the new `spec.md` itself moves the feature onto the
+standard chain.
 
 Schema reference: `${CLAUDE_PLUGIN_ROOT}/references/schema.md`.
 Templates: `${CLAUDE_PLUGIN_ROOT}/references/templates/`.

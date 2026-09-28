@@ -15,10 +15,11 @@
 #   references/state-machine.md.
 # Feature-level `→ready` skips the WP-only goal-hash gate; `archived` is not a
 # feature edge target (that terminal move lives in goalforge-archive.sh only).
-# A `## Feature edges` row whose `route` cell is not `any` (today only
-# `draft -> completed`, route `fast`) is taken only when the feature overview's
-# `route:` equals it and, for `fast`, when <feature>/spec.md is absent. The
-# table path is fixed to SCRIPT_DIR/../references (no env override).
+# The feature `draft -> completed` edge is taken only when <feature>/spec.md is
+# absent, exactly one wp-*/overview.md exists, and that sole WP is at
+# `status: verified` (OQ8); the refusal names the unmet condition. The
+# `## Feature edges` route column is vestigial (all `any`); a non-`any` cell is
+# refused. The table path is fixed to SCRIPT_DIR/../references (no env override).
 #
 # Reads the overview.md current `status:` as the authoritative `from`,
 # validates the `from→to` edge against the selected table
@@ -273,32 +274,6 @@ print("illegal")
 PY
 }
 
-# ── Read a feature overview's top-level `route:` scalar ──────────────────────
-# Prints the value with a trailing ` # comment` and surrounding quotes
-# stripped, or nothing when the key is absent (a missing route never matches a
-# route-scoped row). Only unindented frontmatter lines are read.
-read_route() {
-    python3 - "$1" <<'PY'
-import re, sys
-try:
-    lines = open(sys.argv[1], encoding="utf-8").read().split("\n")
-except OSError:
-    sys.exit(0)
-if not lines or lines[0].strip() != "---":
-    sys.exit(0)
-for ln in lines[1:]:
-    if ln.strip() == "---":
-        break
-    m = re.match(r"^route:(.*)$", ln)
-    if m:
-        v = re.sub(r"\s+#.*$", "", m.group(1)).strip()
-        if len(v) >= 2 and v[0] == v[-1] and v[0] in "'\"":
-            v = v[1:-1].strip()
-        print(v)
-        break
-PY
-}
-
 # ── The write: atomic status/stage_updated rewrite + ledger append ───────────
 do_write() {
     # args: overview to today ledger wp from reason actor override commit ts
@@ -390,19 +365,31 @@ transition() {
     if [[ "$VERDICT" != "legal" ]]; then
         echo "ERROR: illegal transition $FROM -> $TO (not in state-machine.md $SECTION)" >&2; return 1
     fi
-    # ── route-scoped row (Feature edges `route` column; human ruling H3) ─────
-    # A row whose route is not `any` is taken only when the feature overview's
-    # `route:` equals it (a missing `route:` never matches) and, for `fast`,
-    # only when <feature>/spec.md is absent: a specced feature passes
-    # `spec -> ready`, whatever its route: says.
+    # The route column is vestigial (every Feature edges row reads `any`,
+    # `route:` is retired); a scoped cell is a stale table, refused fail-closed.
     if [[ "$ROUTE" != "any" ]]; then
-        local FROUTE
-        FROUTE="$(read_route "$FEATURE_DIR/overview.md")"
-        if [[ -z "$FROUTE" || "$FROUTE" != "$ROUTE" ]]; then
-            echo "ERROR: $FROM -> $TO is scoped to route: $ROUTE features; $FEATURE_DIR/overview.md has route: '${FROUTE:-<none>}' (refused, status unchanged)" >&2; return 1
+        echo "ERROR: $FROM -> $TO row carries route '$ROUTE'; route-scoped Feature edges rows are retired (refused, status unchanged)" >&2; return 1
+    fi
+    # ── feature draft -> completed: three-condition guard (H3, OQ8) ──────────
+    # Legal only with no spec.md, exactly one wp-*/overview.md, and that sole WP
+    # at `status: verified` — the fast path's shape, which cannot get there
+    # without clearing harden and verify, so no spec-approval gate is skipped.
+    if [[ "$KIND" == "feature" && "$FROM" == "draft" && "$TO" == "completed" ]]; then
+        if [[ -e "$FEATURE_DIR/spec.md" ]]; then
+            echo "ERROR: draft -> completed requires no spec.md, but $FEATURE_DIR/spec.md exists; a specced feature passes spec -> ready (refused, status unchanged)" >&2; return 1
         fi
-        if [[ "$ROUTE" == "fast" && -e "$FEATURE_DIR/spec.md" ]]; then
-            echo "ERROR: $FROM -> $TO (route: fast) requires no spec.md, but $FEATURE_DIR/spec.md exists; a specced feature passes spec -> ready (refused, status unchanged)" >&2; return 1
+        local -a SOLE_WPS=()
+        local wpov
+        for wpov in "$FEATURE_DIR"/wp-*/overview.md; do
+            [[ -f "$wpov" ]] && SOLE_WPS+=("$wpov")
+        done
+        if [[ "${#SOLE_WPS[@]}" -ne 1 ]]; then
+            echo "ERROR: draft -> completed requires exactly one wp-*/overview.md, but $FEATURE_DIR has ${#SOLE_WPS[@]} (refused, status unchanged)" >&2; return 1
+        fi
+        local SOLE_ST
+        SOLE_ST="$(read_status "${SOLE_WPS[0]}")"
+        if [[ "$SOLE_ST" != "verified" ]]; then
+            echo "ERROR: draft -> completed requires its sole WP at status: verified, but ${SOLE_WPS[0]} is at status: '${SOLE_ST:-<none>}' (refused, status unchanged)" >&2; return 1
         fi
     fi
     if [[ "$RR" == "yes" && -z "$REASON" ]]; then
@@ -1020,7 +1007,7 @@ PY
     fi
 
     # ── (l)(m) LIVE fast-route spec→ready --mode auto — the wp-07 regression ────
-    #   Reproduces the defect wp-01's hash gate introduced: a route:fast WP is
+    #   Reproduces the defect wp-01's hash gate introduced: a fast-path WP is
     #   born goal_approved_version: null and takes spec→ready --mode auto with NO
     #   harden (the sole hash writer), so the null stamp made the fast route
     #   non-runnable end-to-end. (l) the bug: null stamp → REFUSED. (m) the fix:
@@ -1124,41 +1111,51 @@ EOF
         no "(s) reverse feature edge with --reason should succeed"
     fi
 
-    # ── (s2)(s3)(s4) route-scoped draft -> completed (Feature edges `route`) ────
-    #   (s2) route: fast, no spec.md → completes; (s3) route: standard → refused;
-    #   (s4) route: fast WITH a spec.md → refused (a specced feature passes
-    #   spec -> ready). Refusals leave status: draft.
-    _mk_route_feat() {  # $1=dir $2=route line (empty = no route:)
+    # ── (s2)(s3)(s4)(s4b) draft -> completed three-condition guard (H3, OQ8) ──
+    #   (s2) no spec.md + exactly one WP at verified → completes; (s3) zero WPs
+    #   and two WPs → refused; (s4) spec.md present → refused (a specced feature
+    #   passes spec -> ready); (s4b) the sole WP at implemented, not verified →
+    #   refused. Each refusal names its unmet condition and leaves status: draft.
+    _mk_dc_feat() {  # $1=dir $2=spec.md? (0|1) $3=WP statuses ('' = no WP)
+        local n=0 s
         mkdir -p "$1"
-        { printf -- '---\nname: %s\ntitle: route self-test fixture\nstatus: draft\n' "$(basename "$1")"
-          [[ -n "$2" ]] && printf '%s\n' "$2"
-          printf 'feature: %s\nwork_packages: []\n---\n\n# route fixture\n' "$(basename "$1")"
-        } > "$1/overview.md"
+        printf -- '---\nname: %s\ntitle: draft-completed self-test fixture\nstatus: draft\nfeature: %s\nwork_packages: []\n---\n\n# fixture\n' \
+            "$(basename "$1")" "$(basename "$1")" > "$1/overview.md"
+        [[ "$2" == 0 ]] || printf -- '---\nname: %s-spec\n---\n' "$(basename "$1")" > "$1/spec.md"
+        for s in $3; do
+            n=$((n + 1)); mkdir -p "$1/wp-0$n-x"
+            printf -- '---\nname: wp-0%s-x\nstatus: %s\nplan: %s\n---\n' "$n" "$s" "$(basename "$1")" > "$1/wp-0$n-x/overview.md"
+        done
     }
-    local rfast="$_ST_TMP/plans/rfast" rstd="$_ST_TMP/plans/rstd" rspec="$_ST_TMP/plans/rspec"
-    _mk_route_feat "$rfast" "route: fast"
-    _mk_route_feat "$rstd" "route: standard"
-    _mk_route_feat "$rspec" "route: fast"; printf -- '---\nname: rspec-spec\n---\n' > "$rspec/spec.md"
-    if bash "$SELF" "$rfast" completed >/dev/null 2>&1 \
-       && [[ "$(read_status "$rfast/overview.md")" == "completed" ]]; then
-        ok "(s2) route: fast feature with no spec.md takes draft -> completed"
+    _dc_refused() {  # $1=label $2=feature dir $3=refusal substring
+        local out
+        if out="$(bash "$SELF" "$2" completed 2>&1)"; then
+            no "$1 must not take draft -> completed"
+        elif [[ "$(read_status "$2/overview.md")" != "draft" ]]; then
+            no "$1 draft -> completed refused but status mutated"
+        elif ! grep -qF -- "$3" <<<"$out"; then
+            no "$1 refusal does not name '$3': $out"
+        else
+            ok "$1 refused draft -> completed naming '$3' (status unchanged)"
+        fi
+    }
+    local dcok="$_ST_TMP/plans/dcok" dc0="$_ST_TMP/plans/dc0" dc2="$_ST_TMP/plans/dc2" \
+          dcspec="$_ST_TMP/plans/dcspec" dcimpl="$_ST_TMP/plans/dcimpl"
+    _mk_dc_feat "$dcok" 0 verified
+    _mk_dc_feat "$dc0" 0 ""
+    _mk_dc_feat "$dc2" 0 "verified verified"
+    _mk_dc_feat "$dcspec" 1 verified
+    _mk_dc_feat "$dcimpl" 0 implemented
+    if bash "$SELF" "$dcok" completed >/dev/null 2>&1 \
+       && [[ "$(read_status "$dcok/overview.md")" == "completed" ]]; then
+        ok "(s2) no spec.md + one WP at verified takes draft -> completed"
     else
-        no "(s2) route: fast feature with no spec.md should take draft -> completed"
+        no "(s2) no spec.md + one WP at verified should take draft -> completed"
     fi
-    if bash "$SELF" "$rstd" completed >/dev/null 2>&1; then
-        no "(s3) route: standard feature must not take draft -> completed"
-    elif [[ "$(read_status "$rstd/overview.md")" == "draft" ]]; then
-        ok "(s3) route: standard feature refused draft -> completed (status unchanged)"
-    else
-        no "(s3) route: standard draft -> completed refused but status mutated"
-    fi
-    if bash "$SELF" "$rspec" completed >/dev/null 2>&1; then
-        no "(s4) route: fast feature with a spec.md must not take draft -> completed"
-    elif [[ "$(read_status "$rspec/overview.md")" == "draft" ]]; then
-        ok "(s4) route: fast feature with a spec.md refused draft -> completed (status unchanged)"
-    else
-        no "(s4) route: fast + spec.md draft -> completed refused but status mutated"
-    fi
+    _dc_refused "(s3) zero WPs" "$dc0" "exactly one wp-*/overview.md"
+    _dc_refused "(s3) two WPs" "$dc2" "exactly one wp-*/overview.md"
+    _dc_refused "(s4) spec.md present" "$dcspec" "requires no spec.md"
+    _dc_refused "(s4b) sole WP at implemented" "$dcimpl" "status: verified"
 
     # ── (t)(u)(v) evidence-gated ready→hardened revert — the re-harden edge (wp-02)
     #   The `ready→hardened` revert is NOT a bare FREE-REVERSE: it additionally
