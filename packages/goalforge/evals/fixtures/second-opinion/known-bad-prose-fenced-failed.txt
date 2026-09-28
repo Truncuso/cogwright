@@ -1,0 +1,5 @@
+Reviewing the diff now.
+
+```json
+{"status":"failed","verdict":"n/a - could not read diff"}
+```

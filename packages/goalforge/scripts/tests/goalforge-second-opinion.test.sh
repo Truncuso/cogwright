@@ -389,6 +389,69 @@ else
     cat "$FEATURE/trace-events.jsonl" 2>/dev/null
 fi
 
+# --- case 14f (M1-v8): known-good status:"partial" reply (verbatim) --------
+# a verbatim recorded codex reply for wp-10-respec-edge, `status:"partial"`.
+# 4 of 10 recorded codex envelopes use `status:"partial"`, so dropping it from
+# the accepted status tuple would misclassify ~40% of real verdicts.
+PARTIAL_STATUS="$(cat "$SO_FIXTURES/known-good-partial-status.txt")"
+STUB_RESULT="$PARTIAL_STATUS" run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.ok' && ! trace_has 'second_opinion.invalid'; then
+    ok "known-good status:partial fixture (verbatim recorded reply) -> second_opinion.ok"
+else
+    bad "known-good status:partial fixture (verbatim recorded reply) -> second_opinion.ok"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 14g (M1-v8): known-good verdict-key reply (no status field) ------
+VERDICT_KEY="$(cat "$SO_FIXTURES/known-good-verdict-key.txt")"
+STUB_RESULT="$VERDICT_KEY" run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.ok' && ! trace_has 'second_opinion.invalid'; then
+    ok "known-good verdict-key fixture (no status field) -> second_opinion.ok"
+else
+    bad "known-good verdict-key fixture (no status field) -> second_opinion.ok"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 14h (M1-v8): known-bad status:"success" with an empty summary ----
+EMPTY_SUMMARY="$(cat "$SO_FIXTURES/known-bad-empty-summary.txt")"
+STUB_RESULT="$EMPTY_SUMMARY" run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.invalid' && trace_has 'non-verdict-result' \
+   && ! trace_has 'second_opinion.ok'; then
+    ok "known-bad empty-summary reply -> second_opinion.invalid"
+else
+    bad "known-bad empty-summary reply -> second_opinion.invalid"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 14i (M1-v8/L2-v8): prose quoting a fenced status:"failed" block --
+# the fenced block is parseable JSON but not verdict-shaped once status:failed
+# is rejected before the verdict-key fallback (L2-v8) — a fenced-path mutant
+# that accepted ANY parseable fenced block regardless of shape would wrongly
+# pass this as .ok.
+FENCED_FAILED="$(cat "$SO_FIXTURES/known-bad-prose-fenced-failed.txt")"
+STUB_RESULT="$FENCED_FAILED" run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.invalid' && trace_has 'non-verdict-result' \
+   && ! trace_has 'second_opinion.ok'; then
+    ok "known-bad prose quoting a fenced status:failed block -> second_opinion.invalid"
+else
+    bad "known-bad prose quoting a fenced status:failed block -> second_opinion.invalid"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
+# --- case 14j (L2-v8): raw status:"failed" reply that ALSO carries a verdict
+# key must still be rejected — `{"status":"failed","verdict":"..."}` must not
+# fall through to the verdict-key branch just because `verdict` is non-empty;
+# a `failed` status is a task-completion outcome, never an opinion.
+FAILED_WITH_VERDICT="$(cat "$SO_FIXTURES/known-bad-failed-with-verdict.txt")"
+STUB_RESULT="$FAILED_WITH_VERDICT" run_so_pinned dispatch-default.yaml spec-no-egress.md
+if trace_has 'second_opinion.invalid' && trace_has 'non-verdict-result' \
+   && ! trace_has 'second_opinion.ok'; then
+    ok "known-bad status:failed reply with a verdict key -> second_opinion.invalid"
+else
+    bad "known-bad status:failed reply with a verdict key -> second_opinion.invalid"
+    cat "$FEATURE/trace-events.jsonl" 2>/dev/null
+fi
+
 # --- case 15 (issue 579): the full leaf result is recoverable, not just the --
 # --- 200-char excerpt kept in the trace row's `reason` ----------------------
 # A leaf result over 200 chars must still be fully recoverable afterwards: the
@@ -448,13 +511,36 @@ else
 fi
 
 # ledger accumulated exactly one row per leaf call (cases 2,3,4,6,7,8,10,12,13,
-# 14,14a,14b,14c,14d,14e,15,16a,16b = 18; cases 1, 5, 9 and 11 never reach the
-# leaf. 16b reaches the leaf — STUB_EXIT=1 — but its second_opinion.skipped
-# emit carries no decision_ref, which is exactly the case it asserts)
-if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "18" ]]; then
-    ok "ledger row count equals leaf-call count (18)"
+# 14,14a,14b,14c,14d,14e,14f,14g,14h,14i,14j,15,16a,16b = 23; cases 1, 5, 9 and
+# 11 never reach the leaf. 16b reaches the leaf — STUB_EXIT=1 — but its
+# second_opinion.skipped emit carries no decision_ref, which is exactly the
+# case it asserts)
+if [[ "$(wc -l < "$GOALFORGE_DISPATCH_LEDGER")" == "23" ]]; then
+    ok "ledger row count equals leaf-call count (23)"
 else
-    bad "ledger row count equals leaf-call count (18): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
+    bad "ledger row count equals leaf-call count (23): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
+fi
+
+# --- case 17 (wp-15 fix/b4): the SHIPPED dispatch.yaml pins codex/gpt-6-astra
+# and carries no ollama providers[] row -----------------------------------
+# Reads the real, checked-in references/dispatch.yaml (not a test fixture),
+# so a revert of dispatch.yaml back to an ollama-shipped state is caught
+# here, not just by eyeballing the diff.
+SHIPPED_DISPATCH="$SD/../../references/dispatch.yaml"
+SHIPPED_CHECK="$(python3 -c '
+import sys
+import yaml
+with open(sys.argv[1], encoding="utf-8") as fh:
+    data = yaml.safe_load(fh) or {}
+row = (data.get("stages") or {}).get("second_opinion") or {}
+names = [p.get("name") for p in (data.get("providers") or []) if isinstance(p, dict)]
+ok = row.get("provider") == "codex" and row.get("model") == "gpt-6-astra" and "ollama" not in names
+print("1" if ok else "0")
+' "$SHIPPED_DISPATCH" 2>/dev/null)"
+if [[ "$SHIPPED_CHECK" == "1" ]]; then
+    ok "shipped dispatch.yaml second_opinion row is codex/gpt-6-astra, no ollama providers row"
+else
+    bad "shipped dispatch.yaml second_opinion row is codex/gpt-6-astra, no ollama providers row"
 fi
 
 echo

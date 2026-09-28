@@ -404,6 +404,8 @@ def _obj_is_verdict(obj):
     if not isinstance(obj, dict):
         return False
     status = obj.get("status")
+    if status == "failed":
+        return False
     summary = obj.get("summary")
     if status in ("success", "partial") and isinstance(summary, str) and summary.strip():
         return True
