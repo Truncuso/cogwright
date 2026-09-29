@@ -56,9 +56,10 @@ wrapper (`verify_leaf`). It takes no table path: it binds only
 PKG_ROOT/references/admitted-providers.yaml, and PKG_ROOT is the admission
 script's own real location (the wrapper finds that script at
 `$(dirname "$0")`), so the package identity is bound instead (step 2): a shim
-of symlinked scripts resolves to the package's own script and table, and a
-shim of copied or hard-linked scripts at another path is refused. So no shim
-makes either caller bind another committed table.
+of symlinked scripts resolves to the package's own script and table; an
+UNTRACKED shim of copied or hard-linked scripts at another path is refused by
+step 2, and a COMMITTED shim passes step 2 and is refused by the guard-identity
+walk of step 4. So no shim makes either caller bind another committed table.
 `resolve_admitted_path` stays unbound, so `--test-tiers` and pick-agent's CLI
 need no git work tree.
 
@@ -66,11 +67,14 @@ need no git work tree.
    realpath(PKG_ROOT); no top level exits 2, failed CLOSED. It must contain
    realpath(PKG_ROOT), else exit 2, failed CLOSED (a repository-local
    `core.worktree` can move it below the package).
-2. The package identity: realpath of the admission script itself must be
-   committed at its path under that top level and byte-equal to that HEAD
-   blob (`git show HEAD:<rel>`), else exit 2. An untracked copy, or a hard
-   link at a stray path, is absent from HEAD; a hard link AT the tracked path
-   is the file itself.
+2. The package identity: the admission script's real path, resolved once at
+   module scope (`_OWN`, from which PKG_ROOT is derived), must be committed at
+   its path under that top level and byte-equal to that HEAD blob
+   (`git show HEAD:<rel>`), else exit 2. An UNTRACKED copy, or a hard link at
+   a stray path, is absent from HEAD and refused here; a hard link AT the
+   tracked path is the file itself. A COMMITTED shim (copy or hard link at
+   another tracked path) passes this step: its PKG_ROOT then names a guard
+   location that is not the installed one, and step 4 refuses it.
 3. The table path is walked component by component. A symlink component
    located at or below that top level (the table file, `references/`, or any
    directory between) exits 2 naming the symlink. A symlink component located
@@ -87,7 +91,11 @@ need no git work tree.
    walk supplies the bytes: a swap can only cause a mismatch. The guard's
    identity, PKG_ROOT/hooks/goalforge-pre-commit.sh, is walked the same way
    (a symlink component at or below the top level exits 2) and must equal the
-   realpath of a path the installed marker block invokes.
+   realpath of a path the installed marker block invokes. The comparison is
+   asymmetric: the package side is walked (in-tree symlinks refused), the
+   marker-block side is fully realpath'd (in-tree symlinks followed). So it
+   pins the guard's LOCATION, not the hook file's content: overwriting the
+   tracked hook in place is the accepted forged-hook residual.
 5. Every git call of the binding and the brief's HEAD read runs
    `git -c core.useReplaceRefs=false` with `GIT_NO_REPLACE_OBJECTS=1` set
    after the `GIT_*` scrub. The variable alone is not enough: a

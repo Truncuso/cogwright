@@ -649,6 +649,19 @@ if [ "$RC" -eq 2 ] && err_has b10-closure "missing required key 'leaf_closure'" 
 else
     bad "b10(iii) (rc=$RC): $(cat "$T/b10-closure.err")"
 fi
+# (iv) the same admitting triple twice (verify r4 glm LOW, r5): the loader
+# refuses it, so compile and verify_leaf share the exactly-one rule.
+case_b10_iv() {
+    seam_compile b10-dup "$RFX/bad-duplicate-triple.yaml" "$D_ADM"
+    if [ "$RC" -eq 2 ] && err_has b10-dup "duplicate admitting triple" && ! err_has b10-dup "egress incoherent"; then
+        ok "b10(iv) a duplicated admitting triple -> exit 2 naming the duplicate at load, never the incoherence path"
+    else
+        bad "b10(iv) duplicated admitting triple (rc=$RC): $(cat "$T/b10-dup.err")"
+    fi
+}
+case_b10_iv
+red "b10(d) a loader with no duplicate-triple check" "b10(iv)" \
+    "scripts/goalforge-admission.py:no-duplicate-triple" -- case_b10_iv
 
 # --- b11: fable is advisor-only on BOTH paths -------------------------------------
 FABLE_MSG="fable is advisor-only, never an implementer"
@@ -1475,6 +1488,9 @@ case_b15_xvid
 # guard file replaced by an in-tree symlink to an untracked no-op hook. The
 # installed marker path then resolves to the no-op, so a realpath identity
 # passes while `git commit` runs nothing; the walk refuses the symlink.
+# The case pins guard LOCATION identity only (the hook at its tracked path, not
+# an in-tree symlink); guard CONTENT is not bound, so overwriting the tracked
+# hook file in place stays in the accepted forged-hook residual (wp-08 Risks).
 case_b15_xvie() {
     local hook="$R/hooks/goalforge-pre-commit.sh"
     mv "$hook" "$T/pre-commit-hook.real"
@@ -1551,6 +1567,11 @@ RED_ROOT="$RA" red "b15(t) no HEAD binding of the admission script, (xvi-d)" "ma
     "$ADM_PY:no-tracked-self" -- case_b15_xvid
 RED_ROOT="$RA" red "b15(u) historical lock: the 5f071b3 package identity, (xvi-c)" "marker=yes" \
     "$ADM_PY:identity-5f071b3" -- case_b15_xvic
+# b15 (v), xv-c ledger assertion (r5): an `admitted` row appended BEFORE
+# verify_head_binding — the compile still exits 2 and writes no workflow, so
+# attack() goes RED only on its no-admitted-ledger-row assertion.
+RED_ROOT="$RA" red "b15(v) the admitted ledger row appended before verify_head_binding, (xv-c)" \
+    "compile rc=2, admitted ledger rows=1, wrapper rc=2" "$PICK_PY:ledger-before-head-binding" -- case_b15_xvc
 
 # Structural (T13): table-anchor and shared-binding, each with its mutant.
 structural_case() { # <mode>
@@ -1562,9 +1583,13 @@ structural_case() { # <mode>
 case_table_anchor() { structural_case table-anchor; }
 case_shared_binding() { structural_case shared-binding; }
 case_canonical_only() { structural_case canonical-only; }
+case_own_script_once() { structural_case own-script-once; }
 case_table_anchor
 case_shared_binding
 case_canonical_only
+case_own_script_once
+red "M1-r4a structural: _bind_own_script re-resolving __file__" "own-script-once" \
+    "$ADM_PY:rebind-own-script" -- case_own_script_once
 red "b15(p) structural: the cd3fe47 caller-passed TABLE" "canonical-only" \
     "$ADM_PY:caller-table" "scripts/goalforge-leaf-exec.sh:wrapper-table-arg" -- case_canonical_only
 red "b15(d) structural: the HEAD read anchored at the table's directory" "table-anchor" \

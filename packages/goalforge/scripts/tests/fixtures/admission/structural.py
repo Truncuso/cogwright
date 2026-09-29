@@ -20,6 +20,11 @@ swap race they narrow); each prints one `ok ...` / `bad ...` line per check.
     python3 structural.py canonical-only <goalforge-admission.py>
         v15 (a): no table-path parameter on bind_table / verify_leaf /
         --verify-leaf, and the sibling wrapper passes only the row key.
+    python3 structural.py own-script-once <goalforge-admission.py>
+        M1-r4a: the script's own path is resolved ONCE at module scope
+        (`_OWN`, assigned exactly once; PKG_ROOT = _OWN.parent.parent) and
+        _bind_own_script binds `_OWN` with ZERO resolve()/realpath/abspath
+        calls of its own.
 """
 from __future__ import annotations
 
@@ -204,11 +209,41 @@ def canonical_only(path: str) -> bool:
     return good
 
 
+def own_script_once(path: str) -> bool:
+    tree = ast.parse(open(path, encoding="utf-8").read(), path)
+    good = True
+    own = [n for n in tree.body if isinstance(n, ast.Assign)
+           and any(isinstance(t, ast.Name) and t.id == "_OWN" for t in n.targets)]
+    pkg = [n for n in tree.body if isinstance(n, ast.Assign)
+           and any(isinstance(t, ast.Name) and t.id == "PKG_ROOT" for t in n.targets)]
+    if len(own) != 1:
+        print(f"bad own-script-once: _OWN is assigned {len(own)} time(s) at module scope, want 1")
+        good = False
+    if len(pkg) != 1 or ast.unparse(pkg[0].value) != "_OWN.parent.parent":
+        print("bad own-script-once: PKG_ROOT is not derived as _OWN.parent.parent")
+        good = False
+    fn = _functions(path).get("_bind_own_script")
+    if fn is None:
+        print(f"bad own-script-once: no _bind_own_script in {path}")
+        return False
+    calls = _resolver_calls(fn)
+    uses = any(isinstance(n, ast.Name) and n.id == "_OWN" for n in ast.walk(fn))
+    if calls or not uses:
+        print(f"bad own-script-once: _bind_own_script binds _OWN={uses}, resolves "
+              f"again at line(s) {[c.lineno for c in calls]}")
+        good = False
+    if good:
+        print("ok own-script-once: the script path is resolved once at module "
+              "scope; PKG_ROOT and _bind_own_script both take _OWN")
+    return good
+
+
 if __name__ == "__main__":
     mode, target = sys.argv[1], sys.argv[2]
     check = {"closure-single-realpath": closure_single_realpath,
              "single-resolution": single_resolution,
              "table-anchor": table_anchor,
              "shared-binding": shared_binding,
-             "canonical-only": canonical_only}[mode]
+             "canonical-only": canonical_only,
+             "own-script-once": own_script_once}[mode]
     sys.exit(0 if check(target) else 1)

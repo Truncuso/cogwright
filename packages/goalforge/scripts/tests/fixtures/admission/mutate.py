@@ -246,6 +246,23 @@ MUTATIONS.update({
         "    unguarded = _guard_reason(top)\n",
         "    unguarded = None\n",
     ),
+    # M1-r4a structural (own-script-once): _bind_own_script resolves
+    # __file__ again instead of binding the module-scope _OWN.
+    "rebind-own-script": (
+        "    own = _OWN\n",
+        "    own = Path(os.path.realpath(__file__))\n",
+    ),
+    # b10 known-bad (d) (glm LOW, r5): the exactly-one admitting-triple check dropped.
+    "no-duplicate-triple": ("        if key in seen:\n", "        if False:\n"),
+    # b15 known-bad (v) (r5): the `admitted` row appended BEFORE verify_head_binding,
+    # so a refused compile still leaves an admitted row on the ledger.
+    "ledger-before-head-binding": (
+        '    if bind_head and decision == "admitted":\n',
+        "    if decision:\n"
+        "        append_ledger_row(ledger_row(resolution, wp=wp, "
+        "admitted_source=admitted_source, admitted_override=False))\n"
+        '    if bind_head and decision == "admitted":\n',
+    ),
     # b16 known-bads (a)/(b): the brief always from HEAD / always the work tree.
     "brief-always-head": (
         '        if adm.is_tracked(real, "WP overview"):',

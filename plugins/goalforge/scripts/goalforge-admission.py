@@ -48,7 +48,10 @@ except ImportError as exc:  # pragma: no cover
     raise SystemExit("PyYAML required: pip install pyyaml") from exc
 
 
-PKG_ROOT = Path(__file__).resolve().parent.parent
+# The script's own location, resolved ONCE (M1-r4a): PKG_ROOT and the
+# script's HEAD self-binding (_bind_own_script) both take this one path.
+_OWN = Path(__file__).resolve()
+PKG_ROOT = _OWN.parent.parent
 ADMITTED_PATH = PKG_ROOT / "references" / "admitted-providers.yaml"
 
 # Closed set. `self-report` is deliberately absent: a model's own claim that it
@@ -164,6 +167,19 @@ def validate(rows: object) -> list[dict]:
         ):
             raise _row_error(index, "leaf_closure", "not a mapping of path -> sha256")
         validated.append(row)
+    # Exactly one row per admitting key (glm LOW, r5): resolve() takes the
+    # first match while verify_leaf demands exactly one, so a duplicated
+    # (task_class, provider, model) would compile and never dispatch.
+    seen: dict[tuple[str, str, str], int] = {}
+    for index, row in enumerate(validated):
+        key = (str(row["task_class"]), str(row["provider"]), str(row["model"]))
+        if key in seen:
+            raise _row_error(
+                index, "task_class",
+                f"duplicate admitting triple {key} (first at row {seen[key]}) — "
+                "a (task_class, provider, model) key admits through exactly one row",
+            )
+        seen[key] = index
     return validated
 
 
@@ -516,9 +532,10 @@ def _walk_table(table_path: Path, top: Path, what: str = "admission table") -> P
 def _bind_own_script(top: Path) -> None:
     """Refuse unless this script is the committed blob at its tracked path.
 
-    realpath(``__file__``) relative to ``top`` must be present in HEAD with
-    the running file's exact bytes (``git -C <top> show HEAD:<rel>``)."""
-    own = Path(os.path.realpath(__file__))
+    ``_OWN`` (the module-scope resolution PKG_ROOT is derived from, never
+    resolved again here) relative to ``top`` must be present in HEAD with the
+    running file's exact bytes (``git -C <top> show HEAD:<rel>``)."""
+    own = _OWN
     rel = Path(os.path.relpath(own, top)).as_posix()
     try:
         running = own.read_bytes()
@@ -546,10 +563,12 @@ def bind_table() -> TableBinding:
     --show-toplevel``; none fails CLOSED) and must contain realpath(PKG_ROOT):
     a repository-local ``core.worktree`` can move it below the package (v15
     (c)). PKG_ROOT comes from this script's own location, so that location is
-    bound too (R3-H1): realpath(``__file__``) must be committed at its path
-    under the top level and byte-equal to that HEAD blob — an untracked copy
-    or a hard link at a stray path is absent from HEAD and refused; a hard
-    link AT the tracked path is the file itself. The walk (``_walk_table``)
+    bound too (R3-H1): ``_OWN`` must be committed at its path under the top
+    level and byte-equal to that HEAD blob — an UNTRACKED copy or hard link at
+    a stray path is absent from HEAD and refused here; a COMMITTED shim passes
+    this step and is refused by the guard-identity walk in
+    ``verify_head_binding`` (``_guard_reason``); a hard link AT the tracked
+    path is the file itself. The walk (``_walk_table``)
     refuses any symlink at or below the top level; the walked path must lie
     inside realpath(PKG_ROOT); rel is taken against the top level. Every git
     call of the binding then runs ``git -C <top>``, so no linked worktree,
