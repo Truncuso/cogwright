@@ -277,10 +277,14 @@ if [[ -z "$(git -C "$NOGIT_REP" rev-parse --show-toplevel 2>/dev/null)" ]]; then
     cp "$PICK_REP" "$T/pick.orig"
     if python3 "$ADM_FX/mutate.py" bind-in-resolve-admitted-path "$T/pick.orig" "$PICK_REP"; then
         OUT="$( (case_b4_viii) 2>&1 )"
-        if grep -q "FAIL: b4(viii)" <<<"$OUT"; then
-            ok "known-bad red: b4(g) the T13 binding in resolve_admitted_path (why: b4(viii))"
-        else
+        # Red for the stated reason only: the binding fails CLOSED outside a
+        # git work tree (a crashing mutant also prints "FAIL: b4(viii)").
+        if ! grep -q "FAIL: b4(viii)" <<<"$OUT"; then
             bad "known-bad stays green: b4(g) the T13 binding in resolve_admitted_path"
+        elif ! grep -q "outside a git work tree" <<<"$OUT"; then
+            bad "known-bad red, but not for 'outside a git work tree': b4(g)"; printf '%s\n' "$OUT" | sed 's/^/    /'
+        else
+            ok "known-bad red: b4(g) the T13 binding in resolve_admitted_path (why: outside a git work tree)"
         fi
     else
         bad "known-bad b4(g): mutation bind-in-resolve-admitted-path did not apply"

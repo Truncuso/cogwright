@@ -346,7 +346,13 @@ def _marker_hook_paths(text: str) -> list[str]:
 
 
 def _guard_reason(table_dir: Path) -> str | None:
-    """Why the repository anchored at ``table_dir`` is not goalforge-guarded."""
+    """Why the repository anchored at ``table_dir`` is not goalforge-guarded.
+
+    ``table_dir`` is the binding's top level. The guard's identity,
+    PKG_ROOT/hooks/goalforge-pre-commit.sh, is WALKED like the table
+    (``_walk_table``): a symlink at or below the top level (``hooks/`` or the
+    hook file) raises AdmissionTableError, so an untracked in-tree symlink
+    cannot stand in for the package's own guard (R3-H1)."""
     for scope in ("--global", "--system"):
         res = _git(["config", scope, "--get", "core.hooksPath"], table_dir,
                    isolate_config=False)
@@ -373,7 +379,7 @@ def _guard_reason(table_dir: Path) -> str | None:
         text = pre_commit.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         text = ""
-    want = os.path.realpath(PRE_COMMIT_HOOK)
+    want = str(_walk_table(PRE_COMMIT_HOOK, table_dir, "pre-commit guard"))
     if any(os.path.realpath(p) == want for p in _marker_hook_paths(text)):
         return None
     return (
@@ -477,13 +483,15 @@ def _within(root: Path, path: Path) -> bool:
     return os.path.commonpath([str(root), str(path)]) == str(root)
 
 
-def _walk_table(table_path: Path, top: Path) -> Path:
+def _walk_table(table_path: Path, top: Path, what: str = "admission table") -> Path:
     """Walk ``table_path`` component by component (no full realpath).
 
-    A symlink located at or below the physical top level ``top`` — the table
-    file, ``references/`` or any directory between — is refused; a symlink
-    above ``top`` (``~/.claude -> dotfiles/claude``) is resolved. Returns the
-    walked physical path."""
+    A symlink component located at or below the physical top level ``top`` —
+    the file, its directory or any directory between — is refused; a symlink
+    component above ``top`` (``~/.claude -> dotfiles/claude``) is resolved
+    with one full realpath, which follows its whole target chain. Returns the
+    walked physical path. ``what`` names the path in the refusal (the table,
+    or the pre-commit guard ``_guard_reason`` walks the same way)."""
     table_path = Path(table_path)
     walked = Path(table_path.anchor) if table_path.is_absolute() else Path(os.getcwd())
     parts = table_path.parts[1:] if table_path.is_absolute() else table_path.parts
@@ -495,14 +503,35 @@ def _walk_table(table_path: Path, top: Path) -> Path:
         step = walked / part
         if step.is_symlink() and _within(top, step):
             raise AdmissionTableError(
-                f"admission table {table_path}: {step} is a symlink located inside "
+                f"{what} {table_path}: {step} is a symlink located inside "
                 f"the package work tree {top} (component {i + 1} of {last + 1}) — "
-                "the table binding refuses it, HEAD binding refused"
+                "the binding refuses it, HEAD binding refused"
             )
         if step.is_symlink():
             step = Path(os.path.realpath(step))
         walked = step
     return walked
+
+
+def _bind_own_script(top: Path) -> None:
+    """Refuse unless this script is the committed blob at its tracked path.
+
+    realpath(``__file__``) relative to ``top`` must be present in HEAD with
+    the running file's exact bytes (``git -C <top> show HEAD:<rel>``)."""
+    own = Path(os.path.realpath(__file__))
+    rel = Path(os.path.relpath(own, top)).as_posix()
+    try:
+        running = own.read_bytes()
+    except OSError as exc:
+        raise AdmissionTableError(
+            f"admission script {own} cannot be read ({exc}) — HEAD binding "
+            "failed CLOSED"
+        ) from exc
+    if _show_head(top, rel, "admission script", own) != running:
+        raise AdmissionTableError(
+            f"admission script {own} differs from git show HEAD:{rel} — the "
+            "package identity is the committed script, HEAD binding refused"
+        )
 
 
 def bind_table() -> TableBinding:
@@ -516,11 +545,16 @@ def bind_table() -> TableBinding:
     The top level is that of realpath(PKG_ROOT) (``git rev-parse
     --show-toplevel``; none fails CLOSED) and must contain realpath(PKG_ROOT):
     a repository-local ``core.worktree`` can move it below the package (v15
-    (c)). The walk (``_walk_table``) refuses any symlink at or below it; the
-    walked path must equal realpath(ADMITTED_PATH) and lie inside
-    realpath(PKG_ROOT); rel is taken against the top level. Every git call of the binding then runs ``git -C <top>`` with that
-    rel, so no linked worktree, nested or foreign repository, and no path
-    swapped in after the walk supplies the HEAD bytes."""
+    (c)). PKG_ROOT comes from this script's own location, so that location is
+    bound too (R3-H1): realpath(``__file__``) must be committed at its path
+    under the top level and byte-equal to that HEAD blob — an untracked copy
+    or a hard link at a stray path is absent from HEAD and refused; a hard
+    link AT the tracked path is the file itself. The walk (``_walk_table``)
+    refuses any symlink at or below the top level; the walked path must lie
+    inside realpath(PKG_ROOT); rel is taken against the top level. Every git
+    call of the binding then runs ``git -C <top>``, so no linked worktree,
+    nested or foreign repository, and no path swapped in after the walk
+    supplies the HEAD bytes."""
     table_path = ADMITTED_PATH
     pkg_real = Path(os.path.realpath(PKG_ROOT))
     try:
@@ -541,12 +575,8 @@ def bind_table() -> TableBinding:
             f"admission table {table_path}: the work-tree top level {top} does not "
             f"contain the package root {pkg_real} — HEAD binding failed CLOSED"
         )
+    _bind_own_script(top)
     walked = _walk_table(table_path, top)
-    if walked != Path(os.path.realpath(table_path)):
-        raise AdmissionTableError(
-            f"admission table {table_path} walks to {walked}, not the package "
-            "canonical table — HEAD binding refused"
-        )
     if not _within(pkg_real, walked):
         raise AdmissionTableError(
             f"admission table {table_path} walks to {walked}, outside the package "

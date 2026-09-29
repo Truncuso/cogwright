@@ -52,8 +52,13 @@ checkout, at the canonical table's own repository path. One shared helper,
 callers: the workflow compile (`resolve_and_log(bind_head=True)`) and the leaf
 wrapper (`verify_leaf`). It takes no table path: it binds only
 `ADMITTED_PATH`, and neither `verify_leaf`, `--verify-leaf` nor
-`scripts/goalforge-leaf-exec.sh` accepts or derives one (so a shim of
-symlinked scripts cannot make the wrapper bind another committed table).
+`scripts/goalforge-leaf-exec.sh` accepts one. `ADMITTED_PATH` is
+PKG_ROOT/references/admitted-providers.yaml, and PKG_ROOT is the admission
+script's own real location (the wrapper finds that script at
+`$(dirname "$0")`), so the package identity is bound instead (step 2): a shim
+of symlinked scripts resolves to the package's own script and table, and a
+shim of copied or hard-linked scripts at another path is refused. So no shim
+makes either caller bind another committed table.
 `resolve_admitted_path` stays unbound, so `--test-tiers` and pick-agent's CLI
 need no git work tree.
 
@@ -61,17 +66,28 @@ need no git work tree.
    realpath(PKG_ROOT); no top level exits 2, failed CLOSED. It must contain
    realpath(PKG_ROOT), else exit 2, failed CLOSED (a repository-local
    `core.worktree` can move it below the package).
-2. The table path is walked component by component. A symlink at or below
-   that top level (the table file, `references/`, or any directory between)
-   exits 2 naming the symlink; a symlink above it (`~/.claude ->
-   dotfiles/claude`) is resolved.
-3. The walked path must equal realpath(ADMITTED_PATH) ("not the package
-   canonical table" otherwise) and lie inside realpath(PKG_ROOT); its rel is
-   taken against the top level.
+2. The package identity: realpath of the admission script itself must be
+   committed at its path under that top level and byte-equal to that HEAD
+   blob (`git show HEAD:<rel>`), else exit 2. An untracked copy, or a hard
+   link at a stray path, is absent from HEAD; a hard link AT the tracked path
+   is the file itself.
+3. The table path is walked component by component. A symlink component
+   located at or below that top level (the table file, `references/`, or any
+   directory between) exits 2 naming the symlink. A symlink component located
+   above it is resolved with one full realpath, which follows its whole target
+   chain, in-tree hops included. In production no such component exists:
+   ADMITTED_PATH is built on realpath(PKG_ROOT), so only `references/` and the
+   file can be symlinks, and both are refused. Only the in-process seam can
+   pass a logical path through an ancestor symlink (`~/.claude ->
+   dotfiles/claude`). The walked path must lie inside realpath(PKG_ROOT); its
+   rel is taken against the top level.
 4. The HEAD read and the guarded-repository check run `git -C <top level>`
    with that rel, never at the table's own directory. So neither a linked
    worktree, a nested or foreign repository, nor a path swapped in after the
-   walk supplies the bytes: a swap can only cause a mismatch.
+   walk supplies the bytes: a swap can only cause a mismatch. The guard's
+   identity, PKG_ROOT/hooks/goalforge-pre-commit.sh, is walked the same way
+   (a symlink component at or below the top level exits 2) and must equal the
+   realpath of a path the installed marker block invokes.
 5. Every git call of the binding and the brief's HEAD read runs
    `git -c core.useReplaceRefs=false` with `GIT_NO_REPLACE_OBJECTS=1` set
    after the `GIT_*` scrub. The variable alone is not enough: a
@@ -98,10 +114,11 @@ conflict. Rule (c) governs the LEAF path under the leaf root, where an in-root
 symlinked directory between the root and the entry's directory is RESOLVED:
 the leaf's integrity rests on content (the entry hash plus a closure manifest
 keyed by real path, so a repoint changes the keys and is caught). The table
-binding governs the TABLE path under PKG_ROOT, where every in-tree symlink is
-REFUSED: the table's integrity rests on location (the HEAD read of the one
-path the pre-commit guard watches, at the package's own top level). Both
-resolve ancestors above their root.
+binding governs the TABLE path under PKG_ROOT, where every symlink component
+located at or below the top level is REFUSED: the table's integrity rests on
+location (the HEAD read of the one path the pre-commit guard watches, at the
+package's own top level). Both resolve a symlink component located above
+their root with a full realpath (binding step 3).
 
 ## The task-class key
 

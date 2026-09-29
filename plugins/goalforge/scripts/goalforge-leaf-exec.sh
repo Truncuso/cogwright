@@ -11,9 +11,12 @@
 # table argument: an actor who can edit the leaf can also rewrite an argument in
 # the emitted workflow file, so nothing on the command line is trusted. The
 # expected `leaf`, `leaf_sha256` and `leaf_closure` are re-derived from the
-# package's canonical admission table (never a path derived from $0), and only when that table's
-# bytes are its committed HEAD content in a goalforge-guarded repository
-# (goalforge-admission.py verify_leaf / verify_head_binding). The leaf's real
+# canonical admission table of the package that owns the admission script found
+# at $(dirname "$0"). That script must be committed at its real path and
+# byte-equal to its HEAD blob, so a copied or hard-linked script elsewhere is
+# refused. The table admits only when its bytes are its committed HEAD content
+# in a goalforge-guarded repository (goalforge-admission.py bind_table /
+# verify_leaf / verify_head_binding). The leaf's real
 # path must lie under the leaf root, it must hash to the recorded value, and
 # every file under its directory tree must match the closure manifest, or this
 # exits 2 WITHOUT executing it.

@@ -443,12 +443,17 @@ err_has() { grep -qF -- "$2" "$T/$1.err"; }
 # lines captured, its counters discarded) and restores every file. The
 # known-bad counts only when the case goes RED — and, with <why>, only when a
 # FAIL line carries that substring (so it is red for the stated reason).
+# A known-bad models SHIPPED code: in a git replica the mutated files are
+# committed (setup only, around the installed guard) before the case runs,
+# since the admission script binds itself to its HEAD blob (R3-H1); HEAD and
+# the index are moved back after the files are restored.
 RED_N=0
 red() {
-    local label="$1" why="$2" out="" f applied=1; shift 2
-    local files=()
+    local label="$1" why="$2" out="" f applied=1 root="${RED_ROOT:-$R}" pre="" rel; shift 2
+    local files=() rels=()
     while [ "$1" != "--" ]; do
-        f="${RED_ROOT:-$R}/${1%%:*}"
+        f="$root/${1%%:*}"
+        rels+=("${1%%:*}")
         RED_N=$((RED_N+1))
         cp "$f" "$T/red-$RED_N.orig"
         files+=("$f" "$T/red-$RED_N.orig")
@@ -459,9 +464,22 @@ red() {
         shift
     done
     shift
+    if [ "$applied" -eq 1 ] && [ -d "$root/.git" ]; then
+        pre="$("${GITQ[@]}" -C "$root" rev-parse HEAD)"
+        "${GITQ[@]}" -C "$root" add -- "${rels[@]}"
+        "${GITQ[@]}" -C "$root" -c core.hooksPath=/dev/null commit -qm "known-bad" </dev/null >/dev/null 2>&1
+        for rel in "${rels[@]}"; do
+            cmp -s <("${GITQ[@]}" -C "$root" show "HEAD:$rel" 2>/dev/null) "$root/$rel" \
+                || bad "known-bad $label: the mutated $rel is not committed in $root"
+        done
+    fi
     [ "$applied" -eq 1 ] && out="$("$@" 2>&1)"
     # Reverse order: two mutations of ONE file restore to the original last.
     for ((f = ${#files[@]} - 2; f >= 0; f -= 2)); do cp "${files[f+1]}" "${files[f]}"; done
+    if [ -n "$pre" ]; then
+        "${GITQ[@]}" -C "$root" reset -q --soft "$pre"
+        "${GITQ[@]}" -C "$root" reset -q -- "${rels[@]}"
+    fi
     [ "$applied" -eq 1 ] || return 0
     [ -n "${COMPILE_TEST_VERBOSE:-}" ] && printf '%s\n' "$out" | sed 's/^/    | /'
     if ! grep -q '^  FAIL: ' <<<"$out"; then
@@ -1064,9 +1082,6 @@ setup_commit() {
         fi
     done
 }
-b15_rej() { # <name> — no workflow written, compile refused
-    [ "$RC" -eq 2 ] && [ ! -f "$T/$1/wp-fx-admitted.js" ]
-}
 INSIDE="is a symlink located inside the package work tree"
 
 # (iii) the canonical table -> a symlink to a headless-committed evil/ table.
@@ -1190,21 +1205,33 @@ else
 fi
 ra_canon_link() { rm -f "$RA_CANON"; ln -s "$1" "$RA_CANON"; }
 ra_canon_restore() { rm -f "$RA_CANON"; "${GITQ[@]}" -C "$RA" checkout -q -- "$TBL"; }
+# admitted_rows_since <ledger row count> -> the `admitted` rows appended since.
+admitted_rows_since() {
+    tail -n +"$(( $1 + 1 ))" "$GOALFORGE_DISPATCH_LEDGER" 2>/dev/null | python3 -c '
+import json, sys
+print(sum(1 for l in sys.stdin if l.strip() and json.loads(l).get("decision") == "admitted"))'
+}
 # attack <name> <label> <compile substring|-> <wrapper substring>
+# ATTACK_PKG (default $RA) holds the scripts/ run and is the wrapper's working
+# directory; ATTACK_REPO (default $RA) holds the compiled WP fixture. A refused
+# compile appends no `admitted` ledger row.
 attack() {
-    local RCOMPILE="$RA/scripts/goalforge-workflow-compile.py"
-    local WPA="$RA/scripts/tests/fixtures/dispatch/wp-admitted.md" crc good=1
+    local pkg="${ATTACK_PKG:-$RA}" repo="${ATTACK_REPO:-$RA}" crc good=1 rows adm
+    local RCOMPILE="$pkg/scripts/goalforge-workflow-compile.py"
+    local WPA="$repo/scripts/tests/fixtures/dispatch/wp-admitted.md"
+    rows="$(cat "$GOALFORGE_DISPATCH_LEDGER" 2>/dev/null | wc -l)"
     seam_compile "$1" - "$D_ADM"; crc=$RC
+    adm="$(admitted_rows_since "$rows")"
     rm -f "$MARK"
-    ( cd "$RA" && LEAF_MARKER="$MARK" LEAF_EXIT=7 bash -c "$RA_CALL" ) >/dev/null 2>"$T/$1.wrap.err"
+    ( cd "$pkg" && LEAF_MARKER="$MARK" LEAF_EXIT=7 bash -c "$RA_CALL" ) >/dev/null 2>"$T/$1.wrap.err"
     RC=$?
-    [ "$crc" -eq 2 ] && [ ! -f "$T/$1/wp-fx-admitted.js" ] || good=0
+    [ "$crc" -eq 2 ] && [ ! -f "$T/$1/wp-fx-admitted.js" ] && [ "$adm" = 0 ] || good=0
     [ "$3" = - ] || err_has "$1" "$3" || good=0
     [ "$RC" -eq 2 ] && [ ! -f "$MARK" ] && grep -qF -- "$4" "$T/$1.wrap.err" || good=0
     if [ "$good" -eq 1 ]; then
-        ok "b15 $1 $2 -> compile exit 2, wrapper exit 2, leaf marker absent"
+        ok "b15 $1 $2 -> compile exit 2 with no admitted ledger row, wrapper exit 2, leaf marker absent"
     else
-        bad "b15 $1 $2 (compile rc=$crc, wrapper rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/$1.err" "$T/$1.wrap.err")"
+        bad "b15 $1 $2 (compile rc=$crc, admitted ledger rows=$adm, wrapper rc=$RC, marker=$([ -f "$MARK" ] && echo yes || echo no)): $(cat "$T/$1.err" "$T/$1.wrap.err")"
     fi
 }
 # evil_commit <parent|-> — a commit of HEAD's tree with the canonical table
@@ -1325,10 +1352,10 @@ case_b15_xvb() {
     "${GITQ[@]}" -C "$RA" replace "$head" "$evil"
     cp "$ADMIT_SRC" "$RA_CANON"
     "${GITQ[@]}" -C "$RA" add -- "$TBL"
-    if [ -z "$("${GITQ[@]}" -C "$RA" status --short --untracked-files=no)" ]; then
-        ok "b15(xv-b) setup: git status is clean under the replaced HEAD"
+    if [ -z "$("${GITQ[@]}" -C "$RA" status --short -- "$TBL")" ]; then
+        ok "b15(xv-b) setup: the table's git status is clean under the replaced HEAD"
     else
-        bad "b15(xv-b) setup: git status is not clean: $("${GITQ[@]}" -C "$RA" status --short --untracked-files=no)"
+        bad "b15(xv-b) setup: the table's git status is not clean: $("${GITQ[@]}" -C "$RA" status --short -- "$TBL")"
     fi
     attack "b15-xvb${XV:-}" "git replace <HEAD> <admitting commit>" "differs from git show HEAD" "differs from git show HEAD"
     "${GITQ[@]}" -C "$RA" replace -d "$head" >/dev/null
@@ -1378,23 +1405,112 @@ case_b15_xvib() { shim b15-xvi-b "shim admitted-ok/scripts/, verbatim call" scri
 case_b15_xvia
 case_b15_xvib
 
+# (xvi-c)/(xvi-d) R3-H1: HARD-LINK and COPY shims in the same fixture directory,
+# on the compile AND the wrapper side. PKG_ROOT follows the admission script's
+# own location, so each would bind the committed fixture table. (xvi-c) is
+# refused by the guard-identity walk alone, (xvi-d) by the script's HEAD
+# binding alone (the untracked path is absent from HEAD).
+SHIM_SCRIPTS=(goalforge-leaf-exec.sh goalforge-admission.py goalforge-second-opinion.sh
+              goalforge-workflow-compile.py goalforge-pick-agent.py)
+SELF_ABSENT="goalforge-admission.py is absent from HEAD"
+RA_HOOK="$RA/.git/hooks/pre-commit"
+shim_clean() { rm -rf "${ADMIT_DIR:?}/scripts" "$ADMIT_DIR/hooks" "$ADMIT_DIR/agents"; }
+# (xvi-c) hard links (same inode, genuine bytes) COMMITTED as setup (like
+# (xvii)), so the script's HEAD binding passes: the link is tracked and
+# byte-equal to its HEAD blob. hooks/ and agents/ are UNTRACKED directory
+# symlinks to the package's own; the guard-identity walk refusing the in-tree
+# hooks/ symlink is the only refusal. The links are made and committed at call
+# time, so under a known-bad they carry (and commit) the mutated bytes.
+XVIC_REL="scripts/tests/fixtures/admission/admitted-ok/scripts"
+case_b15_xvic() {
+    local s rels=()
+    mkdir -p "$ADMIT_DIR/scripts"
+    for s in "${SHIM_SCRIPTS[@]}"; do
+        ln "$RA/scripts/$s" "$ADMIT_DIR/scripts/$s"
+        rels+=("$XVIC_REL/$s")
+    done
+    setup_commit "$RA" "${rels[@]}"
+    ln -s "$RA/hooks" "$ADMIT_DIR/hooks"
+    ln -s "$RA/agents" "$ADMIT_DIR/agents"
+    if [ "$ADMIT_DIR/scripts/goalforge-admission.py" -ef "$RA/scripts/goalforge-admission.py" ] \
+       && cmp -s <("${GITQ[@]}" -C "$RA" show "HEAD:$XVIC_REL/goalforge-admission.py") "$ADMIT_DIR/scripts/goalforge-admission.py" \
+       && ! "${GITQ[@]}" -C "$RA" ls-files --error-unmatch -- "${ADMIT_DIR#"$RA"/}/hooks" >/dev/null 2>&1; then
+        ok "b15(xvi-c) setup: the admission-script hard link is tracked and byte-equal to HEAD, hooks/ untracked"
+    else
+        bad "b15(xvi-c) setup: the hard link is not tracked/byte-equal, or hooks/ is tracked"
+    fi
+    local walk="pre-commit guard $(realpath "$ADMIT_DIR")/hooks/goalforge-pre-commit.sh"
+    ATTACK_PKG="$ADMIT_DIR" attack b15-xvi-c "committed hard-link shim + untracked hooks/ symlink" \
+        "$walk" "$walk"
+    "${GITQ[@]}" -C "$RA" rm -q --cached -- "${rels[@]}"
+    "${GITQ[@]}" -C "$RA" -c core.hooksPath=/dev/null commit -qm "setup" </dev/null >/dev/null 2>&1
+    shim_clean
+    "${GITQ[@]}" -C "$RA" cat-file -e "HEAD:$XVIC_REL/goalforge-admission.py" 2>/dev/null \
+        && bad "b15(xvi-c) teardown: the shim is still in HEAD"
+}
+# (xvi-d) byte-identical copies, hooks/ and agents/ copied as real directories,
+# and (setup only, like (xvii)) the installed marker block also invoking the
+# COPY's hook: the guard identity passes, so the script's HEAD binding is the
+# only refusal.
+case_b15_xvid() {
+    local s copy_hook="$ADMIT_DIR/hooks/goalforge-pre-commit.sh"
+    mkdir -p "$ADMIT_DIR/scripts"
+    for s in "${SHIM_SCRIPTS[@]}"; do cp -p "$RA/scripts/$s" "$ADMIT_DIR/scripts/$s"; done
+    cp -r "$RA/hooks" "$RA/agents" "$ADMIT_DIR/"
+    cp -p "$RA_HOOK" "$T/ra-pre-commit.orig"
+    awk -v p="$copy_hook" '$0 == "# <<< sdd-pre-commit <<<" { printf "bash \"%s\" || exit $?\n", p } { print }' \
+        "$T/ra-pre-commit.orig" > "$RA_HOOK"
+    if grep -qxF "bash \"$copy_hook\" || exit \$?" "$RA_HOOK"; then
+        ok "b15(xvi-d) setup: the marker block also invokes the copy's hook"
+    else
+        bad "b15(xvi-d) setup: the marker block does not invoke the copy's hook"
+    fi
+    ATTACK_PKG="$ADMIT_DIR" attack b15-xvi-d "copy shim, its own hook in the marker block" "$SELF_ABSENT" "$SELF_ABSENT"
+    cp -p "$T/ra-pre-commit.orig" "$RA_HOOK"
+    shim_clean
+}
+case_b15_xvic
+case_b15_xvid
+# (xvi-e) R3-H1 guard identity: in the ADMITTING replica, the package's own
+# guard file replaced by an in-tree symlink to an untracked no-op hook. The
+# installed marker path then resolves to the no-op, so a realpath identity
+# passes while `git commit` runs nothing; the walk refuses the symlink.
+case_b15_xvie() {
+    local hook="$R/hooks/goalforge-pre-commit.sh"
+    mv "$hook" "$T/pre-commit-hook.real"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$R/hooks/noop-pre-commit.sh"
+    ln -s noop-pre-commit.sh "$hook"
+    ATTACK_PKG="$R" ATTACK_REPO="$R" attack b15-xvi-e "guard file -> in-tree symlink to a no-op hook" \
+        "pre-commit guard" "pre-commit guard"
+    rm -f "$hook" "$R/hooks/noop-pre-commit.sh"
+    mv "$T/pre-commit-hook.real" "$hook"
+}
+case_b15_xvie
+
 # (xvii) v15 (c): core.worktree forged BELOW the package (setup only) turns the
-# in-tree canonical-table symlink into a resolved "ancestor".
+# in-tree canonical-table symlink into a resolved "ancestor". The top level is
+# <pkg>/scripts, the one directory below the package that holds the admission
+# script; a setup commit of a copy at the rel the script's HEAD binding then
+# computes keeps that binding satisfied, so the containment check is the only
+# refusal.
 case_b15_xvii() {
-    local sub="$RA/sub/scripts/tests/fixtures/admission/admitted-ok/references"
+    local sub="$RA/scripts/scripts/tests/fixtures/admission/admitted-ok/references"
     mkdir -p "$sub"
     cp "$ADMIT_SRC" "$sub/admitted-providers.yaml"
-    ra_canon_link ../sub/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml
-    "${GITQ[@]}" -C "$RA" config core.worktree "$RA/sub"
-    if [ "$("${GITQ[@]}" -C "$RA" config --local --get core.worktree)" = "$RA/sub" ]; then
-        ok "b15(xvii) setup: core.worktree=<pkg>/sub is set repository-local"
+    cp "$RA/$ADM_PY" "$RA/goalforge-admission.py"
+    setup_commit "$RA" goalforge-admission.py
+    ra_canon_link ../scripts/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml
+    "${GITQ[@]}" -C "$RA" config core.worktree "$RA/scripts"
+    if [ "$("${GITQ[@]}" -C "$RA" config --local --get core.worktree)" = "$RA/scripts" ]; then
+        ok "b15(xvii) setup: core.worktree=<pkg>/scripts is set repository-local"
     else
         bad "b15(xvii) setup: core.worktree is not set repository-local"
     fi
-    attack b15-xvii "core.worktree below the package + canonical-table symlink" - \
-        "does not contain the package root"
+    attack b15-xvii "core.worktree below the package + canonical-table symlink" \
+        "does not contain the package root" "does not contain the package root"
     "${GITQ[@]}" -C "$RA" config --unset core.worktree
-    rm -rf "${RA:?}/sub"
+    rm -rf "${RA:?}/scripts/scripts" "$RA/goalforge-admission.py"
+    setup_commit "$RA" goalforge-admission.py
     ra_canon_restore
 }
 case_b15_xvii
@@ -1426,6 +1542,15 @@ RED_ROOT="$RA" red "b15(q) _git without -c core.useReplaceRefs=false, env var ke
     "$ADM_PY:no-replace-config" -- case_b15_xvc
 RED_ROOT="$RA" red "b15(r) no top-level-contains-package check, (xvii)" "marker=yes" \
     "$ADM_PY:no-top-contains-pkg" -- case_b15_xvii
+# R3-H1 known-bads: (s) and (t) single-condition, (u) the 5f071b3 identity.
+RED_ROOT="$RA" red "b15(s) guard identity by realpath, not the walk, (xvi-c)" "marker=yes" \
+    "$ADM_PY:guard-realpath" -- case_b15_xvic
+red "b15(s) guard identity by realpath, not the walk, (xvi-e)" "marker=yes" \
+    "$ADM_PY:guard-realpath" -- case_b15_xvie
+RED_ROOT="$RA" red "b15(t) no HEAD binding of the admission script, (xvi-d)" "marker=yes" \
+    "$ADM_PY:no-tracked-self" -- case_b15_xvid
+RED_ROOT="$RA" red "b15(u) historical lock: the 5f071b3 package identity, (xvi-c)" "marker=yes" \
+    "$ADM_PY:identity-5f071b3" -- case_b15_xvic
 
 # Structural (T13): table-anchor and shared-binding, each with its mutant.
 structural_case() { # <mode>

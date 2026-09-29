@@ -92,6 +92,13 @@ _FULL_REALPATH = (_WALK_CALL, '    walked = Path(os.path.realpath(table_path))\n
 _NO_REPLACE_FLAG = (_REPLACE_FLAG, "")
 # b15 (q): _git without `-c core.useReplaceRefs=false` (the cd3fe47 _git).
 _NO_REPLACE_CONFIG = ('["git", "-c", "core.useReplaceRefs=false", "-C",', '["git", "-C",')
+# b15 (s): the 5f071b3 guard identity, a full realpath of the hook path.
+_GUARD_REALPATH = (
+    '    want = str(_walk_table(PRE_COMMIT_HOOK, table_dir, "pre-commit guard"))\n',
+    "    want = os.path.realpath(PRE_COMMIT_HOOK)\n",
+)
+# b15 (t): the admission script's own HEAD binding dropped.
+_NO_TRACKED_SELF = ("    _bind_own_script(top)\n", "")
 
 MUTATIONS.update({
     # b12 known-bad (n): the full lap-7 N1 code — no entry islink check, a walk
@@ -206,6 +213,15 @@ MUTATIONS.update({
          "            table, klass, provider, model = args.verify_leaf\n"
          '            globals()["ADMITTED_PATH"] = Path(table)\n'),
     ],
+    # b15 known-bad (s), single-condition (R3-H1): the guard identity taken as
+    # realpath(PRE_COMMIT_HOOK), so an in-tree symlinked hook passes.
+    "guard-realpath": _GUARD_REALPATH,
+    # b15 known-bad (t), single-condition (R3-H1): no binding of the admission
+    # script to its tracked HEAD blob, so an untracked copy picks PKG_ROOT.
+    "no-tracked-self": _NO_TRACKED_SELF,
+    # b15 known-bad (u), historical regression lock: the 5f071b3 identity —
+    # both (s) and (t).
+    "identity-5f071b3": [_GUARD_REALPATH, _NO_TRACKED_SELF],
     # b15 known-bad (p), wrapper half: the cd3fe47 $0-derived TABLE argument.
     "wrapper-table-arg": (
         '--verify-leaf "$1"',
@@ -215,7 +231,7 @@ MUTATIONS.update({
     # resolve_admitted_path — fails closed with no work-tree top level.
     "bind-in-resolve-admitted-path": (
         "    target = (Path(raw) if raw else admission.ADMITTED_PATH).resolve()\n",
-        "    target = admission.bind_table(Path(raw) if raw else admission.ADMITTED_PATH).path\n",
+        "    target = admission.bind_table().path\n",
     ),
     # b12 known-bad (o): rule (c) refusing an in-root symlinked directory
     # BETWEEN the leaf root and the entry's directory.
