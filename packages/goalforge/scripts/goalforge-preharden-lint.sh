@@ -40,24 +40,29 @@
 #       `known-bad`/`exit 2`/`sabotage`/… — was removed: a keyword grep on prose
 #       is not evidence a known-bad input exists. Measured on the live corpus it
 #       flagged 7 of 11 rows, several of them compliant.)
-#   V7  static revision check: each `;`/`&`/`|` segment of a task `verify:`
-#       block (`\` continuations joined) whose first word is `git` is split on
-#       whitespace, with no shell evaluation. A token is checked only where it
+#   V7  static revision check: each line of a task `verify:` block (`\`
+#       continuations joined) that has a `git` word gets its quote spans folded,
+#       its inline ` #` comment dropped, then is split on `;`/`&`/`|`; a segment
+#       whose first word is `git` is split on whitespace, with no shell
+#       evaluation. Lines and segments without `git` print nothing. A token is checked only where it
 #       is certainly a revision: every operand of `git rev-parse`, both sides of
 #       an `a..b` / `a...b` range, and sha-shaped or HEAD-shaped positional
 #       operands of show/diff/log/rev-list/merge-base/cat-file/shortlog/
 #       format-patch/range-diff/cherry (value-taking options such as `-S`,
-#       `--grep`, `--format` consume their argument). Each token is resolved by a
+#       `--grep`, `--format` consume their argument; a consumed sha/HEAD/range-
+#       shaped value prints INFO SKIP). Each token is resolved by a
 #       fixed read-only `git rev-parse --verify --quiet <tok>^{object}` that this
 #       lint invokes itself (argv, no shell) inside the WP's own repository, with
 #       git's local environment (`git rev-parse --local-env-vars`) cleared. An
 #       unresolvable token is an ERROR. NO part of a verify block is ever run.
 #       Everything undecidable prints an INFO SKIP line instead: shell expansion,
 #       `rev:path`, globs, `^@` / `^-` shorthands, other positionals,
-#       backslash-escaped quotes and `$'` ANSI-C quoting (segment not checked),
+#       backslash-escaped quotes and `$'` ANSI-C quoting (line not checked),
 #       heredocs (a line containing `<<`: its remainder and the body through the
 #       delimiter line are not checked; unparsable delimiter skips the rest),
-#       `-C`/`--git-dir`/`--work-tree`, rev-parse path modes (`--git-path`, …),
+#       `-C`/`--git-dir`/`--work-tree`, any git segment after a `cd`/`pushd`
+#       in the block, a comment that mentions git, a partial-clone WP repo
+#       (resolution could lazily fetch), rev-parse path modes (`--git-path`, …),
 #       other subcommands, and `git` that is not the segment's first word. Every
 #       block prints an INFO count line and a WP with no verify blocks (schema-6
 #       WPs carry none) prints INFO too, so "passed" and "never ran" differ.
@@ -395,8 +400,10 @@ for ln in fm:
         if m:
             val = m.group(1).strip()
             if val.startswith('['):
-                for item in re.findall(r'"((?:[^"\\]|\\.)*)"|\'([^\']*)\'', val):
-                    print("CONSTRAINT:" + (item[0] or item[1]))
+                for item in re.findall(r'"((?:[^"\\]|\\.)*)"|\'([^\']*)\'|([^,\[\]"\']+)', val):
+                    item = (item[0] or item[1] or item[2]).strip()
+                    if item:
+                        print("CONSTRAINT:" + item)
             else:
                 in_con = True
         continue
@@ -414,17 +421,16 @@ V7_UNSAFE='[][$`()*?<>:\\!]'
 V7_QUOTED='@V7QUOTED@'
 V7_QUOTE_RE="^([^\"']*)(\"[^\"]*\"|'[^']*')(.*)\$"
 # Options of the parsed subcommands that consume the next word as their value.
-V7_VALUE_OPTS=' -S -G -n -e -L -O -o --grep --author --committer --format --since --until --after --before --skip --max-count --default --diff-filter --date --encoding --output '
+V7_VALUE_OPTS=' -S -G -n -L -O -o --grep --author --committer --format --since --until --after --before --skip --max-count --default --diff-filter --date --encoding --output '
 # rev-parse options after which operands are no longer revisions.
 V7_REVPARSE_MODES=' --git-path --prefix --resolve-git-dir --sq-quote --parseopt '
+V7_GIT_WORD='(^|[^[:alnum:]_./-])git([[:space:]]|$)'
 
 # The only git invocation V7 makes: fixed argv, read-only, with git's whole
 # repository-locating environment (`git rev-parse --local-env-vars`) cleared.
 V7_ENV_UNSET=()
 while IFS= read -r _v; do [ -n "$_v" ] && V7_ENV_UNSET+=(-u "$_v"); done \
     < <(git rev-parse --local-env-vars 2>/dev/null)
-[ "${#V7_ENV_UNSET[@]}" -gt 0 ] || V7_ENV_UNSET=(-u GIT_DIR -u GIT_COMMON_DIR -u GIT_WORK_TREE \
-    -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES)
 v7_git() { env "${V7_ENV_UNSET[@]}" git "$@"; }
 
 # One operand word. $2=1: every operand is a revision (rev-parse); $2=0: only a
@@ -450,10 +456,11 @@ v7_operand() {
 
 # stdin: verify-block command lines. Prints `REV:<tok>` for each token that is
 # certainly a revision and `SKIP:<text>` for anything it cannot decide. Only
-# heredoc skipping, quote-span folding and whitespace splitting on `;`/`&`/`|`-separated
-# segments: nothing is expanded or evaluated.
+# heredoc skipping, quote-span folding, comment dropping and whitespace splitting
+# on `;`/`&`/`|`-separated segments: nothing is expanded or evaluated.
 v7_tokens() {
     local ln pre rest delim dash body=0
+    V7_CD=0
     local hd_re="<<(-?)[[:space:]]*\\\\?(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\\2"
     while IFS= read -r ln; do
         if [ "$body" = 1 ]; then
@@ -473,75 +480,89 @@ v7_tokens() {
             fi
             body=1
             # The text before the heredoc operator is still ordinary command text.
-            [ "$ln" = "$rest" ] && printf '%s\n' "$pre" | tr ';&|' '\n\n\n' | v7_segments
+            [ "$ln" = "$rest" ] && v7_line "$pre"
             continue
         fi
-        printf '%s\n' "$ln" | tr ';&|' '\n\n\n' | v7_segments
+        v7_line "$ln"
     done < <(sed -e ':a' -e '/\\$/{N;s/\\\n/ /;ba' -e '}')
 }
 
-# stdin: one `;`/`&`/`|`-separated segment per line.
-v7_segments() {
-    local seg rest i sub w any
+# One command line. A line with no `git` word is not looked at. Quote spans are
+# folded into one opaque word each BEFORE the comment cut and the `;`/`&`/`|`
+# split, so a separator or `#` inside quotes neither splits nor comments.
+v7_line() {
+    local ln="$1" rest seg
+    local -a segs
+    [[ "$ln" =~ $V7_GIT_WORD ]] || return 0
+    if [[ "$ln" =~ \\[\"\'] || "$ln" == *'$'\'* ]]; then
+        echo "SKIP:$ln (escaped or ANSI-C quoting)"; return
+    fi
+    rest="$ln"
+    while [[ "$rest" =~ $V7_QUOTE_RE ]]; do
+        rest="${BASH_REMATCH[1]}$V7_QUOTED${BASH_REMATCH[3]}"
+    done
+    if [[ "$rest" == *[\"\']* ]]; then echo "SKIP:$ln (unpaired quote)"; return; fi
+    if [[ "$rest" =~ [[:space:]]#(.*) ]]; then
+        [[ "${BASH_REMATCH[1]}" =~ $V7_GIT_WORD ]] && echo "SKIP:#${BASH_REMATCH[1]} (comment)"
+        rest="${rest%%[[:space:]]#*}"
+    fi
+    IFS=';&|' read -ra segs <<<"$rest"
+    for seg in "${segs[@]}"; do v7_segment "$seg"; done
+}
+
+# One `;`/`&`/`|`-separated segment. A `cd` makes every later git segment of the
+# block SKIP (the gate would run in another repository).
+v7_segment() {
+    local i sub w v any
     local -a words
-    while IFS= read -r seg; do
-        # Backslash-escaped quotes and ANSI-C quoting defeat the span folding
-        # below, so such a segment is not checked at all.
-        if [[ "$seg" =~ \\[\"\'] || "$seg" == *'$'\'* ]]; then
-            echo "SKIP:$seg (escaped or ANSI-C quoting)"; continue
-        fi
-        # Each paired quoted span becomes one opaque word, so a value option
-        # consumes all of it and nothing inside is read as a revision; a quote
-        # left unpaired (e.g. split by `;`/`|` above) makes the segment SKIP.
-        rest="$seg"
-        while [[ "$rest" =~ $V7_QUOTE_RE ]]; do
-            rest="${BASH_REMATCH[1]}$V7_QUOTED${BASH_REMATCH[3]}"
-        done
-        if [[ "$rest" == *[\"\']* ]]; then echo "SKIP:$seg (unpaired quote)"; continue; fi
-        read -ra words <<<"$rest"
-        [ "${#words[@]}" -gt 0 ] || continue
-        if [ "${words[0]}" != git ]; then
-            [[ "$seg" =~ (^|[^[:alnum:]_./-])git([[:space:]]|$) ]] && echo "SKIP:${words[*]} (git is not the first word)"
-            continue
-        fi
-        i=1
-        while [ "$i" -lt "${#words[@]}" ]; do
-            case "${words[$i]}" in
-                -C|--git-dir|--git-dir=*|--work-tree|--work-tree=*)
-                    echo "SKIP:${words[*]} (repository redirected)"; continue 2 ;;
-                -c) i=$((i+2)) ;;
-                -*) i=$((i+1)) ;;
-                *) break ;;
-            esac
-        done
-        sub="${words[$i]:-}"
-        case "$sub" in
-            "") continue ;;
-            rev-parse) any=1 ;;
-            show|diff|log|rev-list|merge-base|cat-file|shortlog|format-patch|range-diff|cherry) any=0 ;;
-            *) echo "SKIP:git $sub (subcommand not parsed)"; continue ;;
+    read -ra words <<<"$1"
+    [ "${#words[@]}" -gt 0 ] || return 0
+    case "${words[0]}" in cd|pushd) V7_CD=1; return ;; esac
+    [[ "$1" =~ $V7_GIT_WORD ]] || return 0
+    [ "$V7_CD" = 0 ] || { echo "SKIP:${words[*]} (after cd)"; return; }
+    [ "${words[0]}" = git ] || { echo "SKIP:${words[*]} (git is not the first word)"; return; }
+    i=1
+    while [ "$i" -lt "${#words[@]}" ]; do
+        case "${words[$i]}" in
+            -C|--git-dir|--git-dir=*|--work-tree|--work-tree=*)
+                echo "SKIP:${words[*]} (repository redirected)"; return ;;
+            -c) i=$((i+2)) ;;
+            -*) i=$((i+1)) ;;
+            *) break ;;
         esac
-        i=$((i+1))
-        while [ "$i" -lt "${#words[@]}" ]; do
-            w="${words[$i]}"; i=$((i+1))
-            [ "$w" = -- ] && break
-            if [ "$any" = 1 ] && [[ "$V7_REVPARSE_MODES" == *" ${w%%=*} "* ]]; then
-                echo "SKIP:${words[*]} (rev-parse $w)"; continue 2
-            fi
-            case "$w" in
-                '>'|'>>'|'<'|[0-9]'>'|'&>') i=$((i+1)) ;;
-                *'>'*|*'<'*) : ;;
-                -*) [[ "$V7_VALUE_OPTS" == *" $w "* ]] && i=$((i+1)) ;;
-                *) v7_operand "$w" "$any" ;;
-            esac
-        done
+    done
+    sub="${words[$i]:-}"
+    case "$sub" in
+        "") return ;;
+        rev-parse) any=1 ;;
+        show|diff|log|rev-list|merge-base|cat-file|shortlog|format-patch|range-diff|cherry) any=0 ;;
+        *) echo "SKIP:git $sub (subcommand not parsed)"; return ;;
+    esac
+    i=$((i+1))
+    while [ "$i" -lt "${#words[@]}" ]; do
+        w="${words[$i]}"; i=$((i+1))
+        [ "$w" = -- ] && break
+        if [ "$any" = 1 ] && [[ "$V7_REVPARSE_MODES" == *" ${w%%=*} "* ]]; then
+            echo "SKIP:${words[*]} (rev-parse $w)"; return
+        fi
+        case "$w" in
+            '>'|'>>'|'<'|[0-9]'>'|'&>') i=$((i+1)) ;;
+            *'>'*|*'<'*) : ;;
+            -*) [[ "$V7_VALUE_OPTS" == *" $w "* ]] || continue
+                # A consumed value never passes silently if it looks like a revision.
+                v="${words[$i]:-}"; i=$((i+1))
+                [[ "$v" == *..* || "$v" =~ $V7_SHA_RE || "$v" =~ $V7_HEAD_RE ]] && echo "SKIP:$w $v (option value)" ;;
+            *) v7_operand "$w" "$any" ;;
+        esac
     done
 }
 
 lint_wp_gates() {
-    local wp="$1" wpn f base cmds toks t tok n blocks=0 in_repo=1
+    local wp="$1" wpn f base cmds toks t tok n blocks=0 in_repo=1 partial=0
     wpn="$(basename -- "$wp")"
     v7_git -C "$wp" rev-parse --git-dir >/dev/null 2>&1 || in_repo=0
+    # A partial clone would lazily fetch a missing object (a write + network).
+    [ -z "$(v7_git -C "$wp" config --get extensions.partialClone 2>/dev/null)" ] || partial=1
     for f in "$wp"/task-*.md; do
         [ -f "$f" ] || continue
         base="$(basename -- "$f")"
@@ -559,6 +580,9 @@ lint_wp_gates() {
             fi
             t="${tok#^}"; t="${t%^\{commit\}}"; t="${t%^\{\}}"
             case "$t" in ""|-*) continue ;; esac
+            if [ "$partial" -eq 1 ]; then
+                echo "INFO [V7] $wpn: $base: token \`$tok\` not resolved (partial clone)"; continue
+            fi
             n=$((n+1))
             if [ "$in_repo" -eq 0 ]; then
                 err V7 "$wpn: $base: names revision \`$tok\` but $wpn is not inside a git repository"

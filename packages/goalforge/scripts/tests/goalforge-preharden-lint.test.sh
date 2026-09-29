@@ -165,6 +165,28 @@ mkwp v7-bad-after-heredoc  '' "cat >/dev/null <<'EOF'
   git show deadbeef1234
   EOF
   git show cafebabe5678"
+# Verify r2 (r4 round): one single-line case per tokenizer rule that a mutant
+# survived; each flips verdict if its rule is dropped.
+mkwp v7-bad-sha7           '' "git show abc1234"
+mkwp v7-bad-merge-head     '' "git show MERGE_HEAD"
+mkwp v7-bad-semicolon      '' "true; git show deadbeef1234"
+mkwp v7-bad-pipe           '' "echo x | git show cafebabe1234"
+mkwp v7-bad-dash-c         '' "git -c core.pager=cat show deadbeef1234"
+mkwp v7-bad-cat-file-e     '' "git cat-file -e deadbeef1234"
+mkwp v7-bad-quoted-sep     '' "git log --grep 'a;b' deadbeef1234"
+mkwp v7-good-git-dir       '' "git --git-dir=../o/.git show deadbeef1234"
+mkwp v7-good-prefix        '' "git rev-parse --prefix sub HEAD"
+mkwp v7-good-n-value       '' "git log -n 1234567 HEAD"
+mkwp v7-good-redirect      '' "git log HEAD > deadbeef1234"
+mkwp v7-good-dotdot-path   '' "git diff HEAD ../x"
+mkwp v7-good-quoted-word   '' "git rev-parse --verify \"HEAD\""
+mkwp v7-good-bang          '' "git rev-parse HEAD^!"
+mkwp v7-good-dashdash      '' "git log HEAD -- deadbeef1234"
+mkwp v7-good-comment       '' "git rev-parse --verify HEAD  # base must exist"
+mkwp v7-good-cd            '' "cd ../other && git show deadbeef1234"
+mkwp v7-good-quoted-sep    '' "grep -q 'a; git show deadbeef1234; b' run.sh"
+mkwp v7-good-no-git-noise  '' "python3 -c \"a; b\" | grep 'x|y' run.sh; grep -q a\\\"b run.sh"
+mkwp v8-unquoted-flow      '[Preserve `<missing>`]' ''
 mkwp v8-placeholder    '["baseline pinned at <base_sha>"]' ''
 mkwp v8-missing-artifact '["the contract in `docs/no-such-contract.md` stays unchanged"]' ''
 mkwp v2-git-external   '["baseline pinned at <sha>, contract `overview.md`"]' \
@@ -223,7 +245,45 @@ v7-probes-good|0||
 v7-bad-after-quote|2|V7|unresolvable revision `deadbeef1234`
 v7-bad-after-heredoc|2|V7|unresolvable revision `cafebabe5678`
 pi-prose-quote|0||
+v7-bad-sha7|2|V7|unresolvable revision `abc1234`
+v7-bad-merge-head|2|V7|unresolvable revision `MERGE_HEAD`
+v7-bad-semicolon|2|V7|unresolvable revision `deadbeef1234`
+v7-bad-pipe|2|V7|unresolvable revision `cafebabe1234`
+v7-bad-dash-c|2|V7|unresolvable revision `deadbeef1234`
+v7-bad-cat-file-e|2|V7|unresolvable revision `deadbeef1234`
+v7-bad-quoted-sep|2|V7|unresolvable revision `deadbeef1234`
+v7-good-git-dir|0||
+v7-good-prefix|0||
+v7-good-n-value|0||
+v7-good-redirect|0||
+v7-good-dotdot-path|0||
+v7-good-quoted-word|0||
+v7-good-bang|0||
+v7-good-dashdash|0||
+v7-good-comment|0||
+v7-good-cd|0||
+v7-good-quoted-sep|0||
+v7-good-no-git-noise|0||
+v8-unquoted-flow|2|V8|placeholder <missing>
 CASES
+# SKIP noise: text with no git word outside quotes prints no token line at all.
+for c in v7-good-quoted-sep v7-good-no-git-noise; do
+    OUT="$(bash "$LINT" "$W/$c" 2>&1)"
+    printf '%s' "$OUT" | grep -qF 'not statically checkable' && bad "$c: prints a SKIP line: $OUT" \
+        || ok "$c: no SKIP line for text without a git word"
+done
+# A consumed revision-shaped option value is announced, never silent.
+OUT="$(bash "$LINT" "$W/v7-good-n-value" 2>&1)"
+printf '%s' "$OUT" | grep -qF -- '`-n 1234567 (option value)`' && ok "v7-good-n-value: consumed sha-shaped value is an INFO SKIP" \
+    || bad "v7-good-n-value: no option-value SKIP: $OUT"
+# Partial clone: resolution would lazily fetch, so tokens are SKIPped, not resolved.
+P="$FIX_TMP_ROOT/partial"
+mkdir -p "$P" && cp -r "$W/v7-bad-sha-positional" "$P/" && git -C "$P" init -q \
+    && git -C "$P" config core.repositoryformatversion 1 && git -C "$P" config extensions.partialClone origin \
+    || bad "partial-clone fixture could not be created"
+OUT="$(bash "$LINT" "$P/v7-bad-sha-positional" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && printf '%s' "$OUT" | grep -qF '`deadbeef1234` not resolved (partial clone)' \
+    && ok "partial clone: token SKIPped, exit 0" || bad "partial clone (rc=$rc): $OUT"
 # b2 oracle note (verify r1, D7): the oracle's "pre-WP script" arm is not run
 # here; the why-string asserts above prove each rejection comes from V7/V8.
 for c in "v7-skip-dash-C|(repository redirected)" "v7-skip-not-first|(git is not the first word)" \
