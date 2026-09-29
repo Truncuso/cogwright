@@ -40,22 +40,33 @@
 #       `known-bad`/`exit 2`/`sabotage`/… — was removed: a keyword grep on prose
 #       is not evidence a known-bad input exists. Measured on the live corpus it
 #       flagged 7 of 11 rows, several of them compliant.)
-#   V7  static revision check: every `git` command in a task `verify:` block is
-#       parsed (whitespace split, no shell evaluation) for revision tokens —
-#       every operand of `git rev-parse`, plus sha-shaped, HEAD-shaped and
-#       `a..b` / `a...b` operands of any other git subcommand. Each token is
-#       resolved by a fixed read-only `git rev-parse --verify --quiet
-#       <tok>^{commit}` that this lint invokes itself (argv, no shell, no author
-#       text interpolated into a shell string) inside the WP's own repository. An
+#   V7  static revision check: each `;`/`&`/`|` segment of a task `verify:`
+#       block (`\` continuations joined) whose first word is `git` is split on
+#       whitespace, with no shell evaluation. A token is checked only where it
+#       is certainly a revision: every operand of `git rev-parse`, both sides of
+#       an `a..b` / `a...b` range, and sha-shaped or HEAD-shaped positional
+#       operands of show/diff/log/rev-list/merge-base/cat-file/shortlog/
+#       format-patch/range-diff/cherry (value-taking options such as `-S`,
+#       `--grep`, `--format` consume their argument). Each token is resolved by a
+#       fixed read-only `git rev-parse --verify --quiet <tok>^{object}` that this
+#       lint invokes itself (argv, no shell) inside the WP's own repository, with
+#       git's local environment (`git rev-parse --local-env-vars`) cleared. An
 #       unresolvable token is an ERROR. NO part of a verify block is ever run.
-#       Every block prints an INFO line saying how many tokens were checked and
-#       that the gate did not run; a token it cannot check statically (shell
-#       expansion, `rev:path`, glob) and a WP with no verify blocks (schema-6 WPs
-#       carry none) print INFO too, so "passed" and "never ran" read differently.
-#   PI  path-idiom findings: goalforge-path-idiom-lint.sh is run over the WP dir
-#       (OQ5 wiring). Each finding is relayed as `WARN [PIn] <file>:<line>: ...`
-#       (WARN channel, exit 1, as the path-idiom lint's own exit 1); an
-#       unreadable input (its exit 2) is `ERROR [PI]`.
+#       Everything undecidable prints an INFO SKIP line instead: shell expansion,
+#       `rev:path`, globs, `^@` / `^-` shorthands, other positionals,
+#       backslash-escaped quotes and `$'` ANSI-C quoting (segment not checked),
+#       heredocs (a line containing `<<`: its remainder and the body through the
+#       delimiter line are not checked; unparsable delimiter skips the rest),
+#       `-C`/`--git-dir`/`--work-tree`, rev-parse path modes (`--git-path`, …),
+#       other subcommands, and `git` that is not the segment's first word. Every
+#       block prints an INFO count line and a WP with no verify blocks (schema-6
+#       WPs carry none) prints INFO too, so "passed" and "never ran" differ.
+#   PI  path-idiom findings: goalforge-path-idiom-lint.sh --fenced-only runs over
+#       the WP's overview.md and task-*.md (the set P1 scans), so quotations in
+#       prose, findings.md, sources/ and verify/ are not linted (OQ5 wiring,
+#       bounded 2026-09-29). Each finding is relayed as `WARN [PIn]
+#       <file>:<line>: ...` (WARN channel, exit 1); PI2 is dropped since P1 owns
+#       `$CLAUDE_PLUGIN_ROOT` there; an unreadable input is `ERROR [PI]`.
 #   V8  resolve the referent: every `<placeholder>`-shaped token in
 #       `goal.constraints` must name a populated top-level frontmatter field of
 #       the WP, and every backticked file-shaped token (contains `/` or ends in
@@ -71,7 +82,8 @@
 #       from the WARN channel.
 # Offline, deterministic, read-only, no LLM. Executes no text taken from a WP: its
 # only subprocesses are fixed argv invocations (python3 frontmatter parsers,
-# sibling lints, `git rev-parse --verify --quiet`). sdd-* diagnostic prefix per
+# sibling lints, `git rev-parse --verify --quiet`, `git rev-parse --local-env-vars`).
+# sdd-* diagnostic prefix per
 # CLI-surface freeze.
 set -uo pipefail
 
@@ -340,9 +352,8 @@ lint_wp_verification() {
     esac
 }
 
-# V8 helper — prints the WP overview's goal.verification.strategy (STRATEGY:)
-# and one CONSTRAINT: line per goal.constraints entry (flow or block list), and
-# one FIELD:<key>=<value> line per top-level frontmatter scalar.
+# V8 helper — prints one CONSTRAINT: line per goal.constraints entry (flow or
+# block list), and one FIELD:<key>=<value> line per top-level frontmatter scalar.
 extract_goal_refs() {
     python3 - "$1" <<'PY'
 import sys, re
@@ -369,17 +380,16 @@ for ln in fm:
         val = unquote(re.sub(r'\s+#.*$', '', m.group(2)))
         print("FIELD:" + m.group(1) + "=" + val)
 
-in_goal = in_ver = in_con = False
+in_goal = in_con = False
 for ln in fm:
     if re.match(r'^goal:\s*$', ln):
         in_goal = True
         continue
     if in_goal and re.match(r'^[A-Za-z_]', ln):
-        in_goal = in_ver = in_con = False
+        in_goal = in_con = False
     if not in_goal:
         continue
     if re.match(r'^  [A-Za-z_]', ln):
-        in_ver = bool(re.match(r'^  verification:\s*$', ln))
         in_con = False
         m = re.match(r'^  constraints:\s*(.*)$', ln)
         if m:
@@ -390,10 +400,6 @@ for ln in fm:
             else:
                 in_con = True
         continue
-    if in_ver:
-        m = re.match(r'^    strategy:\s*(\S+)', ln)
-        if m:
-            print("STRATEGY:" + unquote(m.group(1)))
     if in_con:
         m = re.match(r'^    - (.*)$', ln)
         if m:
@@ -402,51 +408,134 @@ PY
 }
 
 # V7 — static revision check. Never executes any part of a verify block.
-V7_SHA_RE='^\^?[0-9a-fA-F]{7,40}([~^][0-9]*|\^\{(commit|)\})*$'
-V7_HEAD_RE='^\^?(HEAD|FETCH_HEAD|ORIG_HEAD|MERGE_HEAD)([~^][0-9]*)*$'
-V7_UNSAFE='[][$`()*?<>:\\]'
+V7_SHA_RE='^[0-9a-fA-F]{7,40}([~^][0-9]*)*$'
+V7_HEAD_RE='^(HEAD|FETCH_HEAD|ORIG_HEAD|MERGE_HEAD)([~^][0-9]*)*$'
+V7_UNSAFE='[][$`()*?<>:\\!]'
+V7_QUOTED='@V7QUOTED@'
+V7_QUOTE_RE="^([^\"']*)(\"[^\"]*\"|'[^']*')(.*)\$"
+# Options of the parsed subcommands that consume the next word as their value.
+V7_VALUE_OPTS=' -S -G -n -e -L -O -o --grep --author --committer --format --since --until --after --before --skip --max-count --default --diff-filter --date --encoding --output '
+# rev-parse options after which operands are no longer revisions.
+V7_REVPARSE_MODES=' --git-path --prefix --resolve-git-dir --sq-quote --parseopt '
 
-# The only git invocation V7 makes: fixed argv, read-only, ambient GIT_* redirection cleared.
-v7_git() {
-    env -u GIT_DIR -u GIT_WORK_TREE -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY \
-        -u GIT_ALTERNATE_OBJECT_DIRECTORIES git "$@"
+# The only git invocation V7 makes: fixed argv, read-only, with git's whole
+# repository-locating environment (`git rev-parse --local-env-vars`) cleared.
+V7_ENV_UNSET=()
+while IFS= read -r _v; do [ -n "$_v" ] && V7_ENV_UNSET+=(-u "$_v"); done \
+    < <(git rev-parse --local-env-vars 2>/dev/null)
+[ "${#V7_ENV_UNSET[@]}" -gt 0 ] || V7_ENV_UNSET=(-u GIT_DIR -u GIT_COMMON_DIR -u GIT_WORK_TREE \
+    -u GIT_INDEX_FILE -u GIT_OBJECT_DIRECTORY -u GIT_ALTERNATE_OBJECT_DIRECTORIES)
+v7_git() { env "${V7_ENV_UNSET[@]}" git "$@"; }
+
+# One operand word. $2=1: every operand is a revision (rev-parse); $2=0: only a
+# range or a sha/HEAD-shaped word is certainly one. Prints REV:/SKIP: lines.
+v7_operand() {
+    local w="$1" t a b
+    if [[ "$w" == *"$V7_QUOTED"* ]]; then echo "SKIP:$w (quoted text)"; return; fi
+    t="${w#^}"; t="${t%^\{commit\}}"; t="${t%^\{\}}"
+    if [[ "$t" =~ $V7_UNSAFE || "$t" == *'^@'* || "$t" == *'^-'* ]]; then
+        echo "SKIP:$w"; return
+    fi
+    if [[ "$t" == *..* ]]; then
+        case "$t" in .*|*/..*|*../*) echo "SKIP:$w"; return ;; esac
+        a="${t%%..*}"; b="${t#*..}"; b="${b#.}"
+        [ -z "$a" ] || echo "REV:$a"
+        [ -z "$b" ] || echo "REV:$b"
+    elif [ "$2" = 1 ] || [[ "$t" =~ $V7_SHA_RE || "$t" =~ $V7_HEAD_RE ]]; then
+        echo "REV:$w"
+    else
+        echo "SKIP:$w"
+    fi
 }
 
-# stdin: verify-block command lines. Prints `REV:<tok>` for each revision token
-# and `SKIP:<tok>` for a candidate it cannot check statically. Only whitespace
-# splitting: nothing is expanded or evaluated.
+# stdin: verify-block command lines. Prints `REV:<tok>` for each token that is
+# certainly a revision and `SKIP:<text>` for anything it cannot decide. Only
+# heredoc skipping, quote-span folding and whitespace splitting on `;`/`&`/`|`-separated
+# segments: nothing is expanded or evaluated.
 v7_tokens() {
-    local seg i sub w a b
+    local ln pre rest delim dash body=0
+    local hd_re="<<(-?)[[:space:]]*\\\\?(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\\2"
+    while IFS= read -r ln; do
+        if [ "$body" = 1 ]; then
+            # Inside a heredoc body: skip up to and including the delimiter line.
+            [ -z "$delim" ] && continue
+            [ "$dash" = 1 ] && ln="${ln#"${ln%%[!$'\t']*}"}"
+            [ "$ln" = "$delim" ] && body=0
+            continue
+        fi
+        rest="${ln//<<</}"
+        if [[ "$rest" == *'<<'* ]]; then
+            echo "SKIP:$ln (heredoc)"
+            pre="${ln%%<<*}"
+            delim=""; dash=0
+            if [[ "$rest" =~ $hd_re ]]; then
+                delim="${BASH_REMATCH[3]}"; [ -n "${BASH_REMATCH[1]}" ] && dash=1
+            fi
+            body=1
+            # The text before the heredoc operator is still ordinary command text.
+            [ "$ln" = "$rest" ] && printf '%s\n' "$pre" | tr ';&|' '\n\n\n' | v7_segments
+            continue
+        fi
+        printf '%s\n' "$ln" | tr ';&|' '\n\n\n' | v7_segments
+    done < <(sed -e ':a' -e '/\\$/{N;s/\\\n/ /;ba' -e '}')
+}
+
+# stdin: one `;`/`&`/`|`-separated segment per line.
+v7_segments() {
+    local seg rest i sub w any
     local -a words
     while IFS= read -r seg; do
-        read -ra words <<<"$seg"
-        [ "${#words[@]}" -gt 0 ] && [ "${words[0]}" = git ] || continue
+        # Backslash-escaped quotes and ANSI-C quoting defeat the span folding
+        # below, so such a segment is not checked at all.
+        if [[ "$seg" =~ \\[\"\'] || "$seg" == *'$'\'* ]]; then
+            echo "SKIP:$seg (escaped or ANSI-C quoting)"; continue
+        fi
+        # Each paired quoted span becomes one opaque word, so a value option
+        # consumes all of it and nothing inside is read as a revision; a quote
+        # left unpaired (e.g. split by `;`/`|` above) makes the segment SKIP.
+        rest="$seg"
+        while [[ "$rest" =~ $V7_QUOTE_RE ]]; do
+            rest="${BASH_REMATCH[1]}$V7_QUOTED${BASH_REMATCH[3]}"
+        done
+        if [[ "$rest" == *[\"\']* ]]; then echo "SKIP:$seg (unpaired quote)"; continue; fi
+        read -ra words <<<"$rest"
+        [ "${#words[@]}" -gt 0 ] || continue
+        if [ "${words[0]}" != git ]; then
+            [[ "$seg" =~ (^|[^[:alnum:]_./-])git([[:space:]]|$) ]] && echo "SKIP:${words[*]} (git is not the first word)"
+            continue
+        fi
         i=1
         while [ "$i" -lt "${#words[@]}" ]; do
             case "${words[$i]}" in
-                -C|-c) i=$((i+2)) ;;
+                -C|--git-dir|--git-dir=*|--work-tree|--work-tree=*)
+                    echo "SKIP:${words[*]} (repository redirected)"; continue 2 ;;
+                -c) i=$((i+2)) ;;
                 -*) i=$((i+1)) ;;
                 *) break ;;
             esac
         done
         sub="${words[$i]:-}"
-        [ -n "$sub" ] || continue
-        for w in "${words[@]:$((i+1))}"; do
+        case "$sub" in
+            "") continue ;;
+            rev-parse) any=1 ;;
+            show|diff|log|rev-list|merge-base|cat-file|shortlog|format-patch|range-diff|cherry) any=0 ;;
+            *) echo "SKIP:git $sub (subcommand not parsed)"; continue ;;
+        esac
+        i=$((i+1))
+        while [ "$i" -lt "${#words[@]}" ]; do
+            w="${words[$i]}"; i=$((i+1))
             [ "$w" = -- ] && break
-            case "$w" in -*) continue ;; esac
-            w="${w#[\"\']}"; w="${w%[\"\']}"
-            if [ "$sub" = rev-parse ]; then
-                if [[ "$w" =~ $V7_UNSAFE ]]; then echo "SKIP:$w"; else echo "REV:$w"; fi
-            elif [[ "$w" =~ $V7_SHA_RE || "$w" =~ $V7_HEAD_RE ]]; then
-                echo "REV:$w"
-            elif [[ "$w" == *..* && "$w" != */* && "$w" != .* ]]; then
-                if [[ "$w" =~ $V7_UNSAFE ]]; then echo "SKIP:$w"; continue; fi
-                a="${w%%..*}"; b="${w#*..}"; b="${b#.}"
-                [ -z "$a" ] || echo "REV:$a"
-                [ -z "$b" ] || echo "REV:$b"
+            if [ "$any" = 1 ] && [[ "$V7_REVPARSE_MODES" == *" ${w%%=*} "* ]]; then
+                echo "SKIP:${words[*]} (rev-parse $w)"; continue 2
             fi
+            case "$w" in
+                '>'|'>>'|'<'|[0-9]'>'|'&>') i=$((i+1)) ;;
+                *'>'*|*'<'*) : ;;
+                -*) [[ "$V7_VALUE_OPTS" == *" $w "* ]] && i=$((i+1)) ;;
+                *) v7_operand "$w" "$any" ;;
+            esac
         done
-    done < <(tr ';&|' '\n\n\n')
+    done
 }
 
 lint_wp_gates() {
@@ -473,7 +562,7 @@ lint_wp_gates() {
             n=$((n+1))
             if [ "$in_repo" -eq 0 ]; then
                 err V7 "$wpn: $base: names revision \`$tok\` but $wpn is not inside a git repository"
-            elif ! v7_git -C "$wp" rev-parse --verify --quiet "$t^{commit}" >/dev/null 2>&1; then
+            elif ! v7_git -C "$wp" rev-parse --verify --quiet "$t^{object}" >/dev/null 2>&1; then
                 err V7 "$wpn: $base: gate names an unresolvable revision \`$tok\`"
             fi
         done <<EOF
@@ -484,17 +573,23 @@ EOF
     [ "$blocks" -gt 0 ] || echo "INFO [V7] $wpn: no task verify: blocks to check; V7 ran no gate (schema-6 WPs carry none)"
 }
 
-# PI — path-idiom lint over the WP dir (OQ5). Findings ride the WARN channel;
-# an unreadable input (its exit 2) is an ERROR.
+# PI — path-idiom lint over the WP's authored docs (overview.md, task-*.md: the
+# set P1 scans), fenced code blocks only (OQ5, bounded by 2026-09-29 D2).
+# Findings ride the WARN channel; PI2 is dropped because P1 already owns
+# `$CLAUDE_PLUGIN_ROOT` in WP docs; an unreadable input (its exit 2) is an ERROR.
 lint_wp_path_idiom() {
-    local wp="$1" out rc line
-    out="$(bash "$SCRIPT_DIR/goalforge-path-idiom-lint.sh" "$wp" 2>&1)"; rc=$?
+    local wp="$1" out rc line f
+    local -a docs=()
+    for f in "$wp"/overview.md "$wp"/task-*.md; do [ -e "$f" ] && docs+=("$f"); done
+    [ "${#docs[@]}" -gt 0 ] || return 0
+    out="$(bash "$SCRIPT_DIR/goalforge-path-idiom-lint.sh" --fenced-only "${docs[@]}" 2>&1)"; rc=$?
     case "$rc" in
         0) return 0 ;;
         1)
             while IFS= read -r line; do
                 [ -n "$line" ] || continue
                 if [[ "$line" =~ ^(.*:[0-9]+):\ \[(PI[0-9]+)\]\ (.*)$ ]]; then
+                    [ "${BASH_REMATCH[2]}" = PI2 ] && continue
                     warn "${BASH_REMATCH[2]}" "${BASH_REMATCH[1]}: ${BASH_REMATCH[3]}"
                 else
                     warn PI "$line"
@@ -596,7 +691,7 @@ EOF
     lint_wp_behaviors "$wp"
 
     # V7 — static revision check (never runs a gate); V8 — resolve constraint
-    # referents (ERROR channel); PI — path-idiom lint over the WP dir.
+    # referents (ERROR channel); PI — path-idiom lint over the WP's docs.
     lint_wp_gates "$wp"
     lint_wp_referents "$wp"
     lint_wp_path_idiom "$wp"

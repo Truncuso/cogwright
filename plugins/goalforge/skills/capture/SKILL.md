@@ -226,10 +226,6 @@ ceremony is skipped. After Step 5:
    The WP is born `status: spec`, `goal.outcome`/`goal.verification` from the
    capture intent. If either cannot be written measurably, the goal was not small
    — **re-route to `standard`** (note it in the report) and hand off to `goalforge-spec`.
-   If `wp-01-<slug>/` was already authored, it is not deleted and not re-stamped:
-   `goalforge-decompose` skips an existing WP folder without modification, so it stays
-   at `status: spec` as a leftover. Delete the folder before `goalforge-decompose` to
-   have it re-stamped from `spec.md`, or keep it when the spec's first WP has that slug.
 2. **Gate deterministically** (both, typed DATA):
    - `goalforge-validate.sh` — WP goal-block integrity (fatal on malformed);
    - `hooks/goalforge-open-questions-gate.sh --check <wp>/overview.md` — must print `0`.

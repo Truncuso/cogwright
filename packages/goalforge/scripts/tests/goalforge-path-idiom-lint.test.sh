@@ -61,6 +61,36 @@ else
         && ok "b1 unwalkable subdir -> exit 2 naming the directory" || bad "b1 unwalkable subdir -> exit 2 (rc=$rc): $out"
 fi
 
+# ── b1: scan scope (verify r1 D5) and --fenced-only (D2) ─────────────────────
+# A symlinked start dir and a symlinked *.md are scanned; an excluded fixture
+# tree is pruned (an unwalkable dir inside it is never visited); a directory with
+# nothing to scan is an error, not a clean pass.
+mkdir -p "$T/real" "$T/scope" && cp "$FX/bad-literal.md" "$T/real/lit.md"
+ln -s "$T/real" "$T/scope/linkdir"
+out="$(bash "$LINT" "$T/scope/linkdir" 2>&1)"; rc=$?
+[[ "$rc" -eq 1 ]] && grep -qF "$T/scope/linkdir/lit.md:3: [PI1]" <<<"$out" \
+    && ok "b1 symlinked start directory is scanned" || bad "b1 symlinked start dir (rc=$rc): $out"
+mkdir -p "$T/lnk" && ln -s "$T/real/lit.md" "$T/lnk/viafile.md"
+out="$(bash "$LINT" "$T/lnk" 2>&1)"; rc=$?
+[[ "$rc" -eq 1 ]] && grep -qF "$T/lnk/viafile.md:3: [PI1]" <<<"$out" \
+    && ok "b1 symlinked *.md file is scanned" || bad "b1 symlinked *.md (rc=$rc): $out"
+mkdir -p "$T/empty/sub"
+out="$(bash "$LINT" "$T/empty" 2>&1)"; rc=$?
+[[ "$rc" -eq 2 ]] && grep -qF "no *.md to scan under directory: $T/empty" <<<"$out" \
+    && ok "b1 directory with no *.md -> exit 2, not a silent pass" || bad "b1 empty dir -> exit 2 (rc=$rc): $out"
+mkdir -p "$T/pr/evals/fixtures/locked" && printf 'clean\n' >"$T/pr/ok.md" && chmod 000 "$T/pr/evals/fixtures/locked"
+out="$(bash "$LINT" "$T/pr" 2>&1)"; rc=$?
+[[ "$rc" -eq 0 ]] && ok "b1 excluded fixture tree is pruned (unwalkable dir inside it not visited)" \
+    || bad "b1 fixture prune (rc=$rc): $out"
+chmod 755 "$T/pr/evals/fixtures/locked"
+printf 'prose `~/.claude/skills/goalforge/a.md` and $CLAUDE_PLUGIN_ROOT\n\n```text\n~/.claude/skills/goalforge/b.md\n```\n' >"$T/fo.md"
+out="$(bash "$LINT" --fenced-only "$T/fo.md" 2>&1)"; rc=$?
+[[ "$rc" -eq 1 && "$(grep -c . <<<"$out")" -eq 1 ]] && grep -qF "$T/fo.md:4: [PI1]" <<<"$out" \
+    && ok "b1 --fenced-only: prose quotation ignored, fenced literal reported" || bad "b1 --fenced-only (rc=$rc): $out"
+out="$(bash "$LINT" "$T/fo.md" 2>&1)"
+[[ "$(grep -c . <<<"$out")" -eq 3 ]] && ok "b1 default mode still reports the prose lines (fenced-only is opt-in)" \
+    || bad "b1 default mode prose lines: $out"
+
 # ── b1: live tree arm + reintroduced literal ─────────────────────────────────
 if out="$(bash "$LINT" "$PKG" 2>&1)"; then ok "b1 live packages/goalforge tree is clean"
 else bad "b1 live tree is clean"; printf '%s\n' "$out" | sed 's/^/        /'; fi
@@ -72,9 +102,9 @@ if [[ "$rc" -eq 1 ]] && grep -qF -- "$T/pkg/capture/SKILL.md:" <<<"$out" && grep
 else bad "b1 known-bad: reintroduced literal stays green (rc=$rc)"; fi
 
 # ── b1: mutants — each check removed lets its own known-bad through ──────────
-sed 's#^        /\\\$CLAUDE_PLUGIN_ROOT/ {#        0 {#' "$LINT" >"$T/m-pi2.sh"
+sed 's#^        (fence || !fo) \&\& /\\\$CLAUDE_PLUGIN_ROOT/ {#        0 {#' "$LINT" >"$T/m-pi2.sh"
 sed 's#^        fence \&\& shell \&\& #        0 \&\& #' "$LINT" >"$T/m-pi3.sh"
-sed 's#index(\$0, "~/.claude/skills/goalforge")#0#' "$LINT" >"$T/m-pi1.sh"
+sed 's#index(\$0, pi1)#0#' "$LINT" >"$T/m-pi1.sh"
 for m in "pi1 bad-literal.md PI1 3" "pi2 bad-second-idiom.md PI2 4" "pi3 bad-home-fence.md PI3 4"; do
     set -- $m
     if cmp -s "$LINT" "$T/m-$1.sh"; then bad "mutant m-$1 is not a mutant (sed matched nothing)"
@@ -82,6 +112,28 @@ for m in "pi1 bad-literal.md PI1 3" "pi2 bad-second-idiom.md PI2 4" "pi3 bad-hom
     else ok "mutant killed: m-$1 (check $3 removed) lets $2 through"; fi
 done
 
+
+# ── b1: the GENERATED plugin copy (scripts/goalforge-generate.sh output) ─────
+# The generator rewrites author install paths to ${CLAUDE_PLUGIN_ROOT}; the lint
+# must survive that rewrite: sanctioned idiom clean, the literal still PI1.
+PLINT="$PKG/../../plugins/goalforge/scripts/goalforge-path-idiom-lint.sh"
+pi1_lit='~/.claude/skills/'; pi1_lit+=goalforge
+printf '```bash\nbash ${CLAUDE_PLUGIN_ROOT}/scripts/x.sh\n```\n' >"$T/plugin-good.md"
+printf '```bash\ncat %s/references/schema.md\n```\n' "$pi1_lit" >"$T/plugin-bad.md"
+plugin_lint() {  # $1 lint -> 0 when the fenced idiom is clean and the literal is PI1
+    local out
+    out="$(bash "$1" --fenced-only "$T/plugin-good.md" 2>&1)" || { echo "sanctioned idiom flagged: $out"; return 1; }
+    out="$(bash "$1" --fenced-only "$T/plugin-bad.md" 2>&1)"
+    [[ $? -eq 1 ]] && grep -qF "$T/plugin-bad.md:2: [PI1]" <<<"$out" || { echo "literal not PI1: $out"; return 1; }
+}
+if [[ ! -f "$PLINT" ]]; then bad "b1 generated plugin lint missing: $PLINT"
+elif out="$(plugin_lint "$PLINT")"; then ok "b1 generated plugin lint: \${CLAUDE_PLUGIN_ROOT} clean, author literal -> PI1"
+else bad "b1 generated plugin lint: $out"; fi
+# Known-bad: the pre-fix generator output (PI1 literal rewritten to the idiom).
+sed "s|^pi1_lit=.*|pi1_lit='\${CLAUDE_PLUGIN_ROOT}'|" "$PLINT" >"$T/m-plugin-rewritten.sh"
+if cmp -s "$PLINT" "$T/m-plugin-rewritten.sh"; then bad "mutant m-plugin-rewritten is not a mutant"
+elif plugin_lint "$T/m-plugin-rewritten.sh" >/dev/null; then bad "b1 known-bad: rewritten PI1 literal stays green"
+else ok "b1 known-bad: PI1 literal rewritten to \${CLAUDE_PLUGIN_ROOT} -> red"; fi
 # ── b3: route coherence over the wp-11 owned files ───────────────────────────
 OWNED=(
   scripts/goalforge-path-idiom-lint.sh scripts/tests/goalforge-path-idiom-lint.test.sh

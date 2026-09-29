@@ -4,6 +4,9 @@
 # of goalforge-preharden-lint.sh's existing P1/V1-V4 family. Fixtures live
 # under packages/goalforge/evals/fixtures/preharden-lint/ — never inline.
 set -uo pipefail
+# An inherited GIT_DIR / GIT_COMMON_DIR / ... would redirect the fixture repo's
+# own git writes below into whatever repo the caller points at.
+unset $(git rev-parse --local-env-vars)
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LINT="$SD/../goalforge-preharden-lint.sh"
@@ -128,16 +131,60 @@ mkwp v7-side-effect-touch '' "grep -q T1 overview.md && touch $MARK_TOUCH
 mkwp v7-side-effect-commit '' "git commit --allow-empty -qm should-never-land"
 mkwp v7-good-revision  '' "git rev-parse --verify --quiet HEAD"
 mkwp v7-uncheckable    '' "git rev-parse --verify HEAD:overview.md"
+# One condition per kept V7 behavior (each known-bad dies under the mutant that
+# drops that behavior).
+mkwp v7-bad-sha-positional '' "git show --stat deadbeef1234 -- run.sh"
+mkwp v7-bad-head-shaped    '' "git show HEAD~99"
+mkwp v7-bad-triple-dot     '' "git diff HEAD...cafebabe1234"
+mkwp v7-bad-slash-range    '' "git log feature/nope..HEAD"
+mkwp v7-bad-chain          '' "grep -q T1 run.sh && git rev-parse --verify deadbeef1234"
+mkwp v7-bad-continuation   '' "git log --oneline \\
+  deadbeef1234..HEAD"
+mkwp v7-skip-dash-C        '' "git -C . rev-parse --verify deadbeef1234"
+mkwp v7-skip-not-first     '' "command git rev-parse --verify deadbeef1234"
+mkwp v7-skip-parent-short  '' "git rev-parse HEAD^@"
+mkwp v7-wp-repo-tag        '' "git rev-parse --verify fixture-only-tag"
+mkwp v7-env-leak           '' "git rev-parse --verify victim-only-tag"
+# Reviewer probes (verify r1) that used to raise a false ERROR on a correct WP.
+mkwp v7-probes-good        '' "git rev-parse HEAD..HEAD
+  git rev-parse HEAD^{tree}
+  git rev-parse --git-path hooks
+  git grep -q defaced -- run.sh
+  git grep -q 'foo..bar' HEAD
+  git log -S 1234567 --oneline
+  git -C ../other log abc1234..HEAD
+  git log --grep \"was defaced\" HEAD
+  git log --format=\"%h deadbee1\" -1 HEAD
+  git log --author \"Ab Cafe123\" HEAD
+  git log --grep \"a \\\" deadbeef1234 \\\" b\" HEAD
+  cat >/dev/null <<'EOF'
+  git show deadbeef1234
+  EOF"
+mkwp v7-bad-after-quote    '' "git log --grep \"was defaced\" deadbeef1234"
+mkwp v7-bad-after-heredoc  '' "cat >/dev/null <<'EOF'
+  git show deadbeef1234
+  EOF
+  git show cafebabe5678"
 mkwp v8-placeholder    '["baseline pinned at <base_sha>"]' ''
 mkwp v8-missing-artifact '["the contract in `docs/no-such-contract.md` stays unchanged"]' ''
 mkwp v2-git-external   '["baseline pinned at <sha>, contract `overview.md`"]' \
     "grep -q T1 overview.md
   git rev-parse --verify --quiet HEAD"
 mkwp pi-literal        '' ''
-printf '\nSee `~/.claude/skills/goalforge/references/schema.md`.\n' >>"$W/pi-literal/overview.md"
-git -C "$W" init -q && git -C "$W" add -A \
-    && git -C "$W" -c user.name=fixture -c user.email=fixture@example.invalid commit -qm fixture \
+printf '\n```bash\ncat ~/.claude/skills/goalforge/references/schema.md\n```\n' >>"$W/pi-literal/overview.md"
+mkwp pi-prose-quote    '' ''
+printf '\nThe defect is the literal `~/.claude/skills/goalforge/references/schema.md`.\n' >>"$W/pi-prose-quote/overview.md"
+printf '```bash\ncat ~/.claude/skills/goalforge/x.md\n```\n' >"$W/pi-prose-quote/findings.md"
+mkwp pi-p1-owns        '' ''
+printf '\n```bash\nbash $CLAUDE_PLUGIN_ROOT/scripts/x.sh\n```\n' >>"$W/pi-p1-owns/overview.md"
+FIXGIT=(-c user.name=fixture -c user.email=fixture@example.invalid)
+git -C "$W" init -q && git -C "$W" add -A && git -C "$W" "${FIXGIT[@]}" commit -qm fixture \
+    && git -C "$W" tag fixture-only-tag \
     || bad "v78 fixture repo could not be committed"
+# A second repo the WP must never resolve against (cwd and GIT_* leak cases).
+V="$FIX_TMP_ROOT/victim"
+git init -q "$V" && git -C "$V" "${FIXGIT[@]}" commit -q --allow-empty -m victim \
+    && git -C "$V" tag victim-only-tag || bad "victim repo could not be created"
 
 v78() {  # $1 lint, $2 wp, $3 want rc, $4 want check id ('' = no finding), $5 want why substring ('' = any)
     local out rc
@@ -163,7 +210,52 @@ v8-missing-artifact|2|V8|docs/no-such-contract.md
 v2-git-external|0||
 v7-good-revision|0||
 v7-uncheckable|0||
+v7-bad-sha-positional|2|V7|unresolvable revision `deadbeef1234`
+v7-bad-head-shaped|2|V7|unresolvable revision `HEAD~99`
+v7-bad-triple-dot|2|V7|unresolvable revision `cafebabe1234`
+v7-bad-slash-range|2|V7|unresolvable revision `feature/nope`
+v7-bad-chain|2|V7|unresolvable revision `deadbeef1234`
+v7-bad-continuation|2|V7|unresolvable revision `deadbeef1234`
+v7-skip-dash-C|0||
+v7-skip-not-first|0||
+v7-skip-parent-short|0||
+v7-probes-good|0||
+v7-bad-after-quote|2|V7|unresolvable revision `deadbeef1234`
+v7-bad-after-heredoc|2|V7|unresolvable revision `cafebabe5678`
+pi-prose-quote|0||
 CASES
+# b2 oracle note (verify r1, D7): the oracle's "pre-WP script" arm is not run
+# here; the why-string asserts above prove each rejection comes from V7/V8.
+for c in "v7-skip-dash-C|(repository redirected)" "v7-skip-not-first|(git is not the first word)" \
+         'v7-skip-parent-short|`HEAD^@`'; do
+    OUT="$(bash "$LINT" "$W/${c%%|*}" 2>&1)"
+    printf '%s' "$OUT" | grep -qF "INFO [V7] ${c%%|*}: task-01-a.md: token" && printf '%s' "$OUT" | grep -qF "${c#*|}" \
+        && ok "${c%%|*}: INFO SKIP ${c#*|}, no ERROR" || bad "${c%%|*}: INFO SKIP ${c#*|}: $OUT"
+done
+# WP-repo binding: a tag only the WP's repo has resolves with cwd in another repo.
+OUT="$(cd "$V" && bash "$LINT" "$W/v7-wp-repo-tag" 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "v7-wp-repo-tag: resolved in the WP repo with cwd in another repo" \
+    || { bad "v7-wp-repo-tag with cwd in another repo (rc=$rc)"; printf '%s\n' "$OUT" | sed 's/^/        /'; }
+# Env clearing: an inherited GIT_DIR / GIT_COMMON_DIR must not make a revision
+# that exists only in that other repo resolve.
+for ev in GIT_DIR GIT_COMMON_DIR; do
+    OUT="$(env "$ev=$V/.git" bash "$LINT" "$W/v7-env-leak" 2>&1)"; rc=$?
+    [ "$rc" -eq 2 ] && printf '%s' "$OUT" | grep -qF 'unresolvable revision `victim-only-tag`' \
+        && ok "v7-env-leak: $ev leak cleared -> exit 2 naming victim-only-tag" \
+        || { bad "v7-env-leak under $ev (rc=$rc)"; printf '%s\n' "$OUT" | sed 's/^/        /'; }
+done
+# GIT_COMMON_DIR does not redirect ref lookup (the tag arm above is a regression
+# guard) but it does redirect object lookup: probed 2026-09-29, a victim-only
+# commit sha resolves in the WP repo under GIT_COMMON_DIR=<victim>/.git. It is
+# outside the pre-r2 five-variable list, so this arm is what distinguishes the
+# full `--local-env-vars` clearing (GIT_NAMESPACE, GIT_INDEX_FILE, GIT_CONFIG_*,
+# GIT_GRAFT_FILE, GIT_SHALLOW_FILE changed neither tag nor sha resolution).
+VSHA="$(git -C "$V" rev-parse HEAD)"
+mkwp v7-env-leak-sha '' "git rev-parse --verify $VSHA"
+OUT="$(env "GIT_COMMON_DIR=$V/.git" bash "$LINT" "$W/v7-env-leak-sha" 2>&1)"; rc=$?
+[ "$rc" -eq 2 ] && printf '%s' "$OUT" | grep -qF "unresolvable revision \`$VSHA\`" \
+    && ok "v7-env-leak-sha: GIT_COMMON_DIR leak cleared -> exit 2 naming the victim sha" \
+    || { bad "v7-env-leak-sha under GIT_COMMON_DIR (rc=$rc)"; printf '%s\n' "$OUT" | sed 's/^/        /'; }
 # The range fixture's resolvable side (HEAD) must not be blamed.
 OUT="$(bash "$LINT" "$W/v7-bad-range" 2>&1)"
 printf '%s' "$OUT" | grep -q 'unresolvable revision `HEAD`' \
@@ -201,14 +293,19 @@ if [ "$rc" -eq 1 ] && printf '%s' "$OUT" | grep -qE "^WARN \[PI1\] $W/pi-literal
 else bad "pi-literal: PI1 not surfaced (rc=$rc)"; printf '%s\n' "$OUT" | sed 's/^/        /'; fi
 OUT="$(bash "$LINT" "$W/v7-good-revision" 2>&1)"
 printf '%s' "$OUT" | grep -q '\[PI' && bad "clean WP shows a PI finding: $OUT" || ok "clean WP shows no PI finding"
-# D via the wiring: an unreadable *.md is an ERROR (exit 2), not a silent pass.
+# D2: P1 owns $CLAUDE_PLUGIN_ROOT in WP docs; PI2 never reports the same token.
+OUT="$(bash "$LINT" "$W/pi-p1-owns" 2>&1)"; rc=$?
+if [ "$rc" -eq 1 ] && printf '%s' "$OUT" | grep -q '^WARN \[P1\] overview.md' && ! printf '%s' "$OUT" | grep -q '\[PI2\]'; then
+    ok "pi-p1-owns: one P1 finding, no PI2 on the same token"
+else bad "pi-p1-owns: P1 only (rc=$rc)"; printf '%s\n' "$OUT" | sed 's/^/        /'; fi
+# D via the wiring: an unreadable task doc is an ERROR (exit 2), not a silent pass.
 if [ -r "$W" ] && mkdir -p "$W/pi-unreadable" && cp "$W/v7-good-revision/overview.md" "$W/pi-unreadable/overview.md" \
-   && printf 'x\n' >"$W/pi-unreadable/notes.md" && chmod 000 "$W/pi-unreadable/notes.md" && [ ! -r "$W/pi-unreadable/notes.md" ]; then
+   && printf 'x\n' >"$W/pi-unreadable/task-02-b.md" && chmod 000 "$W/pi-unreadable/task-02-b.md" && [ ! -r "$W/pi-unreadable/task-02-b.md" ]; then
     OUT="$(bash "$LINT" "$W/pi-unreadable" 2>&1)"; rc=$?
-    if [ "$rc" -eq 2 ] && printf '%s' "$OUT" | grep -q 'ERROR \[PI\] pi-unreadable: path-idiom lint could not scan (exit 2): .*cannot read file'; then
-        ok "pi-unreadable: unreadable md -> ERROR [PI], exit 2"
+    if [ "$rc" -eq 2 ] && printf '%s' "$OUT" | grep -q 'ERROR \[PI\] pi-unreadable: path-idiom lint could not scan (exit 2): not a readable file'; then
+        ok "pi-unreadable: unreadable task doc -> ERROR [PI], exit 2"
     else bad "pi-unreadable: exit 2 with ERROR [PI] (rc=$rc)"; printf '%s\n' "$OUT" | sed 's/^/        /'; fi
-    chmod 644 "$W/pi-unreadable/notes.md"
+    chmod 644 "$W/pi-unreadable/task-02-b.md"
 else echo "  SKIP: pi-unreadable (cannot make a file unreadable, e.g. running as root)"; fi
 
 for c in V7 V8 PI; do
