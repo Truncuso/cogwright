@@ -23,7 +23,7 @@ LINT="$PKG/scripts/goalforge-path-idiom-lint.sh"
 FX="$PKG/evals/fixtures/path-idiom"
 
 T="$(mktemp -d)"
-trap 'rm -rf "$T"' EXIT
+trap 'chmod -R u+rwx "$T" 2>/dev/null; rm -rf "$T"' EXIT
 PASS=0; FAIL=0
 ok()  { echo "  PASS: $1"; PASS=$((PASS+1)); }
 bad() { echo "  FAIL: $1"; FAIL=$((FAIL+1)); }
@@ -44,6 +44,22 @@ bad_case "$LINT" bad-second-idiom.md PI2 4 && ok "b1 bad-second-idiom.md -> exit
 bad_case "$LINT" bad-home-fence.md PI3 4   && ok "b1 bad-home-fence.md -> exit 1, names file:4 [PI3]"   || bad "b1 bad-home-fence.md -> exit 1 [PI3]"
 bash "$LINT" "$T/no-such-file.md" >/dev/null 2>&1; rc=$?
 [[ "$rc" -eq 2 ]] && ok "b1 unreadable input -> exit 2" || bad "b1 unreadable input -> exit 2 (rc=$rc)"
+
+# An unreadable *.md inside a scanned dir, and an unwalkable subdir, must exit 2
+# (the lint used to exit 0: awk/find failures were swallowed). The why string
+# distinguishes these from the usage-error exit 2. Skipped where chmod cannot
+# make a path unreadable (root).
+mkdir -p "$T/unread/sub" && printf 'clean\n' >"$T/unread/ok.md" && printf 'x\n' >"$T/unread/locked.md" && chmod 000 "$T/unread/locked.md"
+if [[ -r "$T/unread/locked.md" ]]; then echo "  SKIP: unreadable-input cases (chmod cannot restrict this user)"
+else
+    out="$(bash "$LINT" "$T/unread" 2>&1)"; rc=$?
+    [[ "$rc" -eq 2 ]] && grep -qF "cannot read file: $T/unread/locked.md" <<<"$out" \
+        && ok "b1 unreadable *.md in a scanned dir -> exit 2 naming the file" || bad "b1 unreadable *.md -> exit 2 (rc=$rc): $out"
+    mkdir -p "$T/unwalk/locked" && printf 'x\n' >"$T/unwalk/locked/a.md" && chmod 000 "$T/unwalk/locked"
+    out="$(bash "$LINT" "$T/unwalk" 2>&1)"; rc=$?
+    [[ "$rc" -eq 2 ]] && grep -qF "cannot scan directory: $T/unwalk" <<<"$out" \
+        && ok "b1 unwalkable subdir -> exit 2 naming the directory" || bad "b1 unwalkable subdir -> exit 2 (rc=$rc): $out"
+fi
 
 # ── b1: live tree arm + reintroduced literal ─────────────────────────────────
 if out="$(bash "$LINT" "$PKG" 2>&1)"; then ok "b1 live packages/goalforge tree is clean"

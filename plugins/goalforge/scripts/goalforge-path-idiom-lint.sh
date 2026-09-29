@@ -20,18 +20,27 @@
 #
 # Usage: goalforge-path-idiom-lint.sh <file-or-dir>...
 # Output: one line per finding on stdout — `<file>:<line>: [PIn] <message>`.
-# Exit: 0 clean; 1 one or more findings; 2 usage error or unreadable input.
-# Offline, deterministic, no LLM.
+# Exit: 0 clean; 1 one or more findings; 2 usage error or unreadable input — an
+# argument that is not a readable file or directory, a directory `find` cannot
+# fully walk, or a scanned file `awk` cannot read (never a silent exit 0).
+# Offline, deterministic, read-only, no LLM.
 set -uo pipefail
 
 [ "$#" -gt 0 ] || { echo "usage: goalforge-path-idiom-lint.sh <file-or-dir>..." >&2; exit 2; }
 
+listing="$(mktemp)" || exit 2
+trap 'rm -f "$listing"' EXIT
+
 files=()
 for arg in "$@"; do
     if [ -d "$arg" ]; then
-        while IFS= read -r -d '' f; do files+=("$f"); done < <(
-            find "$arg" -type f -name '*.md' \
-                -not -path '*/evals/fixtures/*' -not -path '*/tests/fixtures/*' -print0 | sort -z)
+        # find's status is checked (a pipeline or process substitution would hide it).
+        if ! find "$arg" -type f -name '*.md' \
+                -not -path '*/evals/fixtures/*' -not -path '*/tests/fixtures/*' -print0 >"$listing"; then
+            echo "goalforge-path-idiom-lint: cannot scan directory: $arg" >&2
+            exit 2
+        fi
+        while IFS= read -r -d '' f; do files+=("$f"); done < <(sort -z "$listing")
     elif [ -f "$arg" ] && [ -r "$arg" ]; then
         files+=("$arg")
     else
@@ -57,7 +66,7 @@ for f in "${files[@]}"; do
         fence && shell && /(^|[^[:alnum:]_.~$}])\/(home|Users)\/[^\/[:space:]]+\// {
             printf "%s:%d: [PI3] absolute home path inside a fenced shell block\n", file, NR
         }
-    ' "$f")"
+    ' "$f")" || { echo "goalforge-path-idiom-lint: cannot read file: $f" >&2; exit 2; }
     if [ -n "$out" ]; then
         printf '%s\n' "$out"
         findings=$((findings + $(printf '%s\n' "$out" | wc -l)))
