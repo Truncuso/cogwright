@@ -109,7 +109,7 @@ stages:
     endpoint: session
     egress: none
   second_opinion:                 # the one non-native leg shipped; propose-only FOR THIS ROLE (a second opinion is advice, never a gate decision), model id overridable in wp-05.
-    model: gpt-6-astra            # a PROVIDER model id (codex), not a Claude tier — a tier here exits 2 at the leaf.
+    model: gpt-6-luna             # a PROVIDER model id (codex), not a Claude tier — a tier here exits 2 at the leaf. Pin tracks the paid tier: gpt-6-astra went model_not_found 2026-10-21 (unpaid month); probe before a verify run.
     effort: low
     provider: codex
     endpoint: leaf
