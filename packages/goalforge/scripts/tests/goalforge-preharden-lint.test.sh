@@ -160,6 +160,7 @@ mkwp v7-good-dotdot-path   '' "git diff HEAD ../x
 mkwp v7-good-nonrange-subcmd '' "git grep -q foo..bar HEAD"
 mkwp v7-good-dashdash-range  '' "git log --oneline -- docs/v1..v2.md"
 mkwp v7-good-dashdash-verify '' "git rev-parse --verify HEAD -- file.txt"
+mkwp v7-good-optval '' "git rev-parse --default nosuch --prefix sub --verify HEAD"
 # r5 N2: a heredoc body line starting with git is data, not a command.
 mkwp v7-skip-heredoc       '' "cat > run.sh <<EOF
   git rev-parse --verify no-such-tag
@@ -226,6 +227,7 @@ v7-good-dotdot-path|0||
 v7-good-nonrange-subcmd|0||
 v7-good-dashdash-range|0||
 v7-good-dashdash-verify|0||
+v7-good-optval|0||
 v7-skip-heredoc|0||
 v7-skip-unchecked-range|0||
 pi-prose-quote|0||

@@ -442,12 +442,15 @@ v7_tokens() {
         if [ "${words[0]:-}" != git ]; then echo "SKIP:first word is not git"; continue; fi
         if [[ "$ln" == *[\"\'\$\`\\]* ]]; then echo "SKIP:git line with quoting or expansion"; continue; fi
         if [[ "${words[1]:-}" == -* ]]; then echo "SKIP:git option before the subcommand"; continue; fi
-        verify=0; found=0; unchecked=0; ops=(); ranges=0
+        verify=0; found=0; unchecked=0; ops=(); ranges=0; optval=0
         [[ "${words[1]:-}" =~ $V7_RANGE_SUBCMD_RE ]] && ranges=1
         for w in "${words[@]:2}"; do
             if [[ "$w" == *[\;\&\|\<\>\#]* ]]; then echo "SKIP:text after a shell operator or comment"; break; fi
+            # rev-parse --default/--prefix take a separate value word: never an operand
+            if [ "$optval" = 1 ]; then optval=0; continue; fi
             case "$w" in
                 --) break ;;
+                --default|--prefix) optval=1 ;;
                 --verify) verify=1 ;;
                 -*) ;;
                 *..*) if [ "$ranges" = 1 ]; then
