@@ -186,6 +186,22 @@
       "path": "skills/execute/references/dispatch-resolution.md"
     },
     {
+      "from": "references/harness-dependencies.md",
+      "path": "references/harness-primitives.txt"
+    },
+    {
+      "from": "references/harness-dependencies.md",
+      "path": "scripts/goalforge-doctor.sh"
+    },
+    {
+      "from": "references/harness-dependencies.md",
+      "path": "scripts/goalforge-harness-check.sh"
+    },
+    {
+      "from": "references/harness-dependencies.md",
+      "path": "scripts/tests/goalforge-harness-check.test.sh"
+    },
+    {
       "from": "references/lens-ownership.md",
       "path": "references/expertise-map.yaml"
     },
@@ -347,7 +363,15 @@
     },
     {
       "from": "skills/execute/SKILL.md",
+      "path": "references/harness-dependencies.md"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
       "path": "references/schema.md"
+    },
+    {
+      "from": "skills/execute/SKILL.md",
+      "path": "scripts/goalforge-harness-check.sh"
     },
     {
       "from": "skills/execute/SKILL.md",
@@ -375,7 +399,15 @@
     },
     {
       "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/harness-dependencies.md"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
       "path": "references/tier-map.md"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "scripts/goalforge-harness-check.sh"
     },
     {
       "from": "skills/execute/references/dispatch-resolution.md",

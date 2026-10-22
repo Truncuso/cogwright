@@ -1,0 +1,12 @@
+# Agent tool absent (hard-required)
+Agent tool=absent
+Workflow tool=present
+AskUserQuestion=present
+git=present
+python3=present
+jq=present
+flock=present
+timeout=present
+realpath=present
+tar=present
+PyYAML=present

@@ -181,3 +181,7 @@ exits 2 naming the missing `(task_class, provider, model)` admission.
   decision, the HEAD binding and the wrapper stay with the compile.
 - **Advisor-only.** An implement row whose model is `fable` exits 2 on both
   the admitted and the native path.
+
+## Harness dependencies
+
+Hard-required (the floor): Agent tool, git, python3, jq, flock, timeout, realpath, tar, PyYAML. Degradable: Workflow tool, AskUserQuestion, and the admitted non-native implement row (it follows the Workflow tool: refuse to the first native provider with a WARN). Each has a row in `references/harness-dependencies.md`; `scripts/goalforge-harness-check.sh` runs at execute entry.
