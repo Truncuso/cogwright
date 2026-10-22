@@ -1,6 +1,6 @@
 # Closed vocabulary of harness primitives goalforge declares in
 # references/harness-dependencies.md. One name per line; `#` lines are comments.
-# scripts/tests/goalforge-harness-check.test.sh scans the stage SKILL.md files
+# the goalforge-harness-check test suite scans the stage SKILL.md files
 # and execute/references/dispatch-resolution.md for these names (whole-word,
 # case-sensitive) and requires a table row for every one it finds.
 # Session tools (declared, not probed):

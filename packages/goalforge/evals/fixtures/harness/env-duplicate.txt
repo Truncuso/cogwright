@@ -1,0 +1,5 @@
+# a repeated key must not let the later line win
+Agent tool=absent
+Agent tool=present
+Workflow tool=present
+AskUserQuestion=present

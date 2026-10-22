@@ -198,10 +198,6 @@
       "path": "scripts/goalforge-harness-check.sh"
     },
     {
-      "from": "references/harness-dependencies.md",
-      "path": "scripts/tests/goalforge-harness-check.test.sh"
-    },
-    {
       "from": "references/lens-ownership.md",
       "path": "references/expertise-map.yaml"
     },

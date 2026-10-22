@@ -4,7 +4,8 @@
 #   b1  every vocabulary primitive named in a stage SKILL.md or
 #       dispatch-resolution.md has a row in references/harness-dependencies.md;
 #       the ruled floor, the hard-required set and the two named fallbacks hold.
-#   b2  scripts/goalforge-harness-check.sh exit codes per fixture environment.
+#   b2  scripts/goalforge-harness-check.sh exit codes per fixture environment,
+#       run under a PATH shim so the outcome never depends on the host toolchain.
 #   b3  execute/SKILL.md and dispatch-resolution.md mark every vocabulary
 #       primitive they name and stay within the 125-line cap.
 #   b4  the execute-entry invocation span sits before `## 2` and, extracted and
@@ -38,6 +39,69 @@ table_rows() {
       printf "%s\t%s\t%s\t%s\t%s\t%s\n",t($2),t($3),t($4),t($5),t($6),t($7)}' "$1"
 }
 live_files() { ls "$PKG"/*/SKILL.md; echo "$DISP"; }
+
+# make_env <dir> [--without <cmd>]... [--no-pyyaml]
+# A PATH directory for the checker: real awk/grep/dirname/bash, stub exit-0
+# toolchain commands, and a python3 that either passes `import yaml` (stub) or
+# is the real interpreter with site-packages cut off (--no-pyyaml). A --without
+# command is simply absent, so the probe observes it missing.
+make_env() {
+  local d="$1" c w noy=0; shift
+  local -a without=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in --without) without+=("$2"); shift 2 ;; --no-pyyaml) noy=1; shift ;; *) shift ;; esac
+  done
+  mkdir -p "$d"
+  for c in awk grep dirname bash; do ln -sf "$(command -v "$c")" "$d/$c"; done
+  for c in git python3 jq flock timeout realpath tar; do
+    for w in ${without+"${without[@]}"}; do [[ "$w" == "$c" ]] && continue 2; done
+    if [[ $c == python3 && $noy -eq 1 ]]; then
+      printf '#!/bin/sh\nexec "%s" -S -E "$@"\n' "$(command -v python3)" > "$d/$c"
+    else
+      printf '#!/bin/sh\nexit 0\n' > "$d/$c"
+    fi
+    chmod +x "$d/$c"
+  done
+}
+make_env "$T/shim-full"
+make_env "$T/shim-nojq" --without jq
+make_env "$T/shim-noyaml" --no-pyyaml
+# run_with <shim> <checker> <availability-file>...
+run_with() { local sh="$1"; shift; env PATH="$sh" "$BASH" "$@" 2>&1; }
+
+# check_b2 <checker> -> 0 when the checker honours the exit-code contract
+check_b2() {
+  local ck="$1" rc=0 out code
+  chk() {  # chk <label> <want-code> <want-substring> <shim> <availability-file>
+    out="$(run_with "$4" "$ck" "$5")"; code=$?
+    [[ $code -eq $2 && "$out" == *"$3"* ]] || { echo "    $1: rc=$code want $2 ~ '$3'"; rc=1; }
+  }
+  chk "complete" 0 "harness-check: ok" "$T/shim-full" "$FIX/env-complete.txt"
+  out="$(run_with "$T/shim-full" "$ck" "$FIX/env-complete.txt")"
+  [[ "$out" != *WARN* ]] || { echo "    complete: unexpected WARN"; rc=1; }
+  chk "missing degradable" 0 "WARN: Workflow tool absent; fallback: batching degrades to the C5 single owner" "$T/shim-full" "$FIX/env-missing-degradable.txt"
+  out="$(run_with "$T/shim-full" "$ck" "$FIX/env-missing-degradable.txt")"
+  [[ "$out" == *"admitted non-native implement"*"first native provider"* ]] || { echo "    no derived WARN after Workflow tool"; rc=1; }
+  chk "missing hard-required" 1 "FAIL: hard-required Agent tool absent" "$T/shim-full" "$FIX/env-missing-hard.txt"
+  out="$(run_with "$T/shim-full" "$ck" "$FIX/env-missing-hard.txt")"
+  [[ "$out" == *"minimum floor"* ]] || { echo "    FAIL line lacks the floor"; rc=1; }
+  chk "malformed line" 2 "malformed line" "$T/shim-full" "$FIX/env-malformed.txt"
+  printf 'Agent tool=present\nNo Such Tool=present\n' > "$T/unknown.txt"
+  chk "unknown primitive" 2 "unknown primitive" "$T/shim-full" "$T/unknown.txt"
+  chk "duplicate key" 2 "repeated primitive" "$T/shim-full" "$FIX/env-duplicate.txt"
+  command sed 's/^jq=present/jq=absent/' "$FIX/env-complete.txt" > "$T/no-jq.txt"
+  chk "jq=absent forces absent" 1 "jq absent" "$T/shim-full" "$T/no-jq.txt"
+  grep -v '^Agent tool' "$FIX/env-complete.txt" > "$T/undeclared.txt"
+  chk "undeclared session tool" 1 "Agent tool absent" "$T/shim-full" "$T/undeclared.txt"
+  # probe path: toolchain left to the probe, observed absence wins
+  chk "probe: jq off PATH" 1 "hard-required jq absent" "$T/shim-nojq" "$FIX/env-session-only.txt"
+  chk "probe: PyYAML missing" 1 "hard-required PyYAML absent" "$T/shim-noyaml" "$FIX/env-session-only.txt"
+  chk "probe: all present" 0 "harness-check: ok" "$T/shim-full" "$FIX/env-session-only.txt"
+  chk "declaration cannot mask absent jq" 1 "hard-required jq absent" "$T/shim-nojq" "$FIX/env-complete.txt"
+  out="$(run_with "$T/shim-full" "$ck" 2>&1)"; code=$?
+  [[ $code -eq 2 ]] || { echo "    no argument: rc=$code"; rc=1; }
+  return $rc
+}
 
 # check_b1 <vocab> <table> <file>... -> 0 when the contract holds
 check_b1() {
@@ -83,14 +147,21 @@ check_b1() {
   return $rc
 }
 
-# check_b3 <file> -> every vocabulary primitive the file names has a line that
-# carries the primitive, the pointer path, and a hard-required/degradable mark.
+# check_b3 <file> -> every vocabulary primitive the file names is, on each line
+# that carries it AND the pointer path, marked with its own table class; at least
+# one such line exists.
 check_b3() {
-  local f="$1" rc=0 name
+  local f="$1" rc=0 name class mark line n
   while IFS= read -r name; do
     grep -qwF -- "$name" "$f" || continue
-    grep -wF -- "$name" "$f" | grep -F -- "$PTR" | grep -qE 'hard-required|[Dd]egradable' \
-      || { echo "    $(basename "$f"): $name unmarked"; rc=1; }
+    class="$(table_rows "$TABLE" | awk -F'\t' -v n="$name" '$1==n{print $4}')"
+    case "$class" in hard-required) mark='hard-required' ;; degradable) mark='degradable' ;; *) echo "    $name: no table class"; rc=1; continue ;; esac
+    n=0
+    while IFS= read -r line; do
+      n=$((n+1))
+      grep -qiE -- "$mark" <<<"$line" || { echo "    $(basename "$f"): $name carries the wrong mark (want $class)"; rc=1; }
+    done < <(grep -wF -- "$name" "$f" | grep -F -- "$PTR")
+    [[ $n -gt 0 ]] || { echo "    $(basename "$f"): $name unmarked"; rc=1; }
   done < <(vocab_names "$VOCAB")
   return $rc
 }
@@ -105,10 +176,12 @@ check_b4() {
   [[ -n "$span_ln" ]] || { echo "    no check span in $(basename "$f")"; return 1; }
   [[ -n "$h2_ln" && "$span_ln" -lt "$h2_ln" ]] || { echo "    span not before ## 2"; rc=1; }
   span="$(grep -oE -- "$SPAN_RE" "$f" | head -1)"; span="${span#\`}"; span="${span%\`}"
+  grep -F -- "$span" "$f" | grep -qE 'non-zero exit stops the run per §5.*exit 1.*exit 2' \
+    || { echo "    span line lacks the non-zero-exit stop (§5, exit 1/2)"; rc=1; }
   for env in missing-degradable missing-hard-required; do
     case "$env" in missing-degradable) src=env-missing-degradable.txt ;; *) src=env-missing-hard.txt ;; esac
     cmd="${span//<availability-file>/$FIX/$src}"
-    out="$(CLAUDE_PLUGIN_ROOT="$PKG" bash -c "$cmd" 2>&1)"; code=$?
+    out="$(env PATH="$T/shim-full" CLAUDE_PLUGIN_ROOT="$PKG" "$BASH" -c "$cmd" 2>&1)"; code=$?
     if [[ $env == missing-degradable ]]; then
       [[ $code -eq 0 && "$out" == *"WARN: Workflow tool"* ]] || { echo "    $env: rc=$code"; rc=1; }
     else
@@ -134,39 +207,21 @@ printf 'Frobnicator tool\n' | cat "$VOCAB" - > "$T/vocab-frob.txt"
 printf 'Uses the Frobnicator tool.\n' > "$T/stage-frob.md"
 expect_red "(ii) stage copy naming a vocabulary primitive with no row" check_b1 "$T/vocab-frob.txt" "$TABLE" "${LIVE[@]}" "$T/stage-frob.md"
 expect_red "(iii) vocabulary holding only Agent tool" check_b1 "$FIX/vocab-only-agent.txt" "$TABLE" "${LIVE[@]}"
+mkdir -p "$T/noask"; : > "$T/noask/list"
+for f in "${LIVE[@]}"; do grep -vwF AskUserQuestion "$f" > "$T/noask/$(echo "$f" | tr / _)"; echo "$T/noask/$(echo "$f" | tr / _)" >> "$T/noask/list"; done
+mapfile -t NOASK < "$T/noask/list"
+expect_red "(iv) file list with no AskUserQuestion hit" check_b1 "$VOCAB" "$TABLE" "${NOASK[@]}"
 command sed 's/| hard-required | - | none: the floor |$/| degradable | - | none: the floor |/' "$TABLE" > "$T/table-soft-floor.md"
 expect_red "floor row downgraded to degradable" check_b1 "$VOCAB" "$T/table-soft-floor.md" "${LIVE[@]}"
 
 # ── b2 ──────────────────────────────────────────────────────────────────────
 echo "[ b2: check script per environment ]"
-run() { bash "$CHECK" "$1" 2>&1; }
-out="$(run "$FIX/env-complete.txt")"; code=$?
-[[ $code -eq 0 && "$out" != *WARN* ]] && ok "complete: exit 0, no WARN" || bad "complete rc=$code: $out"
-out="$(run "$FIX/env-missing-degradable.txt")"; code=$?
-[[ $code -eq 0 && "$out" == *"WARN: Workflow tool absent; fallback: batching degrades to the C5 single owner"* ]] \
-  && ok "missing degradable: exit 0, WARN names primitive + table fallback" || bad "missing degradable rc=$code: $out"
-[[ "$out" == *"admitted non-native implement"*"first native provider"* ]] && ok "admitted-implement WARN follows Workflow tool" || bad "no derived WARN: $out"
-out="$(run "$FIX/env-missing-hard.txt")"; code=$?
-[[ $code -eq 1 && "$out" == *"FAIL: hard-required Agent tool absent"*"minimum floor"* ]] \
-  && ok "missing hard-required: exit 1 naming primitive + floor" || bad "missing hard rc=$code: $out"
-out="$(run "$FIX/env-malformed.txt")"; code=$?
-[[ $code -eq 2 && "$out" == *"malformed line"* ]] && ok "malformed line: exit 2" || bad "malformed rc=$code: $out"
-printf 'Agent tool=present\nNo Such Tool=present\n' > "$T/unknown.txt"
-out="$(run "$T/unknown.txt")"; code=$?
-[[ $code -eq 2 ]] && ok "unknown primitive: exit 2" || bad "unknown rc=$code"
-command sed 's/^jq=present/jq=absent/' "$FIX/env-complete.txt" > "$T/no-jq.txt"
-out="$(run "$T/no-jq.txt")"; code=$?
-[[ $code -eq 1 && "$out" == *"jq absent"* ]] && ok "declared line overrides the probe (jq=absent): exit 1" || bad "jq override rc=$code"
-grep -v '^Agent tool' "$FIX/env-complete.txt" > "$T/undeclared.txt"
-out="$(run "$T/undeclared.txt")"; code=$?
-[[ $code -eq 1 && "$out" == *"Agent tool absent"* ]] && ok "undeclared session tool counts as absent: exit 1" || bad "undeclared rc=$code"
-[[ $(bash "$CHECK" 2>/dev/null; echo $?) -eq 2 ]] && ok "no argument: exit 2" || bad "no-arg exit"
-# known-bads: a checker that passes the hard-missing fixture / ignores malformed lines
+if out="$(check_b2 "$CHECK")"; then ok "live checker: every environment outcome holds"; else bad "live checker"; echo "$out"; fi
 printf '#!/usr/bin/env bash\nexit 0\n' > "$T/always-ok.sh"
-bad_check() { bash "$T/always-ok.sh" "$FIX/env-missing-hard.txt" >/dev/null 2>&1 && return 1; return 0; }
-expect_red "(b2) checker exiting 0 on missing-hard-required" bad_check
-bad_check2() { bash "$T/always-ok.sh" "$FIX/env-malformed.txt" >/dev/null 2>&1; [[ $? -eq 2 ]]; }
-expect_red "(b2) checker ignoring a malformed line" bad_check2
+expect_red "(b2) checker exiting 0 on everything" check_b2 "$T/always-ok.sh"
+# a checker that believes declarations and never probes
+printf '%s\n' '#!/usr/bin/env bash' 'grep -q "=absent" "$1" && exit 1' 'exit 0' > "$T/trusting.sh"
+expect_red "(b2) checker trusting declarations, never probing" check_b2 "$T/trusting.sh"
 
 # ── b3 ──────────────────────────────────────────────────────────────────────
 echo "[ b3: markings and line cap ]"
@@ -175,6 +230,8 @@ for f in "$EXEC" "$DISP"; do
   command sed "s#$PTR##g" "$f" > "$T/nopointer-$(basename "$f")"
   expect_red "pointers deleted from $(basename "$f")" check_b3 "$T/nopointer-$(basename "$f")"
 done
+command sed '/^4\. Before any dispatch/ s/hard-required per `references\/harness-dependencies.md`: /hard-required per `references\/harness-dependencies.md`: Workflow tool, /' "$EXEC" > "$T/exec-wfhard.md"
+expect_red "Workflow tool listed as hard-required" check_b3 "$T/exec-wfhard.md"
 lines="$(wc -l < "$EXEC")"
 [[ $lines -le 125 ]] && ok "execute/SKILL.md $lines lines (cap 125)" || bad "execute/SKILL.md $lines lines"
 
@@ -185,8 +242,8 @@ grep -vE -- "$SPAN_RE" "$EXEC" > "$T/exec-nospan.md"
 expect_red "span removed" check_b4 "$T/exec-nospan.md"
 { grep -vE -- "$SPAN_RE" "$EXEC"; grep -E -- "$SPAN_RE" "$EXEC"; } > "$T/exec-late.md"
 expect_red "span placed after ## 2" check_b4 "$T/exec-late.md"
-command sed 's#<availability-file>`#<availabilty-file>`#' "$EXEC" > "$T/exec-broken.md"
-expect_red "span with broken argument" check_b4 "$T/exec-broken.md"
+command sed 's/ a non-zero exit stops the run per §5 (exit 1 floor breach, exit 2 bad declaration)//' "$EXEC" > "$T/exec-nostop.md"
+expect_red "span line without the non-zero-exit stop" check_b4 "$T/exec-nostop.md"
 
 echo ""
 echo "goalforge-harness-check.test.sh: $PASS passed, $FAIL failed"

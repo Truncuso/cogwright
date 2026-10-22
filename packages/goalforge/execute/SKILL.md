@@ -36,7 +36,7 @@ one commit landed — not quality-signed-off: `verified` is written only by
    ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh execute <wp-id> --json <report.json> --feature-dir <feature>
    ```
-4. Before any dispatch run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-harness-check.sh <availability-file>`, the file written from this session's actual tool list (never a fixture); hard-required per `references/harness-dependencies.md`: Agent tool, git, python3, jq, flock, timeout, realpath, tar, PyYAML; a WARN names the lost fallback.
+4. Before any dispatch run `bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-harness-check.sh <availability-file>`, the file written from this session's actual tool list (never a fixture); hard-required per `references/harness-dependencies.md`: Agent tool, git, python3, jq, flock, timeout, realpath, tar, PyYAML; a WARN names the lost fallback; a non-zero exit stops the run per §5 (exit 1 floor breach, exit 2 bad declaration).
 
 ## 2 — Register switch
 

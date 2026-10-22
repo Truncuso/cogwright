@@ -3,7 +3,7 @@
 Every harness primitive goalforge uses is either **hard-required** (the run
 cannot be trusted without it) or **degradable** (a named fallback exists and the
 run says so). The closed vocabulary is `references/harness-primitives.txt`;
-`scripts/tests/goalforge-harness-check.test.sh` fails when a stage `SKILL.md` or
+the `goalforge-harness-check` test suite fails when a stage `SKILL.md` or
 `execute/references/dispatch-resolution.md` names a vocabulary primitive that
 has no row below.
 
@@ -40,11 +40,12 @@ never blocks a WP; a later harness-neutral workflow runner rewrites that cell.
 
 `scripts/goalforge-harness-check.sh <availability-file>` reads
 `<primitive>=present|absent` lines (`#` comments and blank lines skipped).
-Toolchain primitives are probed unless a line overrides the probe; session tools
-cannot be observed from a script, so they are taken from the file, and an
-undeclared session tool counts as absent. Exit 0 clean or with WARN lines (a
+Toolchain primitives are always probed: an observed absence wins, and a line may
+only force `absent`, never mask a missing tool. Session tools cannot be observed
+from a script, so they are taken from the file, and an undeclared session tool
+counts as absent. A repeated key is a usage error. Exit 0 clean or with WARN lines (a
 degradable primitive is absent); exit 1 naming a missing hard-required primitive;
-exit 2 on a usage error or malformed line. Trust assumption: a declaration is
+exit 2 on a usage error, malformed line or repeated key. Trust assumption: a declaration is
 only as honest as its writer, so the execute entry step writes it from the
 session's actual tool list and never copies a fixture.
 

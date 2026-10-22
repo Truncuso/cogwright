@@ -5,13 +5,15 @@
 #
 # <availability-file> holds `<primitive>=present|absent` lines (`#` comments and
 # blank lines skipped). Primitives and their class come from the table in
-# references/harness-dependencies.md. Toolchain primitives are probed unless a
-# line overrides the probe; session tools cannot be observed from a script, so
-# an undeclared one counts as absent (never a silent pass).
+# references/harness-dependencies.md. Toolchain primitives are always probed: an
+# observed absence wins, and a declaration may only force `absent` (never mask a
+# missing tool). Session tools cannot be observed from a script, so they come
+# from the declaration and an undeclared one counts as absent (never a silent
+# pass). A repeated key is a usage error.
 #
 # Exit: 0 clean, or WARN lines for absent degradable primitives (stderr)
 #       1 a hard-required primitive is absent (FAIL line names it)
-#       2 usage error, unreadable file, unknown primitive, malformed line
+#       2 usage error, unreadable file, unknown primitive, malformed or repeated line
 set -euo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,6 +45,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
     || die "malformed line (want <primitive>=present|absent): $line"
   grep -qxF -- "$key" < <(awk -F'\t' '$4 == "-" {print $1}' <<<"$rows") \
     || die "unknown primitive in availability file: $key"
+  [[ -z "${DECL[$key]:-}" ]] || die "repeated primitive in availability file: $key"
   DECL["$key"]="$val"
 done <"$AVAIL"
 
@@ -57,8 +60,13 @@ declare -A STATE=()
 rc=0
 while IFS=$'\t' read -r prim kind class needs degrade; do
   [[ "$needs" == "-" ]] || continue
-  if [[ -n "${DECL[$prim]:-}" ]]; then st="${DECL[$prim]}"
-  elif [[ "$kind" == toolchain ]]; then st="$(probe "$prim")"
+  if [[ "$kind" == toolchain ]]; then
+    st="$(probe "$prim")"
+    if [[ "${DECL[$prim]:-}" == absent ]]; then st=absent
+    elif [[ "${DECL[$prim]:-}" == present && "$st" == absent ]]; then
+      printf 'note: %s declared present but the probe observed it absent\n' "$prim" >&2
+    fi
+  elif [[ -n "${DECL[$prim]:-}" ]]; then st="${DECL[$prim]}"
   else st=absent; printf 'note: %s undeclared, counted as absent\n' "$prim" >&2
   fi
   STATE["$prim"]="$st"
