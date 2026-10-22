@@ -463,6 +463,7 @@ v7_tokens() {
             for w in "${ops[@]}"; do
                 if [[ "$w" =~ $V7_REV_RE ]]; then echo "REV:$w"; found=1; else unchecked=1; fi
             done
+        elif [ "${#ops[@]}" -gt 0 ]; then unchecked=1   # plain operands are never checked: announce them
         fi
         if [ "$found" = 0 ]; then echo "SKIP:no checkable rev-parse --verify operand or a..b range"
         elif [ "$unchecked" = 1 ]; then echo "SKIP:revision word not statically checkable"; fi

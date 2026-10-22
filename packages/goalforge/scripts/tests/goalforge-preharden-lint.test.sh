@@ -161,6 +161,7 @@ mkwp v7-good-nonrange-subcmd '' "git grep -q foo..bar HEAD"
 mkwp v7-good-dashdash-range  '' "git log --oneline -- docs/v1..v2.md"
 mkwp v7-good-dashdash-verify '' "git rev-parse --verify HEAD -- file.txt"
 mkwp v7-good-optval '' "git rev-parse --default nosuch --prefix sub --verify HEAD"
+mkwp v7-skip-plain-operand '' "git log HEAD..HEAD bad+rev"
 # r5 N2: a heredoc body line starting with git is data, not a command.
 mkwp v7-skip-heredoc       '' "cat > run.sh <<EOF
   git rev-parse --verify no-such-tag
@@ -229,6 +230,7 @@ v7-good-dashdash-range|0||
 v7-good-dashdash-verify|0||
 v7-good-optval|0||
 v7-skip-heredoc|0||
+v7-skip-plain-operand|0||
 v7-skip-unchecked-range|0||
 pi-prose-quote|0||
 v8-unquoted-flow|2|V8|placeholder <missing>
@@ -255,6 +257,7 @@ v7-uncheckable|1x no checkable rev-parse --verify operand or a..b range
 v7-side-effect-touch|2x first word is not git
 v7-skip-heredoc|1x block has a heredoc (<<), nothing checked
 v7-skip-unchecked-range|1x revision word not statically checkable
+v7-skip-plain-operand|1x revision word not statically checkable
 SKIPS
 OUT="$(bash "$LINT" "$W/v7-good-revision" 2>&1)"
 printf '%s' "$OUT" | grep -qF 'SKIP not statically checked' \
