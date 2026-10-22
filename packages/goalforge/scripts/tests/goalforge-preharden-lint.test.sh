@@ -156,6 +156,16 @@ mkwp v7-skip-no-verify     '' "git rev-parse --git-path deadbeef1234"
 mkwp v7-skip-other-subcmd  '' "git tag --verify v9.9-nope"
 mkwp v7-good-dotdot-path   '' "git diff HEAD ../x
   git diff HEAD a/../b"
+# r5 N1: `a..b` is a range only for a revision subcommand; `--` ends revisions.
+mkwp v7-good-nonrange-subcmd '' "git grep -q foo..bar HEAD"
+mkwp v7-good-dashdash-range  '' "git log --oneline -- docs/v1..v2.md"
+mkwp v7-good-dashdash-verify '' "git rev-parse --verify HEAD -- file.txt"
+# r5 N2: a heredoc body line starting with git is data, not a command.
+mkwp v7-skip-heredoc       '' "cat > run.sh <<EOF
+  git rev-parse --verify no-such-tag
+  EOF"
+# r5 N5: an uncheckable range beside a checked one is announced, not dropped.
+mkwp v7-skip-unchecked-range '' "git log a/..b HEAD..HEAD"
 mkwp v8-unquoted-flow      '[Preserve `<missing>`]' ''
 mkwp v8-placeholder    '["baseline pinned at <base_sha>"]' ''
 mkwp v8-missing-artifact '["the contract in `docs/no-such-contract.md` stays unchanged"]' ''
@@ -213,6 +223,11 @@ v7-skip-shell-stop|0||
 v7-skip-no-verify|0||
 v7-skip-other-subcmd|0||
 v7-good-dotdot-path|0||
+v7-good-nonrange-subcmd|0||
+v7-good-dashdash-range|0||
+v7-good-dashdash-verify|0||
+v7-skip-heredoc|0||
+v7-skip-unchecked-range|0||
 pi-prose-quote|0||
 v8-unquoted-flow|2|V8|placeholder <missing>
 CASES
@@ -236,6 +251,8 @@ v7-skip-no-verify|1x no checkable rev-parse --verify operand or a..b range
 v7-skip-other-subcmd|1x no checkable rev-parse --verify operand or a..b range
 v7-uncheckable|1x no checkable rev-parse --verify operand or a..b range
 v7-side-effect-touch|2x first word is not git
+v7-skip-heredoc|1x block has a heredoc (<<), nothing checked
+v7-skip-unchecked-range|1x revision word not statically checkable
 SKIPS
 OUT="$(bash "$LINT" "$W/v7-good-revision" 2>&1)"
 printf '%s' "$OUT" | grep -qF 'SKIP not statically checked' \

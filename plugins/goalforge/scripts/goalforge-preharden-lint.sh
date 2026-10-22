@@ -427,33 +427,42 @@ v7_range() {
     echo "REV:$a"; echo "REV:$b"
 }
 
+# Subcommands whose operands are revisions, so an `a..b` word is a range.
+V7_RANGE_SUBCMD_RE='^(log|diff|rev-list|rev-parse|show|merge-base)$'
+
 # stdin: one verify block's command lines. Prints `REV:<tok>` per checked token
 # and `SKIP:<reason>` per line (or line tail) it does not check. Lines are split
-# on whitespace only; nothing is expanded or evaluated.
+# on whitespace only; nothing is expanded or evaluated. Words after `--` are
+# paths, never revisions.
 v7_tokens() {
-    local ln w verify found
+    local ln w verify found unchecked ranges
     local -a words ops
     while IFS= read -r ln; do
         read -ra words <<<"$ln"
         if [ "${words[0]:-}" != git ]; then echo "SKIP:first word is not git"; continue; fi
         if [[ "$ln" == *[\"\'\$\`\\]* ]]; then echo "SKIP:git line with quoting or expansion"; continue; fi
         if [[ "${words[1]:-}" == -* ]]; then echo "SKIP:git option before the subcommand"; continue; fi
-        verify=0; found=0; ops=()
+        verify=0; found=0; unchecked=0; ops=(); ranges=0
+        [[ "${words[1]:-}" =~ $V7_RANGE_SUBCMD_RE ]] && ranges=1
         for w in "${words[@]:2}"; do
             if [[ "$w" == *[\;\&\|\<\>\#]* ]]; then echo "SKIP:text after a shell operator or comment"; break; fi
             case "$w" in
+                --) break ;;
                 --verify) verify=1 ;;
                 -*) ;;
-                *..*) v7_range "$w" && found=1 ;;
+                *..*) if [ "$ranges" = 1 ]; then
+                          if v7_range "$w"; then found=1; else unchecked=1; fi
+                      fi ;;
                 *) ops+=("$w") ;;
             esac
         done
         if [ "${words[1]:-}" = rev-parse ] && [ "$verify" = 1 ]; then
             for w in "${ops[@]}"; do
-                [[ "$w" =~ $V7_REV_RE ]] && { echo "REV:$w"; found=1; }
+                if [[ "$w" =~ $V7_REV_RE ]]; then echo "REV:$w"; found=1; else unchecked=1; fi
             done
         fi
-        [ "$found" = 1 ] || echo "SKIP:no checkable rev-parse --verify operand or a..b range"
+        if [ "$found" = 0 ]; then echo "SKIP:no checkable rev-parse --verify operand or a..b range"
+        elif [ "$unchecked" = 1 ]; then echo "SKIP:revision word not statically checkable"; fi
     done
 }
 
@@ -469,6 +478,8 @@ lint_wp_gates() {
         blocks=$((blocks+1))
         if [[ "$cmds" =~ $V7_CD_RE ]]; then
             toks="SKIP:block changes directory (cd/pushd), nothing checked"
+        elif [[ "$cmds" == *'<<'* ]]; then
+            toks="SKIP:block has a heredoc (<<), nothing checked"
         else
             toks="$(printf '%s\n' "$cmds" | v7_tokens)"
         fi
