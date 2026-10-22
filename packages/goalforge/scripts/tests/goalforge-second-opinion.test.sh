@@ -521,7 +521,7 @@ else
     bad "ledger row count equals leaf-call count (23): got $(wc -l < "$GOALFORGE_DISPATCH_LEDGER")"
 fi
 
-# --- case 17 (wp-15 fix/b4): the SHIPPED dispatch.yaml pins codex/gpt-6-astra
+# --- case 17 (wp-15 fix/b4): the SHIPPED dispatch.yaml pins codex/gpt-6-luna
 # and carries no ollama providers[] row -----------------------------------
 # Reads the real, checked-in references/dispatch.yaml (not a test fixture),
 # so a revert of dispatch.yaml back to an ollama-shipped state is caught
@@ -534,13 +534,13 @@ with open(sys.argv[1], encoding="utf-8") as fh:
     data = yaml.safe_load(fh) or {}
 row = (data.get("stages") or {}).get("second_opinion") or {}
 names = [p.get("name") for p in (data.get("providers") or []) if isinstance(p, dict)]
-ok = row.get("provider") == "codex" and row.get("model") == "gpt-6-astra" and "ollama" not in names
+ok = row.get("provider") == "codex" and row.get("model") == "gpt-6-luna" and "ollama" not in names
 print("1" if ok else "0")
 ' "$SHIPPED_DISPATCH" 2>/dev/null)"
 if [[ "$SHIPPED_CHECK" == "1" ]]; then
-    ok "shipped dispatch.yaml second_opinion row is codex/gpt-6-astra, no ollama providers row"
+    ok "shipped dispatch.yaml second_opinion row is codex/gpt-6-luna, no ollama providers row"
 else
-    bad "shipped dispatch.yaml second_opinion row is codex/gpt-6-astra, no ollama providers row"
+    bad "shipped dispatch.yaml second_opinion row is codex/gpt-6-luna, no ollama providers row"
 fi
 
 echo
