@@ -131,61 +131,31 @@ mkwp v7-side-effect-touch '' "grep -q T1 overview.md && touch $MARK_TOUCH
 mkwp v7-side-effect-commit '' "git commit --allow-empty -qm should-never-land"
 mkwp v7-good-revision  '' "git rev-parse --verify --quiet HEAD"
 mkwp v7-uncheckable    '' "git rev-parse --verify HEAD:overview.md"
-# One condition per kept V7 behavior (each known-bad dies under the mutant that
-# drops that behavior).
-mkwp v7-bad-sha-positional '' "git show --stat deadbeef1234 -- run.sh"
-mkwp v7-bad-head-shaped    '' "git show HEAD~99"
+# Narrow V7 (human ruling (b), 2026-10-22): one single-condition fixture per
+# kept behavior; each flips verdict under the mutant that drops that behavior.
 mkwp v7-bad-triple-dot     '' "git diff HEAD...cafebabe1234"
 mkwp v7-bad-slash-range    '' "git log feature/nope..HEAD"
-mkwp v7-bad-chain          '' "grep -q T1 run.sh && git rev-parse --verify deadbeef1234"
-mkwp v7-bad-continuation   '' "git log --oneline \\
-  deadbeef1234..HEAD"
-mkwp v7-skip-dash-C        '' "git -C . rev-parse --verify deadbeef1234"
-mkwp v7-skip-not-first     '' "command git rev-parse --verify deadbeef1234"
-mkwp v7-skip-parent-short  '' "git rev-parse HEAD^@"
 mkwp v7-wp-repo-tag        '' "git rev-parse --verify fixture-only-tag"
 mkwp v7-env-leak           '' "git rev-parse --verify victim-only-tag"
-# Reviewer probes (verify r1) that used to raise a false ERROR on a correct WP.
-mkwp v7-probes-good        '' "git rev-parse HEAD..HEAD
-  git rev-parse HEAD^{tree}
-  git rev-parse --git-path hooks
-  git grep -q defaced -- run.sh
-  git grep -q 'foo..bar' HEAD
-  git log -S 1234567 --oneline
-  git -C ../other log abc1234..HEAD
-  git log --grep \"was defaced\" HEAD
-  git log --format=\"%h deadbee1\" -1 HEAD
-  git log --author \"Ab Cafe123\" HEAD
-  git log --grep \"a \\\" deadbeef1234 \\\" b\" HEAD
-  cat >/dev/null <<'EOF'
-  git show deadbeef1234
-  EOF"
-mkwp v7-bad-after-quote    '' "git log --grep \"was defaced\" deadbeef1234"
-mkwp v7-bad-after-heredoc  '' "cat >/dev/null <<'EOF'
-  git show deadbeef1234
-  EOF
-  git show cafebabe5678"
-# Verify r2 (r4 round): one single-line case per tokenizer rule that a mutant
-# survived; each flips verdict if its rule is dropped.
-mkwp v7-bad-sha7           '' "git show abc1234"
-mkwp v7-bad-merge-head     '' "git show MERGE_HEAD"
-mkwp v7-bad-semicolon      '' "true; git show deadbeef1234"
-mkwp v7-bad-pipe           '' "echo x | git show cafebabe1234"
-mkwp v7-bad-dash-c         '' "git -c core.pager=cat show deadbeef1234"
-mkwp v7-bad-cat-file-e     '' "git cat-file -e deadbeef1234"
-mkwp v7-bad-quoted-sep     '' "git log --grep 'a;b' deadbeef1234"
-mkwp v7-good-git-dir       '' "git --git-dir=../o/.git show deadbeef1234"
-mkwp v7-good-prefix        '' "git rev-parse --prefix sub HEAD"
-mkwp v7-good-n-value       '' "git log -n 1234567 HEAD"
-mkwp v7-good-redirect      '' "git log HEAD > deadbeef1234"
-mkwp v7-good-dotdot-path   '' "git diff HEAD ../x"
-mkwp v7-good-quoted-word   '' "git rev-parse --verify \"HEAD\""
-mkwp v7-good-bang          '' "git rev-parse HEAD^!"
-mkwp v7-good-dashdash      '' "git log HEAD -- deadbeef1234"
-mkwp v7-good-comment       '' "git rev-parse --verify HEAD  # base must exist"
-mkwp v7-good-cd            '' "cd ../other && git show deadbeef1234"
-mkwp v7-good-quoted-sep    '' "grep -q 'a; git show deadbeef1234; b' run.sh"
-mkwp v7-good-no-git-noise  '' "python3 -c \"a; b\" | grep 'x|y' run.sh; grep -q a\\\"b run.sh"
+# Known-goods: each line is a false ERROR if the SKIP rule it pins is dropped.
+mkwp v7-skip-not-first     '' "command git log deadbeef1234..HEAD"
+# r4 MEDIUM-2: a quoted "$(git ...)" is an announced SKIP, never silent.
+mkwp v7-skip-quoted-subst  '' "[ \"\$(git rev-parse --verify deadbeef1234)\" = x ]"
+mkwp v7-skip-git-option    '' "git -C ../other log deadbeef1234..HEAD"
+mkwp v7-skip-quoting       '' "git log --grep \"x deadbeef1234..HEAD y\" HEAD"
+# r4 MEDIUM-1: a `cd` line, then a git line naming a revision of the other repo.
+mkwp v7-skip-cd            '' "cd ../other
+  git log deadbeef1234..HEAD"
+mkwp v7-skip-shell-stop    '' "git rev-parse --verify HEAD && grep -q x..y run.sh
+  git rev-parse --verify HEAD # x..y
+  git rev-parse --verify HEAD | grep x..y
+  git rev-parse --verify HEAD; echo x..y
+  git rev-parse --verify HEAD >x..y
+  git rev-parse --verify HEAD <x..y"
+mkwp v7-skip-no-verify     '' "git rev-parse --git-path deadbeef1234"
+mkwp v7-skip-other-subcmd  '' "git tag --verify v9.9-nope"
+mkwp v7-good-dotdot-path   '' "git diff HEAD ../x
+  git diff HEAD a/../b"
 mkwp v8-unquoted-flow      '[Preserve `<missing>`]' ''
 mkwp v8-placeholder    '["baseline pinned at <base_sha>"]' ''
 mkwp v8-missing-artifact '["the contract in `docs/no-such-contract.md` stays unchanged"]' ''
@@ -232,66 +202,45 @@ v8-missing-artifact|2|V8|docs/no-such-contract.md
 v2-git-external|0||
 v7-good-revision|0||
 v7-uncheckable|0||
-v7-bad-sha-positional|2|V7|unresolvable revision `deadbeef1234`
-v7-bad-head-shaped|2|V7|unresolvable revision `HEAD~99`
 v7-bad-triple-dot|2|V7|unresolvable revision `cafebabe1234`
 v7-bad-slash-range|2|V7|unresolvable revision `feature/nope`
-v7-bad-chain|2|V7|unresolvable revision `deadbeef1234`
-v7-bad-continuation|2|V7|unresolvable revision `deadbeef1234`
-v7-skip-dash-C|0||
 v7-skip-not-first|0||
-v7-skip-parent-short|0||
-v7-probes-good|0||
-v7-bad-after-quote|2|V7|unresolvable revision `deadbeef1234`
-v7-bad-after-heredoc|2|V7|unresolvable revision `cafebabe5678`
-pi-prose-quote|0||
-v7-bad-sha7|2|V7|unresolvable revision `abc1234`
-v7-bad-merge-head|2|V7|unresolvable revision `MERGE_HEAD`
-v7-bad-semicolon|2|V7|unresolvable revision `deadbeef1234`
-v7-bad-pipe|2|V7|unresolvable revision `cafebabe1234`
-v7-bad-dash-c|2|V7|unresolvable revision `deadbeef1234`
-v7-bad-cat-file-e|2|V7|unresolvable revision `deadbeef1234`
-v7-bad-quoted-sep|2|V7|unresolvable revision `deadbeef1234`
-v7-good-git-dir|0||
-v7-good-prefix|0||
-v7-good-n-value|0||
-v7-good-redirect|0||
+v7-skip-quoted-subst|0||
+v7-skip-git-option|0||
+v7-skip-quoting|0||
+v7-skip-cd|0||
+v7-skip-shell-stop|0||
+v7-skip-no-verify|0||
+v7-skip-other-subcmd|0||
 v7-good-dotdot-path|0||
-v7-good-quoted-word|0||
-v7-good-bang|0||
-v7-good-dashdash|0||
-v7-good-comment|0||
-v7-good-cd|0||
-v7-good-quoted-sep|0||
-v7-good-no-git-noise|0||
+pi-prose-quote|0||
 v8-unquoted-flow|2|V8|placeholder <missing>
 CASES
-# SKIP noise: text with no git word outside quotes prints no token line at all.
-for c in v7-good-quoted-sep v7-good-no-git-noise; do
-    OUT="$(bash "$LINT" "$W/$c" 2>&1)"
-    printf '%s' "$OUT" | grep -qF 'not statically checkable' && bad "$c: prints a SKIP line: $OUT" \
-        || ok "$c: no SKIP line for text without a git word"
-done
-# A consumed revision-shaped option value is announced, never silent.
-OUT="$(bash "$LINT" "$W/v7-good-n-value" 2>&1)"
-printf '%s' "$OUT" | grep -qF -- '`-n 1234567 (option value)`' && ok "v7-good-n-value: consumed sha-shaped value is an INFO SKIP" \
-    || bad "v7-good-n-value: no option-value SKIP: $OUT"
-# Partial clone: resolution would lazily fetch, so tokens are SKIPped, not resolved.
-P="$FIX_TMP_ROOT/partial"
-mkdir -p "$P" && cp -r "$W/v7-bad-sha-positional" "$P/" && git -C "$P" init -q \
-    && git -C "$P" config core.repositoryformatversion 1 && git -C "$P" config extensions.partialClone origin \
-    || bad "partial-clone fixture could not be created"
-OUT="$(bash "$LINT" "$P/v7-bad-sha-positional" 2>&1)"; rc=$?
-[ "$rc" -eq 0 ] && printf '%s' "$OUT" | grep -qF '`deadbeef1234` not resolved (partial clone)' \
-    && ok "partial clone: token SKIPped, exit 0" || bad "partial clone (rc=$rc): $OUT"
+# Every unchecked part of a block is announced by exactly one INFO SKIP line
+# naming why, so "passed" and "never ran" differ.
 # b2 oracle note (verify r1, D7): the oracle's "pre-WP script" arm is not run
 # here; the why-string asserts above prove each rejection comes from V7/V8.
-for c in "v7-skip-dash-C|(repository redirected)" "v7-skip-not-first|(git is not the first word)" \
-         'v7-skip-parent-short|`HEAD^@`'; do
-    OUT="$(bash "$LINT" "$W/${c%%|*}" 2>&1)"
-    printf '%s' "$OUT" | grep -qF "INFO [V7] ${c%%|*}: task-01-a.md: token" && printf '%s' "$OUT" | grep -qF "${c#*|}" \
-        && ok "${c%%|*}: INFO SKIP ${c#*|}, no ERROR" || bad "${c%%|*}: INFO SKIP ${c#*|}: $OUT"
-done
+while IFS='|' read -r id why; do
+    OUT="$(bash "$LINT" "$W/$id" 2>&1)"
+    n="$(printf '%s\n' "$OUT" | grep -c "^INFO \[V7\] $id: task-01-a.md: SKIP not statically checked: ")"
+    [ "$n" -eq 1 ] && printf '%s' "$OUT" | grep -qF -- "$why" \
+        && ok "$id: one INFO SKIP line naming '$why'" || bad "$id: one INFO SKIP naming '$why' (got $n): $OUT"
+done <<'SKIPS'
+v7-skip-not-first|1x first word is not git
+v7-skip-quoted-subst|1x first word is not git
+v7-skip-git-option|1x git option before the subcommand
+v7-skip-quoting|1x git line with quoting or expansion
+v7-skip-cd|1x block changes directory (cd/pushd), nothing checked
+v7-skip-shell-stop|6x text after a shell operator or comment
+v7-skip-no-verify|1x no checkable rev-parse --verify operand or a..b range
+v7-skip-other-subcmd|1x no checkable rev-parse --verify operand or a..b range
+v7-uncheckable|1x no checkable rev-parse --verify operand or a..b range
+v7-side-effect-touch|2x first word is not git
+SKIPS
+OUT="$(bash "$LINT" "$W/v7-good-revision" 2>&1)"
+printf '%s' "$OUT" | grep -qF 'SKIP not statically checked' \
+    && bad "v7-good-revision: fully checked block prints a SKIP line: $OUT" \
+    || ok "v7-good-revision: fully checked block prints no SKIP line"
 # WP-repo binding: a tag only the WP's repo has resolves with cwd in another repo.
 OUT="$(cd "$V" && bash "$LINT" "$W/v7-wp-repo-tag" 2>&1)"; rc=$?
 [ "$rc" -eq 0 ] && ok "v7-wp-repo-tag: resolved in the WP repo with cwd in another repo" \
@@ -338,9 +287,6 @@ else bad "v7-side-effect-commit: a commit landed or lint failed (rc=$rc)"; print
 OUT="$(bash "$LINT" "$W/v7-good-revision" 2>&1)"
 printf '%s' "$OUT" | grep -q 'INFO \[V7\] v7-good-revision: task-01-a.md: 1 revision token(s) statically checked; gate not run' \
     && ok "v7-good-revision: INFO says 1 token checked, gate not run" || bad "v7-good-revision INFO line: $OUT"
-OUT="$(bash "$LINT" "$W/v7-uncheckable" 2>&1)"
-printf '%s' "$OUT" | grep -q 'INFO \[V7\] v7-uncheckable: task-01-a.md: token `HEAD:overview.md` not statically checkable' \
-    && ok "v7-uncheckable: INFO names the token it cannot check" || bad "v7-uncheckable INFO line: $OUT"
 OUT="$(bash "$LINT" "$FIX/good-wp" 2>&1)"; rc=$?
 if [ "$rc" -eq 0 ] && printf '%s' "$OUT" | grep -q 'INFO \[V7\] good-wp: no task verify: blocks to check; V7 ran no gate'; then
     ok "good-wp (schema-6, no task files) -> exit 0 with the V7 nothing-to-check INFO"

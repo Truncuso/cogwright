@@ -40,31 +40,22 @@
 #       `known-bad`/`exit 2`/`sabotage`/… — was removed: a keyword grep on prose
 #       is not evidence a known-bad input exists. Measured on the live corpus it
 #       flagged 7 of 11 rows, several of them compliant.)
-#   V7  static revision check: each line of a task `verify:` block (`\`
-#       continuations joined) that has a `git` word gets its quote spans folded,
-#       its inline ` #` comment dropped, then is split on `;`/`&`/`|`; a segment
-#       whose first word is `git` is split on whitespace, with no shell
-#       evaluation. Lines and segments without `git` print nothing. A token is checked only where it
-#       is certainly a revision: every operand of `git rev-parse`, both sides of
-#       an `a..b` / `a...b` range, and sha-shaped or HEAD-shaped positional
-#       operands of show/diff/log/rev-list/merge-base/cat-file/shortlog/
-#       format-patch/range-diff/cherry (value-taking options such as `-S`,
-#       `--grep`, `--format` consume their argument; a consumed sha/HEAD/range-
-#       shaped value prints INFO SKIP). Each token is resolved by a
-#       fixed read-only `git rev-parse --verify --quiet <tok>^{object}` that this
-#       lint invokes itself (argv, no shell) inside the WP's own repository, with
+#   V7  narrow static revision check (human ruling (b), 2026-10-22). Only lines
+#       of a task `verify:` block whose first word is literally `git` are
+#       looked at, split on whitespace with no shell evaluation. On those it
+#       checks only the operands of `git rev-parse --verify` and both sides of
+#       an explicit `a..b` / `a...b` word. Each token is resolved by a fixed
+#       read-only `git rev-parse --verify --quiet <tok>^{object}` that this lint
+#       invokes itself (argv, no shell) inside the WP's own repository, with
 #       git's local environment (`git rev-parse --local-env-vars`) cleared. An
 #       unresolvable token is an ERROR. NO part of a verify block is ever run.
-#       Everything undecidable prints an INFO SKIP line instead: shell expansion,
-#       `rev:path`, globs, `^@` / `^-` shorthands, other positionals,
-#       backslash-escaped quotes and `$'` ANSI-C quoting (line not checked),
-#       heredocs (a line containing `<<`: its remainder and the body through the
-#       delimiter line are not checked; unparsable delimiter skips the rest),
-#       `-C`/`--git-dir`/`--work-tree`, any git segment after a `cd`/`pushd`
-#       in the block, a comment that mentions git, a partial-clone WP repo
-#       (resolution could lazily fetch), rev-parse path modes (`--git-path`, …),
-#       other subcommands, and `git` that is not the segment's first word. Every
-#       block prints an INFO count line and a WP with no verify blocks (schema-6
+#       Everything else is not checked and is announced by exactly one INFO
+#       SKIP line per block naming why: lines whose first word is not `git`
+#       (including quoted `"$(git ...)"`), git lines with quoting, `$`,
+#       backtick or backslash, a git option before the subcommand (`-C`, `-c`,
+#       `--git-dir`, ...), text after a shell operator or `#`, lines with no
+#       checkable token, and a whole block containing `cd`/`pushd`. Every block
+#       also prints an INFO count line and a WP with no verify blocks (schema-6
 #       WPs carry none) prints INFO too, so "passed" and "never ran" differ.
 #   PI  path-idiom findings: goalforge-path-idiom-lint.sh --fenced-only runs over
 #       the WP's overview.md and task-*.md (the set P1 scans), so quotations in
@@ -414,17 +405,12 @@ for ln in fm:
 PY
 }
 
-# V7 — static revision check. Never executes any part of a verify block.
-V7_SHA_RE='^[0-9a-fA-F]{7,40}([~^][0-9]*)*$'
-V7_HEAD_RE='^(HEAD|FETCH_HEAD|ORIG_HEAD|MERGE_HEAD)([~^][0-9]*)*$'
-V7_UNSAFE='[][$`()*?<>:\\!]'
-V7_QUOTED='@V7QUOTED@'
-V7_QUOTE_RE="^([^\"']*)(\"[^\"]*\"|'[^']*')(.*)\$"
-# Options of the parsed subcommands that consume the next word as their value.
-V7_VALUE_OPTS=' -S -G -n -L -O -o --grep --author --committer --format --since --until --after --before --skip --max-count --default --diff-filter --date --encoding --output '
-# rev-parse options after which operands are no longer revisions.
-V7_REVPARSE_MODES=' --git-path --prefix --resolve-git-dir --sq-quote --parseopt '
-V7_GIT_WORD='(^|[^[:alnum:]_./-])git([[:space:]]|$)'
+# V7 — narrow static revision check (human ruling (b), 2026-10-22). Never
+# executes any part of a verify block.
+# A checkable revision word: no quoting, expansion, `:`-path or glob character.
+V7_REV_RE='^[A-Za-z0-9_@]([A-Za-z0-9_./@{}~^-]*[A-Za-z0-9_@}~^])?$'
+# A block that changes directory may name revisions of another repository.
+V7_CD_RE='(^|[[:space:](;&|])(cd|pushd)([[:space:]]|$)'
 
 # The only git invocation V7 makes: fixed argv, read-only, with git's whole
 # repository-locating environment (`git rev-parse --local-env-vars`) cleared.
@@ -433,165 +419,75 @@ while IFS= read -r _v; do [ -n "$_v" ] && V7_ENV_UNSET+=(-u "$_v"); done \
     < <(git rev-parse --local-env-vars 2>/dev/null)
 v7_git() { env "${V7_ENV_UNSET[@]}" git "$@"; }
 
-# One operand word. $2=1: every operand is a revision (rev-parse); $2=0: only a
-# range or a sha/HEAD-shaped word is certainly one. Prints REV:/SKIP: lines.
-v7_operand() {
-    local w="$1" t a b
-    if [[ "$w" == *"$V7_QUOTED"* ]]; then echo "SKIP:$w (quoted text)"; return; fi
-    t="${w#^}"; t="${t%^\{commit\}}"; t="${t%^\{\}}"
-    if [[ "$t" =~ $V7_UNSAFE || "$t" == *'^@'* || "$t" == *'^-'* ]]; then
-        echo "SKIP:$w"; return
-    fi
-    if [[ "$t" == *..* ]]; then
-        case "$t" in .*|*/..*|*../*) echo "SKIP:$w"; return ;; esac
-        a="${t%%..*}"; b="${t#*..}"; b="${b#.}"
-        [ -z "$a" ] || echo "REV:$a"
-        [ -z "$b" ] || echo "REV:$b"
-    elif [ "$2" = 1 ] || [[ "$t" =~ $V7_SHA_RE || "$t" =~ $V7_HEAD_RE ]]; then
-        echo "REV:$w"
-    else
-        echo "SKIP:$w"
-    fi
+# An explicit `a..b` / `a...b` word: prints REV: for both sides, or fails.
+v7_range() {
+    local a="${1%%..*}" b="${1#*..}"
+    b="${b#.}"
+    [[ "$a" =~ $V7_REV_RE && "$b" =~ $V7_REV_RE ]] || return 1
+    echo "REV:$a"; echo "REV:$b"
 }
 
-# stdin: verify-block command lines. Prints `REV:<tok>` for each token that is
-# certainly a revision and `SKIP:<text>` for anything it cannot decide. Only
-# heredoc skipping, quote-span folding, comment dropping and whitespace splitting
-# on `;`/`&`/`|`-separated segments: nothing is expanded or evaluated.
+# stdin: one verify block's command lines. Prints `REV:<tok>` per checked token
+# and `SKIP:<reason>` per line (or line tail) it does not check. Lines are split
+# on whitespace only; nothing is expanded or evaluated.
 v7_tokens() {
-    local ln pre rest delim dash body=0
-    V7_CD=0
-    local hd_re="<<(-?)[[:space:]]*\\\\?(['\"]?)([A-Za-z_][A-Za-z0-9_]*)\\2"
+    local ln w verify found
+    local -a words ops
     while IFS= read -r ln; do
-        if [ "$body" = 1 ]; then
-            # Inside a heredoc body: skip up to and including the delimiter line.
-            [ -z "$delim" ] && continue
-            [ "$dash" = 1 ] && ln="${ln#"${ln%%[!$'\t']*}"}"
-            [ "$ln" = "$delim" ] && body=0
-            continue
+        read -ra words <<<"$ln"
+        if [ "${words[0]:-}" != git ]; then echo "SKIP:first word is not git"; continue; fi
+        if [[ "$ln" == *[\"\'\$\`\\]* ]]; then echo "SKIP:git line with quoting or expansion"; continue; fi
+        if [[ "${words[1]:-}" == -* ]]; then echo "SKIP:git option before the subcommand"; continue; fi
+        verify=0; found=0; ops=()
+        for w in "${words[@]:2}"; do
+            if [[ "$w" == *[\;\&\|\<\>\#]* ]]; then echo "SKIP:text after a shell operator or comment"; break; fi
+            case "$w" in
+                --verify) verify=1 ;;
+                -*) ;;
+                *..*) v7_range "$w" && found=1 ;;
+                *) ops+=("$w") ;;
+            esac
+        done
+        if [ "${words[1]:-}" = rev-parse ] && [ "$verify" = 1 ]; then
+            for w in "${ops[@]}"; do
+                [[ "$w" =~ $V7_REV_RE ]] && { echo "REV:$w"; found=1; }
+            done
         fi
-        rest="${ln//<<</}"
-        if [[ "$rest" == *'<<'* ]]; then
-            echo "SKIP:$ln (heredoc)"
-            pre="${ln%%<<*}"
-            delim=""; dash=0
-            if [[ "$rest" =~ $hd_re ]]; then
-                delim="${BASH_REMATCH[3]}"; [ -n "${BASH_REMATCH[1]}" ] && dash=1
-            fi
-            body=1
-            # The text before the heredoc operator is still ordinary command text.
-            [ "$ln" = "$rest" ] && v7_line "$pre"
-            continue
-        fi
-        v7_line "$ln"
-    done < <(sed -e ':a' -e '/\\$/{N;s/\\\n/ /;ba' -e '}')
-}
-
-# One command line. A line with no `git` word is not looked at. Quote spans are
-# folded into one opaque word each BEFORE the comment cut and the `;`/`&`/`|`
-# split, so a separator or `#` inside quotes neither splits nor comments.
-v7_line() {
-    local ln="$1" rest seg
-    local -a segs
-    [[ "$ln" =~ $V7_GIT_WORD ]] || return 0
-    if [[ "$ln" =~ \\[\"\'] || "$ln" == *'$'\'* ]]; then
-        echo "SKIP:$ln (escaped or ANSI-C quoting)"; return
-    fi
-    rest="$ln"
-    while [[ "$rest" =~ $V7_QUOTE_RE ]]; do
-        rest="${BASH_REMATCH[1]}$V7_QUOTED${BASH_REMATCH[3]}"
-    done
-    if [[ "$rest" == *[\"\']* ]]; then echo "SKIP:$ln (unpaired quote)"; return; fi
-    if [[ "$rest" =~ [[:space:]]#(.*) ]]; then
-        [[ "${BASH_REMATCH[1]}" =~ $V7_GIT_WORD ]] && echo "SKIP:#${BASH_REMATCH[1]} (comment)"
-        rest="${rest%%[[:space:]]#*}"
-    fi
-    IFS=';&|' read -ra segs <<<"$rest"
-    for seg in "${segs[@]}"; do v7_segment "$seg"; done
-}
-
-# One `;`/`&`/`|`-separated segment. A `cd` makes every later git segment of the
-# block SKIP (the gate would run in another repository).
-v7_segment() {
-    local i sub w v any
-    local -a words
-    read -ra words <<<"$1"
-    [ "${#words[@]}" -gt 0 ] || return 0
-    case "${words[0]}" in cd|pushd) V7_CD=1; return ;; esac
-    [[ "$1" =~ $V7_GIT_WORD ]] || return 0
-    [ "$V7_CD" = 0 ] || { echo "SKIP:${words[*]} (after cd)"; return; }
-    [ "${words[0]}" = git ] || { echo "SKIP:${words[*]} (git is not the first word)"; return; }
-    i=1
-    while [ "$i" -lt "${#words[@]}" ]; do
-        case "${words[$i]}" in
-            -C|--git-dir|--git-dir=*|--work-tree|--work-tree=*)
-                echo "SKIP:${words[*]} (repository redirected)"; return ;;
-            -c) i=$((i+2)) ;;
-            -*) i=$((i+1)) ;;
-            *) break ;;
-        esac
-    done
-    sub="${words[$i]:-}"
-    case "$sub" in
-        "") return ;;
-        rev-parse) any=1 ;;
-        show|diff|log|rev-list|merge-base|cat-file|shortlog|format-patch|range-diff|cherry) any=0 ;;
-        *) echo "SKIP:git $sub (subcommand not parsed)"; return ;;
-    esac
-    i=$((i+1))
-    while [ "$i" -lt "${#words[@]}" ]; do
-        w="${words[$i]}"; i=$((i+1))
-        [ "$w" = -- ] && break
-        if [ "$any" = 1 ] && [[ "$V7_REVPARSE_MODES" == *" ${w%%=*} "* ]]; then
-            echo "SKIP:${words[*]} (rev-parse $w)"; return
-        fi
-        case "$w" in
-            '>'|'>>'|'<'|[0-9]'>'|'&>') i=$((i+1)) ;;
-            *'>'*|*'<'*) : ;;
-            -*) [[ "$V7_VALUE_OPTS" == *" $w "* ]] || continue
-                # A consumed value never passes silently if it looks like a revision.
-                v="${words[$i]:-}"; i=$((i+1))
-                [[ "$v" == *..* || "$v" =~ $V7_SHA_RE || "$v" =~ $V7_HEAD_RE ]] && echo "SKIP:$w $v (option value)" ;;
-            *) v7_operand "$w" "$any" ;;
-        esac
+        [ "$found" = 1 ] || echo "SKIP:no checkable rev-parse --verify operand or a..b range"
     done
 }
 
 lint_wp_gates() {
-    local wp="$1" wpn f base cmds toks t tok n blocks=0 in_repo=1 partial=0
+    local wp="$1" wpn f base cmds toks t n skips blocks=0 in_repo=1
     wpn="$(basename -- "$wp")"
     v7_git -C "$wp" rev-parse --git-dir >/dev/null 2>&1 || in_repo=0
-    # A partial clone would lazily fetch a missing object (a write + network).
-    [ -z "$(v7_git -C "$wp" config --get extensions.partialClone 2>/dev/null)" ] || partial=1
     for f in "$wp"/task-*.md; do
         [ -f "$f" ] || continue
         base="$(basename -- "$f")"
         cmds="$(verify_block "$f" | grep -vE '^\s*(#|$)')"
         [ -n "$cmds" ] || continue
         blocks=$((blocks+1))
-        toks="$(printf '%s\n' "$cmds" | v7_tokens)"
+        if [[ "$cmds" =~ $V7_CD_RE ]]; then
+            toks="SKIP:block changes directory (cd/pushd), nothing checked"
+        else
+            toks="$(printf '%s\n' "$cmds" | v7_tokens)"
+        fi
         n=0
         while IFS= read -r t; do
-            [ -n "$t" ] || continue
-            tok="${t#*:}"
-            if [ "${t%%:*}" = SKIP ]; then
-                echo "INFO [V7] $wpn: $base: token \`$tok\` not statically checkable"
-                continue
-            fi
-            t="${tok#^}"; t="${t%^\{commit\}}"; t="${t%^\{\}}"
-            case "$t" in ""|-*) continue ;; esac
-            if [ "$partial" -eq 1 ]; then
-                echo "INFO [V7] $wpn: $base: token \`$tok\` not resolved (partial clone)"; continue
-            fi
-            n=$((n+1))
+            case "$t" in REV:*) ;; *) continue ;; esac
+            t="${t#REV:}"; n=$((n+1))
             if [ "$in_repo" -eq 0 ]; then
-                err V7 "$wpn: $base: names revision \`$tok\` but $wpn is not inside a git repository"
+                err V7 "$wpn: $base: names revision \`$t\` but $wpn is not inside a git repository"
             elif ! v7_git -C "$wp" rev-parse --verify --quiet "$t^{object}" >/dev/null 2>&1; then
-                err V7 "$wpn: $base: gate names an unresolvable revision \`$tok\`"
+                err V7 "$wpn: $base: gate names an unresolvable revision \`$t\`"
             fi
         done <<EOF
 $toks
 EOF
+        # Exactly one SKIP line per block, so "passed" and "never ran" differ.
+        skips="$(printf '%s\n' "$toks" | sed -n 's/^SKIP://p' | sort | uniq -c \
+            | sed 's/^ *\([0-9]*\) /\1x /' | paste -sd ';' | sed 's/;/; /g')"
+        [ -z "$skips" ] || echo "INFO [V7] $wpn: $base: SKIP not statically checked: $skips"
         echo "INFO [V7] $wpn: $base: $n revision token(s) statically checked; gate not run"
     done
     [ "$blocks" -gt 0 ] || echo "INFO [V7] $wpn: no task verify: blocks to check; V7 ran no gate (schema-6 WPs carry none)"
