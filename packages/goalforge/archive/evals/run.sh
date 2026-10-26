@@ -43,7 +43,7 @@ file_check() {
 echo "=== goalforge-archive: contract + fixture checks ==="
 
 # STATIC-CONTRACT: identity
-check STATIC-CONTRACT "skill name declared" "name: goalforge-archive"
+check STATIC-CONTRACT "skill name declared" "name: archive"
 check STATIC-CONTRACT "version metadata present" "version: 1.4.0"
 
 # STATIC-CONTRACT: triggers (incl. negative — surface is constrained to archival)

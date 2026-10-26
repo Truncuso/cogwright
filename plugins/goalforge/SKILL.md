@@ -1,80 +1,68 @@
 ---
 name: goalforge
 description: >
-  PUBLIC front door for the goalforge Spec-Driven Development (SDD) planning
-  chain — the LOCAL, authoritative source of truth for the capture → spec →
-  decompose → harden → execute → verify workflow. Use when explaining what the
-  SDD/goalforge chain is, how the planning workflow works, which child skill to
-  invoke for a given stage, or where the schemas, templates, and scripts live.
-  Routes names to the PRIVATE nested children under this package. Trigger
-  phrases: "explain SDD", "explain goalforge", "how does the planning chain
-  work", "which goalforge skill should I use", "show me the planning workflow",
-  "spec-driven development overview", "what does goalforge-harden do", "what's
-  the difference between goalforge-spec and goalforge-decompose", "where are the
-  goalforge templates". Do NOT use to RUN the chain — use /spec /plan /implement
-  /verify directly (they dispatch the stage children directly; the goalforge/run
-  orchestrator is the end-to-end alternative).
+  PUBLIC front door for the goalforge Spec-Driven Development (SDD) chain:
+  capture → spec → decompose → harden → execute → verify. Use to explain the
+  chain, pick the stage child, or locate schemas, templates, and scripts.
+  Triggers: "explain goalforge", "explain SDD", "which goalforge skill",
+  "where are the goalforge templates". Not for RUNNING the chain — use
+  /spec /plan /implement /verify or /goalforge-run.
 metadata:
   skill-kind: preference
-  version: 3.0.0
+  version: 4.0.0
 ---
 
 # goalforge — Spec-Driven Development chain (LOCAL authority)
 
-The **goalforge** package carries the authoritative SDD (Spec-Driven
-Development) planning chain. `packages/goalforge/` is the authored source of
-truth; `plugins/goalforge/` is its generated artifact (`scripts/goalforge-generate.sh`,
-drift-gated). The maintainer's dotfiles reach this package via a per-machine
-symlink (installer contributor mode).
+`packages/goalforge/` is the authored source of truth; `plugins/goalforge/` is
+its generated artifact (`scripts/goalforge-generate.sh`, drift-gated). The
+maintainer's dotfiles reach this package via a per-machine symlink.
 
-This is a **PUBLIC-parent package** (`metadata.version` 3.0.0): a PUBLIC parent
-(this file) owning PRIVATE nested children. Children do not trigger by
-discovery — they are invoked by name from the entry commands and the
-orchestrator, or referenced here.
+This is a **PUBLIC-parent package**: a PUBLIC parent (this file) owning PRIVATE
+nested children. Children do not trigger by discovery — they are invoked by
+name from the entry commands and the orchestrator, or referenced here.
+
+Contract: `plans/<feature>/spec.md` carries the Interface Contract C1-C7 (WP
+shape, frontmatter, gate set, stop rules, dispatch unit, trace, human
+touchpoints); `references/schema.md` and `references/state-machine.md` are the
+field and status authorities. A WP is one `overview.md` with 8 fixed sections
+and a checklist; there are no task files.
 
 ## Children (name → stage → path)
 
 | Skill | Stage | Path |
 |-------|-------|------|
-| `goalforge-capture` | free-text intent → `overview.md` (draft) + route | `capture/` |
-| `goalforge-spec` | design pass → `spec.md`, draft → ready | `spec/` |
-| `goalforge-decompose` | spec → work packages + tasks; `--add-wp` mode | `decompose/` |
-| `goalforge-harden` | WP spec → hardened → ready (review + interview) | `harden/` |
-| `goalforge-interview` | fidelity-aware goal-hardening grilling (wraps the interview plugin engine) | `interview/` |
-| `goalforge-execute` | run ready-WP tasks → implemented | `execute/` |
-| `goalforge-verify` | executing → verified (single semantic gate) | `verify/` |
+| `goalforge-capture` | free-text intent → `overview.md` (draft) | `capture/` |
+| `goalforge-spec` | design pass → `spec.md` with goal + behaviors, draft → spec → ready (ratified); respec | `spec/` |
+| `goalforge-decompose` | spec → WP overviews with checklists; `--add-wp` mode | `decompose/` |
+| `goalforge-harden` | WP spec → hardened → ready (gates G1-G4, 2-round stop) | `harden/` |
+| `goalforge-execute` | ready → executing → implemented (one owner, one commit) | `execute/` |
+| `goalforge-verify` | implemented → verified (gates A/B/C) | `verify/` |
 | `goalforge-redecompose` | reconcile a re-decomposition on a learning event | `redecompose/` |
 | `goalforge-archive` | completed → archived (supersede edges) | `archive/` |
-| `goalforge-recap` | feature/WP status recap | `recap/` |
 | `goalforge-onboard` | onboard an existing repo into the chain | `onboard/` |
-| `goalforge-watchdog` | drift/health monitoring | `watchdog/` |
 | `goalforge-plan-index` | plan index generation | `plan-index/` |
-| `goalforge-arbiter` | adjudication support | `arbiter/` |
-| `goalforge-run` | chain orchestrator (route-aware) | `run/` |
+| `goalforge-run` | chain driver by status | `run/` |
 
 ## Shared assets
 
 | You want… | At |
 |-----------|-----|
-| Frontmatter schemas, status machine | `${CLAUDE_PLUGIN_ROOT}/references/schema.md`, `references/state-machine.md` |
+| Frontmatter schema, status machine | `${CLAUDE_PLUGIN_ROOT}/references/schema.md`, `references/state-machine.md` |
 | File templates | `${CLAUDE_PLUGIN_ROOT}/references/templates/` |
-| Old `sdd-*` → `goalforge-*` name map | `${CLAUDE_PLUGIN_ROOT}/references/alias-map.md` |
-| Validation / goal / routing scripts | `${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-*.sh` |
+| Trace event schema | `${CLAUDE_PLUGIN_ROOT}/references/trace-events.md` |
+| Gate, hash, transition scripts | `${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-*.sh` |
+| Gate sabotage pairs + harness | `hooks/tests/`, `scripts/tests/`, `evals/run.sh` |
 
 ## Entry points
 
 `/spec`, `/plan`, `/implement`, `/verify` are the human entry points; each is a
 thin dispatch surface that reads the stage child's `SKILL.md` directly and runs
-the procedure in-session. `/goalforge-run` is the fifth entry point: it pins the
-`goalforge-run` orchestrator (`run/`) for driving the whole chain end-to-end.
+the procedure in-session. `/goalforge-run` pins the `goalforge-run` driver
+(`run/`) for the whole chain.
 
-Note: `prototype/` and `wayfind/` are non-chain tenants co-located in this
-package (not chain stages), reachable via the installer's top-level symlinks
-(Interface Contract §5).
-
-Note: `brief/` is a chain-support asset — not a chain stage (no status edge)
-and not a co-tenant (no top-level symlink): the `brief` skill authors task
-briefs that `goalforge-execute` consumes.
+`prototype/` and `wayfind/` are non-chain tenants co-located in this package,
+reachable via the installer's top-level symlinks.
 
 ## Legacy naming
 
@@ -83,20 +71,15 @@ name map: `references/alias-map.md`.
 
 ## Gotchas
 
-- **Route vocabulary is `fast | standard | wave` — nothing else.** That set is
-  what `scripts/goalforge-route.sh` actually emits, and the package's prose now
-  says only that. The retired `full` and `one-go` still normalize on READ
-  (`full`⇒`standard`, `one-go`⇒`fast`) so old pins keep working, but neither is
-  ever emitted or written. `run/evals/run.sh` derives the enum from the
-  classifier and fails if the prose drifts back.
 - **`goalforge-run` is PUBLIC-PINNED as `/goalforge-run`, not as a Skill-tool
-  name.** It is still a PRIVATE nested child with no discovery entry, so
-  invoking `goalforge-run` by name answers "Unknown skill" — do not retry that
-  call. `commands/goalforge-run.md` is the pin: it loads `run/SKILL.md` by path.
-  Prefer `/spec`, `/plan`, `/implement`, `/verify` for stage-at-a-time work.
-- **No nested child here resolves via the Skill tool.** Discovery is one level
-  deep: only `goalforge`, `prototype`, and `wayfind` are discoverable. Every
-  other name in the Children table — `goalforge-capture`, `goalforge-harden`,
-  and the rest — must be reached by reading `<child>/SKILL.md` by path. A
-  command or brief that says "invoke goalforge-<stage>" is stating a dispatch
-  that the runtime cannot perform.
+  name.** It is a PRIVATE nested child with no discovery entry; invoking
+  `goalforge-run` by name answers "Unknown skill". `commands/goalforge-run.md`
+  loads `run/SKILL.md` by path.
+- **No nested child resolves via the Skill tool.** Discovery is one level deep:
+  only `goalforge`, `prototype`, and `wayfind` are discoverable. Every other
+  name in the Children table is reached by reading `<child>/SKILL.md` by path.
+- **A gate that does not emit `gate.result` is not a gate.** Every PreToolUse
+  guard and gate script emits through `scripts/goalforge-trace-emit` and ships
+  a sabotage pair (known-bad exit 2, known-good exit 0) under `evals/run.sh`.
+  `goalforge-pre-commit.sh` (git hook) and `goalforge-frontmatter-touch.sh`
+  (non-blocking) ship pairs but emit no row.

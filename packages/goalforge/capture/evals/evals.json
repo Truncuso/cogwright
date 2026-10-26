@@ -1,22 +1,21 @@
 {
-  "skill_name": "goalforge-capture",
+  "skill_name": "capture",
   "evals": [
     {
       "id": 1,
       "should_trigger": true,
       "prompt": "I want to build a notification service that sends emails and SMS when events occur.",
-      "expected_output": "Creates ~/.claude/plans/notification-service/overview.md with status: draft and todo.md from template",
+      "expected_output": "Creates ~/.claude/plans/notification-service/overview.md with status: draft",
       "files": [],
       "expectations": [
-        "SKILL.md declares name: goalforge-capture",
-        "SKILL.md documents output files: overview.md (status: draft) and todo.md",
+        "SKILL.md declares name: capture",
         "SKILL.md references template feature-overview.md",
-        "SKILL.md references template feature-todo.md",
         "SKILL.md describes slugification procedure",
         "SKILL.md states idempotency: folder present + overview.md present = update in place without clobbering",
         "SKILL.md forbids creating WP folders or spec.md",
         "SKILL.md forbids moving or deleting existing files",
-        "SKILL.md states stage_updated is not applicable to feature overview.md (uses updated: instead)"
+        "SKILL.md states stage_updated is not applicable to feature overview.md (uses updated: instead)",
+        "SKILL.md documents overview.md (status: draft) as the only output file"
       ]
     },
     {
@@ -26,7 +25,7 @@
       "expected_output": "Slugifies to user-auth-revamp; creates overview.md with status: draft",
       "files": [],
       "expectations": [
-        "SKILL.md example shows 'User auth Revamp' → user-auth-revamp",
+        "SKILL.md example shows 'User auth Revamp' \u2192 user-auth-revamp",
         "SKILL.md status for overview.md output is exactly 'draft'",
         "SKILL.md template marker line is: <!-- Template: feature-overview v4 (frontmatter-first, flat layout) -->"
       ]
@@ -35,19 +34,19 @@
       "id": 3,
       "should_trigger": true,
       "prompt": "Create a new feature plan for a search indexing pipeline",
-      "expected_output": "Slugifies to search-indexing-pipeline; creates overview.md (status: draft) and todo.md; does not create spec.md or any WP folder",
+      "expected_output": "Slugifies to search-indexing-pipeline; creates overview.md (status: draft); does not create spec.md or any WP folder",
       "files": [],
       "expectations": [
         "SKILL.md triggers on user describing a new feature in natural language",
-        "SKILL.md writes exactly two files: overview.md and todo.md",
-        "SKILL.md Never creates spec.md or WP folders at capture time"
+        "SKILL.md Never creates spec.md or WP folders at capture time",
+        "SKILL.md writes exactly one file: overview.md"
       ]
     },
     {
       "id": 4,
       "should_trigger": false,
       "prompt": "Run the test suite and report which tests are failing.",
-      "expected_output": "goalforge-capture should NOT trigger — this is a test-execution request, not a feature-planning request. The skill is not applicable.",
+      "expected_output": "goalforge-capture should NOT trigger \u2014 this is a test-execution request, not a feature-planning request. The skill is not applicable.",
       "files": [],
       "expectations": [
         "SKILL.md trigger phrase requires user describing a new feature, change, or work item",
@@ -71,7 +70,7 @@
       "id": 6,
       "should_trigger": true,
       "prompt": "Start a plan for okf-substrate.",
-      "expected_output": "The slug is absent from the ACTIVE plans root but present at plans/_archived/okf-substrate/ (and plans/ideas/_archived/okf-substrate.md). Capture must NOT treat it as absent and stamp a fresh status: draft — it HALTS and presents restore-the-archived-feature vs pick-a-new-slug. Exactly one node exists for the slug afterwards, never two.",
+      "expected_output": "The slug is absent from the ACTIVE plans root but present at plans/_archived/okf-substrate/ (and plans/ideas/_archived/okf-substrate.md). Capture must NOT treat it as absent and stamp a fresh status: draft \u2014 it HALTS and presents restore-the-archived-feature vs pick-a-new-slug. Exactly one node exists for the slug afterwards, never two.",
       "files": [
         "evals/fixtures/plans-archived-collision/_archived/okf-substrate/overview.md",
         "evals/fixtures/plans-archived-collision/ideas/_archived/okf-substrate.md"

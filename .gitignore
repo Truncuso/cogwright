@@ -14,3 +14,6 @@ docs/handoffs/
 
 # skill-trace: per-session skill/agent trace (do not commit)
 .memory/trace/
+
+# goalforge reader profiles (spec.md C8): machine state, never committed.
+.memory/user/

@@ -1,0 +1,1 @@
+{"schema_version":"1","status":"failed","verdict":"n/a - could not read diff"}

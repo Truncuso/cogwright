@@ -37,7 +37,7 @@ from pathlib import Path
 
 DEP_KINDS = {"follows", "depends_on"}  # target must precede this feature
 INV_KINDS = {"enables", "blocks"}      # this feature precedes target
-# Same set as goalforge-validate.sh / goalforge-stamp-tables.sh / goalforge-status.sh
+# Same set as goalforge-validate.sh / goalforge-status.sh
 ARCHIVE_DIRS = ("_archived", "_archive")
 
 

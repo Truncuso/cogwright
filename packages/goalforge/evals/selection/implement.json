@@ -37,7 +37,7 @@
       "id": "sel-neg-brief-a-fresh-agent",
       "should_trigger": false,
       "prompt": "Write me a short brief of this work package so a fresh agent can pick it up cold.",
-      "expected_output": "Does not fire — producing a pointer brief is not executing the WP. `brief` owns the WP brief artifact.",
+      "expected_output": "Does not fire — producing a standalone brief document is not executing the WP. There is no brief file: `execute` writes the one dispatch brief in-session, on entry.",
       "files": []
     },
     {

@@ -1,0 +1,27 @@
+{
+  "stage": "harden",
+  "wp": "wp-07-stage-reports",
+  "reader": "anonymous",
+  "changed": [
+    { "text": "G3 round 2 closed 11 of 17 findings; both CRITICALs are gone", "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:140" }
+  ],
+  "issues": [
+    {
+      "id": "N3",
+      "text": "the ref regex still accepts the undefined path:#heading form",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/overview.md:180",
+      "evidence": "re.match accepts a/b.md:#Heading",
+      "options": [
+        { "label": "colon-free first arm", "pro": "the known-bad can fail", "con": "one more regex review" },
+        { "label": "leave as written", "pro": "no edit", "con": "a known-bad that cannot fail is not a check" }
+      ],
+      "recommended": "colon-free first arm",
+      "owner": "human"
+    }
+  ],
+  "next_gate": {
+    "ask": "Authorize a fix lap and one more review round past the C4 cap?",
+    "ref": "plans/goalforge-overhaul/wp-07-stage-reports/findings.md:235"
+  },
+  "assumed_known": []
+}

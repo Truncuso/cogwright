@@ -1,0 +1,11 @@
+{
+  "stage": "harden",
+  "wp": "wp-07-stage-reports",
+  "reader": "anonymous",
+  "changed": [{ "text": "one change", "ref": "a/b.py:12" }],
+  "issues": [
+    { "id": "X2", "text": "the ref is a paraphrase, not a locator", "ref": "see the harden skill", "owner": "human" }
+  ],
+  "next_gate": { "ask": "proceed?", "ref": "a/b.py:12" },
+  "assumed_known": []
+}

@@ -1,0 +1,4 @@
+# wp-08 b2/b7(i): an EMPTY but well-formed table — admits nothing.
+schema_version: 1
+
+admitted: []

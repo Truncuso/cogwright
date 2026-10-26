@@ -1,0 +1,14 @@
+# Known-bad expertise map — a bare specialist NAME as a bundle value.
+#
+# `typescript-pro` is a dispatch target, not a readable corpus-relative
+# path; every admissible value contains a `/`. Copy of the live map's
+# shape, one defect.
+
+by_extension:
+  .ts: [typescript-pro, rules/common/coding-style.md]
+
+by_tag:
+  security: [rules/common/security.md]
+
+by_task_type:
+  code: [rules/common/coding-style.md]

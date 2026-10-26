@@ -3,15 +3,35 @@
   "refs": [
     {
       "from": "README.md",
+      "path": "hooks/goalforge-quota-read.sh"
+    },
+    {
+      "from": "README.md",
+      "path": "hooks/hooks.json"
+    },
+    {
+      "from": "README.md",
+      "path": "references/alias-map.md"
+    },
+    {
+      "from": "README.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "README.md",
+      "path": "references/respec.md"
+    },
+    {
+      "from": "README.md",
       "path": "references/schema.md"
     },
     {
       "from": "README.md",
-      "path": "references/specialist-map.yaml"
+      "path": "references/state-machine.md"
     },
     {
       "from": "README.md",
-      "path": "references/state-machine.md"
+      "path": "scripts/goalforge-install-hooks.sh"
     },
     {
       "from": "SKILL.md",
@@ -31,7 +51,19 @@
     },
     {
       "from": "SKILL.md",
-      "path": "scripts/goalforge-route.sh"
+      "path": "references/trace-events.md"
+    },
+    {
+      "from": "SKILL.md",
+      "path": "scripts/goalforge-trace-emit"
+    },
+    {
+      "from": "agents/implementer.md",
+      "path": "references/expertise-map.yaml"
+    },
+    {
+      "from": "agents/reviewer.md",
+      "path": "references/expertise-map.yaml"
     },
     {
       "from": "commands/goalforge-run.md",
@@ -110,8 +142,36 @@
       "path": "skills/wayfind/SKILL.md"
     },
     {
+      "from": "references/admission.md",
+      "path": "references/admitted-providers.yaml"
+    },
+    {
+      "from": "references/admission.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "references/admission.md",
+      "path": "scripts/goalforge-admission.py"
+    },
+    {
+      "from": "references/admission.md",
+      "path": "scripts/goalforge-leaf-exec.sh"
+    },
+    {
+      "from": "references/admission.md",
+      "path": "scripts/goalforge-pick-agent.py"
+    },
+    {
       "from": "references/dispatch-template.md",
       "path": "references/discipline-core.md"
+    },
+    {
+      "from": "references/dispatch-template.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "references/dispatch-template.md",
+      "path": "references/schema.md"
     },
     {
       "from": "references/dispatch-template.md",
@@ -126,12 +186,40 @@
       "path": "skills/execute/references/dispatch-resolution.md"
     },
     {
-      "from": "references/fidelity.md",
-      "path": "scripts/goalforge-issue"
+      "from": "references/harness-dependencies.md",
+      "path": "references/harness-primitives.txt"
     },
     {
-      "from": "references/fidelity.md",
-      "path": "skills/prototype/references/spike-spec.md"
+      "from": "references/harness-dependencies.md",
+      "path": "scripts/goalforge-doctor.sh"
+    },
+    {
+      "from": "references/harness-dependencies.md",
+      "path": "scripts/goalforge-harness-check.sh"
+    },
+    {
+      "from": "references/lens-ownership.md",
+      "path": "references/expertise-map.yaml"
+    },
+    {
+      "from": "references/reader-profile.md",
+      "path": "scripts/goalforge-reader.sh"
+    },
+    {
+      "from": "references/reader-profile.md",
+      "path": "scripts/goalforge-stage-report.sh"
+    },
+    {
+      "from": "references/respec.md",
+      "path": "references/state-machine.md"
+    },
+    {
+      "from": "references/respec.md",
+      "path": "scripts/goalforge-respec-apply.sh"
+    },
+    {
+      "from": "references/respec.md",
+      "path": "scripts/goalforge-respec-diff.sh"
     },
     {
       "from": "references/retrospective.md",
@@ -147,7 +235,23 @@
     },
     {
       "from": "references/schema.md",
+      "path": "references/admission.md"
+    },
+    {
+      "from": "references/schema.md",
+      "path": "references/admitted-providers.yaml"
+    },
+    {
+      "from": "references/schema.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "references/schema.md",
       "path": "references/templates/reharden-evidence.md"
+    },
+    {
+      "from": "references/schema.md",
+      "path": "references/tier-map.md"
     },
     {
       "from": "references/schema.md",
@@ -155,11 +259,15 @@
     },
     {
       "from": "references/schema.md",
-      "path": "scripts/goalforge-route.sh"
+      "path": "scripts/goalforge-pick-agent.py"
     },
     {
       "from": "references/state-machine.md",
       "path": "hooks/goalforge-transition-guard.sh"
+    },
+    {
+      "from": "references/state-machine.md",
+      "path": "references/respec.md"
     },
     {
       "from": "references/state-machine.md",
@@ -174,8 +282,28 @@
       "path": "scripts/goalforge-transition.sh"
     },
     {
+      "from": "references/templates/stage-report.md",
+      "path": "scripts/goalforge-stage-report.sh"
+    },
+    {
+      "from": "references/tier-map.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "references/trace-events.md",
+      "path": "references/schema/stage-report.schema.json"
+    },
+    {
       "from": "references/trace-events.md",
       "path": "references/state-machine.md"
+    },
+    {
+      "from": "references/trace-events.md",
+      "path": "references/templates/stage-report.md"
+    },
+    {
+      "from": "references/trace-events.md",
+      "path": "scripts/goalforge-stage-report.sh"
     },
     {
       "from": "skills/archive/SKILL.md",
@@ -188,18 +316,6 @@
     {
       "from": "skills/archive/SKILL.md",
       "path": "scripts/goalforge-archive.sh"
-    },
-    {
-      "from": "skills/brief/SKILL.md",
-      "path": "references/tier-map.md"
-    },
-    {
-      "from": "skills/brief/SKILL.md",
-      "path": "scripts/goalforge-goal-hash.sh"
-    },
-    {
-      "from": "skills/brief/SKILL.md",
-      "path": "scripts/goalforge-pick-agent.py"
     },
     {
       "from": "skills/capture/SKILL.md",
@@ -219,6 +335,10 @@
     },
     {
       "from": "skills/capture/SKILL.md",
+      "path": "references/reader-profile.md"
+    },
+    {
+      "from": "skills/capture/SKILL.md",
       "path": "references/schema.md"
     },
     {
@@ -227,35 +347,19 @@
     },
     {
       "from": "skills/decompose/SKILL.md",
-      "path": "references/fidelity.md"
-    },
-    {
-      "from": "skills/decompose/SKILL.md",
       "path": "references/schema.md"
     },
     {
       "from": "skills/decompose/SKILL.md",
-      "path": "scripts/goalforge-pick-agent.py"
-    },
-    {
-      "from": "skills/decompose/SKILL.md",
-      "path": "skills/decompose/references/gotchas.md"
-    },
-    {
-      "from": "skills/decompose/SKILL.md",
-      "path": "skills/decompose/references/tier1-feature-audit.md"
-    },
-    {
-      "from": "skills/decompose/SKILL.md",
-      "path": "skills/prototype/references/spike-spec.md"
+      "path": "references/templates/wp-overview.md"
     },
     {
       "from": "skills/execute/SKILL.md",
-      "path": "commands/implement.md"
+      "path": "references/dispatch.yaml"
     },
     {
       "from": "skills/execute/SKILL.md",
-      "path": "references/fidelity.md"
+      "path": "references/harness-dependencies.md"
     },
     {
       "from": "skills/execute/SKILL.md",
@@ -263,83 +367,63 @@
     },
     {
       "from": "skills/execute/SKILL.md",
-      "path": "skills/execute/references/autonomy.md"
+      "path": "scripts/goalforge-harness-check.sh"
     },
     {
       "from": "skills/execute/SKILL.md",
       "path": "skills/execute/references/dispatch-resolution.md"
     },
     {
-      "from": "skills/execute/SKILL.md",
-      "path": "skills/execute/references/goal-directive.md"
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "hooks/goalforge-pre-commit.sh"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/admission.md"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/admitted-providers.yaml"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/dispatch.yaml"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/expertise-map.yaml"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/harness-dependencies.md"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "references/tier-map.md"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "scripts/goalforge-harness-check.sh"
+    },
+    {
+      "from": "skills/execute/references/dispatch-resolution.md",
+      "path": "scripts/goalforge-install-hooks.sh"
     },
     {
       "from": "skills/harden/SKILL.md",
-      "path": "hooks/goalforge-open-questions-gate.sh"
+      "path": "agents/reviewer.md"
     },
     {
       "from": "skills/harden/SKILL.md",
-      "path": "references/fidelity.md"
+      "path": "references/expertise-map.yaml"
     },
     {
       "from": "skills/harden/SKILL.md",
-      "path": "references/mutation-testing.md"
+      "path": "references/lens-ownership.md"
     },
     {
       "from": "skills/harden/SKILL.md",
       "path": "references/schema.md"
-    },
-    {
-      "from": "skills/harden/SKILL.md",
-      "path": "references/state-machine.md"
-    },
-    {
-      "from": "skills/harden/SKILL.md",
-      "path": "references/templates/reharden-evidence.md"
-    },
-    {
-      "from": "skills/harden/SKILL.md",
-      "path": "scripts/goalforge-attribution.sh"
-    },
-    {
-      "from": "skills/harden/SKILL.md",
-      "path": "scripts/goalforge-preharden-lint.sh"
-    },
-    {
-      "from": "skills/harden/SKILL.md",
-      "path": "skills/harden/references/assumptions.md"
-    },
-    {
-      "from": "skills/harden/SKILL.md",
-      "path": "skills/harden/references/migration-rewire.md"
-    },
-    {
-      "from": "skills/harden/SKILL.md",
-      "path": "skills/harden/references/panel-protocol.md"
-    },
-    {
-      "from": "skills/harden/SKILL.md",
-      "path": "skills/harden/references/pre-harden-review.md"
-    },
-    {
-      "from": "skills/harden/SKILL.md",
-      "path": "skills/harden/references/review-topology.md"
-    },
-    {
-      "from": "skills/harden/references/assumptions.md",
-      "path": "scripts/goalforge-assumption-recheck.sh"
-    },
-    {
-      "from": "skills/harden/references/panel-protocol.md",
-      "path": "skills/harden/references/pre-harden-review.md"
-    },
-    {
-      "from": "skills/interview/SKILL.md",
-      "path": "references/fidelity.md"
-    },
-    {
-      "from": "skills/interview/SKILL.md",
-      "path": "skills/prototype/references/spike-spec.md"
     },
     {
       "from": "skills/plan-index/SKILL.md",
@@ -358,10 +442,6 @@
       "path": "skills/prototype/references/UI.md"
     },
     {
-      "from": "skills/recap/SKILL.md",
-      "path": "scripts/recap.sh"
-    },
-    {
       "from": "skills/redecompose/SKILL.md",
       "path": "scripts/goalforge-goal-changelog.sh"
     },
@@ -375,31 +455,15 @@
     },
     {
       "from": "skills/run/SKILL.md",
-      "path": "commands/spec.md"
-    },
-    {
-      "from": "skills/run/SKILL.md",
-      "path": "hooks/goalforge-open-questions-gate.sh"
-    },
-    {
-      "from": "skills/run/SKILL.md",
-      "path": "references/dispatch-template.md"
-    },
-    {
-      "from": "skills/run/SKILL.md",
       "path": "references/schema.md"
     },
     {
       "from": "skills/run/SKILL.md",
-      "path": "references/specialist-map.yaml"
+      "path": "scripts/goalforge-workflow-compile.py"
     },
     {
-      "from": "skills/run/SKILL.md",
-      "path": "scripts/goalforge-route.sh"
-    },
-    {
-      "from": "skills/run/SKILL.md",
-      "path": "skills/run/scripts/goalforge-router.sh"
+      "from": "skills/run/workflows/README.md",
+      "path": "scripts/goalforge-workflow-compile.py"
     },
     {
       "from": "skills/spec/SKILL.md",
@@ -407,19 +471,47 @@
     },
     {
       "from": "skills/spec/SKILL.md",
+      "path": "references/respec.md"
+    },
+    {
+      "from": "skills/spec/SKILL.md",
       "path": "references/schema.md"
     },
     {
-      "from": "skills/verify/SKILL.md",
-      "path": "references/schema.md"
-    },
-    {
-      "from": "skills/verify/SKILL.md",
+      "from": "skills/spec/SKILL.md",
       "path": "references/state-machine.md"
     },
     {
-      "from": "skills/watchdog/SKILL.md",
+      "from": "skills/spec/SKILL.md",
+      "path": "scripts/goalforge-respec-apply.sh"
+    },
+    {
+      "from": "skills/spec/SKILL.md",
+      "path": "scripts/goalforge-respec-diff.sh"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "agents/evaluation-expert.md"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "agents/reviewer.md"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "references/expertise-map.yaml"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "references/lens-ownership.md"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
       "path": "references/schema.md"
+    },
+    {
+      "from": "skills/verify/SKILL.md",
+      "path": "references/tier-map.md"
     },
     {
       "from": "skills/wayfind/SKILL.md",

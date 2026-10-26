@@ -1,0 +1,44 @@
+{
+  "stage": "harden",
+  "wp": "wp-07-stage-reports",
+  "reader": "anonymous",
+  "changed": [
+    {
+      "text": "dependencies wp-03, wp-04 and wp-06 are all verified",
+      "ref": "plans/goalforge-overhaul/wp-07-stage-reports/overview.md:10"
+    }
+  ],
+  "issues": [
+    {
+      "id": "wp-02",
+      "text": "schema v6 renamed four frontmatter keys this WP's overview uses",
+      "ref": "plans/goalforge-overhaul/wp-02-schema-v6/overview.md:1",
+      "evidence": "schema_version: 6 in every WP frontmatter",
+      "options": [
+        {
+          "label": "read wp-02 first",
+          "pro": "full context",
+          "con": "a long detour"
+        },
+        {
+          "label": "take the rename list as given",
+          "pro": "fast",
+          "con": "you trust the summary"
+        }
+      ],
+      "recommended": "take the rename list as given",
+      "owner": "human"
+    },
+    {
+      "id": "T11",
+      "text": "the colliding evals/run.sh block must be relabelled by content",
+      "ref": "packages/goalforge/evals/run.sh:163",
+      "owner": "agent"
+    }
+  ],
+  "next_gate": {
+    "ask": "Advance wp-07 from hardened to ready?",
+    "ref": "packages/goalforge/harden/SKILL.md#The `hardened \u2192 ready` gate (C7)"
+  },
+  "assumed_known": []
+}

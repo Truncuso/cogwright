@@ -24,7 +24,7 @@ check() {
 echo "=== goalforge-spec: static-contract checks ==="
 
 # Identity
-check "skill name declared" "name: goalforge-spec"
+check "skill name declared" "name: spec"
 
 # Input contract
 check "input is overview.md with status draft" "status: draft"
@@ -36,17 +36,24 @@ check "overview.md status advances to ready" "status: ready"
 
 # Human gate
 check "human-gated transition documented" "human-gated"
-check "draft → ready feature gate documented" "(the feature gate) is one of two human-gated transitions"
-# Negative: the retired claim must not reappear (ground truth: state-machine.md
-# human-gates draft→ready, never draft→spec)
-if grep -qF 'draft → spec` is one of two human-gated' "$SKILL_MD"; then
-  echo "  FAIL: retired human-gate claim (draft → spec) present"
-  FAIL=$((FAIL+1))
-else
-  echo "  PASS: retired human-gate claim absent"
+check "spec → ready single spec-approval gate documented" "spec → ready is the single human-gated spec-approval transition"
+# Negative: the retired gate claims must not reappear (ground truth:
+# state-machine.md human-gates spec→ready only; draft→spec is the ungated
+# proposal edge and no draft→ready row exists)
+RETIRED=0
+for claim in '(the feature gate) is one of two human-gated' 'draft → ready' 'draft -> ready' 'draft → spec` is one of two human-gated'; do
+  if grep -qF -- "$claim" "$SKILL_MD"; then
+    echo "  FAIL: retired human-gate claim present: $claim"
+    RETIRED=1
+  fi
+done
+if [ "$RETIRED" -eq 0 ]; then
+  echo "  PASS: retired human-gate claims absent"
   PASS=$((PASS+1))
+else
+  FAIL=$((FAIL+1))
 fi
-check "skill must present draft before writing" "present the draft spec"
+check "skill must present the proposal before ratifying" "present the proposal to the user"
 
 # Template marker
 check "feature-spec template marker documented" "<!-- Template: feature-spec v4 (frontmatter-first, flat layout) -->"

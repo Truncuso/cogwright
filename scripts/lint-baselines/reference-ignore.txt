@@ -17,22 +17,25 @@
 # ref inside it. Entries are live: ci-lints.sh fails on an entry that suppresses
 # nothing (the dead-entry leg of the same ratchet the baselines get).
 
-# class-vi cross-skill prose: a path into ANOTHER installed skill, deliberately
-# left verbatim by the generator (it addresses ~/.claude/skills, not the plugin).
-*harden/*::skills/adjudication/*
-
-# class-vi cross-skill prose: decompose's Add-WP re-entry section names the
-# caller that marshals `--source` records (the idea package's idea-route), which
-# is a peer installed skill under ~/.claude/skills, never part of this plugin.
-*decompose/SKILL.md::skills/idea/idea-route/*
-
-# external pointer into the author's global rule set, not the plugin tree.
-*execute/references/dispatch-resolution.md::references/rules/*
-
-# repo-tooling pointer: maintainer prose in the parent SKILL.md names the
-# cogwright-repo-relative generator path (alongside packages/ and plugins/),
-# which by construction never ships inside the artifact it generates.
+# repo-tooling pointer: maintainer prose names the cogwright-repo-relative
+# generator path (alongside packages/ and plugins/), which by construction never
+# ships inside the artifact it generates. The parent SKILL.md carries it, and so
+# do the entry commands and execute's regenerate step (wp-01 T16/T21).
 SKILL.md::scripts/goalforge-generate.sh
+*commands/*.md::scripts/goalforge-generate.sh
+*execute/SKILL.md::scripts/goalforge-generate.sh
+
+# grammar placeholder, not an address: the entry commands and the run driver
+# document the plugin path LAYOUT, where `<child>` stands for whichever stage
+# skill the step names. The token is ref-shaped but unresolvable by construction
+# (wp-01 T21).
+*commands/*.md::skills/<child>/SKILL.md
+*run/SKILL.md::skills/<child>/SKILL.md
+
+# dev-tree test suites are excluded from the artifact by the generator
+# (`**/tests/**`, scripts/goalforge-generate.sh:141), so the package README's
+# pointer at a hook test resolves in the package tree and never in the plugin.
+*README.md::hooks/tests/*
 
 # ── Outside the grammar by construction — no entry needed ───────────────────
 # These classes were carried as ignore entries and never fired once: the

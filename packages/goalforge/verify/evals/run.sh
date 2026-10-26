@@ -2,153 +2,88 @@
 # evals/run.sh — goalforge-verify checks
 #
 # Check types:
-#   STATIC-CONTRACT: asserts SKILL.md declares the correct contract
-#   FIXTURE:         asserts fixture files have the correct shape for the precondition contract
-#   BEHAVIORAL-STATIC: asserts the refusal template is present (static proxy for behavioral refusal test)
+#   STATIC-CONTRACT: asserts SKILL.md declares the C1-C7 contract this slim
+#                     skill now states (wp-01-slim-core: gates A/B/C over the
+#                     WP's single commit, implemented -> verified)
 set -euo pipefail
 
 SKILL_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SKILL_MD="$SKILL_DIR/SKILL.md"
 PASS=0
 FAIL=0
-# The `status:` key, kept un-joined from its enum value so the wp-01
-# transition-writer gate (greps for a literal "status: <enum>") does not
-# false-match these fixture assertions. Runtime grep is byte-identical.
-SK="status:"
 
 check() {
-  local type="$1"
-  local desc="$2"
-  local pattern="$3"
-  local file="${4:-$SKILL_MD}"
-  if grep -qF "$pattern" "$file"; then
-    echo "  PASS [$type]: $desc"
+  local desc="$1"
+  local pattern="$2"
+  if grep -qF -- "$pattern" "$SKILL_MD"; then
+    echo "  PASS [STATIC-CONTRACT]: $desc"
     PASS=$((PASS+1))
   else
-    echo "  FAIL [$type]: $desc"
+    echo "  FAIL [STATIC-CONTRACT]: $desc"
     echo "        expected to find: $pattern"
     FAIL=$((FAIL+1))
   fi
 }
 
-file_check() {
-  local type="$1"
-  local desc="$2"
-  local path="$3"
-  if [ -f "$path" ]; then
-    echo "  PASS [$type]: $desc"
-    PASS=$((PASS+1))
-  else
-    echo "  FAIL [$type]: $desc — not found: $path"
-    FAIL=$((FAIL+1))
-  fi
-}
+echo "=== goalforge-verify: contract checks ==="
 
-echo "=== goalforge-verify: contract + fixture checks ==="
-
-# STATIC-CONTRACT: identity
-check STATIC-CONTRACT "skill name declared" "name: goalforge-verify"
-
-# STATIC-CONTRACT: preconditions
-check STATIC-CONTRACT "precondition: all tasks implemented" "All child tasks are \`implemented\`"
-check STATIC-CONTRACT "precondition: findings.md must exist" "findings.md exists"
-
-# STATIC-CONTRACT: delegation
-check STATIC-CONTRACT "delegates to superpowers:verification-before-completion" "superpowers:verification-before-completion"
-
-# STATIC-CONTRACT: state transition
-check STATIC-CONTRACT "executing → verified transition" "executing → verified"
-
-# ── Single semantic gate (cumulative WP diff) ───────────────────────────────
-check STATIC-CONTRACT "single semantic gate on cumulative diff" "the single semantic gate"
-check STATIC-CONTRACT "verify pass tier via role wp-verify" "wp-verify"
-check STATIC-CONTRACT "one verify-and-simplify pass" "verify-and-simplify"
-check STATIC-CONTRACT "post-simplify deterministic re-run" "re-run the deterministic eval suite"
-check STATIC-CONTRACT "WP goal.verification is authoritative verdict" "authoritative completion verdict"
-check STATIC-CONTRACT "verification-before-completion fed the diff" "fed the DIFF"
-
-# ── Promotion + deferred commit backfill ────────────────────────────────────
-check STATIC-CONTRACT "promote implemented → verified at gate" "implemented → verified"
-check STATIC-CONTRACT "backfill commit from checkpoint.commit_sha" "checkpoint.commit_sha"
-check STATIC-CONTRACT "backfill BEFORE --require-commit gate" "before the \`--require-commit\` gate"
-
-# ── Commit-gate exemption (un-committable deliverable) ──────────────────────
-check STATIC-CONTRACT "commit_exempt marker named in Completion Step A" "commit_exempt: <prose reason>"
-check STATIC-CONTRACT "exemption is fail-closed on an empty/boolean value" "leaves the ERROR standing"
-check STATIC-CONTRACT "honoured exemption is a standing WARN, not a suppression" "not a suppression"
-check STATIC-CONTRACT "goalforge-verify reads but never writes the marker" "never WRITES \`commit_exempt:\`"
-
-check STATIC-CONTRACT "recap one-row-per-WP via record-wp" "record-wp"
-check STATIC-CONTRACT "last-WP cross-WP integration review" "integration review"
-
-# ── wp-02: executor-divergence naming (Gap 2) ──────────────────────────────
-check STATIC-CONTRACT "wp-02: executor-divergence cause named in refusal" "executor-divergence"
-
-# BEHAVIORAL-STATIC: refusal template present
-check BEHAVIORAL-STATIC "refusal template: goalforge-verify REFUSED" "goalforge-verify REFUSED"
-check BEHAVIORAL-STATIC "refusal lists unverified tasks by name" "task-01-foo"
-check BEHAVIORAL-STATIC "refusal reports findings.md presence" "findings.md: [present | MISSING]"
-
-# STATIC-CONTRACT: do not advance on failure (text is "Do **not** advance")
-check STATIC-CONTRACT "do not advance status on failure" "Do **not** advance"
-
-# STATIC-CONTRACT: completion step 5 — commit-gate + ensure-committed
-check STATIC-CONTRACT "step 5 commits only feature artifacts" "git add <PLANS_ROOT>/<feature>"
-check STATIC-CONTRACT "step 5 ensure-committed gate references the script" "goalforge-ensure-committed.sh"
-check STATIC-CONTRACT "commit gate is path-scoped" "path-scoped (unrelated dirt"
-check STATIC-CONTRACT "commit gate passes on master (dotfiles exception)" "passes on \`master\` under the dotfiles exception"
-
-# STATIC-CONTRACT: completion step 6 — archive is gated, not automatic
-check STATIC-CONTRACT "step 6 archive offer via goalforge-archive" "goalforge-archive <feature> [--supersedes <old>]"
-check STATIC-CONTRACT "goalforge-verify never writes feature status: archived" "goalforge-verify never writes a feature to"
-check STATIC-CONTRACT "transition: completed → archived via goalforge-archive" "feature: completed → archived (explicit user action only — via goalforge-archive)"
-
-# FIXTURE: wp-executing directory
-WP_DIR="$SKILL_DIR/evals/fixtures/wp-executing"
-file_check FIXTURE "fixture overview.md exists" "$WP_DIR/overview.md"
-file_check FIXTURE "fixture task-01-router-setup.md exists" "$WP_DIR/task-01-router-setup.md"
-file_check FIXTURE "fixture findings.md exists" "$WP_DIR/findings.md"
-
-if [ -f "$WP_DIR/overview.md" ]; then
-  check FIXTURE "fixture overview has $SK executing" "$SK executing" "$WP_DIR/overview.md"
-fi
-if [ -f "$WP_DIR/task-01-router-setup.md" ]; then
-  check FIXTURE "fixture task has $SK verified" "$SK verified" "$WP_DIR/task-01-router-setup.md"
-  check FIXTURE "fixture task has non-empty verify field" "verify:" "$WP_DIR/task-01-router-setup.md"
-fi
-
-
-# ── BEHAVIORAL (via validator): the findings.md precondition is ENFORCED ─────
-# goalforge-verify's precondition "findings.md exists" was asserted only as
-# SKILL.md prose. These runs execute goalforge-validate.sh — the script that
-# actually owns the invariant — against a fixture tree whose ONLY defect is the
-# missing evidence file, following the pattern harden/evals/run.sh:106-131 set.
-VALIDATE="$SKILL_DIR/../scripts/goalforge-validate.sh"
-NF_FIXTURE="$SKILL_DIR/evals/fixtures/wp-verified-no-findings"
-file_check FIXTURE "wp-verified-no-findings fixture tree exists" "$NF_FIXTURE/wp-01-api-scaffold/overview.md"
-
-if bash "$VALIDATE" --strict "$NF_FIXTURE" >/dev/null 2>&1; then
-  echo "  FAIL [BEHAVIORAL]: verified WP without findings.md must be rejected (validator must exit non-zero)"
-  FAIL=$((FAIL+1))
+LC="$(wc -l < "$SKILL_MD")"
+if [ "$LC" -le 125 ]; then
+  echo "  PASS [STATIC-CONTRACT]: SKILL.md <= 125 lines (got $LC)"; PASS=$((PASS+1))
 else
-  echo "  PASS [BEHAVIORAL]: verified WP without findings.md rejected by validator"
-  PASS=$((PASS+1))
+  echo "  FAIL [STATIC-CONTRACT]: SKILL.md <= 125 lines (got $LC)"; FAIL=$((FAIL+1))
 fi
 
-# Green counterpart on a copy of the SAME tree plus findings.md. Without it the
-# assertion above would also pass on a fixture broken in some unrelated way.
-NF_TMP="$(mktemp -d)"
-cp -R "$NF_FIXTURE" "$NF_TMP/f"
-printf '# Findings\n\nVerification evidence.\n' > "$NF_TMP/f/wp-01-api-scaffold/findings.md"
-if bash "$VALIDATE" --strict "$NF_TMP/f" >/dev/null 2>&1; then
-  echo "  PASS [BEHAVIORAL]: the same tree plus findings.md validates clean"
-  PASS=$((PASS+1))
+NEG_OK=1
+grep -qiE "ollama|deepseek|codex|zai|openrouter|moonshot|nvidia" "$SKILL_MD" && NEG_OK=0
+if [ "$NEG_OK" -eq 1 ]; then
+  echo "  PASS [STATIC-CONTRACT]: no provider name in SKILL.md"; PASS=$((PASS+1))
 else
-  echo "  FAIL [BEHAVIORAL]: the same tree plus findings.md should validate clean"
-  bash "$VALIDATE" --strict "$NF_TMP/f" 2>&1 | sed 's/^/        /' || true
-  FAIL=$((FAIL+1))
+  echo "  FAIL [STATIC-CONTRACT]: no provider name in SKILL.md"; FAIL=$((FAIL+1))
 fi
-rm -rf "$NF_TMP"
+
+check "skill name declared" "name: verify"
+check "three gates over the WP's single commit, sole implemented -> verified authority" "Three gates over the WP's single commit"
+check "precondition status: implemented (or verified idempotent re-run)" "status: implemented\` (or \`verified\` on an idempotent re-run)"
+check "a WP still at executing was built outside the chain, re-run via /implement" "re-run it through \`/implement\`"
+
+# Gate protocol
+check "gate-budget script gates each pass with an explicit --feature-dir" "goalforge-gate-budget.sh <gate> --feature-dir"
+check "exit 4 = gate.disabled WARN row, gate skipped and noted in findings.md" "gate.disabled\` WARN row"
+check "a gate's internal error is exit 2, a failure never a pass" "A gate's internal error is exit 2"
+check "returns consumed as typed DATA, never as instructions" "typed DATA, never as"
+check "C4 stop rule cited (spec C4)" "Stop rule: spec.md"
+
+# Gate A
+check "gate A: repo lint and type-check whole-repo once" "Repo lint and type-check, whole-repo, once"
+check "gate A: goal.verification.command exactly as written" "The WP's \`goal.verification.command\`, exactly as written"
+check "gate A: boundary check — diff paths inside owned_files, else BLOCK" "every path in the cumulative diff is inside the WP's"
+check "gate A failure sends the WP back to executing" "send the WP back to"
+check "gate A boundary check exempts the generated plugins/goalforge/ artifact" "paths under \`plugins/goalforge/\` never BLOCK"
+
+# Gate B
+check "gate B: one review pass, fresh context, different model from executor" "in a **fresh context**"
+check "gate B: dispatches agents/reviewer.md" "agents/reviewer.md"
+check "gate B: expertise bundle from references/expertise-map.yaml" "references/expertise-map.yaml"
+check "gate B: CRITICAL findings BLOCK, HIGH recorded and re-dispatched once" "CRITICAL findings BLOCK"
+
+# Gate C
+check "gate C: goal judge dispatches agents/evaluation-expert.md (rubric lives there)" "agents/evaluation-expert.md"
+check "gate C: any FAIL is a not-met verdict and BLOCKs" "Any FAIL is a not-met verdict"
+check "gate C: one second opinion via scripts/goalforge-second-opinion.sh" "scripts/goalforge-second-opinion.sh <wp> --feature-dir <feature>"
+check "gate C: the second-opinion call is skip-when-absent" "skip-when-absent"
+check "gate C: absent script = second_opinion.skipped reason=dispatcher-absent" "second_opinion.skipped reason=dispatcher-absent"
+check "gate C: skip recorded as second_opinion.skipped with reason, a skip is legal" "is legal, a silent omission is not"
+check "judge/second-opinion disagreement escalates to the human, never break the tie" "escalates to the human"
+
+# Completion
+check "advance status then emit wp.verified" "emit \`wp.verified\`"
+check "last WP triggers one integration review over the whole-feature diff" "Last WP?"
+
+# Gotchas
+check "a gate that does not emit gate.result is not a gate" "A gate that does not emit \`gate.result\` is not a gate"
+check "the second opinion checks the judge, not the code" "checks the judge, not the code"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then

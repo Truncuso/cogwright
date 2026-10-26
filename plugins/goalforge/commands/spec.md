@@ -1,12 +1,14 @@
 ---
-description: "Spec authoring via the goalforge chain — scaffold a new feature with goalforge-capture, then draft→spec with goalforge-spec. Human-gated draft→spec transition. First step of the chain."
+description: "Spec authoring via the goalforge chain — scaffold a new feature with goalforge-capture, then propose and ratify spec.md with goalforge-spec. Human-gated spec→ready ratification. First step of the chain."
 ---
 
 # /spec
 
-> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
-> directory holding this command file. On a direct, non-plugin load the
-> variable is unset; resolve it that way.
+> `${CLAUDE_PLUGIN_ROOT}` is the installed plugin root (`plugins/goalforge/`),
+> where each child skill lives at `skills/<child>/SKILL.md`. The variable is
+> unset on a direct load from the source package — there read
+> `packages/goalforge/<child>/SKILL.md` (the source package has no `skills/`
+> directory; `scripts/goalforge-generate.sh` adds it when generating the plugin).
 
 Entry point of the goalforge chain: `/spec → /plan → /implement → /verify`.
 
@@ -32,37 +34,33 @@ the alternative when the whole chain should be driven end-to-end.
 **If no `<PLANS_ROOT>/<feature>/` folder exists yet for the described idea:**
 
 1. Run `goalforge-capture` — scaffolds `<feature>/overview.md` with frontmatter
-   metadata, captures the raw idea, creates the feature folder in the flat
-   layout, and **stamps the chain route** (`route: fast|standard|wave`;
-   borderline verdicts are confirmed with the user).
-2. **Branch on the stamped route:**
-   - `route: standard` (or `wave`) — run `goalforge-spec`: an interview-style design pass
-     producing `<feature>/spec.md`; continue below.
-   - `route: fast` — **skip `goalforge-spec` entirely.** Follow
-     `goalforge-capture` §Fast path: single WP via `goalforge-decompose
-     --add-wp`, deterministic gates, `--mode auto` advance, then `/implement`.
-     No spec.md, no human spec gate; verification is never skipped.
+   metadata, captures the raw idea, and creates the feature folder in the flat
+   layout at `status: draft`.
+2. Run `goalforge-spec` — a design pass producing `<feature>/spec.md`: the goal
+   object (`outcome` + `verification.command` + `verification.behaviors[]`), the
+   `## Interface Contract` sections later WPs slice, and the `register:`
+   (`spike | production`) that sets the rigor for the whole feature.
 
 **If the feature folder already exists (resuming or refining):** run
-`goalforge-spec` on it — updates or completes `spec.md` (on a `route: fast`
-feature this is the deliberate promotion path: author the spec retroactively
-and flip `route: standard`).
+`goalforge-spec` on it — it updates or completes `spec.md` in place.
 
 `<PLANS_ROOT>` resolves per `${CLAUDE_PLUGIN_ROOT}/references/schema.md`
 §PLANS_ROOT resolution.
 
-## Human gate (draft → spec, standard route)
+## Human gate (spec → ready)
 
-- Present the full `spec.md` to the user.
-- **Wait for explicit user approval** before the feature status advances.
+- `goalforge-spec` writes the proposal (`spec.md` at `draft -> spec` for a
+  first spec; a `respec/<YYYY-MM-DD>-<slug>/` proposal for a revision) and
+  presents it to the user.
+- **Wait for explicit user approval** before the feature status advances:
+  the ratification on `spec → ready` is the single spec-approval gate.
 - If the user requests changes, loop `goalforge-spec` until they approve.
 - A WP leaves `/spec` at `status: spec` ONLY when both its **outcome** and its
   **verification method** are written. Unresolved unknowns keep it at `draft`.
 
 ## Rules
 
-- No code. Terminal state (standard route): an approved `spec.md` with work
-  packages at `status: spec`. Fast route: one WP at `status: ready` via the
-  deterministic gates.
+- No code. Terminal state: an approved `spec.md` and a feature at
+  `status: ready`, ready for `/plan` to decompose it into WPs at `status: spec`.
 - Layout is FLAT: `<PLANS_ROOT>/<feature>/<wp>/` — no lifecycle folders.
-- Next: `/plan` (standard route) or `/implement` directly (fast route).
+- Next: `/plan` (decompose + harden).

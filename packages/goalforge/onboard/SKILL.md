@@ -1,5 +1,5 @@
 ---
-name: goalforge-onboard
+name: onboard
 description: >
   Bootstraps the Spec-Driven Development chain in a repository: creates the
   plans/ root, installs the goalforge-validate pre-commit hook (via

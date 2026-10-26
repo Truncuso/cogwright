@@ -1,285 +1,226 @@
 #!/usr/bin/env bash
-# goalforge-rollup.sh — derive a feature-level todo.md rollup from authoritative
-#                 wp-*/overview.md status: frontmatter.
+# goalforge-rollup.sh — read-side renderer over a feature's trace-events.jsonl
+# (D13: "state in one file" — trace-events.jsonl is the single state
+# substrate; this script never reads or writes recap.md, per-task checkpoint
+# blocks, or a todo.md rollup — all three are RETIRED by wp-01/C6).
 #
 # Usage:
-#   goalforge-rollup.sh <feature-dir>
+#   goalforge-rollup.sh <feature-dir> [--session <id>] [--dispatch <path>]
 #
 # Reads (NEVER writes to these):
-#   <feature-dir>/overview.md                 — feature name:, title:
-#   <feature-dir>/wp-*/overview.md            — name:, title:, status:, stage_updated:
-#   <feature-dir>/wp-*/todo.md                — ## Open Items and ## Blocked On bullets
+#   <feature-dir>/trace-events.jsonl   — the sole input (via goalforge-trace-read)
 #
-# Writes exactly one file:
-#   <feature-dir>/todo.md                     — generated: true rollup
+# Writes: NOTHING. Prints a per-WP rollup + a shipping-metric line to STDOUT.
+# A missing trace-events.jsonl is not an error (a feature that hasn't started
+# executing yet has no trace) — the renderer prints an empty rollup and exits 0.
 #
-# Clobber guard: if <feature-dir>/todo.md already exists WITHOUT
-# `generated: true` in its frontmatter, it is a hand-maintained file this
-# script does not own — the rollup REFUSES to overwrite it, warns on stderr,
-# and exits 0 (never blocks the calling transition). Move the hand content
-# aside (e.g. open-items.md) to adopt the generated rollup.
+# Per-WP section (only WPs that appear in the trace are listed, in the order
+# their first event appears): dispatches (dispatch.launched, task/agent/model/
+# effort), gate results (gate.result, gate=result pairs in trace order), harden
+# rounds (harden.round/harden.parked, if any), completed dispatches
+# (dispatch.completed, with the `tokens`/`tool_uses` sizing sensors wp-03
+# made required — a row whose `tokens` exceeds `rollup.token_warn` from
+# references/dispatch.yaml, overridable with `--dispatch <path>`, prints a
+# WARN line; a WARN never changes the exit code), the linked commit
+# (commit.linked, most recent by seq), and whether the WP verified
+# (wp.verified).
 #
-# Idempotent: running twice back-to-back produces a byte-identical file.
-# updated: is the MAX stage_updated across WP overviews (ISO date compare),
-#   never the wall-clock date — guarantees idempotency.
+# Shipping metric (D9): "WPs verified this session: N" — counts distinct WPs
+# with a `wp.verified` row IN THE RESOLVED SESSION (same fallback + degrade
+# rule as goalforge-gate-budget.sh: --session override > $CLAUDE_SESSION_ID >
+# "unknown"; a row with no `session` field is assumed to belong to the current
+# session — see that script's header for the full rationale).
 #
-# Exit 0 on success. Exit non-zero only on a genuinely unreadable feature dir.
+# Idempotent: running twice back-to-back on an unchanged trace produces
+# byte-identical stdout (no wall-clock stamps in the body).
+#
+# Exit 0 on success (including "no trace yet"). Exit 1 only when <feature-dir>
+# does not exist / is unreadable — this script is called from
+# goalforge-transition.sh's critical section under `set -e`, so it must never
+# fail on a valid, existing feature dir.
 
 set -uo pipefail
 
+SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 if [[ $# -lt 1 ]]; then
-    echo "Usage: goalforge-rollup.sh <feature-dir>" >&2
+    echo "Usage: goalforge-rollup.sh <feature-dir> [--session <id>] [--dispatch <path>]" >&2
     exit 1
 fi
 
-FEATURE_DIR="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$1")"
+FEATURE_DIR_ARG="$1"; shift
+SESSION_OPT=""
+DISPATCH_PATH="$SD/../references/dispatch.yaml"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --session)  SESSION_OPT="${2:-}"; shift 2 ;;
+        --dispatch) DISPATCH_PATH="${2:-}"; shift 2 ;;
+        *)          echo "goalforge-rollup.sh: unexpected argument '$1'" >&2; exit 1 ;;
+    esac
+done
 
+FEATURE_DIR="$(python3 -c "import os,sys; print(os.path.realpath(sys.argv[1]))" "$FEATURE_DIR_ARG")"
 if [[ ! -d "$FEATURE_DIR" ]]; then
     echo "ERROR: feature dir not found: $FEATURE_DIR" >&2
     exit 1
 fi
 
-FEATURE_OVERVIEW="${FEATURE_DIR}/overview.md"
-if [[ ! -f "$FEATURE_OVERVIEW" ]]; then
-    echo "ERROR: feature overview.md not found: $FEATURE_OVERVIEW" >&2
-    exit 1
-fi
+SESSION="${SESSION_OPT:-${CLAUDE_SESSION_ID:-unknown}}"
+TRACE_READ="$SD/goalforge-trace-read"
 
-OUTPUT="${FEATURE_DIR}/todo.md"
-
-# ── Delegate all YAML-aware logic to Python ──────────────────────────────────
-
-python3 - "$FEATURE_DIR" "$OUTPUT" <<'PYEOF'
+python3 - "$FEATURE_DIR" "$SESSION" "$TRACE_READ" "$DISPATCH_PATH" <<'PYEOF'
+import importlib.machinery
+import importlib.util
 import sys
-import os
-import re
-import datetime
 from pathlib import Path
 
-try:
-    import yaml
-except ImportError:
-    print("ERROR: PyYAML not available. Install with: pip3 install pyyaml", file=sys.stderr)
-    sys.exit(1)
+import yaml
 
-feature_dir = Path(sys.argv[1])
-output_path = Path(sys.argv[2])
+feature_dir, session, trace_read_path, dispatch_path = sys.argv[1:5]
 
-# ── Clobber guard: never overwrite a hand-maintained todo.md ─────────────────
-# A pre-existing todo.md without `generated: true` frontmatter is not ours.
-if output_path.exists():
+
+def load_token_warn(path: str) -> int | None:
+    """`rollup.token_warn` from dispatch.yaml; None when unreadable (no WARNs)."""
     try:
-        head = output_path.read_text(encoding='utf-8')[:2000]
-    except OSError:
-        head = ''
-    if not re.search(r'^generated:\s*true\s*$', head, re.MULTILINE):
-        print(f"WARN: {output_path} exists and is not generated (no "
-              f"'generated: true' frontmatter) — refusing to overwrite a "
-              f"hand-maintained file. Move its content aside (e.g. "
-              f"open-items.md) to adopt the generated rollup.", file=sys.stderr)
-        sys.exit(0)
+        with open(path, encoding="utf-8") as fh:
+            data = yaml.safe_load(fh) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    warn = (data.get("rollup") or {}).get("token_warn")
+    return warn if isinstance(warn, int) else None
 
-# ── Frontmatter parser ────────────────────────────────────────────────────────
 
-def parse_frontmatter(path: Path):
-    """Return (fm_dict, body_lines) or (None, []) on failure.
-    fm_dict has string values (quotes stripped).
-    body_lines is the list of lines after the closing --- separator."""
-    try:
-        text = path.read_text(encoding='utf-8')
-    except OSError:
-        return None, []
-    lines = text.split('\n')
-    if not lines or lines[0].strip() != '---':
-        return None, []
-    end = None
-    for i in range(1, len(lines)):
-        if lines[i].strip() == '---':
-            end = i
-            break
-    if end is None:
-        return None, []
-    fm_text = '\n'.join(lines[1:end])
-    try:
-        fm = yaml.safe_load(fm_text) or {}
-    except yaml.YAMLError:
-        return None, []
-    # Normalise all scalar values to strings, strip surrounding quotes.
-    # PyYAML parses bare YYYY-MM-DD values as datetime.date — convert those too.
-    for k, v in list(fm.items()):
-        if v is None:
-            fm[k] = ''
-        elif isinstance(v, (datetime.date, datetime.datetime)):
-            fm[k] = v.isoformat()[:10]
-        elif isinstance(v, (bool, int, float)):
-            fm[k] = str(v)
-        elif isinstance(v, str):
-            fm[k] = v.strip().strip("'\"")
-    body_lines = lines[end + 1:]
-    return fm, body_lines
+token_warn = load_token_warn(dispatch_path)
 
-# ── Feature overview ──────────────────────────────────────────────────────────
+loader = importlib.machinery.SourceFileLoader("goalforge_trace_read", trace_read_path)
+spec = importlib.util.spec_from_loader("goalforge_trace_read", loader)
+trace_read = importlib.util.module_from_spec(spec)
+loader.exec_module(trace_read)
 
-feature_ov = feature_dir / 'overview.md'
-feat_fm, _ = parse_frontmatter(feature_ov)
-if feat_fm is None:
-    print(f"ERROR: cannot parse {feature_ov}", file=sys.stderr)
-    sys.exit(1)
-
-feature_name  = feat_fm.get('name', feature_dir.name)
-feature_title = feat_fm.get('title', feature_name)
-feature_updated = feat_fm.get('updated') or feat_fm.get('created') or ''
-
-# ── Collect WP dirs (sorted lexically for determinism) ───────────────────────
-
-wp_dirs = sorted(
-    [d for d in feature_dir.iterdir()
-     if d.is_dir() and re.match(r'^wp-\d+', d.name)],
-    key=lambda d: d.name
-)
-
-# ── Parse each WP ────────────────────────────────────────────────────────────
-
-class WPInfo:
-    __slots__ = ('name', 'title', 'status', 'stage_updated', 'open_items')
-    def __init__(self, name, title, status, stage_updated, open_items):
-        self.name = name
-        self.title = title
-        self.status = status
-        self.stage_updated = stage_updated
-        self.open_items = open_items  # list of strings (final bullet lines)
-
-def collect_bullets(body_lines: list, heading: str, prefix: str = '') -> list:
-    """Collect bullet lines under `heading` in `body_lines`.
-    prefix is prepended to each bullet (e.g. 'Blocked: ').
-    Returns lines starting with '- ' or '  - ' that are non-empty/non-placeholder."""
-    collecting = False
-    bullets = []
-    heading_re = re.compile(r'^#{1,6}\s+' + re.escape(heading) + r'\s*$')
-    next_heading_re = re.compile(r'^#{1,6}\s+')
-    placeholder_re = re.compile(
-        r'^\s*-\s*\(?\s*(none|nothing|n/?a)\s*\.?\)?\s*$', re.IGNORECASE
-    )
-    for line in body_lines:
-        if heading_re.match(line.rstrip()):
-            collecting = True
-            continue
-        if collecting:
-            if next_heading_re.match(line) and not line.startswith('#' * 7):
-                # Another heading ends the section
-                break
-            # Accept top-level bullets: '- ...' or '  - ...'
-            if re.match(r'^( {0,3}-| {1,3} {0,2}-)\s+\S', line):
-                stripped = line.strip()
-                if placeholder_re.match(stripped):
-                    continue
-                # Normalise to a plain '- ...' bullet, optionally with prefix
-                bullet_content = re.sub(r'^-\s+', '', stripped)
-                bullets.append(f'- {prefix}{bullet_content}')
-    return bullets
-
-wps = []
-for wp_dir in wp_dirs:
-    ov_path = wp_dir / 'overview.md'
-    if not ov_path.exists():
-        continue
-    ov_fm, _ = parse_frontmatter(ov_path)
-    if ov_fm is None:
-        continue
-
-    wp_name         = ov_fm.get('name', wp_dir.name)
-    wp_title        = ov_fm.get('title', wp_name)
-    wp_status       = ov_fm.get('status', '')
-    wp_stage_upd    = ov_fm.get('stage_updated', '')
-
-    # Collect open items from WP todo.md (if present)
-    open_bullets = []
-    todo_path = wp_dir / 'todo.md'
-    if todo_path.exists():
-        _, todo_body = parse_frontmatter(todo_path)
-        if todo_body is None:
-            todo_body = []
-        open_bullets += collect_bullets(todo_body, 'Open Items')
-        open_bullets += collect_bullets(todo_body, 'Blocked On', prefix='Blocked: ')
-
-    wps.append(WPInfo(
-        name=wp_name,
-        title=wp_title,
-        status=wp_status,
-        stage_updated=wp_stage_upd,
-        open_items=open_bullets,
-    ))
-
-# ── Determine updated: date (MAX stage_updated, never wall-clock) ─────────────
-
-def is_iso_date(s: str) -> bool:
-    return bool(s and re.match(r'^\d{4}-\d{2}-\d{2}$', s))
-
-candidate_dates = [w.stage_updated for w in wps if is_iso_date(w.stage_updated)]
-if candidate_dates:
-    updated_date = max(candidate_dates)
-elif is_iso_date(feature_updated):
-    updated_date = feature_updated
+trace_path = Path(feature_dir) / "trace-events.jsonl"
+if trace_path.exists():
+    # Best-effort: a torn/unknown-version row is a renderer's problem, never a
+    # reason to fail a caller running inside a `set -e` critical section.
+    events = trace_read.read_events(trace_path, strict=False)
 else:
-    updated_date = ''
+    events = []
 
-# ── Build ## Status Rollup table ──────────────────────────────────────────────
 
-status_rows = []
-for w in wps:
-    status_rows.append(f'| {w.name} | {w.status} |')
+def in_session(ev: dict) -> bool:
+    row_session = ev.get("session")
+    return not row_session or row_session == session
 
-status_table = (
-    '| WP | Status |\n'
-    '|---|---|\n'
-    + '\n'.join(status_rows)
-) if status_rows else '_(no work packages found)_'
 
-# ── Build ## Open Items section ───────────────────────────────────────────────
+# ── Group per-WP, preserving first-appearance order ─────────────────────────
+wp_order: list[str] = []
+wps: dict[str, dict] = {}
 
-open_sections = []
-for w in wps:
-    if w.open_items:
-        open_sections.append(f'### {w.name}\n' + '\n'.join(w.open_items))
 
-if open_sections:
-    open_items_body = '\n\n'.join(open_sections)
+def wp_bucket(wp: str) -> dict:
+    if wp not in wps:
+        wp_order.append(wp)
+        wps[wp] = {"dispatches": [], "completed": [], "gates": [], "harden_rounds": [],
+                    "harden_parked": None, "commit": None, "verified": False,
+                    "verified_reason": None}
+    return wps[wp]
+
+
+verified_this_session: set[str] = set()
+
+for ev in events:
+    et = ev.get("type")
+    wp = ev.get("wp")
+    if et == "dispatch.launched" and wp:
+        b = wp_bucket(wp)
+        b["dispatches"].append({
+            "task": ev.get("task", ""), "agent": ev.get("agent", ""),
+            "model": ev.get("model", ""), "effort": ev.get("effort", ""),
+        })
+    elif et == "dispatch.completed" and wp:
+        b = wp_bucket(wp)
+        b["completed"].append({
+            "task": ev.get("task", ""), "agent": ev.get("agent", ""),
+            "tokens": ev.get("tokens"), "tool_uses": ev.get("tool_uses"),
+        })
+    elif et == "gate.result" and wp:
+        b = wp_bucket(wp)
+        b["gates"].append((ev.get("gate", ""), ev.get("result", "")))
+    elif et == "harden.round" and wp:
+        b = wp_bucket(wp)
+        b["harden_rounds"].append((ev.get("round"), ev.get("tokens")))
+    elif et == "harden.parked" and wp:
+        b = wp_bucket(wp)
+        b["harden_parked"] = (ev.get("rounds"), ev.get("reason", ""))
+    elif et == "commit.linked" and wp:
+        b = wp_bucket(wp)
+        b["commit"] = ev.get("commit")
+    elif et == "wp.verified" and wp:
+        b = wp_bucket(wp)
+        b["verified"] = True
+        b["verified_reason"] = ev.get("reason", "")
+        if in_session(ev):
+            verified_this_session.add(wp)
+
+feature_name = Path(feature_dir).name
+
+lines: list[str] = []
+lines.append(f"# Trace Rollup — {feature_name}")
+lines.append("")
+lines.append("Read-side render of trace-events.jsonl (D13) — no todo.md, no")
+lines.append("recap.md, no per-task checkpoints; the trace is the single state")
+lines.append("substrate.")
+lines.append("")
+
+if not wp_order:
+    lines.append("_No trace events yet._")
 else:
-    open_items_body = '_No open items._'
+    for wp in wp_order:
+        b = wps[wp]
+        lines.append(f"## {wp}")
+        if b["dispatches"]:
+            parts = [
+                f'{d["task"] or "?"}:{d["agent"] or "?"}@{d["model"] or "?"}/{d["effort"] or "?"}'
+                for d in b["dispatches"]
+            ]
+            lines.append(f"- Dispatches: {len(b['dispatches'])} ({', '.join(parts)})")
+        else:
+            lines.append("- Dispatches: none")
+        if b["completed"]:
+            done_parts = [
+                f'{c["task"] or "?"}:{c["agent"] or "?"} '
+                f'tokens={c["tokens"]} tool_uses={c["tool_uses"]}'
+                for c in b["completed"]
+            ]
+            lines.append(f"- Completed: {len(b['completed'])} ({', '.join(done_parts)})")
+            if token_warn is not None:
+                for c in b["completed"]:
+                    tokens = c["tokens"]
+                    if isinstance(tokens, int) and tokens > token_warn:
+                        name = c["task"] or c["agent"] or "?"
+                        lines.append(
+                            f"  WARN: dispatch {name} tokens={tokens} "
+                            f"exceeds token_warn={token_warn}"
+                        )
+        if b["gates"]:
+            gate_parts = [f"{g}={r}" for g, r in b["gates"]]
+            lines.append(f"- Gate results: {', '.join(gate_parts)}")
+        else:
+            lines.append("- Gate results: none")
+        if b["harden_rounds"]:
+            round_parts = [f"round {r} ({t} tok)" for r, t in b["harden_rounds"]]
+            lines.append(f"- Harden rounds: {', '.join(round_parts)}")
+        if b["harden_parked"]:
+            rounds, reason = b["harden_parked"]
+            lines.append(f"- Harden parked: rounds={rounds} ({reason})")
+        lines.append(f"- Commit: {b['commit'] or 'none'}")
+        lines.append(f"- Verified: {'yes' if b['verified'] else 'no'}")
+        lines.append("")
 
-# ── Assemble output ───────────────────────────────────────────────────────────
+lines.append("## Shipping metric")
+lines.append("")
+lines.append(f"WPs verified this session: {len(verified_this_session)}")
 
-updated_line = f'updated: {updated_date}' if updated_date else 'updated: ""'
-
-output_text = f"""\
----
-name: {feature_name}-todo
-title: {feature_title} — open items (auto-generated)
-feature: {feature_name}
-{updated_line}
-generated: true
----
-
-<!-- AUTO-GENERATED by goalforge-rollup.sh — do not hand-edit. Status is DERIVED from each
-     wp-*/overview.md status:. Regenerate: goalforge-rollup.sh {feature_dir} -->
-
-## Status Rollup
-
-{status_table}
-
-## Open Items
-
-{open_items_body}
-"""
-
-# ── Write only if changed (supports idempotency check) ───────────────────────
-try:
-    existing = output_path.read_text(encoding='utf-8') if output_path.exists() else None
-except OSError:
-    existing = None
-
-if existing != output_text:
-    output_path.write_text(output_text, encoding='utf-8')
-
+sys.stdout.write("\n".join(lines) + "\n")
 sys.exit(0)
 PYEOF
+exit $?

@@ -52,8 +52,8 @@ The same `<effort-slug>` becomes the feature slug — **graduation is in-place**
 `map.md` is a **pointer-index**: decision bodies live in tickets/findings, never
 in the map.
 
-Resolve `<PLANS_ROOT>` per `~/.claude/skills/goalforge/references/schema.md`
-§PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
+Resolve `<PLANS_ROOT>` per the goalforge/references/schema.md
+(`${CLAUDE_PLUGIN_ROOT}/references/schema.md`) §PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
 global `~/.claude/plans/`. Wayfind cites that rule, never its own convention.
 
 **Auto-phase (`/wayfind <effort-slug>`):** no `wayfind/` map present → **chart**;
@@ -87,6 +87,8 @@ created: YYYY-MM-DD
 context_pointers: []            # paths/globs the blind-spot pass sweeps (set at chart, editable)
 references: []                  # provenance; bridges into the graduated feature's sources[]
 ```
+`destination:` is written once at chart time; it is recommitted only through a
+grilling ticket shaped like ticket-31 (grill the old destination, record the new).
 
 `references[]` uses the CANONICAL typed shape — cited, never re-invented:
 `~/.claude/skills/idea/references/provenance-mapping.md` (`id` / `type` /
@@ -241,7 +243,7 @@ first: a row there replaces the **full row below** for that `ticket_type`.
 | ticket_type | mode | Machinery | Model / effort |
 |---|---|---|---|
 | research | AFK | dispatched `research-analyst` → web+docs sweep → `findings/` summary, consumed as DATA | opus / medium (pure scan legs → sonnet / low) |
-| grilling | HITL | `interview` plugin engine, `preset: wayfind-probe`, in the **main session** (`goalforge-interview` is harden-only) — **(default type)** | not dispatched |
+| grilling | HITL | `interview` plugin engine, `preset: wayfind-probe`, in the **main session** — **(default type)** | not dispatched |
 | prototype | HITL | `prototype` skill in a worktree (owns its own branches + dispatch) | opus / medium (delegated) |
 | task | AFK default | agent-driven `implement` dispatch (or human checklist) | mechanical → haiku / low; standard → opus / low |
 | learning | HITL | `interview` plugin `preset: teach-back` in the **main session** — optional dispatched material-gathering leg | main session (material legs: sonnet / low) |

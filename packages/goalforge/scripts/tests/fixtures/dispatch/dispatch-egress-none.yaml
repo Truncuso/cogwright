@@ -1,0 +1,88 @@
+# dispatch-egress-none.yaml — dispatch-default.yaml with the second_opinion
+# row at egress: none (the leg is skipped with reason egress-none, no leaf
+# call). Generated from dispatch-default.yaml.
+
+schema_version: 1
+providers:
+- name: anthropic
+  kind: native
+  leaf: null
+  propose_only: false
+- name: stub-a
+  kind: local
+  leaf: skills/agent-dispatch/stub-a/scripts/headless_dispatch
+  max_budget_usd: 0.1
+  propose_only: true
+- name: stub-b
+  kind: foreign
+  leaf: skills/agent-dispatch/stub-b/scripts/headless_dispatch
+  max_budget_usd: 0.1
+  propose_only: true
+stages:
+  implement:
+    model: by_register
+    effort: by_register
+    provider: anthropic
+    endpoint: session
+    egress: none
+  discovery:
+    model: sonnet
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  feature-audit:
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  harden-review:
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  wp-verify:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  simplify:
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  judge:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  panel:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: overview
+  integration-review:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  second_opinion:
+    model: opus
+    effort: low
+    provider: stub-a
+    endpoint: leaf
+    egress: none
+rollup:
+  token_warn: 250000
+harden:
+  token_ceiling: null
+
+second_opinion:
+  max_payload_bytes: 102400

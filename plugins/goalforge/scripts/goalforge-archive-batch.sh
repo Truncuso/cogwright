@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # goalforge-archive-batch.sh — loop-safe batch archive. Finds every archive-ready
-# feature (goalforge-completed.sh), reconciles it (goalforge-hygiene.sh --apply), and
-# archives it (goalforge-archive.sh), committing per feature.
+# feature (status: completed in its overview.md frontmatter), reconciles it
+# (goalforge-hygiene.sh --apply), and archives it (goalforge-archive.sh),
+# committing per feature.
 #
 # Usage:  goalforge-archive-batch.sh [--show] [--apply] [--plans-root <root>]
 #   default : PREVIEW — list what WOULD be archived; writes nothing; loop-safe.
@@ -23,7 +24,6 @@
 set -uo pipefail
 
 SD="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DETECT="$SD/goalforge-completed.sh"
 HYGIENE="$SD/goalforge-hygiene.sh"
 ARCHIVE="$SD/goalforge-archive.sh"
 ENSURE="$SD/goalforge-ensure-committed.sh"
@@ -58,8 +58,23 @@ if [[ "$APPLY" -eq 1 && -z "$REPO" ]]; then
     exit 2
 fi
 
+# ── Detect: top-level feature dirs whose overview.md status: completed ──────
+detect_completed() {
+    local d status
+    for d in "$ROOT"/*/; do
+        [[ -d "$d" ]] || continue
+        d="${d%/}"
+        case "$(basename "$d")" in
+            _archived|_archive|.*) continue ;;
+        esac
+        [[ -f "$d/overview.md" ]] || continue
+        status="$(sed -n 's/^status:[[:space:]]*//p' "$d/overview.md" | head -1 | tr -d '"'"'"'')"
+        [[ "$status" == "completed" ]] && basename "$d"
+    done
+}
+
 # ── Detect + classify ────────────────────────────────────────────────────────
-mapfile -t SLUGS < <(bash "$DETECT" "$ROOT" 2>/dev/null || true)
+mapfile -t SLUGS < <(detect_completed 2>/dev/null || true)
 
 ELIGIBLE=()
 SKIPPED=()

@@ -1,0 +1,8 @@
+{"seq":0,"ts":"2026-09-14T09:00:00Z","type":"harden.round","schema_version":1,"wp":"wp-reset-twice","round":1,"tokens":1000}
+{"seq":1,"ts":"2026-09-14T09:05:00Z","type":"harden.round","schema_version":1,"wp":"wp-reset-twice","round":2,"tokens":2000}
+{"seq":2,"ts":"2026-09-14T09:10:00Z","type":"harden.parked","schema_version":1,"wp":"wp-reset-twice","reason":"ceiling-breached","rounds":2}
+{"seq":3,"ts":"2026-09-14T09:15:00Z","type":"harden.reset","schema_version":1,"wp":"wp-reset-twice","reason":"human ruling 2026-09-14a park-seq=2","rounds_cleared":2,"decision_ref":"findings.md"}
+{"seq":4,"ts":"2026-09-14T09:20:00Z","type":"harden.round","schema_version":1,"wp":"wp-reset-twice","round":1,"tokens":500}
+{"seq":5,"ts":"2026-09-14T09:25:00Z","type":"harden.round","schema_version":1,"wp":"wp-reset-twice","round":2,"tokens":700}
+{"seq":6,"ts":"2026-09-14T09:30:00Z","type":"harden.parked","schema_version":1,"wp":"wp-reset-twice","reason":"ceiling-breached","rounds":2}
+{"seq":7,"ts":"2026-09-14T09:35:00Z","type":"harden.reset","schema_version":1,"wp":"wp-reset-twice","reason":"human ruling 2026-09-14b park-seq=6","rounds_cleared":2,"decision_ref":"findings.md"}

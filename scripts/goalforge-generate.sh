@@ -15,6 +15,12 @@
 #   packages/goalforge/<child>/  (dir with SKILL.md)  -> plugins/goalforge/skills/<child>/
 #   packages/goalforge/<other-dir> (no SKILL.md)      -> plugins/goalforge/<same>   (e.g. workflow-authoring/)
 #   packages/goalforge/evals/                         -> EXCLUDED (workspace/pyc pollution; consumers get `claude plugin validate`)
+#   **/tests/**                                       -> EXCLUDED (they resolve fixtures through ../evals/, which is excluded
+#                                                       above, so a shipped copy is unrunnable-by-construction and reports
+#                                                       fixture-missing failures that read as real defects; they are dev-tree
+#                                                       suites, run by hand under packages/. CI does not execute them in
+#                                                       either tree -- it runs the hooks' --self-test entrypoints, the smoke
+#                                                       and doctor scripts, and `claude plugin validate --strict`.)
 #   **/__pycache__/**, *.pyc                          -> EXCLUDED
 #
 # Path-rewrite rule table (pinned, wp-17 harden panel — classes i..vii):
@@ -127,12 +133,12 @@ _keep_expr=()
 for k in "${PRESERVE[@]}"; do _keep_expr+=( ! -name "$k" ); done
 find "$DST" -mindepth 1 -maxdepth 1 "${_keep_expr[@]}" -exec rm -rf {} +
 
-# ── 2. Structural copy: package -> flat plugin (excluding evals/, __pycache__, *.pyc) ──
+# ── 2. Structural copy: package -> flat plugin (excluding evals/, tests/, __pycache__, *.pyc) ──
 copy_filtered() { # src_dir dst_dir
     local s="$1" d="$2" f rel
     while IFS= read -r -d '' f; do
         rel="${f#"$s"/}"
-        case "/$rel/" in */evals/*|*/__pycache__/*) continue;; esac
+        case "/$rel/" in */evals/*|*/tests/*|*/__pycache__/*) continue;; esac
         case "$rel" in *.pyc) continue;; esac
         mkdir -p "$d/$(dirname "$rel")"
         cp "$f" "$d/$rel"

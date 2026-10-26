@@ -30,4 +30,5 @@ updated: YYYY-MM-DD
 
 ## Specialist Map Proposals
 
-<!-- Entries proposed by the discovery agent for review before merge into specialist-map.yaml. -->
+<!-- Entries proposed by the discovery agent, for review before they are merged
+     into the agent roster (agents/) or references/expertise-map.yaml. -->

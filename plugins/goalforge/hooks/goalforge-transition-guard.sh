@@ -140,7 +140,7 @@ if not fp.endswith("overview.md"):
     sys.exit(0)
 old = str(ti.get("old_string") or "")
 new = str(ti.get("new_string") or "")
-enum = r"(draft|spec|hardened|ready|executing|verified|archived)"
+enum = r"(spec|hardened|ready|executing|implemented|verified|abandoned|archived)"
 mo = re.search(r"^\s*status:\s*['\"]?" + enum, old, re.MULTILINE)
 mn = re.search(r"^\s*status:\s*['\"]?" + enum, new, re.MULTILINE)
 if not (mo and mn) or mo.group(1) == mn.group(1):
@@ -216,6 +216,13 @@ self_test() {
     mkdir -p "$hs/.claude/plans/f" "$hs/.claude/notplans"
     git init -q "$d/leg2repo" 2>/dev/null
     mkdir -p "$d/leg2repo/plans/f" "$d/leg2repo/notplans"
+    # Leg 2b shape: plans/ is its OWN git repo nested in the outer one. The git
+    # root of a file below it is the plans dir itself, so leg 2 alone resolves
+    # to `plans/plans` and the file falls out of scope. This is the real-world
+    # layout of a private plans repo gitignored by a public parent.
+    git init -q "$d/leg2brepo" 2>/dev/null
+    mkdir -p "$d/leg2brepo/plans/f"
+    git init -q "$d/leg2brepo/plans" 2>/dev/null
     leg() { # <label> <overview path> <engage|silent>
         local out rc
         out="$(payload "$2" | env -u SDD_PLANS_DIR HOME="$hs" bash "$SELF" 2>&1)"; rc=$?
@@ -227,6 +234,7 @@ self_test() {
     }
     leg "leg 2: <git-root>/plans/** -> hook engaged"               "$d/leg2repo/plans/f/overview.md"   engage
     leg "leg 2 negative: same git repo outside plans/ -> silent"   "$d/leg2repo/notplans/overview.md"  silent
+    leg "leg 2b: plans/ is its OWN git repo -> hook engaged"       "$d/leg2brepo/plans/f/overview.md"  engage
     leg "leg 3: \$HOME/.claude/plans/** -> hook engaged"           "$hs/.claude/plans/f/overview.md"   engage
     leg "leg 3 negative: \$HOME/.claude outside plans/ -> silent"  "$hs/.claude/notplans/overview.md"  silent
 
@@ -302,12 +310,15 @@ fi
 goalforge_under_plans_root "${FILE:-}" || exit 0
 if feature_frozen "$FILE"; then
     echo "goalforge-transition-guard: BLOCK — $FILE: owning feature is 'status: paused' (WIP freeze, base-system-map ticket-13). Unfreeze the feature's overview.md first." >&2
+    goalforge_emit_gate_result "transition-guard" "fail" "feature frozen (status: paused)" "$FILE"
     exit 2
 fi
 do_check "$FROM" "$TO"
 rc=$?
 if [[ "$rc" -eq 2 ]]; then
     echo "goalforge-transition-guard: BLOCK — $FILE: '$FROM -> $TO' is not an edge in references/state-machine.md; use goalforge-transition.sh." >&2
+    goalforge_emit_gate_result "transition-guard" "fail" "'$FROM -> $TO' is not a legal edge" "$FILE"
     exit 2
 fi
+goalforge_emit_gate_result "transition-guard" "pass" "'$FROM -> $TO' is a legal edge" "$FILE"
 exit 0

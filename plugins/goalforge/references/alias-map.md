@@ -27,12 +27,40 @@ with the unrelated `run` skill.
 | `sdd-verify` | `goalforge-verify` | `skills/verify/` |
 | `sdd-redecompose` | `goalforge-redecompose` | `skills/redecompose/` |
 | `sdd-archive` | `goalforge-archive` | `skills/archive/` |
-| `sdd-recap` | `goalforge-recap` | `skills/recap/` |
+| `sdd-recap` | `goalforge-recap` *(retired)* | — |
 | `sdd-onboard` | `goalforge-onboard` | `skills/onboard/` |
-| `sdd-watchdog` | `goalforge-watchdog` | `skills/watchdog/` |
+| `sdd-watchdog` | `goalforge-watchdog` *(retired)* | — |
 | `sdd-plan-index` | `goalforge-plan-index` | `skills/plan-index/` |
-| `sdd-arbiter` | `goalforge-arbiter` | `skills/arbiter/` |
+| `sdd-arbiter` | `goalforge-arbiter` *(retired)* | — |
 | `sdd-run` (runner) | `goalforge-run` | `skills/run/` |
+
+### Third identity: the nested `name:` key (ticket-79 option 1)
+
+The middle column above is the **historical** bare name. Since ticket-79, every
+nested child's `SKILL.md` carries `name:` equal to its **directory basename** —
+the rule `validate-skill.py` enforces, and the reason the name column of the
+front door's Children table reads `spec` rather than `goalforge-spec`. The
+`goalforge-` prefix is redundant inside the plugin namespace, and these children
+are private (discovery is one level deep), so the bare key costs no
+selectability.
+
+| Directory | `name:` in its SKILL.md | Historical bare name |
+|-----------|-------------------------|----------------------|
+| `capture/` | `capture` | `goalforge-capture` |
+| `spec/` | `spec` | `goalforge-spec` |
+| `decompose/` | `decompose` | `goalforge-decompose` |
+| `harden/` | `harden` | `goalforge-harden` |
+| `execute/` | `execute` | `goalforge-execute` |
+| `verify/` | `verify` | `goalforge-verify` |
+| `redecompose/` | `redecompose` | `goalforge-redecompose` |
+| `archive/` | `archive` | `goalforge-archive` |
+| `onboard/` | `onboard` | `goalforge-onboard` |
+| `plan-index/` | `plan-index` | `goalforge-plan-index` |
+| `run/` | `run` | `goalforge-run` (still the command and `chain.yaml` name) |
+
+`run/` is the one place the two diverge on purpose: `chain.yaml` and the
+`/goalforge-run` command keep the prefixed name, because a bare `run` on the
+command surface would collide with the unrelated `run` skill.
 
 ### Children with no legacy name
 
@@ -43,8 +71,8 @@ under bare names, without the `goalforge-` prefix the chain children carry.
 
 | Old skill | New bare name | Location |
 |-----------|---------------|----------|
-| *(none)* | `goalforge-brief` | `skills/brief/` |
-| *(none)* | `goalforge-interview` | `skills/interview/` |
+| *(none)* | `goalforge-brief` *(retired)* | — |
+| *(none)* | `goalforge-interview` *(retired)* | — |
 | *(none)* | `prototype` | `skills/prototype/` |
 | *(none)* | `wayfind` | `skills/wayfind/` |
 
@@ -61,7 +89,7 @@ name — the old names simply do not exist.
 | `sdd-archive.sh` | `goalforge-archive.sh` |
 | `sdd-assumption-recheck.sh` | `goalforge-assumption-recheck.sh` |
 | `sdd-attribution.sh` | `goalforge-attribution.sh` |
-| `sdd-completed.sh` | `goalforge-completed.sh` |
+| `sdd-completed.sh` | `goalforge-completed.sh` *(retired)* |
 | `sdd-ensure-committed.sh` | `goalforge-ensure-committed.sh` |
 | `sdd-feature-hash.sh` | `goalforge-feature-hash.sh` |
 | `sdd-frontier.sh` | `goalforge-frontier.sh` |
@@ -69,7 +97,7 @@ name — the old names simply do not exist.
 | `sdd-goal-eval.sh` | `goalforge-goal-eval.sh` |
 | `sdd-goal-hash.sh` | `goalforge-goal-hash.sh` |
 | `sdd-goal-route.sh` | `goalforge-route.sh` *(rename)* |
-| `sdd-harden-route.sh` | `goalforge-harden-route.sh` |
+| `sdd-harden-route.sh` | `goalforge-harden-route.sh` *(retired)* |
 | `sdd-harden-surface.sh` | `goalforge-harden-surface.sh` |
 | `sdd-hygiene.sh` | `goalforge-hygiene.sh` |
 | `sdd-install-hooks.sh` | `goalforge-install-hooks.sh` |
@@ -77,11 +105,11 @@ name — the old names simply do not exist.
 | `sdd-reconcile-diff.sh` | `goalforge-reconcile-diff.sh` |
 | `sdd-rewire-impact.sh` | `goalforge-rewire-impact.sh` |
 | `sdd-rollup.sh` | `goalforge-rollup.sh` |
-| `sdd-stamp-tables.sh` | `goalforge-stamp-tables.sh` |
+| `sdd-stamp-tables.sh` | `goalforge-stamp-tables.sh` *(retired)* |
 | `sdd-status.sh` | `goalforge-status.sh` |
 | `sdd-transition.sh` | `goalforge-transition.sh` |
 | `sdd-validate.sh` | `goalforge-validate.sh` |
-| `sdd-wp-complexity.sh` | `goalforge-wp-complexity.sh` |
+| `sdd-wp-complexity.sh` | `goalforge-wp-complexity.sh` *(retired)* |
 
 ## Scripts (.py — plain renames)
 

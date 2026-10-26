@@ -16,10 +16,14 @@ block is optional there — a plan without it validates via the legacy `## Goal`
 + task `verify:` fallback. **v5** adds one behavior on top of v4: when a plan
 opts in via the `schema_version:` marker (below), the `goal:` block becomes
 **mandatory** at the WP's `ready`+ gate (`ready`/`executing`/`verified`) instead
-of optional.
+of optional. **v6** (spec.md Interface Contract C1-C7, "the slim chain") adds
+the C1 8-section WP overview shape, `verification.command` (required, ERROR
+under `--strict`), the C2 field set (`register`, `human_required`,
+`contract_slice`, `owned_files`), the narrowed `goal_approved_version` hash,
+and retires task files/briefs/checkpoints entirely.
 
 `schema_version:` (an optional integer WP/feature frontmatter field, e.g.
-`schema_version: 5`) is a **per-plan opt-in marker** — distinct from both of
+`schema_version: 6`) is a **per-plan opt-in marker** — distinct from both of
 the above:
 
 - distinct from **this doc's version** (the "Schema version: 3" header above),
@@ -29,12 +33,14 @@ the above:
   plan's semantics.
 
 A plan with no `schema_version:` field is **legacy (≤v4)** and stays fully
-exempt from the v5 goal-mandatory check — absence is not an error, it is the
-default. Only a plan that explicitly carries `schema_version: 5` (or higher)
-opts into goal-mandatory-at-ready. `goalforge-validate.sh` gates strictly on the
-field's presence: no marker ⇒ the check does not run at all (see
-`goalforge-validate.sh`'s goal-mandatory-at-ready check, enforced under the
-Goal-block integrity invariants).
+exempt from the v5/v6 goal-mandatory and command-required checks — absence is
+not an error, it is the default. A plan carrying `schema_version: 5` opts into
+goal-mandatory-at-ready only; `schema_version: 6` (or higher) additionally
+opts into the C1 overview shape and the required `verification.command`.
+`goalforge-validate.sh` gates strictly on the field's presence: no marker ⇒
+the checks do not run at all (see `goalforge-validate.sh`'s
+goal-mandatory-at-ready check, enforced under the Goal-block integrity
+invariants).
 
 **Folder layout is flat:** `plans/<feature>/<wp-id>/files`. There are no
 lifecycle buckets. Lifecycle = the `status:` frontmatter field. Changing
@@ -81,25 +87,26 @@ schema so the same Kuzu graph indexes both memory pages and work packages.
 
 ## WP stage vocabulary
 
-Every work package moves through six stages, stored as `status:` in frontmatter:
+Every work package moves through the C2 status enum, stored as `status:` in
+frontmatter:
 
 | Stage | Meaning | Evidence required |
 |---|---|---|
-| `draft` | Rough capture — problem stated, target files guessed | WP exists; problem statement non-empty |
-| `spec` | Goal + verification defined | Measurable goal written; verification rows drafted |
-| `hardened` | Grilled, open questions resolved | `goalforge-interview` run (which drives the `interview` plugin engine); zero `open` items in OPEN_QUESTIONS |
+| `spec` | Goal + verification defined | Measurable goal written; `## Checklist` items drafted |
+| `hardened` | Reviewed, open questions resolved | One harden review pass recorded; zero `open` items in `## Open Questions` |
 | `ready` | Approved for exec | Human approval recorded; `depends_on` WPs are `ready`+ |
-| `executing` | `goalforge-execute` running | ≥1 task has a `checkpoint` block |
-| `verified` | Passed verification | `goalforge-verify` PASS with evidence; review + simplify clean |
+| `executing` | `goalforge-execute` running | At least one checklist item checked in `## Checklist` |
+| `implemented` | Deterministic eval passed + one commit landed | Gate A evidence recorded; not yet quality-signed-off |
+| `verified` | Passed verification | `goalforge-verify` gates A/B/C PASS with evidence |
+| `abandoned` | Terminal — explicitly dropped | Explicit user action only; never automatic |
 | `archived` | Terminal — historical record | Explicit user action only; never automatic |
 
 Transitions are forward by default. A regression (e.g. `hardened → spec`) is
-allowed and must be logged in `findings.md`. `draft → ready` (feature gate, in
-`goalforge-spec`) and `hardened → ready` (WP gate, in `goalforge-harden`) are the two
-human-gated transitions — except that `hardened → ready` may **auto-advance
-under the signal-scoped rule** (complexity verdict `simple`, severity ≤ MEDIUM,
-`task_type ≠ migration`; ledger row records `mode: auto` + the signal evidence
-— see `state-machine.md` §Policy). `archived` is terminal.
+allowed and must be logged in `findings.md`. `hardened → ready` (WP gate, in
+`goalforge-harden`) is human-gated by default — except that it may
+**auto-advance under the signal-scoped rule** (see `state-machine.md`
+§Policy); a WP with `human_required:` set is never auto-advanced regardless of
+signal. `abandoned` and `archived` are terminal.
 
 ---
 
@@ -116,23 +123,19 @@ status: draft|spec|ready|active|executing|completed|archived
 # active: reserved-for-future (no skill writes it yet; sdd-lifecycle-redesign)
 created: YYYY-MM-DD
 feature: <feature>
-route: standard                   # fast|standard|wave — chain route,
-                                  # stamped by goalforge-capture (goalforge-route.sh
-                                  # verdict). Retired vocabulary normalizes on
-                                  # READ only (`full`⇒standard, `one-go`⇒fast);
-                                  # neither is ever emitted or written.
-                                  # Absent ⇒ standard (back-compat).
-# confidence: clear|borderline|pinned  # classifier confidence for the route
-                                  # verdict (optional; goalforge-route.sh output
-                                  # field, not gating). pinned = human override.
-# execution_plan:                 # optional; stamped by goalforge-capture alongside
-                                  # route. Shape (see spec.md Interface Contract
-                                  # §2):
-#   steps: [spec, decompose, harden, execute, verify]  # subset per route
-#   dispatch: {spec: agent, decompose: agent, hygiene: agent}  # inline|agent per step
-#   parallel: [[spec], [decompose, hygiene]]           # groups run concurrently
-#   tiers: {explore: sonnet, spec_author: opus, judge: opus, boilerplate: haiku}
-# Absent execution_plan: block ⇒ standard route, all-inline (legacy behavior).
+# route:, confidence:, execution_plan: RETIRED (T6) — no longer stamped or
+# read; old plans may still carry `route:` in frontmatter, ignored.
+# ticket-62: the DISPATCH sense of "route" is now `endpoint:` and lives in
+#     references/dispatch.yaml (`endpoint: session | leaf`), never in
+#     frontmatter. The chain sense of `route` (fast|standard) is unrelated.
+#     The frontmatter key `route:` stays RETIRED under both readings.
+egress: overview                  # optional; read from the feature's `spec.md`
+                                  # frontmatter (mirrored here when authored on
+                                  # the overview). NARROW-ONLY override of the
+                                  # stage's egress class in dispatch.yaml. Enum
+                                  # none < diff-only < overview < full; a value
+                                  # WIDER than the stage row is ignored with a
+                                  # WARN row. See "dispatch.yaml" below.
 work_packages: [wp-01-x, wp-02-y]
 relationships:                    # optional typed edges
   - depends_on: [[other-feature]]   # cross-feature ordering (validated: target must be ready+; recorded, NOT auto-orchestrated)
@@ -148,90 +151,58 @@ in frontmatter. No folder move is ever required or meaningful.
 
 ---
 
-## Route enum + execution_plan block
-
-`route:` classifies how much of the chain a feature needs. Three values — the
-set `scripts/goalforge-route.sh` emits, and the only route vocabulary:
-
-| Route | Meaning |
-|---|---|
-| `fast` | capture → single WP → execute/verify, no `spec.md`. |
-| `standard` | Whole chain: spec → decompose → harden → execute → verify. Default. |
-| `wave` | Multi-WP with parallel fan-out (explore, parallel spec authors, cross-spec judge, hygiene). |
-
-Back-compat on READ only: the retired `full` normalizes to `standard` and the
-retired `one-go` to `fast`. Neither is ever emitted or written. Absent `route:`
-⇒ `standard` (legacy behavior).
-
-Classifier confidence (optional `confidence:` field, output of
-`goalforge-route.sh`, never gating): `clear` (unambiguous signals), `borderline`
-(mixed signals, verdict is a best guess), `pinned` (human override — the
-verdict was set explicitly, not classified).
-
-`execution_plan:` is an optional frontmatter block stamped by `goalforge-capture`
-alongside `route:` — persisted DATA, inspectable and human-overridable at the
-spec gate, consumed (never re-classified) by the runner:
-
-```yaml
-route: standard            # fast | standard | wave
-execution_plan:
-  steps: [spec, decompose, harden, execute, verify]   # subset per route
-  dispatch:                # inline | agent, per step
-    spec: agent
-    decompose: agent
-    hygiene: agent
-  parallel: [[spec], [decompose, hygiene]]            # groups run concurrently
-  tiers: {explore: sonnet, spec_author: opus, judge: opus, boilerplate: haiku}
-```
-
-**Fallback rule:** an absent `execution_plan:` block means `standard` route,
-all-inline (legacy behavior) — no step is dispatched to an agent unless the
-block says so.
-
----
-
 ## Frontmatter — WP `overview.md`
 
 ```yaml
 ---
 name: wp-01-<slug>                # kebab, matches WP folder name
 title: <human title>
-status: draft|spec|hardened|ready|executing|verified|archived
-# `archived` is a LIVE second WP terminal, reached only by an explicit out-of-band
-#     edit — NO goalforge script writes it to a WP (`goalforge-archive` flips FEATURE
-#     overviews only; `goalforge-transition` rejects it as an edge target). It is
-#     dep-satisfying: `goalforge-frontier.sh` and `goalforge-validate.sh` treat an
-#     `archived` dep exactly as `verified`. See references/state-machine.md.
+status: spec|hardened|ready|executing|implemented|verified|abandoned|archived
+# `abandoned`/`archived` are terminal, reached only by an explicit out-of-band
+#     edit — NO goalforge script writes either to a WP (`goalforge-archive` flips
+#     FEATURE overviews only; `goalforge-transition` rejects both as an edge
+#     target). Both are dep-satisfying exactly like `verified`: `goalforge-frontier.sh`
+#     and `goalforge-validate.sh` treat an `abandoned`/`archived` dep as satisfied.
+#     See references/state-machine.md.
 # NB: there is NO `superseded` WP status — supersession is expressed by the
 #     `superseded_by` relationship edge (feature-level); a superseded WP stays
 #     `verified`/`archived`. Adding a WP status here would double-own the concept.
-schema_version: 5                 # optional per-plan opt-in marker (see "Version
-                                  # lineage" above) — DISTINCT from this doc's
-                                  # version and the template marker. Absent
-                                  # (legacy ≤v4) ⇒ goal: block stays optional.
-                                  # Present + >=5 ⇒ goal: is MANDATORY at
-                                  # ready/executing/verified (fatal if missing).
+schema_version: 6                 # the C1-C7 slim shape (see "Version lineage"
+                                  # above) — DISTINCT from this doc's version and
+                                  # the template marker. schema_version: 6 ⇒ the
+                                  # goal: block is MANDATORY at every status, the
+                                  # WP overview is the C1 8-section shape, and
+                                  # `verification.command` is required (ERROR
+                                  # under --strict). schema_version: 5 (or absent)
+                                  # plans stay read-only compatible (WARN only).
 stage_updated: YYYY-MM-DD
 severity: HIGH|MEDIUM|LOW
-register: production|prototype    # optional; default production. prototype ⇒
-                                  # declared spike (CLAUDE.md Principle 2, declared
-                                  # in the WP — never post-hoc): the WP answers ONE
-                                  # design question via the `prototype` skill; its
-                                  # deliverable is the findings doc (LOGIC.md /
-                                  # UI.md / PERF.md), which is what gets committed —
-                                  # spike code lives in a worktree and never lands.
-                                  # Goal strategy: judge|human (the findings answer
-                                  # the question), never deterministic-on-spike-code.
+task_type: code|docs|research|ops
+register: spike|production        # required. `prototype` normalizes to `spike`
+                                  # on READ only — never written. spike ⇒
+                                  # declared (CLAUDE.md Principle 2, declared in
+                                  # the WP — never post-hoc): the WP answers ONE
+                                  # design question; goal strategy judge|human,
+                                  # never deterministic-on-spike-code.
                                   # NB: register is NOT covered by the goal hash —
                                   # flipping it after goal_approved_version is set
                                   # changes execution semantics silently; treat a
                                   # register change as a goal change: re-run goalforge-harden.
                                   # Mechanically gated by goalforge-validate.sh check_register
-                                  # (ERROR under --strict): enum ∈ {production,prototype};
-                                  # prototype ⇒ strategy judge|human (any status) and
-                                  # exactly one task-*.md (ready+ only).
-parallel: false                   # may a sibling WP run concurrently?
+                                  # (ERROR under --strict): enum ∈ {spike,production}.
 depends_on: [wp-00-x]            # slug list; validator resolves them
+owned_files: [packages/a/, packages/b/file.py]  # the WP's file boundary; diff
+                                  # paths at verify gate A must be a subset
+parallel: false                   # may a sibling WP run concurrently?
+contract_slice: [C1, C3]          # spec.md `## Interface Contract` subsection
+                                  # ids this WP depends on — see "Contract-slice
+                                  # hash (per-WP)" below
+human_required: null              # null, or "<reason>" naming why a human must
+                                  # gate this WP (irreversible action, HIGH
+                                  # severity + production, or any WP author
+                                  # judgment call) — see spec.md Interface
+                                  # Contract §C7. A set human_required: is never
+                                  # auto-advanced by the signal-scoped rule.
 plan: <feature>                   # parent feature slug
 tags: [tag1, tag2]
 relationships:
@@ -239,7 +210,10 @@ relationships:
   - blocks: [[wp-03-y]]
   - related_to: [[wp-02-z]]
 sources: [SRC-01]
-goal_approved_version: null           # sha256[:12] of the goal block; set at harden gate; null until first approval
+goal_approved_version: null       # sha256[:12] of goal.outcome + goal.verification
+                                  # only (NOT constraints/boundaries/iteration_policy/
+                                  # blocked_stop); set at harden gate; null until
+                                  # first approval
 ---
 ```
 
@@ -276,71 +250,31 @@ marker is the link, the Risks row is the record). `[deferred]` stays for
 genuinely-later questions that carry no risk decision; `[assumption]` stays
 for assumed answers. Do not use `[risk-accepted]` without the id payload.
 
+**`answered_by: agent` (C7).** An unattended harden may resolve an open
+question via an agent respondent instead of a human: the bullet carries
+`[answered: <resolution>] (answered_by: agent)`. A question the agent cannot
+resolve with confidence is **parked**, not guessed — it stays `open` and
+surfaces at the next human touchpoint. Goal facets (`outcome`,
+`verification`, and any question that would change either) are **never**
+agent-answered — only a human may resolve those.
+
 ---
 
-## Frontmatter — `task-NN-*.md`
+## No task files (C1)
 
-```yaml
----
-name: task-01-<slug>
-title: <one-line goal>
-status: pending|briefed|in-progress|implemented|verified
-# briefed     = a complexity-gated (medium/high) task has had its brief-task-NN.md
-#               authored (interim, between pending and in-progress); low-complexity
-#               tasks skip briefing and never enter briefed.
-# implemented = deterministic eval passed + committed (interim, by goalforge-execute);
-#               NOT quality-signed-off. verified is written only at the WP gate by
-#               goalforge-verify (it promotes implemented → verified).
-complexity: low|medium|high       # drives model tier; discovery agent estimates if absent
-route: api|ollama                 # default: api
-parallel: false                   # safe to run concurrently with sibling tasks?
-depends_on: []                    # task slugs within the same WP
-verify: "<exact cmd or check that proves the task done>"
-# expects_absent: [<repo-relative path>, ...]   # optional; deletion tasks only.
-#   Paths this task's verify: legitimately asserts ABSENT. goalforge-validate.sh verify-lint
-#   INVERTS the existence check for a listed token: it EXISTS → ERROR (deletion
-#   regressed), it is MISSING → pass. Tokens not listed keep the default check.
-#   Applies to the NON-negated verify form (e.g. `test -f <p>`); a negated form
-#   (`! test -f <p>`) is already skipped by verify-lint, so expects_absent is moot there.
-# commit: <sha>                   # optional; BACKFILLED by goalforge-verify at WP finalize
-#                                 # from checkpoint.commit_sha (not written per-task
-#                                 # during execution). required for status: verified
-#                                 # under --require-commit validation.
-# commit_exempt: "<prose reason>" # optional; the ONLY sanctioned way to satisfy
-#                                 # --require-commit with an empty commit:. Declares the
-#                                 # deliverable un-committable by construction (written
-#                                 # outside the repo, or to a by-design-gitignored path).
-#                                 # Fails closed on an empty or boolean-ish value, and
-#                                 # ERRORs if commit: is also set. Authored by the task
-#                                 # author — goalforge-verify reads it, never writes it.
----
+A schema-6 WP carries no `task-NN-*.md` files and no `brief-*.md` files. Work
+items live as checklist lines in the WP overview's `## Checklist` section:
+
+```
+- [ ] T1 <imperative outcome> {files: a, b} [b1,b2]
 ```
 
-The `checkpoint:` block is written by `goalforge-execute` into the task **body** (not
-the frontmatter) as a `## Checkpoint (goalforge-execute state)` section. The validator
-enforces the `executing` evidence invariant by scanning for `^checkpoint:` in the
-body, so a checkpoint placed inside the frontmatter is invisible to it. Shape:
-
-```markdown
-## Checkpoint (goalforge-execute state)
-
-checkpoint:
-  last_step: 0
-  specialist: ""
-  model: ""
-  route: api
-  worktree: ""
-  discovered_by: ""             # manual|map|discovery-agent
-  commit_sha: ""                # full sha of this task's commit; stashed at Step 8,
-                                # batch-backfilled into frontmatter commit: by goalforge-verify
-  resumable: true
-```
-
-`complexity` drives the model tier; the tier is instantiated to an explicit
-`{model, effort}` by `TIER_DISPATCH`/`tier_to_dispatch` in
-`goalforge/scripts/goalforge-pick-agent.py` — do not restate the values here (they drift).
-`discovered_by` records how the specialist was resolved (see §5 of spec.md for
-the dispatch algorithm).
+`{files: ...}` names the item's file boundary (a subset of the WP's
+`owned_files:`); `[b1,b2]` names the `goal.verification.behaviors[]` ids the
+item satisfies. There is no per-task `status:`, `complexity:`, `checkpoint:`,
+`commit:`, or `commit_exempt:` field — a WP ships as **one conventional commit**
+(C5), and `implemented`/`verified` are WP-level `status:` values, not
+per-checklist-item state.
 
 ---
 
@@ -371,35 +305,14 @@ field (see `evals/schema-v5/fixtures/e-v5-complete-goal-present-dep/` for a live
 
 ## Integrity invariants (enforced by `goalforge-validate.sh`)
 
-- `verified` ⇒ all child tasks `verified` + `findings.md` exists.
-- `executing` ⇒ ≥1 task has a `checkpoint` block.
-- `depends_on: [x]` ⇒ `x` exists and is `ready`+.
+- `implemented`/`verified` ⇒ exactly one WP commit is linked (C5: one
+  conventional commit per WP; no per-task commits).
+- `verified` ⇒ gates A, B, C each have a recorded `gate.result` PASS
+  (`trace-events.jsonl`) and `findings.md` exists.
+- `depends_on: [x]` ⇒ `x` exists and is `ready`+ (or `verified`/`abandoned`/`archived`).
+- `owned_files:` non-empty on a schema-6 WP; the verify-gate-A diff must be a
+  subset of it.
 - Validator suggests fixes; it **never auto-rewrites** frontmatter.
-
-### Severity-split invariants (WARN-plain / ERROR-flag-gated)
-
-The two advisory checks below are WARN in a plain run (exit 0). Each is
-promoted to an ERROR — causing non-zero exit — by a **different flag**, because
-they are enforced at different lifecycle points:
-
-| Check | Plain run | Under `--strict` | Under `--require-commit` | Who uses it |
-|---|---|---|---|---|
-| **Missing commit hash** | WARN (exit 0) | WARN (exit 0) | **ERROR (exit 1)** | `goalforge-verify` gate — `--strict --require-commit` |
-| **Missing commit hash, `commit_exempt:` declared** | WARN (exit 0) | WARN (exit 0) | WARN (exit 0) — reason printed | same gate; the one sanctioned exemption |
-| **Stale feature rollup** | WARN (exit 0) | **ERROR (exit 1)** | WARN (exit 0) | pre-commit hook — `--strict` only |
-
-Rationale for the split: `commit:` is recorded **after** the task commit, so
-the pre-commit hook (`--strict`) must never gate on it — that would false-block
-the very commit writing the hash. Commit-hash provenance is enforced at
-verify-time only, via `--require-commit`. `goalforge-verify` uses both flags
-(`--strict --require-commit`) to enforce all advisory checks at once.
-
-| Check | Condition | Fix |
-|---|---|---|
-| **Missing commit hash** | A `task-*.md` with `status: verified` has no `commit:` field (or it is empty) and no valid `commit_exempt:` | Add `commit: <sha>` — recorded by `goalforge-execute` after the task's commit — or, only when the deliverable is un-committable by construction, `commit_exempt: <prose reason>` |
-| **Malformed `commit_exempt:`** | The value is empty, whitespace, or boolean-ish (`true`/`yes`/`1`/`n/a`/`-`) | Replace with prose naming why no commit can exist |
-| **`commit_exempt:` with a hash** | Both `commit:` and `commit_exempt:` are non-empty | Drop `commit_exempt:` — the task WAS committed |
-| **Stale feature rollup** | `<feature>/todo.md` has `generated: true` and a Status Rollup cell that contradicts the current WP `status:` | Run `goalforge-rollup.sh <feature>` to regenerate |
 
 ---
 
@@ -455,12 +368,19 @@ legacy `## Goal` + task `verify:` representation (treated as
 ### The block (both altitudes)
 
 ```yaml
-task_type: code | research | ops | writing | optimization | analysis | migration
+task_type: code | docs | research | ops
 goal:
   outcome: "<what is true when done — one measurable sentence>"
   verification:                 # the Verification Surface (router input)
-    strategy: deterministic | numeric | judge | human
-    check: <command | metric spec | judge spec | gate prompt>
+    strategy: deterministic | judge | human
+    command: "<the exact reproducible command — command-only, no prose>"
+    check: "<schema-5 alias of command — WARN-only baseline compat>"
+    behaviors:                  # optional; the b1..bN oracle rows checklist
+      - id: b1                  #   items reference in their `[b1,b2]` tags
+        given: "<precondition>"
+        when: "<action>"
+        then: "<expected result>"
+        oracle: "<the deterministic check that proves it>"
   constraints: ["<what must not regress>", ...]
   boundaries: ["<allowed files/tools/resources>", ...]
   iteration_policy: "<how to choose the next action after each attempt>"
@@ -473,17 +393,17 @@ The **WP** block additionally carries:
 inherits_from: <feature-slug | null>    # cascade source; WP-only (a feature spec has no parent)
 ```
 
-### Per-strategy `check` shapes
+### Per-strategy `verification.command` shapes
 
-| `strategy` | `check` shape | How completion is decided |
+| `strategy` | `command` shape | How completion is decided |
 |---|---|---|
-| `deterministic` | string command, e.g. `"pytest tests/auth -q"` | exit 0 = met |
-| `numeric` | `{bench: "<cmd emitting JSON {metric: value}>", metric: "p95_ms", op: "<", threshold: 120}` | run bench, parse metric, compare `metric op threshold` |
-| `judge` | `{artifact: "<path>", rubric: "<criteria>", block_on: [CRITICAL, HIGH]}` | judge verdict; met iff no finding at/above a `block_on` severity |
+| `deterministic` | string command, e.g. `"pytest tests/auth -q"` — command-only, no prose | exit 0 = met |
+| `judge` | string command that runs a judge pass, e.g. `"bash evals/judge.sh <wp>"` | judge verdict; met iff no finding at/above a `block_on` severity named in the command's own rubric |
 | `human` | string gate prompt | NON-BLOCKING in an autonomous loop (pause → write findings → exit → resume next run) |
 
-`op` ∈ `< | <= | > | >= | == | !=`. `block_on` is a non-empty list of severity
-labels (`CRITICAL | HIGH | MEDIUM | LOW`).
+Schema-6 WPs require `verification.command` (ERROR under `goalforge-validate.sh
+--strict`); schema-5 WPs are read-only compatible via the legacy `check:` alias
+(WARN only, never promoted to ERROR).
 
 ### One source of truth
 
@@ -492,29 +412,20 @@ The `goal:` frontmatter is authoritative. `goal.outcome` **supersedes** the body
 sections become a rendered prose mirror (or are dropped). There is no third
 representation.
 
-### Task level (no per-task strategy)
+### Checklist-item level (no per-item strategy)
 
-Tasks do **not** carry a strategy. A task keeps its `verify:` field = a
-**deterministic** evidence check (exit 0 = pass) that proves *its own slice* of
-the work. It is two things at once: a per-task progress/evidence signal during
-execution **and** a conjunct of the WP-completion predicate. The strategy router
-(`numeric | judge | human`) operates **only at the WP-goal altitude**: the WP
-`goal.verification` is the **authoritative completion unit** — the single gate
-that decides whether the WP is done. (A task is therefore a deterministic *step*
-toward the WP goal, never an independently strategy-verified atom.)
+A `## Checklist` item does **not** carry a strategy. Its `{files: ...}` +
+`[b1,b2]` tags declare a file boundary and the `goal.verification.behaviors[]`
+ids it satisfies — evidence that the item is done, not an independent
+completion gate. The strategy router (`deterministic | judge | human`)
+operates **only at the WP-goal altitude**: the WP `goal.verification` is the
+**authoritative completion unit** — the single gate (verify gate A) that
+decides whether the WP is done.
 
-> **Coverage rule.** The WP goal is met ⇔ every task `verify:` passes **AND** the
-> WP-level `goal.verification` passes. The two are complementary, not redundant:
-> task `verify:` proves each slice was built; `goal.verification` is the
-> authoritative gate that proves the WP outcome holds as a whole. This states
-> *what* must hold, not *when* each conjunct is evaluated — the execution engine
-> chooses the timing.
->
-> **Facet-coverage self-check.** Every facet of `goal.outcome` MUST be covered by
-> `goal.verification`. A task `verify:` may prove only a slice; the WP gate must
-> not leave any outcome facet unverified. When `goal.verification` cannot cover a
-> facet on its own, the WP author extends it to cover that facet — a task
-> `verify:` never stands in for the authoritative WP gate.
+> **Facet-coverage self-check.** Every facet of `goal.outcome` MUST be covered
+> by `goal.verification` (directly, or via its `behaviors[]`). A checklist item
+> may prove only a slice; the WP gate must not leave any outcome facet
+> unverified.
 
 ### Cascade rule (standalone-but-feature-aware), per-field semantics
 
@@ -538,35 +449,37 @@ solo. `task_type` and `strategy` are **orthogonal**: any `task_type` may use any
 When a `goal:` block is present:
 
 - `goal.outcome` is present and non-empty (WP and feature).
-- `goal.verification.strategy` ∈ `{deterministic, numeric, judge, human}`.
-- `numeric` ⇒ `check` is a mapping with `bench`, `metric`, `op` (∈ the op set),
-  and a numeric `threshold`.
-- `judge` ⇒ `check` is a mapping with non-empty `artifact`, `rubric`, and a
-  non-empty `block_on` list.
-- `deterministic`/`human` ⇒ `check` is a non-empty string.
+- `goal.verification.strategy` ∈ `{deterministic, judge, human}`.
+- `verification.command` is a non-empty, command-shaped string (no prose) —
+  **ERROR** under `--strict` on a schema-6 WP; **WARN** on a schema-5 WP whose
+  legacy `check:` alias is present instead.
 - `task_type`, when present, ∈ the `task_type` enum.
 - `inherits_from`, when set on a WP, resolves to an existing feature spec slug.
 
 A malformed goal block is a **fatal** schema violation — the validator exits
 non-zero regardless of `--strict` (distinct from advisory status-drift errors).
 
-### Goal-mandatory-at-ready (schema v5, `schema_version:` marker)
+### Goal-mandatory-at-ready (schema v5/v6, `schema_version:` marker)
 
 When a WP's frontmatter carries `schema_version: 5` (or higher) **and** its
-`status` is `ready`, `executing`, or `verified`, the `goal:` block is no longer
-optional — a missing `goal:` is a **fatal** schema violation (same severity as
-a malformed block; non-zero exit regardless of `--strict`). Absent the marker,
-behavior is unchanged from v4 (goal block optional, legacy fallback applies).
-This check is gated strictly on the marker's presence — it never fires on a
-plan that does not carry `schema_version:`.
+`status` is `ready`, `executing`, `implemented`, or `verified`, the `goal:`
+block is no longer optional — a missing `goal:` is a **fatal** schema
+violation (same severity as a malformed block; non-zero exit regardless of
+`--strict`). Absent the marker, behavior is unchanged from v4 (goal block
+optional, legacy fallback applies). `schema_version: 6` additionally requires
+`verification.command` (see above) and the C1 8-section overview shape. This
+check is gated strictly on the marker's presence — it never fires on a plan
+that does not carry `schema_version:`.
 
 ### goal_approved_version
 
-`goal_approved_version` is the **sha256 hash (first 12 hex chars)** of the raw
-`goal:` block text — the lines from `goal:` up to the next top-level frontmatter
-key, with per-line trailing whitespace stripped and line endings normalized to LF.
-It is **null/absent** until the first harden gate; set by `goalforge-harden` at the
-`hardened → ready` approval.
+`goal_approved_version` is the **sha256 hash (first 12 hex chars)** of
+`goal.outcome` + `goal.verification` **only** — trailing-whitespace-stripped,
+LF-normalized. It deliberately excludes `constraints`, `boundaries`,
+`iteration_policy`, and `blocked_stop`: an edit to those facets (or to any
+other prose in the WP, e.g. `## Decisions`) does not change the hash and does
+not require re-approval. It is **null/absent** until the first harden gate;
+set by `goalforge-harden` at the `hardened → ready` approval.
 
 ### Goal Changelog (evolved-goal audit trail)
 
@@ -587,53 +500,15 @@ comparison** (recomputed hash ≠ `goal_approved_version`), not a date compariso
 
 ---
 
-## Tier-1 feature audit (adversarial, hash-gated)
+## Contract-slice hash (per-WP)
 
-The adversarial-verification principle is applied in **two tiers**, scaled to the
-defect's altitude (not the WP count): **Tier-1** audits *feature-global* defects
-**once per feature**; **Tier-2** (`goalforge-harden` Step 0a) is a cheap *WP-scoped
-delta* that consumes Tier-1 findings as typed DATA. This concentrates the
-expensive cross-cutting review up front (cheap to fix at the spec/structure
-level) and keeps per-WP harden from re-litigating it.
-
-**Artifact:** `<PLANS_ROOT>/<feature>/.tier1-audit.md` — git-tracked, one per
-feature. Written by `goalforge-decompose` (Step 10.7) and refreshed by `goalforge-harden`
-only when stale. Shape:
-
-```yaml
----
-feature: <feature-slug>
-audit_hash: <sha256[:12] of the feature structure+goals — see below>
-generated: YYYY-MM-DD
-verdict: pass | findings
----
-# Tier-1 feature audit
-
-- scope: cross-wp-contract | shared-file-ownership | ordering | nondeterministic-check | claims-vs-source
-  severity: CRITICAL | HIGH | MEDIUM | LOW
-  wps: [wp-01-x, wp-02-y]
-  finding: <one-line description>
-  # (repeat per finding; empty list ⇒ verdict: pass)
-```
-
-**`audit_hash` input (canonical, deterministic).** The hash covers the feature's
-*structure + goals* so it changes exactly when a re-audit is warranted:
-
-1. the sorted list of WP slugs,
-2. each WP's `depends_on` list (sorted),
-3. each WP's raw `goal:` block text (same normalization as
-   `goal_approved_version`: trailing-whitespace-stripped, LF-normalized),
-4. the spec's `## Interface Contract` section text (cross-WP contracts).
-
-Computed by `goalforge/scripts/goalforge-feature-hash.sh <feature-dir>` (single source of the
-hash; never hand-computed — LLMs cannot hash reliably). **Freshness gate:** an
-audit is fresh iff `.tier1-audit.md`'s `audit_hash` equals the recomputed hash;
-a stale or absent audit triggers a re-run (a `feature-audit`-role dispatch).
-
-**Tier-2 freshness fallback.** `goalforge-harden` consumes Tier-1 as DATA for the WP it
-is hardening. If a *sibling* WP changed since the Tier-1 snapshot (hash mismatch),
-the cross-WP findings may be stale → `goalforge-harden` falls back to a whole-feature
-review rather than trusting a stale delta.
+Each WP's `contract_slice:` frontmatter list (e.g. `[C1, C3]`) names the
+spec.md `## Interface Contract` subsections (`### C1`, `### C2`, ...) the WP
+depends on. `goalforge/scripts/goalforge-feature-hash.sh <wp-dir>` hashes
+exactly those named subsection bodies plus the sorted slice-id list itself
+(sha256[:12], single source of the hash; never hand-computed). A WP's contract
+dependency changes iff this hash changes — a sibling WP's unrelated goal edit,
+or a spec edit outside the WP's named slices, never trips it.
 
 ---
 
@@ -736,3 +611,84 @@ transition emits `reharden.proposed` / `reharden.accepted` trace events whose
 payloads mirror `kind`/`locator`/`summary` plus the evidence path (see
 `references/trace-events.md`). The reverse `hardened→ready` re-promotion keeps
 its human gate unchanged.
+
+---
+
+## dispatch.yaml (per-stage dispatch config)
+
+`references/dispatch.yaml` is the configured source for model, effort,
+provider, endpoint, and egress class per dispatch stage. Every consumer
+(`goalforge-pick-agent.py`, `goalforge-rollup.sh`, `goalforge-workflow-compile.py`,
+`goalforge-second-opinion.sh`, `goalforge-harden-stop.sh`) reads it through a
+`--dispatch <path>` flag defaulting to this package file. No provider name
+appears in any `SKILL.md`; provider names are data in this file only.
+
+### Top level
+
+| Key | Type | Required | Semantics |
+|---|---|---|---|
+| `schema_version` | integer | yes | This file's shape. Currently `1`. |
+| `providers` | list | yes | Preference order, first entry = default. No budget accounting: preference order alone decides fall-through. |
+| `stages` | map | yes | One row per dispatch stage; keys equal the `ROLE_TIER` keys in `scripts/goalforge-pick-agent.py` — `implement`, `discovery`, `feature-audit`, `harden-review`, `wp-verify`, `simplify`, `judge`, `panel`, `integration-review`, `second_opinion`. |
+| `rollup.token_warn` | integer | yes | Per-dispatch soft token threshold; `goalforge-rollup.sh` writes a WARN line above it and does not change its exit code. Shipped value `250000`. |
+| `harden.token_ceiling` | integer \| null | yes | `null` ⇒ tokens are a **soft sensor**: above the threshold `goalforge-harden-stop.sh` writes a `harden.warn` row and exits 0, the round cap staying the only default hard park (C4). An integer ⇒ a **hard ceiling**: park above it, the same meaning `SDD_HARDEN_TOKEN_CEILING` carries when set. Shipped value `null`. |
+| `second_opinion.max_payload_bytes` | integer | no | Cap on the payload `goalforge-second-opinion.sh` hands the leaf as a `--prompt` **argv value**. Optional: absent means the loader default `102400`, which is also the shipped value and the reviewed **maximum** — a larger configured value is CLAMPED to it with a WARN, and a non-integer or non-positive value falls back to the default with a WARN (never silently). The ceiling exists because the payload is ONE argv string: `MAX_ARG_STRLEN` is `PAGESIZE * 32` = 131072 on a 4 KiB-page host (measured: 131000 bytes exec'd, 131100 exited 126), and the leaf re-passes the same value through `_core/intent_gate.sh` and `claude -p`. `--prompt` is used rather than `--prompt-file` because of what the CONFIGURED provider's leaf does with that flag (verified 2026-09-13 by reading the leaves): the ollama, zai and deepseek leaves route it through `_core/prompt_file.py`, a *structured handoff-brief* parser (base-dir allowlist, frontmatter contract, exit 2/3) that kills a raw payload file with leaf-exit-3, while the codex leaf reads it raw and would accept one — so this is a property of the configured row, not of leaf-interface v1. Above the cap the DIFF section is truncated head-first, marked in the payload, and named in the reason (`; diff-truncated N/M`); a payload still over the cap with the diff gone calls no leaf at all and emits `second_opinion.skipped` with reason `payload-oversize <actual>/<cap>`, exit 0. |
+
+### `providers[]`
+
+| Key | Type | Required | Semantics |
+|---|---|---|---|
+| `name` | string | yes | Provider id referenced by a stage row's `provider`. |
+| `kind` | enum | yes | `native` \| `foreign` \| `local`. `native` runs in-session (Agent/Workflow tool); the others run through an agent-dispatch leaf. DERIVED, not trusted: `native` carrying a `leaf` — or reached through a stage row whose `endpoint` is not `session` or `egress` not `none` — is refused at exit 2, as is a duplicate `name`. |
+| `leaf` | path \| null | yes | The `headless_dispatch` leaf (leaf-interface.md v1), written relative to `${CLAUDE_CONFIG_DIR:-$HOME/.claude}` — never an absolute home path. `null` for `kind: native`. An admission row binds this path AND its sha256, so repointing it under an admitted provider name inherits no admission. |
+| `max_budget_usd` | float | no | Passed to the leaf as `--max-budget-usd`. Leaf default `0.10`. Omitted for `native`. |
+| `propose_only` | bool | no | Informative echo of the **default verdict** when no admission row admits this provider for the WP's task class: the admission table decides the resolver verdict for role `implement` (`references/admission.md`, `references/admitted-providers.yaml`, shipped empty). A resolution left at that default produces a proposal row in the ledger and in `findings.md`, never a gate decision; compile-level dispatch of a non-native `implement` row stays refused until `wp-08-admitted-execution`. This key is an echo, never the gate: a row setting it `false` is still refused unless a table row binds its task class, model and leaf. |
+
+### `stages.<stage>`
+
+| Key | Type | Required | Semantics |
+|---|---|---|---|
+| `model` | enum \| string | yes | On a row whose provider `kind` is `native`: `sonnet` \| `opus` \| `fable` \| `haiku` \| `by_register` — `by_register` only legal on `implement`, resolved from the WP's `register`/`severity` by the pick-agent register logic. On a row whose provider `kind` is NOT `native`, it is that provider's own model id (e.g. `glm-5.3:cloud` on the ollama leaf); a Claude tier there makes the leaf exit 2 and the leg is silently skipped. |
+| `effort` | enum | yes | `low` \| `medium` \| `high` \| `xhigh` \| `max` \| `by_register`. |
+| `provider` | string | yes | First-choice `providers[].name`; fall-through continues down `providers` **from that entry onward**. |
+| `endpoint` | enum | yes | `session` \| `leaf`. The dispatch sense formerly spelled `route` (ticket-62). `kind: native` ⇒ `session`; a leaf provider ⇒ `leaf`. |
+| `egress` | enum | yes | `none` \| `diff-only` \| `overview` \| `full` — what may leave to that endpoint. |
+
+Model/effort mirror the `semi-autonomous` `ROLE_TIER` projection
+(`references/tier-map.md`) except `judge` and `wp-verify`, re-banded to
+`opus`/`high` on every profile by ticket-48 (a grader must differ from the
+implementer in persona AND in model or effort). `goalforge-pick-agent.py
+--test-tiers` enforces that projection on every other row, comparing `model`
+and `effort` on native rows and `effort` alone on a non-native row (whose
+`model` is a provider id); the `by_register` sentinel is exempt.
+
+### Egress classes (ticket-45)
+
+Ordered, narrowest first: `none` < `diff-only` < `overview` < `full`.
+
+| Class | Payload |
+|---|---|
+| `none` | Nothing leaves; the call is skipped with reason `egress-none`. |
+| `diff-only` | The diff. |
+| `overview` | The diff + the WP `overview.md`. **Shipped default on every row whose provider `kind != native`.** |
+| `full` | The diff + `overview.md` + `spec.md` + `findings.md`. In the enum, used by no shipped row; enabled only by a reviewed config edit. |
+
+`none` is legal on any row. **No content is redacted in any class** (operator's
+explicit choice). A feature `spec.md` frontmatter `egress:` may only **narrow**
+the stage row: a value at or below the row's class is applied; a **wider** value
+is ignored with a WARN row and the stage row's class stands.
+
+### Provider fall-through (leaf exit codes, leaf-interface.md §5/§6)
+
+Resolved at dispatch time against the leaf's exit code:
+
+| Leaf exit | Reason | Effect |
+|---|---|---|
+| `1` | backend unreachable | fall through to the next configured provider |
+| `2` | model not found | fall through to the next configured provider |
+| `4` | `plan_quota_exhausted` \| `metered_rate_limited` | no inner envelope, the turn was refused → fall through |
+| `4` | `budget_exceeded` \| `budget_check_failed` | **not** a fall-through: the turn completed, the result is **kept**, and a WARN row names the overspend |
+| `0` | — | result kept |
+
+When the ordered list is exhausted with no result, `EscalationRequired` is
+raised (exit 1, `ESCALATION REQUIRED: …` on stderr) — never a silent fallback.

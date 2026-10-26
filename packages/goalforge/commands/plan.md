@@ -4,9 +4,11 @@ description: "Decompose the current feature's spec.md into work packages via goa
 
 # /plan
 
-> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
-> directory holding this command file. On a direct, non-plugin load the
-> variable is unset; resolve it that way.
+> `${CLAUDE_PLUGIN_ROOT}` is the installed plugin root (`plugins/goalforge/`),
+> where each child skill lives at `skills/<child>/SKILL.md`. The variable is
+> unset on a direct load from the source package — there read
+> `packages/goalforge/<child>/SKILL.md` (the source package has no `skills/`
+> directory; `scripts/goalforge-generate.sh` adds it when generating the plugin).
 
 Decompose and harden the current feature's spec into work packages before any
 code is written.
@@ -33,13 +35,9 @@ chain should be driven end-to-end.
    risk), appending findings to each WP. Advances WPs from `spec → hardened`.
 
 **Present the decomposed plan and WAIT for explicit user confirmation** before
-advancing any WP to `ready` — except WPs in the signal-scoped class (`simple` +
-severity ≤ MEDIUM + non-migration), which `goalforge-harden` auto-advances with
+advancing any WP to `ready` — except the signal-scoped class (severity ≤ MEDIUM,
+non-migration, no `human_required:`), which `goalforge-harden` auto-advances with
 a `--mode auto` ledger record.
-
-A `route: fast` feature normally skips `/plan` entirely — its single WP is
-authored and gated at capture time. Invoke `/plan` on it only when promoting to
-the standard route.
 
 ## Rules
 

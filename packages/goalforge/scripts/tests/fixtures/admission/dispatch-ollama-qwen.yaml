@@ -1,0 +1,22 @@
+# b5: the SAME provider on a DIFFERENT model id — admission binds the triple.
+# (task_class, provider, model), so admitted-ok.yaml must refuse this row.
+schema_version: 1
+
+providers:
+  - name: anthropic
+    kind: native
+    leaf: null
+    propose_only: false
+  - name: ollama
+    kind: local
+    leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+
+stages:
+  implement:
+    model: qwen3-coder:cloud
+    effort: low
+    provider: ollama
+    endpoint: leaf
+    egress: overview

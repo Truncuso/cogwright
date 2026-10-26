@@ -9,36 +9,45 @@ is legal.
 
 ## Policy (FREE-REVERSE)
 
-WP states are linearly ordered:
+WP states are linearly ordered (C2, wp-01 T6/T10 — a WP is born `spec`, there
+is no WP-level `draft`; `implemented`/`abandoned` are new):
 
 | state | order |
 |---|---|
-| draft | 0 |
-| spec | 1 |
-| hardened | 2 |
-| ready | 3 |
-| executing | 4 |
+| spec | 0 |
+| hardened | 1 |
+| ready | 2 |
+| executing | 3 |
+| implemented | 4 |
 | verified | 5 |
+
+A schema-5 WP still carrying the legacy `draft` status is read-only
+compatible: it sorts before `spec` (order -1) for any script that must order
+it, but no goalforge script writes `draft` to a WP going forward. Its one
+exit is the forward edge `draft -> spec` (human ruling 2026-09-27), which
+lifts a legacy WP onto the current chain; every other edge out of `draft`
+is illegal.
 
 - **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no`.
 - **Reverse** edge (`order(to) < order(from)`, e.g. `verified→spec`,
-  `verified→draft`, `ready→spec`): legal, `reason_required: yes`. Every
+  `ready→spec`): legal, `reason_required: yes`. Every
   later→earlier edge is sanctioned — the `goalforge-validate.sh` integrity invariants
-  and the WP/task monotonicity check are the guardrails, not a hand-curated
+  and the WP monotonicity check are the guardrails, not a hand-curated
   reverse subset.
-- **Human-gated**: `draft→ready` (feature gate) and `hardened→ready` (WP gate)
-  carry `human_gated: yes`. The gate is enforced by the calling skill (it must
-  obtain human approval before invoking the mechanism); the mechanism only
-  records it. `human_gated` does not change edge legality or `reason_required`.
+- **Human-gated**: `hardened→ready` (WP gate) carries `human_gated: yes`. The
+  gate is enforced by the calling skill (it must obtain human approval before
+  invoking the mechanism); the mechanism only records it. `human_gated` does
+  not change edge legality or `reason_required`. A WP whose frontmatter sets
+  `human_required:` is never auto-advanced regardless of signal (C7).
 - **Signal-scoped auto-advance exception (`hardened→ready` only).** The calling
-  skill may advance `hardened→ready` WITHOUT human approval **iff** all three
-  hold: complexity verdict `simple` (zero S1–S5 tripped, per
-  `goalforge-wp-complexity.sh`), `severity ≤ MEDIUM`, and `task_type ≠ migration`.
-  The transition MUST be written with `--mode auto` and a `--reason` naming the
-  rule + signal evidence — the ledger row is the audit record. Any tripped
-  signal, HIGH/CRITICAL severity, or migration WP keeps the human gate. The
-  feature `draft→ready` gate has NO auto-advance exception. *(Deliberate
-  guardrail change — ADR: adaptive-chain-routing.)*
+  skill may advance `hardened→ready` WITHOUT human approval **iff** all hold:
+  `severity ≤ MEDIUM`, `human_required:` is unset, and — where a `task_type`
+  is declared — `task_type ≠ migration`. The transition MUST be written with
+  `--mode auto` and a `--reason` naming the rule + signal evidence — the
+  ledger row is the audit record. HIGH/CRITICAL severity, a set
+  `human_required:`, or a migration `task_type` keeps the human gate.
+  *(Deliberate guardrail change — ADR: adaptive-chain-routing; narrowed at
+  wp-01 T6 with the complexity-route removal.)*
 - **Evidence-gated revert exception (`ready→hardened` only).** This one reverse
   edge — re-opening a `ready` WP back to `hardened` to re-develop its goals — is
   NOT a bare FREE-REVERSE move. The edge row stays legal
@@ -58,49 +67,51 @@ WP states are linearly ordered:
   signal-scoped auto-advance) as before. *(Evidence MANDATORY on `ready→hardened`
   — ledgered decision; ADR: prototype-native-goalforge re-harden edge.)*
 
-For a WP, `archived` is a terminal state reached only by an explicit out-of-band
-edit: it is intentionally **not** an edge target here, so the transition mechanism
-never moves a WP to/from `archived`, and no goalforge script writes it either —
-`goalforge-archive` flips FEATURE overviews only (`set_field('status','archived')`
-is invoked on the feature overview and, under `--supersedes`, the superseded
-feature's overview; never on a `wp-*/overview.md`). It **is**
-dep-satisfying: `goalforge-frontier.sh` and `goalforge-validate.sh` treat an
-`archived` dep exactly as `verified` when resolving a sibling's `depends_on`.
+For a WP, `abandoned` and `archived` are terminal states reached only by an
+explicit out-of-band edit: they are intentionally **not** edge targets here,
+so the transition mechanism never moves a WP to/from either, and no goalforge
+script writes them either — `goalforge-archive` flips FEATURE overviews only
+(`set_field('status','archived')` is invoked on the feature overview and,
+under `--supersedes`, the superseded feature's overview; never on a
+`wp-*/overview.md`). Both **are** dep-satisfying: `goalforge-frontier.sh` and
+`goalforge-validate.sh` treat an `abandoned`/`archived` dep exactly as
+`verified` when resolving a sibling's `depends_on`.
 
 ## Edges
 
 | from | to | reason_required | human_gated |
 |---|---|---|---|
 | draft | spec | no | no |
-| draft | hardened | no | no |
-| draft | ready | no | yes |
-| draft | executing | no | no |
-| draft | verified | no | no |
-| spec | draft | yes | no |
 | spec | hardened | no | no |
 | spec | ready | no | no |
 | spec | executing | no | no |
+| spec | implemented | no | no |
 | spec | verified | no | no |
-| hardened | draft | yes | no |
 | hardened | spec | yes | no |
 | hardened | ready | no | yes |
 | hardened | executing | no | no |
+| hardened | implemented | no | no |
 | hardened | verified | no | no |
-| ready | draft | yes | no |
 | ready | spec | yes | no |
 | ready | hardened | yes | no |
 | ready | executing | no | no |
+| ready | implemented | no | no |
 | ready | verified | no | no |
-| executing | draft | yes | no |
 | executing | spec | yes | no |
 | executing | hardened | yes | no |
 | executing | ready | yes | no |
+| executing | implemented | no | no |
 | executing | verified | no | no |
-| verified | draft | yes | no |
+| implemented | spec | yes | no |
+| implemented | hardened | yes | no |
+| implemented | ready | yes | no |
+| implemented | executing | yes | no |
+| implemented | verified | no | no |
 | verified | spec | yes | no |
 | verified | hardened | yes | no |
 | verified | ready | yes | no |
 | verified | executing | yes | no |
+| verified | implemented | yes | no |
 
 ## Reverse-edge note
 
@@ -131,52 +142,71 @@ Feature states are linearly ordered:
 | executing | 4 |
 | completed | 5 |
 
-- **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no`.
+- **Forward** edge (`order(to) > order(from)`): legal, `reason_required: no` —
+  except out of `draft` and `spec`: for a feature outside the
+  `draft -> completed` guard below, the only forward edge out of `draft` is
+  `draft -> spec` and the only one out of `spec` is `spec -> ready`. There is
+  no `draft -> ready` row and no `draft|spec -> active|executing` or
+  `spec -> completed` row, and the one `draft -> completed` row carries a
+  three-condition guard, so for a feature outside that three-condition guard, every path from `draft` or `spec` onward passes `spec -> ready`.
 - **Reverse** edge (`order(to) < order(from)`): legal, `reason_required: yes` —
   mirrors the WP FREE-REVERSE policy (every later→earlier edge is sanctioned; a
   reverse feature transition needs a `--reason`).
-- **Human-gated**: `draft→ready` and `spec→ready` (the feature review gate) carry
-  `human_gated: yes`. The gate is enforced by the calling skill; the mechanism
+- **Human-gated**: `spec -> ready` is the single spec-approval gate (the
+  ratification of a first spec and of a revision alike) and the only feature
+  edge that carries `human_gated: yes`. `draft -> spec` is the ungated
+  proposal edge. The gate is enforced by the calling skill; the mechanism
   only records it.
+- **Respec edges**: `ready -> spec`, `active -> spec`, `executing -> spec` and
+  `completed -> spec` are the reverse rows a spec-invalidating learning takes
+  (`--reason "<learning>"`); a feature at `spec` means "a proposal awaits
+  ratification". Proposal, ratification marker and apply:
+  `references/respec.md`.
 - **`completed`** is reached from `executing` or `active` (and, forward-skipping,
-  from any earlier state). `archived` is a terminal state reached ONLY via
+  from `ready` or later). One exit is guarded: `draft -> completed` is legal only for a feature with no `spec.md`, exactly one `wp-*/overview.md`, and that sole WP at `status: verified`
+  (human ruling H3, "Scoped exit for fast", closed to three conditions by
+  OQ8: the fast path is never specced and its one WP cannot reach `verified`
+  without clearing harden G1-G4 and verify A/B/C, so this exit bypasses no
+  spec-approval gate). `goalforge-transition.sh` checks the three conditions
+  on this one edge and names the unmet one in its refusal; no `route:`
+  frontmatter is read. `archived` is a terminal state reached ONLY via
   `goalforge-archive` — it is intentionally **not** an edge target here, so the
   transition mechanism never moves a feature to/from `archived`.
 
 ## Feature edges
 
-| from | to | reason_required | human_gated |
-|---|---|---|---|
-| draft | spec | no | no |
-| draft | ready | no | yes |
-| draft | active | no | no |
-| draft | executing | no | no |
-| draft | completed | no | no |
-| spec | draft | yes | no |
-| spec | ready | no | yes |
-| spec | active | no | no |
-| spec | executing | no | no |
-| spec | completed | no | no |
-| ready | draft | yes | no |
-| ready | spec | yes | no |
-| ready | active | no | no |
-| ready | executing | no | no |
-| ready | completed | no | no |
-| active | draft | yes | no |
-| active | spec | yes | no |
-| active | ready | yes | no |
-| active | executing | no | no |
-| active | completed | no | no |
-| executing | draft | yes | no |
-| executing | spec | yes | no |
-| executing | ready | yes | no |
-| executing | active | yes | no |
-| executing | completed | no | no |
-| completed | draft | yes | no |
-| completed | spec | yes | no |
-| completed | ready | yes | no |
-| completed | active | yes | no |
-| completed | executing | yes | no |
+The fifth column `route` is vestigial but kept: every row reads `any`, since
+`route:` is retired and no row is scoped by it any more (the `draft -> completed`
+guard is the three-condition check above). Every row here still carries five
+cells: a row with fewer is an `edge_lookup` error (refused), never read as
+`any`. (The WP `## Edges` table above has four columns and reads as `any`.)
+
+| from | to | reason_required | human_gated | route |
+|---|---|---|---|---|
+| draft | spec | no | no | any |
+| draft | completed | no | no | any |
+| spec | draft | yes | no | any |
+| spec | ready | no | yes | any |
+| ready | draft | yes | no | any |
+| ready | spec | yes | no | any |
+| ready | active | no | no | any |
+| ready | executing | no | no | any |
+| ready | completed | no | no | any |
+| active | draft | yes | no | any |
+| active | spec | yes | no | any |
+| active | ready | yes | no | any |
+| active | executing | no | no | any |
+| active | completed | no | no | any |
+| executing | draft | yes | no | any |
+| executing | spec | yes | no | any |
+| executing | ready | yes | no | any |
+| executing | active | yes | no | any |
+| executing | completed | no | no | any |
+| completed | draft | yes | no | any |
+| completed | spec | yes | no | any |
+| completed | ready | yes | no | any |
+| completed | active | yes | no | any |
+| completed | executing | yes | no | any |
 
 ## Feature reverse-edge note
 

@@ -1,0 +1,12 @@
+# malformed: no present|absent value
+Agent tool=present
+AskUserQuestion=present
+Workflow tool=maybe
+git=present
+python3=present
+jq=present
+flock=present
+timeout=present
+realpath=present
+tar=present
+PyYAML=present

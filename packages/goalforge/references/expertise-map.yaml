@@ -1,0 +1,58 @@
+# expertise-map.yaml — goalforge expertise bundles
+#
+# Maps a WP's file extensions, tags, and task_type to an EXPERTISE BUNDLE:
+# the reading list a generic roster agent (agents/implementer.md,
+# agents/reviewer.md, agents/evaluation-expert.md, agents/researcher.md)
+# loads into its `expertise:` slot at dispatch. This map never names a
+# dispatch target — the roster agent IS the target.
+#
+# Values are CORPUS-RELATIVE paths under the root
+#   ${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+# in exactly three admissible shapes:
+#   rules/common/<x>.md   a rule body
+#   agents/<name>.md      a specialist agent file, read as knowledge (never
+#                         dispatched — see wp-02 OQ1)
+#   skills/<name>         a skill directory
+# A bare specialist NAME (`typescript-pro`) is INADMISSIBLE: it is a
+# dispatch target, not a readable path. Every value must contain a `/`.
+#
+# Resolution order (wp-03 owns the resolver): by_tag → by_task_type →
+# by_extension. Bundles from several matching keys are unioned, order
+# preserved, duplicates dropped. No catch-all default: an unmatched WP gets
+# an empty bundle and the roster agent runs on its baseline `skills:` alone.
+#
+# Lists are flow-style on one line by design — the shape the
+# scripts/tests/goalforge-expertise-map.test.sh admissibility check parses.
+
+by_extension:
+  .ts: [agents/typescript-pro.md, rules/common/coding-style.md, skills/bun]
+  .tsx: [agents/typescript-pro.md, rules/common/coding-style.md, skills/frontend-ui-engineering]
+  .js: [agents/typescript-pro.md, rules/common/coding-style.md]
+  .jsx: [agents/typescript-pro.md, skills/frontend-ui-engineering]
+  .py: [agents/python-pro.md, rules/common/coding-style.md, skills/python-patterns, skills/python-testing]
+  .rs: [agents/rust-engineer.md, skills/rust-patterns, skills/rust-testing]
+  .cpp: [agents/cpp-pro.md, skills/cpp-coding-standards, skills/cpp-testing]
+  .hpp: [agents/cpp-pro.md, skills/cpp-coding-standards]
+  .cc: [agents/cpp-pro.md, skills/cpp-coding-standards]
+  .h: [agents/cpp-pro.md, skills/cpp-coding-standards]
+  .sh: [rules/common/coding-style.md, rules/common/hooks.md]
+  .yaml: [rules/common/coding-style.md]
+  .md: [rules/common/self-containment.md, rules/common/prompt-engineering.md]
+
+by_tag:
+  infra: [agents/devops-engineer.md, skills/ci-cd-and-automation]
+  ci: [agents/devops-engineer.md, skills/ci-cd-and-automation]
+  docker: [agents/devops-engineer.md, skills/ci-cd-and-automation]
+  security: [agents/security-reviewer.md, rules/common/security.md, rules/common/agentic-security.md]
+  performance: [agents/performance-engineer.md, skills/performance-optimization]
+  api: [skills/api-design, rules/common/patterns.md]
+  hooks: [rules/common/hooks.md, rules/common/spatiotemporal-composability.md]
+  skills: [rules/common/skill-development.md, skills/skill-meta]
+  agents: [rules/common/agent-development.md, rules/common/subagent-handoff.md]
+  eval: [rules/common/evaluation.md, skills/ml-eval]
+
+by_task_type:
+  code: [rules/common/coding-style.md, rules/common/testing.md, rules/common/code-review.md]
+  docs: [agents/doc-updater.md, rules/common/self-containment.md, skills/documentation-and-adrs]
+  research: [agents/research-analyst.md, skills/topic-research, skills/scientific-method]
+  ops: [agents/devops-engineer.md, rules/common/git-workflow.md]

@@ -1,0 +1,1 @@
+Holding for the run.sh aggregate (~117 test scripts; was at `lens-ownership` PASS, alphabetically past the halfway mark). Watcher fires on completion — second opinion lands then.

@@ -15,6 +15,11 @@
 #   references/state-machine.md.
 # Feature-level `→ready` skips the WP-only goal-hash gate; `archived` is not a
 # feature edge target (that terminal move lives in goalforge-archive.sh only).
+# The feature `draft -> completed` edge is taken only when <feature>/spec.md is
+# absent, exactly one wp-*/overview.md exists, and that sole WP is at
+# `status: verified` (OQ8); the refusal names the unmet condition. The
+# `## Feature edges` route column is vestigial (all `any`); a non-`any` cell is
+# refused. The table path is fixed to SCRIPT_DIR/../references (no env override).
 #
 # Reads the overview.md current `status:` as the authoritative `from`,
 # validates the `from→to` edge against the selected table
@@ -24,10 +29,7 @@
 #   2. appends a JSON row to `plans/<feature>/.sdd-transitions.jsonl`
 #      (git-tracked, append-only) — each row carries an auto-filled attribution
 #      stamp {mode,actor,session,model,provider,agent,decision_ref} sourced from
-#      goalforge-attribution.sh (degrade-not-block: any failure → "unknown"),
-#   3. invokes goalforge-stamp-tables.sh (WP/Tasks STATUS cells — the P5 autostamp)
-#      and goalforge-rollup.sh (feature todo.md).
-# It NEVER writes table cells directly — that is goalforge-stamp-tables.sh's job.
+#      goalforge-attribution.sh (degrade-not-block: any failure → "unknown").
 #
 # `--from` is an optimistic-lock assertion: when given it must equal the on-disk
 # status, else the transition is rejected (non-zero). The `.sdd-transitions.lock`
@@ -37,8 +39,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 STATE_MACHINE="$SCRIPT_DIR/../references/state-machine.md"
-STAMP="$SCRIPT_DIR/goalforge-stamp-tables.sh"
-ROLLUP="$SCRIPT_DIR/goalforge-rollup.sh"
 VALIDATE="$SCRIPT_DIR/goalforge-validate.sh"
 ATTRIB="$SCRIPT_DIR/goalforge-attribution.sh"
 # The validating trace emitter (wp-14). Overridable so the zero-breakage eval
@@ -232,14 +232,18 @@ PY
 }
 
 # ── Look up a from→to edge in state-machine.md ──────────────────────────────
-# Prints "legal <reason_required> <human_gated>" or "illegal" (or "error").
-# $3 selects the table section header ("Edges" for WPs, "Feature edges" for
-# features) — matched exactly so the two tables never collide.
+# Prints "legal <reason_required> <human_gated> <route>" or "illegal" (or
+# "error"). $3 selects the table section header ("Edges" for WPs, "Feature
+# edges" for features) — matched exactly so the two tables never collide.
+# route: the fifth cell. A four-cell `## Edges` row reads `any`; a matched
+# `## Feature edges` row with fewer than five cells is an "error" (refused), so
+# a malformed row never widens a route-scoped exit to every feature.
 edge_lookup() {
     python3 - "$STATE_MACHINE" "$1" "$2" "$3" <<'PY'
 import sys
 sm, frm, to, header = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 want = ("## " + header).lower()
+feature_table = header.lower() == "feature edges"
 try:
     text = open(sm, encoding="utf-8").read()
 except OSError:
@@ -258,7 +262,13 @@ for ln in text.splitlines():
     if cells[0].lower() == "from" or set("".join(cells)) <= set("-: "):
         continue
     if cells[0] == frm and cells[1] == to:
-        print(f"legal {cells[2]} {cells[3]}")
+        if len(cells) >= 5 and cells[4]:
+            route = cells[4]
+        elif feature_table:
+            print("error"); sys.exit(0)
+        else:
+            route = "any"
+        print(f"legal {cells[2]} {cells[3]} {route}")
         sys.exit(0)
 print("illegal")
 PY
@@ -346,11 +356,41 @@ transition() {
         return 1
     fi
 
-    local RES VERDICT RR HG
+    local RES VERDICT RR HG ROUTE
     RES="$(edge_lookup "$FROM" "$TO" "$SECTION")"
-    read -r VERDICT RR HG <<<"$RES"
+    read -r VERDICT RR HG ROUTE <<<"$RES"
+    if [[ "$VERDICT" == "error" ]]; then
+        echo "ERROR: edge_lookup error for $FROM -> $TO (state-machine.md $SECTION unreadable, or the row has fewer than five cells); refused" >&2; return 1
+    fi
     if [[ "$VERDICT" != "legal" ]]; then
         echo "ERROR: illegal transition $FROM -> $TO (not in state-machine.md $SECTION)" >&2; return 1
+    fi
+    # The route column is vestigial (every Feature edges row reads `any`,
+    # `route:` is retired); a scoped cell is a stale table, refused fail-closed.
+    if [[ "$ROUTE" != "any" ]]; then
+        echo "ERROR: $FROM -> $TO row carries route '$ROUTE'; route-scoped Feature edges rows are retired (refused, status unchanged)" >&2; return 1
+    fi
+    # ── feature draft -> completed: three-condition guard (H3, OQ8) ──────────
+    # Legal only with no spec.md, exactly one wp-*/overview.md, and that sole WP
+    # at `status: verified` — the fast path's shape, which cannot get there
+    # without clearing harden and verify, so no spec-approval gate is skipped.
+    if [[ "$KIND" == "feature" && "$FROM" == "draft" && "$TO" == "completed" ]]; then
+        if [[ -e "$FEATURE_DIR/spec.md" ]]; then
+            echo "ERROR: draft -> completed requires no spec.md, but $FEATURE_DIR/spec.md exists; a specced feature passes spec -> ready (refused, status unchanged)" >&2; return 1
+        fi
+        local -a SOLE_WPS=()
+        local wpov
+        for wpov in "$FEATURE_DIR"/wp-*/overview.md; do
+            [[ -f "$wpov" ]] && SOLE_WPS+=("$wpov")
+        done
+        if [[ "${#SOLE_WPS[@]}" -ne 1 ]]; then
+            echo "ERROR: draft -> completed requires exactly one wp-*/overview.md, but $FEATURE_DIR has ${#SOLE_WPS[@]} (refused, status unchanged)" >&2; return 1
+        fi
+        local SOLE_ST
+        SOLE_ST="$(read_status "${SOLE_WPS[0]}")"
+        if [[ "$SOLE_ST" != "verified" ]]; then
+            echo "ERROR: draft -> completed requires its sole WP at status: verified, but ${SOLE_WPS[0]} is at status: '${SOLE_ST:-<none>}' (refused, status unchanged)" >&2; return 1
+        fi
     fi
     if [[ "$RR" == "yes" && -z "$REASON" ]]; then
         echo "ERROR: reverse transition $FROM -> $TO requires --reason" >&2; return 1
@@ -475,7 +515,6 @@ transition() {
     local LEDGER="$FEATURE_DIR/.sdd-transitions.jsonl"
     local TODAY TS COMMIT WP_NAME
     TODAY="$(date +%F)"
-    TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     COMMIT="$(git -C "$FEATURE_DIR" rev-parse --short HEAD 2>/dev/null || true)"
     WP_NAME="$(basename "$WP_DIR")"
 
@@ -492,14 +531,82 @@ transition() {
     fi
     [[ -z "$ACTOR" ]] && ACTOR="auto"
 
-    # Critical section: write → ledger → stamp → rollup, serialized per feature.
+    # Critical section: write → ledger, serialized per feature. (T6/C6: the
+    # rollup call this section used to make here is retired — goalforge-rollup.sh
+    # writes nothing, so calling it here discarded its only output. wp-01 round
+    # 2, gate B new finding.)
     exec 9>"$LOCKFILE"
     flock 9
+    # Re-read FROM and evaluate the respec reharden gate inside the lock: the
+    # apply writes its reharden file under this same lock, so neither decision
+    # can go stale before the write (wp-10 L1-l7).
+    local FROM_NOW STALE_EV
+    FROM_NOW="$(read_status "$OVERVIEW")"
+    if [[ "$FROM_NOW" != "$FROM" ]]; then
+        flock -u 9; exec 9>&-
+        echo "ERROR: status of $OVERVIEW changed from $FROM to ${FROM_NOW:-<none>} before the write; refused" >&2; return 1
+    fi
+    # ── respec reharden gate (wp-10 H1-r2, M1-l7, H1-l8) ─────────────────────
+    # A `ready` WP leaves forward only when a `-> ready` ledger row has ts
+    # strictly greater than the MAXIMUM since_ready_ts: (the last `-> ready`
+    # ts the apply read under this lock; `none` = no row then) over EVERY
+    # reharden/*-respec-* file. Recorded values only, never mtime or name
+    # order. Any file without a parseable since_ready_ts: refuses (fail-closed).
+    if [[ "$KIND" == "wp" && "$FROM" == "ready" && "$TO" =~ ^(executing|implemented|verified)$ ]]; then
+        STALE_EV="$(python3 - "$WP_DIR" "$LEDGER" <<'PY'
+import sys, json, os, glob, re
+from datetime import datetime
+wp_dir, ledger = sys.argv[1], sys.argv[2]
+def ts(v):
+    try:
+        return datetime.strptime(v, "%Y-%m-%dT%H:%M:%SZ")
+    except (TypeError, ValueError):
+        return None
+def ready_rows():  # [(parsed ts, raw ts)] of this WP's `-> ready` ledger rows
+    rows = []
+    if os.path.isfile(ledger):
+        for ln in open(ledger, encoding="utf-8"):
+            try:
+                row = json.loads(ln)
+            except ValueError:
+                continue
+            if not isinstance(row, dict) or row.get("wp") != os.path.basename(wp_dir) or row.get("to") != "ready":
+                continue
+            t = ts(row.get("ts"))
+            if t is not None:
+                rows.append((t, row["ts"]))
+    return rows
+since, last = None, None
+for ev in sorted(glob.glob(os.path.join(wp_dir, "reharden", "*-respec-*"))):
+    fm = open(ev, encoding="utf-8").read().split("\n---", 1)[0]
+    m = re.search(r"^since_ready_ts:\s*['\"]?([^'\"\s]+)", fm, re.M) if fm.startswith("---") else None
+    t = ts(m.group(1)) if m else None
+    if t is None and not (m and m.group(1) == "none"):
+        # L1-l9: name a value the human can record — the latest -> ready ts, or none
+        latest = max(ready_rows(), default=(None, ""))[1]
+        if latest:
+            sys.exit(print("%s carries no parseable since_ready_ts: (fail-closed); record in it since_ready_ts: %s, the ts of the WP's latest -> ready ledger row" % (ev, latest)))
+        sys.exit(print("%s carries no parseable since_ready_ts: (fail-closed); the WP's ledger holds no -> ready row, so record in it since_ready_ts: none" % ev))
+    if last is None or (t is not None and (since is None or t > since)):
+        since, last = t, ev
+if last is None:
+    sys.exit(0)
+for t, _ in ready_rows():
+    if t is not None and (since is None or t > since):
+        sys.exit(0)
+print("%s has no -> ready ledger row after the max since_ready_ts: %s; re-harden it first (goalforge-transition.sh %s hardened --mode evidence --evidence %s)"
+      % (last, since.strftime("%Y-%m-%dT%H:%M:%SZ") if since else "none", wp_dir, last))
+PY
+)" || { flock -u 9; exec 9>&-; echo "ERROR: respec reharden check failed for $WP_DIR; refused" >&2; return 1; }
+        if [[ -n "$STALE_EV" ]]; then
+            flock -u 9; exec 9>&-
+            echo "ERROR: $FROM -> $TO refused: $STALE_EV" >&2; return 1
+        fi
+    fi
+    TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"  # inside the lock: ts order == ledger order (L1-l8)
     do_write "$OVERVIEW" "$TO" "$TODAY" "$LEDGER" "$WP_NAME" "$FROM" \
              "$REASON" "$ACTOR" "$OVERRIDE" "$COMMIT" "$TS" \
              "$SESSION" "$MODEL" "$PROVIDER" "$AGENT" "$MODE" "$DECISION_REF"
-    bash "$STAMP" "$FEATURE_DIR" >/dev/null
-    bash "$ROLLUP" "$FEATURE_DIR" >/dev/null
     flock -u 9
     exec 9>&-
 
@@ -615,6 +722,25 @@ EOF
     no() { echo "  FAIL: $1"; t_fail=$((t_fail+1)); }
 
     echo "=== goalforge-transition.sh --self-test ==="
+
+    # (l) legacy WP status `draft`: only `draft -> spec` is legal (human ruling 2026-09-27)
+    local lg="$feat/wp-09-legacy"
+    mkdir -p "$lg"
+    sed -e 's/^status: .*/status: draft/' -e 's/^name: .*/name: wp-09-legacy/' "$wp/overview.md" > "$lg/overview.md"
+    if bash "$SELF" "$lg" ready >/dev/null 2>&1; then
+        no "(l1) legacy draft WP must not take draft -> ready"
+    elif [[ "$(read_status "$lg/overview.md")" == "draft" ]]; then
+        ok "(l1) legacy draft WP refused draft -> ready (status unchanged)"
+    else
+        no "(l1) draft -> ready refused but status mutated"
+    fi
+    if bash "$SELF" "$lg" spec >/dev/null 2>&1 \
+       && [[ "$(read_status "$lg/overview.md")" == "spec" ]]; then
+        ok "(l2) legacy draft WP takes draft -> spec"
+    else
+        no "(l2) legacy draft WP should take draft -> spec"
+    fi
+    rm -rf "$lg"
 
     # (a) forward edge succeeds + writes a ledger row
     if bash "$SELF" "$wp" hardened --reason "fwd" >/dev/null 2>&1 \
@@ -881,7 +1007,7 @@ PY
     fi
 
     # ── (l)(m) LIVE fast-route spec→ready --mode auto — the wp-07 regression ────
-    #   Reproduces the defect wp-01's hash gate introduced: a route:fast WP is
+    #   Reproduces the defect wp-01's hash gate introduced: a fast-path WP is
     #   born goal_approved_version: null and takes spec→ready --mode auto with NO
     #   harden (the sole hash writer), so the null stamp made the fast route
     #   non-runnable end-to-end. (l) the bug: null stamp → REFUSED. (m) the fix:
@@ -984,6 +1110,52 @@ EOF
     else
         no "(s) reverse feature edge with --reason should succeed"
     fi
+
+    # ── (s2)(s3)(s4)(s4b) draft -> completed three-condition guard (H3, OQ8) ──
+    #   (s2) no spec.md + exactly one WP at verified → completes; (s3) zero WPs
+    #   and two WPs → refused; (s4) spec.md present → refused (a specced feature
+    #   passes spec -> ready); (s4b) the sole WP at implemented, not verified →
+    #   refused. Each refusal names its unmet condition and leaves status: draft.
+    _mk_dc_feat() {  # $1=dir $2=spec.md? (0|1) $3=WP statuses ('' = no WP)
+        local n=0 s
+        mkdir -p "$1"
+        printf -- '---\nname: %s\ntitle: draft-completed self-test fixture\nstatus: draft\nfeature: %s\nwork_packages: []\n---\n\n# fixture\n' \
+            "$(basename "$1")" "$(basename "$1")" > "$1/overview.md"
+        [[ "$2" == 0 ]] || printf -- '---\nname: %s-spec\n---\n' "$(basename "$1")" > "$1/spec.md"
+        for s in $3; do
+            n=$((n + 1)); mkdir -p "$1/wp-0$n-x"
+            printf -- '---\nname: wp-0%s-x\nstatus: %s\nplan: %s\n---\n' "$n" "$s" "$(basename "$1")" > "$1/wp-0$n-x/overview.md"
+        done
+    }
+    _dc_refused() {  # $1=label $2=feature dir $3=refusal substring
+        local out
+        if out="$(bash "$SELF" "$2" completed 2>&1)"; then
+            no "$1 must not take draft -> completed"
+        elif [[ "$(read_status "$2/overview.md")" != "draft" ]]; then
+            no "$1 draft -> completed refused but status mutated"
+        elif ! grep -qF -- "$3" <<<"$out"; then
+            no "$1 refusal does not name '$3': $out"
+        else
+            ok "$1 refused draft -> completed naming '$3' (status unchanged)"
+        fi
+    }
+    local dcok="$_ST_TMP/plans/dcok" dc0="$_ST_TMP/plans/dc0" dc2="$_ST_TMP/plans/dc2" \
+          dcspec="$_ST_TMP/plans/dcspec" dcimpl="$_ST_TMP/plans/dcimpl"
+    _mk_dc_feat "$dcok" 0 verified
+    _mk_dc_feat "$dc0" 0 ""
+    _mk_dc_feat "$dc2" 0 "verified verified"
+    _mk_dc_feat "$dcspec" 1 verified
+    _mk_dc_feat "$dcimpl" 0 implemented
+    if bash "$SELF" "$dcok" completed >/dev/null 2>&1 \
+       && [[ "$(read_status "$dcok/overview.md")" == "completed" ]]; then
+        ok "(s2) no spec.md + one WP at verified takes draft -> completed"
+    else
+        no "(s2) no spec.md + one WP at verified should take draft -> completed"
+    fi
+    _dc_refused "(s3) zero WPs" "$dc0" "exactly one wp-*/overview.md"
+    _dc_refused "(s3) two WPs" "$dc2" "exactly one wp-*/overview.md"
+    _dc_refused "(s4) spec.md present" "$dcspec" "requires no spec.md"
+    _dc_refused "(s4b) sole WP at implemented" "$dcimpl" "status: verified"
 
     # ── (t)(u)(v) evidence-gated ready→hardened revert — the re-harden edge (wp-02)
     #   The `ready→hardened` revert is NOT a bare FREE-REVERSE: it additionally

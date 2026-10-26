@@ -18,6 +18,9 @@ role:        <role from ROLE_TIER — e.g. implement | wp-verify | simplify | ju
 model:       <bare tier resolved to model — sonnet | opus>   # explicit, never a frontmatter default
 effort:      <bare — low | medium | high | xhigh | max>      # explicit, per dispatch-resolution.md
 autonomy:    <autonomous-minimal | semi-autonomous>
+provider:    <providers[].name from references/dispatch.yaml>  # configured, never named in a SKILL.md
+endpoint:    <session | leaf>          # the dispatch sense formerly spelled `route` (ticket-62)
+egress:      <none | diff-only | overview | full>  # what may leave to that endpoint; narrow-only override
 
 owned:                                 # files this worker MAY create/edit
   - <path>
@@ -35,6 +38,40 @@ Everything not in `owned` is off-limits by default; the explicit `off-limits`
 list names the paths the worker might otherwise be tempted to reach for (sibling
 WP files, `plans/**`, shared config). A worker that needs a file outside `owned`
 does not edit it — it returns `EscalationRequired` (see below).
+
+## Provider fall-through
+
+`provider`, `endpoint`, and `egress` are resolved from `references/dispatch.yaml`
+— the stage row names the first-choice provider, and the ordered `providers`
+list decides what happens when its leaf fails. Fall-through on leaf exit `1`,
+`2`, and `4` with reason `plan_quota_exhausted`/`metered_rate_limited`; a leaf
+exit `4` with `budget_exceeded`/`budget_check_failed` keeps its completed
+result and WARNs; `EscalationRequired` when the list is exhausted. Egress
+classes, the narrow-only feature override, and every key are documented in
+`references/schema.md` §dispatch.yaml — not restated here.
+
+## Payload size (leaf legs)
+
+A leaf leg's payload travels as a `--prompt` **argv value**, not
+`--prompt-file`. Which flag works depends on the CONFIGURED provider, not on
+leaf-interface v1 (verified 2026-09-13 by reading the leaves): the ollama, zai
+and deepseek leaves route `--prompt-file` through `_core/prompt_file.py`, a
+*structured handoff-brief* parser (base-dir allowlist + frontmatter contract,
+exit 2/3) that kills a raw payload file with leaf-exit-3, while the codex leaf
+reads the file raw and would accept one. The shipped `second_opinion` row runs
+on ollama, hence `--prompt` and hence a size cap.
+
+The cap is configured, not hardcoded — `second_opinion.max_payload_bytes` in
+`references/dispatch.yaml` (shipped `102400`, which is also the reviewed
+MAXIMUM: one argv string must stay inside `MAX_ARG_STRLEN`, 131072 on a
+4 KiB-page host, and the leaf re-passes the value through
+`_core/intent_gate.sh` and `claude -p`). A larger value is clamped to the
+ceiling with a WARN; a non-integer or non-positive value falls back to the
+default with a WARN. Above the effective cap `goalforge-second-opinion.sh` truncates the DIFF section
+head-first and names it in the reason (`; diff-truncated N/M`); a payload still
+over the cap with the diff gone calls no leaf and emits
+`second_opinion.skipped` with reason `payload-oversize <actual>/<cap>`, exit 0.
+Semantics: `references/schema.md` §dispatch.yaml.
 
 ## Return-as-DATA contract
 
@@ -84,43 +121,3 @@ complexity task carries **no** discipline block (gate: stamp iff
 
 The stamp is by-reference to one file so the five-gate discipline has a single
 owner; its Gate-5 escalation return maps to `EscalationRequired` as above.
-
-## Wave-route brief instance — concurrent spec-author fan-out
-
-The wave route (run/SKILL.md) fans out one **spec-author brief per feature**,
-run concurrently. Each is an ordinary brief on the fields above — no new
-vocabulary. The only wave-specific rule is that the concurrent set's `owned`
-sets are **pairwise-disjoint**, pinned per feature dir (planning-fan-out is a
-feature-level primitive; safety = pairwise-disjoint owned-sets + per-feature-dir
-isolation, declaration-time only, [risk-accepted]).
-
-Per author, pin `owned` to that feature's tree and name every sibling feature
-dir in `off-limits`:
-
-```
-role:        spec-author
-model:       opus
-effort:      medium
-autonomy:    semi-autonomous
-owned:
-  - plans/feature-a/**                 # this author's feature dir ONLY
-off-limits:
-  - plans/**                           # never a status: line (default fence)
-  - plans/feature-b/**                 # sibling author's owned set
-task_spec:   <feature-a spec goal object>
-context:     <feature-a overview + references — pointers, not copies>
-```
-
-The sibling author's brief mirrors this with `owned: [plans/feature-b/**]` and
-`off-limits: [plans/feature-a/**]`. The two `owned` sets share no path, so the
-concurrent writes are naturally disjoint. The cross-spec judge that runs over
-the finished set is **cold** (fresh subagent, no shared conversation state) per
-the dispatch trust boundary.
-
-**Pairwise-disjointness check (net-new, checkable — not prose-only).** Before
-the fan-out dispatches, run the concurrent briefs through
-`evals/wave-route/owned-set-disjoint.py BRIEF ...`. It parses each brief's
-top-level `owned:` block and flags any pair with a non-empty intersection —
-`OVERLAP <a> <b>: <shared paths>` (exit 1) — or prints `DISJOINT` (exit 0). An
-overlapping owned-set is thus detectable mechanically at authoring time, not
-merely discouraged in guidance.

@@ -1,12 +1,14 @@
 ---
-description: "Execute ONE work package end to end via goalforge-execute: read the WP, dispatch the tasks, advance the status to verified. With no argument, picks the next ready work package whose dependencies are satisfied and runs it. This is the per-WP implementation sub-cycle, NOT the whole chain — the full chain is /goalforge-run, decomposing a spec is /plan, the completion check is /verify."
+description: "Execute ONE work package via goalforge-execute: dispatch its checklist to one owning agent, run the WP verification command, land exactly one commit, and leave the WP at `implemented`. Quality sign-off is /verify. With no argument, picks the next ready WP whose dependencies are satisfied. NOT the whole chain — that is /goalforge-run; decomposing a spec is /plan."
 ---
 
 # /implement
 
-> `${CLAUDE_PLUGIN_ROOT}` is the goalforge package root — the parent of the
-> directory holding this command file. On a direct, non-plugin load the
-> variable is unset; resolve it that way.
+> `${CLAUDE_PLUGIN_ROOT}` is the installed plugin root (`plugins/goalforge/`),
+> where each child skill lives at `skills/<child>/SKILL.md`. The variable is
+> unset on a direct load from the source package — there read
+> `packages/goalforge/<child>/SKILL.md` (the source package has no `skills/`
+> directory; `scripts/goalforge-generate.sh` adds it when generating the plugin).
 
 Execute a work package through the full goalforge sub-cycle.
 
@@ -27,12 +29,17 @@ chain should be driven end-to-end.
 
 Run `goalforge-execute` on the named (or auto-selected) WP:
 
-1. Reads `<wp>/overview.md` — asserts `status: ready`; aborts if not.
-2. Dispatches tasks (sequential or parallel wave) using the specialist and
-   model routing from the WP frontmatter.
-3. Loops: implement → verify → fix → re-verify until clean.
-4. Advances the WP `status:` to `verified` on pass.
+1. Reads `<wp>/overview.md` — asserts `status: ready` (or resumes an
+   `executing` WP); aborts on any other status.
+2. Dispatches the `## Checklist` to ONE owning agent at an explicitly resolved
+   model + effort, splitting into non-committing batches only under the C5
+   conditions (more than 8 owned files, or disjoint `{files:}` + `parallel: true`).
+3. Runs the WP's `goal.verification.command`, re-dispatching on failure within
+   the stop rule (goal met | 2 attempts | token ceiling | premise-blocked | same
+   gate twice).
+4. Lands exactly ONE conventional commit and advances the WP to `implemented`.
 
+`/implement` never writes `status: verified` — gates A/B/C in `/verify` do.
 One WP at a time. If stuck, ask — don't guess.
 
 ## Rules
@@ -40,4 +47,4 @@ One WP at a time. If stuck, ask — don't guess.
 - The WP is the unit of work; never widen scope mid-execution.
 - Feature layout is flat: `<PLANS_ROOT>/<feature>/<wp>/`, resolved per
   `${CLAUDE_PLUGIN_ROOT}/references/schema.md` §PLANS_ROOT resolution.
-- Next: `/verify` (runs `goalforge-verify`).
+- Next: `/verify` (runs `goalforge-verify` — `implemented → verified`).

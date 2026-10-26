@@ -1,0 +1,19 @@
+# S-1, resolution path: every provider row is coherent on its own (no native
+# row carries a leaf), but the implement STAGE row sends the native provider
+# through `endpoint: leaf`. A native row that would execute through a leaf
+# never reaches the admission table — it is refused.
+schema_version: 1
+
+providers:
+  - name: anthropic
+    kind: native
+    leaf: null
+    propose_only: false
+
+stages:
+  implement:
+    model: by_register
+    effort: by_register
+    provider: anthropic
+    endpoint: leaf
+    egress: overview

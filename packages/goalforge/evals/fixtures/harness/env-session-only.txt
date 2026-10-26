@@ -1,0 +1,4 @@
+# session tools only; every toolchain primitive is left to the probe
+Agent tool=present
+Workflow tool=present
+AskUserQuestion=present

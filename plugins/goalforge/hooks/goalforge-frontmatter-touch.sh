@@ -3,10 +3,15 @@
 #
 # Reads the edited file path from the hook payload (stdin JSON).
 # If the path is under a resolved PLANS_ROOT and ends in .md, bumps
-# `updated:` (and `stage_updated:` if present) in the frontmatter
-# to today's date (YYYY-MM-DD). Idempotent: no write if already today.
-# Only touches the frontmatter block (between the first two --- lines).
-# No-op silently for non-plans paths or non-.md files.
+# `stage_updated:` (WP-level date) in the frontmatter to today's date
+# (YYYY-MM-DD). Idempotent: no write if already today. Only touches the
+# frontmatter block (between the first two --- lines). No-op silently for
+# non-plans paths or non-.md files.
+#
+# wp-01 T9: no longer bumps the feature-level `updated:` field on every
+# edit — that per-edit churn was noise (goalforge hook inertness audit,
+# 2026-09-08); `stage_updated:` (WP-level, one write per meaningful edit
+# session) is the field this hook still owns.
 #
 # PLANS_ROOT resolution ($SDD_PLANS_DIR → <git-root>/plans → ~/.claude/plans)
 # is owned by the sourced goalforge-plans-root.sh — never re-implemented here.
@@ -50,21 +55,21 @@ self_test() {
     # frontmatter is bumped under $SDD_PLANS_DIR and left untouched outside
     # every resolved root. Driven through a SUBPROCESS so the real stdin entry
     # point is covered.
-    printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$d/plans/f/overview.md"
-    printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$d/elsewhere/overview.md"
+    printf -- '---\nstage_updated: 1999-01-01\n---\nbody\n' > "$d/plans/f/overview.md"
+    printf -- '---\nstage_updated: 1999-01-01\n---\nbody\n' > "$d/elsewhere/overview.md"
     payload() { # <file path>
         python3 -c 'import json,sys; print(json.dumps({"tool_name":"Edit","tool_input":{"file_path":sys.argv[1]}}))' "$1"
     }
 
     pos_out="$(payload "$d/plans/f/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; pos_rc=$?
-    if grep -q "updated: $TODAY" "$d/plans/f/overview.md"; then
-        ok "under \$SDD_PLANS_DIR -> updated: bumped to $TODAY"
+    if grep -q "stage_updated: $TODAY" "$d/plans/f/overview.md"; then
+        ok "under \$SDD_PLANS_DIR -> stage_updated: bumped to $TODAY"
     else
-        no "under \$SDD_PLANS_DIR should bump updated: (rc=$pos_rc, out='$pos_out')"
+        no "under \$SDD_PLANS_DIR should bump stage_updated: (rc=$pos_rc, out='$pos_out')"
     fi
 
     neg_out="$(payload "$d/elsewhere/overview.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; neg_rc=$?
-    if [ "$neg_rc" = 0 ] && [ -z "$neg_out" ] && grep -q 'updated: 1999-01-01' "$d/elsewhere/overview.md"; then
+    if [ "$neg_rc" = 0 ] && [ -z "$neg_out" ] && grep -q 'stage_updated: 1999-01-01' "$d/elsewhere/overview.md"; then
         ok "outside every plans root -> silent exit-0 fast path, file untouched"
     else
         no "outside every plans root should fast-path silently (rc=$neg_rc, out='$neg_out')"
@@ -78,6 +83,16 @@ self_test() {
     [ "$before" = "$after" ] && ok "already-current file -> no write (idempotent)" \
         || no "already-current file was rewritten"
 
+    # wp-01 T9: a feature-level `updated:` field is left untouched (only
+    # `stage_updated:` is bumped now) even when both fields are present.
+    printf -- '---\nupdated: 1999-01-01\nstage_updated: 1999-01-01\n---\nbody\n' > "$d/plans/f/both.md"
+    payload "$d/plans/f/both.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" >/dev/null 2>&1
+    if grep -q "^updated: 1999-01-01" "$d/plans/f/both.md" && grep -q "^stage_updated: $TODAY" "$d/plans/f/both.md"; then
+        ok "updated: left untouched; stage_updated: bumped"
+    else
+        no "updated: should stay 1999-01-01 while stage_updated: bumps to $TODAY ($(cat "$d/plans/f/both.md"))"
+    fi
+
     # Zero-breakage: empty stdin exits 0.
     printf '' | bash "$SELF" >/dev/null 2>&1
     [ $? -eq 0 ] && ok "empty payload -> exit 0 (zero-breakage)" || no "empty payload should exit 0"
@@ -85,13 +100,13 @@ self_test() {
     # Zero-breakage on the WRITE: an unwritable target must exit 0, silently,
     # with the file left alone — the bump is best-effort, never a hard failure.
     local ro_out ro_rc
-    printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$d/plans/f/readonly.md"
+    printf -- '---\nstage_updated: 1999-01-01\n---\nbody\n' > "$d/plans/f/readonly.md"
     chmod a-w "$d/plans/f/readonly.md"
     if [ "$(id -u)" = 0 ]; then
         ok "unwritable target -> exit 0 silent (skipped: running as root, chmod is not enforced)"
     else
         ro_out="$(payload "$d/plans/f/readonly.md" | SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; ro_rc=$?
-        if [ "$ro_rc" = 0 ] && [ -z "$ro_out" ] && grep -q 'updated: 1999-01-01' "$d/plans/f/readonly.md"; then
+        if [ "$ro_rc" = 0 ] && [ -z "$ro_out" ] && grep -q 'stage_updated: 1999-01-01' "$d/plans/f/readonly.md"; then
             ok "unwritable target -> exit 0 silent, file untouched"
         else
             no "unwritable target should exit 0 silently (rc=$ro_rc, out='$ro_out')"
@@ -108,9 +123,9 @@ self_test() {
     for c in bash readlink dirname basename date cat jq git grep sed; do
         ln -sf "$(command -v "$c" 2>/dev/null)" "$sb/$c" 2>/dev/null || true
     done
-    printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$d/plans/f/nopy.md"
+    printf -- '---\nstage_updated: 1999-01-01\n---\nbody\n' > "$d/plans/f/nopy.md"
     np_out="$(payload "$d/plans/f/nopy.md" | PATH="$sb" SDD_PLANS_DIR="$d/plans" bash "$SELF" 2>&1)"; np_rc=$?
-    { [ "$np_rc" = 0 ] && grep -q 'updated: 1999-01-01' "$d/plans/f/nopy.md"; } \
+    { [ "$np_rc" = 0 ] && grep -q 'stage_updated: 1999-01-01' "$d/plans/f/nopy.md"; } \
         && ok "python3 missing from PATH -> exit 0 (zero-breakage)" \
         || no "python3 missing from PATH should exit 0 (rc=$np_rc, out='$np_out')"
     # Positive control for the case above: the SAME sandbox PATH plus python3
@@ -118,7 +133,7 @@ self_test() {
     # not short-circuiting on some earlier missing command.
     ln -sf "$(command -v python3)" "$sb/python3" 2>/dev/null || true
     payload "$d/plans/f/nopy.md" | PATH="$sb" SDD_PLANS_DIR="$d/plans" bash "$SELF" >/dev/null 2>&1
-    grep -q "updated: $TODAY" "$d/plans/f/nopy.md" \
+    grep -q "stage_updated: $TODAY" "$d/plans/f/nopy.md" \
         && ok "sandbox PATH + python3 -> bumped (control: the interpreter step is reached)" \
         || no "sandbox PATH + python3 should bump (control)"
 
@@ -130,23 +145,31 @@ self_test() {
     mkdir -p "$hs/.claude/plans/f" "$hs/.claude/notplans"
     git init -q "$d/leg2repo" 2>/dev/null
     mkdir -p "$d/leg2repo/plans/f" "$d/leg2repo/notplans"
-    for lf in "$d/leg2repo/plans/f" "$d/leg2repo/notplans" "$hs/.claude/plans/f" "$hs/.claude/notplans"; do
-        printf -- '---\nupdated: 1999-01-01\n---\nbody\n' > "$lf/overview.md"
+    # Leg 2b shape: plans/ is its OWN git repo nested in the outer one. The git
+    # root of a file below it is the plans dir itself, so leg 2 alone resolves
+    # to `plans/plans` and the file falls out of scope. This is the real-world
+    # layout of a private plans repo gitignored by a public parent.
+    git init -q "$d/leg2brepo" 2>/dev/null
+    mkdir -p "$d/leg2brepo/plans/f"
+    git init -q "$d/leg2brepo/plans" 2>/dev/null
+    for lf in "$d/leg2repo/plans/f" "$d/leg2repo/notplans" "$d/leg2brepo/plans/f" "$hs/.claude/plans/f" "$hs/.claude/notplans"; do
+        printf -- '---\nstage_updated: 1999-01-01\n---\nbody\n' > "$lf/overview.md"
     done
     leg() { # <label> <overview path> <engage|silent>
         local out rc
         out="$(payload "$2" | env -u SDD_PLANS_DIR HOME="$hs" bash "$SELF" 2>&1)"; rc=$?
         if [ "$3" = engage ]; then
-            { [ "$rc" = 0 ] && [ -z "$out" ] && grep -q "updated: $TODAY" "$2"; } \
+            { [ "$rc" = 0 ] && [ -z "$out" ] && grep -q "stage_updated: $TODAY" "$2"; } \
                 && ok "$1" || no "$1 (rc=$rc, out='$out')"
         else
-            { [ "$rc" = 0 ] && [ -z "$out" ] && grep -q 'updated: 1999-01-01' "$2"; } \
+            { [ "$rc" = 0 ] && [ -z "$out" ] && grep -q 'stage_updated: 1999-01-01' "$2"; } \
                 && ok "$1" || no "$1 (rc=$rc, out='$out')"
         fi
     }
-    leg "leg 2: <git-root>/plans/** -> updated: bumped"             "$d/leg2repo/plans/f/overview.md"   engage
+    leg "leg 2: <git-root>/plans/** -> stage_updated: bumped"             "$d/leg2repo/plans/f/overview.md"   engage
     leg "leg 2 negative: same git repo outside plans/ -> untouched" "$d/leg2repo/notplans/overview.md"  silent
-    leg "leg 3: \$HOME/.claude/plans/** -> updated: bumped"         "$hs/.claude/plans/f/overview.md"   engage
+    leg "leg 2b: plans/ is its OWN git repo -> stage_updated: bumped"     "$d/leg2brepo/plans/f/overview.md"  engage
+    leg "leg 3: \$HOME/.claude/plans/** -> stage_updated: bumped"         "$hs/.claude/plans/f/overview.md"   engage
     leg "leg 3 negative: \$HOME/.claude outside plans/ -> untouched" "$hs/.claude/notplans/overview.md" silent
 
     rm -rf "$d"
@@ -224,18 +247,10 @@ if end_idx is None:
 fm_lines = lines[1:end_idx]
 changed = False
 
-updated_re = re.compile(r'^(updated:\s*)(.+)$')
 stage_re   = re.compile(r'^(stage_updated:\s*)(.+)$')
 
 new_fm = []
 for line in fm_lines:
-    m = updated_re.match(line)
-    if m:
-        if m.group(2).strip() != today:
-            line = m.group(1) + today
-            changed = True
-        new_fm.append(line)
-        continue
     m = stage_re.match(line)
     if m:
         if m.group(2).strip() != today:

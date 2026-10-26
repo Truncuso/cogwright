@@ -1,0 +1,21 @@
+{
+  "stage": "spec",
+  "wp": "goalforge-overhaul",
+  "reader": "anonymous",
+  "changed": [
+    { "text": "every ref form in this report is the legal path#heading arm", "ref": "plans/goalforge-overhaul/spec.md#C6 — Trace" }
+  ],
+  "issues": [
+    {
+      "id": "C6-ref",
+      "text": "spec.md:165 defines both legal ref forms; this fixture pins the colon-free one",
+      "ref": "plans/goalforge-overhaul/spec.md#C6 — Trace",
+      "owner": "agent"
+    }
+  ],
+  "next_gate": {
+    "ask": "Is path#heading accepted and path:#heading rejected?",
+    "ref": "packages/goalforge/references/schema/stage-report.schema.json#properties"
+  },
+  "assumed_known": []
+}

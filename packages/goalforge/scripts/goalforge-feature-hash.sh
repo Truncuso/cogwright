@@ -1,34 +1,48 @@
 #!/usr/bin/env bash
-# goalforge-feature-hash.sh — deterministic hash of a feature's STRUCTURE + GOALS.
+# goalforge-feature-hash.sh — deterministic hash of a WP's CONTRACT SLICE.
 #
-# Single source of the Tier-1 feature-audit freshness key (schema.md §Tier-1
-# feature audit). The hash covers exactly what warrants a re-audit:
-#   1. sorted WP slugs
-#   2. each WP's depends_on (sorted)
-#   3. each WP's raw `goal:` block (trailing-ws-stripped, LF-normalized)
-#   4. the spec's `## Interface Contract` section text
+# wp-01 (T5) narrows this from a whole-feature structure+goals hash to a
+# per-WP hash over only the `## Interface Contract` subsections the WP
+# frontmatter's `contract_slice:` list names (C1-C7, spec.md Interface
+# Contract). Re-audit is now scoped to the contract text a WP actually
+# depends on, not the whole feature's WP graph — a sibling WP's goal edit
+# no longer trips this hash.
 #
-# Usage:   goalforge-feature-hash.sh <feature-dir>
+# The hash covers exactly:
+#   1. the WP's `contract_slice:` list (sorted, as recorded)
+#   2. for each named slice id (e.g. `C2`), the body of the spec.md
+#      `### C<n> — ...` subsection under `## Interface Contract`
+#      (trailing-ws-stripped, LF-normalized)
+#
+# Usage:   goalforge-feature-hash.sh <wp-dir>
 # Output:  the 12-char hex hash on stdout (exit 0), or an error on stderr (exit 2).
-# Zero-breakage: a feature with no WPs / no spec still hashes (over whatever
-# exists), so callers never crash on a partially-decomposed feature.
+# Zero-breakage: a WP with no `contract_slice:` or no spec.md still hashes
+# (over whatever exists), so callers never crash on a partially-decomposed
+# feature or a fast-path WP with no spec.md.
 set -euo pipefail
 
-FEATURE_DIR="${1:-}"
-if [ -z "$FEATURE_DIR" ] || [ ! -d "$FEATURE_DIR" ]; then
-  echo "goalforge-feature-hash: feature dir not found: ${FEATURE_DIR:-<missing>}" >&2
+WP_DIR="${1:-}"
+if [ -z "$WP_DIR" ] || [ ! -d "$WP_DIR" ]; then
+  echo "goalforge-feature-hash: WP dir not found: ${WP_DIR:-<missing>}" >&2
+  exit 2
+fi
+OVERVIEW="$WP_DIR/overview.md"
+if [ ! -f "$OVERVIEW" ]; then
+  echo "goalforge-feature-hash: overview.md not found under $WP_DIR" >&2
   exit 2
 fi
 
-python3 - "$FEATURE_DIR" <<'PY'
-import hashlib, sys
+python3 - "$WP_DIR" "$OVERVIEW" <<'PY'
+import hashlib, re, sys
 from pathlib import Path
 
-feature_dir = Path(sys.argv[1])
+wp_dir = Path(sys.argv[1])
+overview_path = Path(sys.argv[2])
+feature_dir = wp_dir.parent
+spec_path = feature_dir / "spec.md"
 
 
 def frontmatter_lines(text):
-    """Return the lines between the first two '---' fences (the YAML block)."""
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         return []
@@ -39,39 +53,22 @@ def frontmatter_lines(text):
 
 
 def norm(lines):
-    """Trailing-whitespace-stripped, LF-joined — matches goal_approved_version."""
     return "\n".join(l.rstrip() for l in lines)
 
 
-def extract_goal_block(fm_lines):
-    """Raw `goal:` block: from a top-level `goal:` key to the next top-level key."""
-    out, in_block = [], False
-    for ln in fm_lines:
-        if ln.startswith("goal:"):
-            in_block = True
-            out.append(ln)
-            continue
-        if in_block:
-            # a non-indented, non-blank line that is a new top-level key ends it
-            if ln and not ln[0].isspace() and not ln.startswith("#"):
-                break
-            out.append(ln)
-    return out
-
-
-def extract_depends_on(fm_lines):
-    """Best-effort: parse a `depends_on: [a, b]` inline list (sorted)."""
+def extract_contract_slice(fm_lines):
+    """Best-effort: parse a `contract_slice: [C1, C2]` inline list (sorted)."""
     for ln in fm_lines:
         s = ln.strip()
-        if s.startswith("depends_on:"):
-            val = s[len("depends_on:"):].strip()
+        if s.startswith("contract_slice:"):
+            val = s[len("contract_slice:"):].strip()
             val = val.strip("[]")
             items = [x.strip().strip("'\"") for x in val.split(",") if x.strip()]
             return sorted(items)
     return []
 
 
-def interface_contract(spec_text):
+def interface_contract_body(spec_text):
     """The `## Interface Contract` section body (until the next H2 / EOF)."""
     lines = spec_text.splitlines()
     out, capture = [], False
@@ -83,24 +80,40 @@ def interface_contract(spec_text):
             continue
         if capture:
             out.append(ln)
-    return norm(out)
+    return out
 
 
-parts = []
+def slice_bodies(ic_lines):
+    """Map slice id (e.g. 'C2') -> its `### C2 — ...` subsection body."""
+    bodies = {}
+    current_id, buf = None, []
+    header_re = re.compile(r"^### (C\d+)\b")
+    for ln in ic_lines:
+        m = header_re.match(ln)
+        if m:
+            if current_id is not None:
+                bodies[current_id] = buf
+            current_id = m.group(1)
+            buf = []
+            continue
+        if current_id is not None:
+            buf.append(ln)
+    if current_id is not None:
+        bodies[current_id] = buf
+    return bodies
 
-wp_dirs = sorted(
-    p for p in feature_dir.glob("wp-*") if (p / "overview.md").is_file()
-)
-parts.append("WPS\n" + "\n".join(p.name for p in wp_dirs))
 
-for wp in wp_dirs:
-    fm = frontmatter_lines((wp / "overview.md").read_text(encoding="utf-8"))
-    parts.append(f"DEPENDS:{wp.name}\n" + "\n".join(extract_depends_on(fm)))
-    parts.append(f"GOAL:{wp.name}\n" + norm(extract_goal_block(fm)))
+overview_text = overview_path.read_text(encoding="utf-8")
+fm = frontmatter_lines(overview_text)
+slice_ids = extract_contract_slice(fm)
 
-spec = feature_dir / "spec.md"
-if spec.is_file():
-    parts.append("IFC\n" + interface_contract(spec.read_text(encoding="utf-8")))
+parts = ["SLICE\n" + "\n".join(slice_ids)]
+
+if spec_path.is_file():
+    ic_lines = interface_contract_body(spec_path.read_text(encoding="utf-8"))
+    bodies = slice_bodies(ic_lines)
+    for sid in slice_ids:
+        parts.append(f"{sid}\n" + norm(bodies.get(sid, [])))
 
 canonical = "\n\x1e\n".join(parts)  # record-separator joins; stable across runs
 print(hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12])

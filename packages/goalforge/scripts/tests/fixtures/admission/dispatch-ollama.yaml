@@ -1,0 +1,22 @@
+# implement on a LOCAL provider carrying its own model id — the row the
+# admission table either admits (admitted-ok.yaml + a code/py WP) or refuses.
+schema_version: 1
+
+providers:
+  - name: anthropic
+    kind: native
+    leaf: null
+    propose_only: false
+  - name: ollama
+    kind: local
+    leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+
+stages:
+  implement:
+    model: glm-5.3:cloud
+    effort: low
+    provider: ollama
+    endpoint: leaf
+    egress: overview          # a leaf dispatch egresses; `none` here is refused

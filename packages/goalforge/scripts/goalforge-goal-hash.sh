@@ -1,30 +1,55 @@
 #!/usr/bin/env bash
-# goalforge-goal-hash.sh — the SINGLE hash authority for a WP goal block.
+# goalforge-goal-hash.sh — the SINGLE hash authority for a WP goal.
 #
 # Usage:
-#   goalforge-goal-hash.sh <wp-path>            print sha256[:12] of the goal: block
+#   goalforge-goal-hash.sh <wp-path>            print sha256[:12] of outcome+verification
 #   goalforge-goal-hash.sh --record <wp-path>   compute it + write goal_approved_version:
+#   goalforge-goal-hash.sh --legacy <wp-path>   print the LEGACY (pre-2026-09-09) whole-block hash
+#   goalforge-goal-hash.sh --matches <wp-path> <stamp>
+#       print `narrow` or `legacy` (exit 0) when <stamp> equals that hash of the
+#       current goal; else print the narrow hash and exit 1.
+#   goalforge-goal-hash.sh --restamp-legacy <wp-path>
+#       migrate a legacy goal_approved_version stamp to the narrow hash, proof-gated:
+#       stamp == narrow -> `noop`; stamp == legacy(current) -> re-record; else find
+#       the newest git revision whose legacy hash == stamp and re-record ONLY if its
+#       narrow hash equals the current one. Otherwise REFUSE (exit 4, file untouched).
 #   goalforge-goal-hash.sh --self-test
+#
+# wp-01 T10 (narrow hash): the hash covers ONLY the goal block's `outcome:` and
+# `verification:` sub-keys — NOT `constraints:`, `boundaries:`,
+# `iteration_policy:`, or `blocked_stop:`, and not any other WP prose. An edit
+# to those facets, or to any body section outside the goal block (e.g.
+# `## Decisions`), never changes this hash and never requires re-approval.
 #
 # Goal block = the lines from the top-level `goal:` key up to (not including) the
 # next top-level frontmatter key (`^[a-z_][a-z0-9_]*:`, no leading whitespace),
-# within the `---` fence. Normalized before hashing: per-line TRAILING whitespace
-# stripped, line endings normalized to `\n`; leading indentation is significant
-# and preserved.
+# within the `---` fence. Within it, only the `outcome:` and `verification:`
+# sub-keys (each running to the next sibling key at the same indentation, or
+# the block's end) are extracted, in that order. Normalized before hashing:
+# per-line TRAILING whitespace stripped, line endings normalized to `\n`;
+# leading indentation is significant and preserved.
 #
-# This is the ONE place the goal-block hash is defined. goalforge-harden (--record) and
+# This is the ONE place the goal hash is defined. goalforge-harden (--record) and
 # goalforge-validate (recompute-and-compare) BOTH shell out to it — the hash is NEVER
 # reimplemented elsewhere, so the record and recompute paths can never diverge.
 #
-# Exit: 0 success. 3 when <wp-path> has no goal: block (prints nothing to stdout).
-#       1 on usage / IO error.
+# Exit: 0 success. 3 when <wp-path> has no goal: block, or the block has
+#       neither outcome: nor verification: (prints nothing to stdout).
+#       1 on usage / IO error, or --matches mismatch.
+#       4 --restamp-legacy refused (no proof the approved goal is unchanged).
+#
+# LEGACY hash (commit 4b3b953, 2026-09-09, changed the definition): stamps
+# recorded before then hash the WHOLE goal block (`goal:` line through the
+# block end, trailing whitespace stripped, joined by `\n`). It is kept frozen
+# (`hash_block <overview> legacy`) only so old stamps are recognised and can be
+# migrated; fresh approvals always record the narrow hash.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 
 usage() {
-    sed -n '2,17p' "$SELF" | sed 's/^# \{0,1\}//'
+    sed -n '2,45p' "$SELF" | sed 's/^# \{0,1\}//'
 }
 
 # ── Resolve a WP path (dir or overview.md) to its overview.md ────────────────
@@ -41,8 +66,9 @@ resolve_overview() {
     printf '%s\n' "$OVERVIEW"
 }
 
-# ── Compute the goal-block hash (stdout = 12 hex chars; exit 3 = no block) ────
-hash_block() {
+# ── LEGACY whole-block hash (pre-4b3b953). FROZEN: never edit — existing ─────
+# goal_approved_version stamps were computed with exactly this definition.
+hash_block_legacy() {
     python3 - "$1" <<'PY'
 import sys, re, hashlib
 overview = sys.argv[1]
@@ -76,6 +102,80 @@ for i in range(start + 1, end):
 # Normalize: strip per-line trailing whitespace; keep leading indentation.
 block = "\n".join(ln.rstrip() for ln in lines[start:stop])
 print(hashlib.sha256(block.encode("utf-8")).hexdigest()[:12])
+PY
+}
+
+# ── Compute the goal-block hash (stdout = 12 hex chars; exit 3 = no block) ────
+# $2 = narrow (default) | legacy
+hash_block() {
+    if [[ "${2:-narrow}" == "legacy" ]]; then
+        hash_block_legacy "$1"
+        return
+    fi
+    python3 - "$1" <<'PY'
+import sys, re, hashlib
+overview = sys.argv[1]
+text = open(overview, encoding="utf-8").read()
+text = text.replace("\r\n", "\n").replace("\r", "\n")   # normalize line endings
+lines = text.split("\n")
+
+if not lines or lines[0].strip() != "---":
+    sys.exit(3)
+end = None
+for i in range(1, len(lines)):
+    if lines[i].strip() == "---":
+        end = i; break
+if end is None:
+    sys.exit(3)
+
+# Top-level `goal:` key inside the fence.
+start = None
+for i in range(1, end):
+    if re.match(r"^goal:", lines[i]):
+        start = i; break
+if start is None:
+    sys.exit(3)
+
+# The block runs to the next top-level key (no leading space) or the fence.
+stop = end
+for i in range(start + 1, end):
+    if re.match(r"^[a-z_][a-z0-9_]*:", lines[i]):
+        stop = i; break
+
+# Narrow to outcome:/verification: sub-keys only (T10). Sub-keys sit one
+# indentation level under `goal:`; find that level from the first child line,
+# then slice each named sub-key to the next sibling at the same indentation
+# (or the block's end).
+body = lines[start + 1:stop]
+indent = None
+for ln in body:
+    if ln.strip():
+        indent = len(ln) - len(ln.lstrip(" "))
+        break
+
+wanted = {}
+if indent is not None:
+    key_re = re.compile(r"^ {%d}([a-z_][a-z0-9_]*):" % indent)
+    cur, cur_start = None, None
+    for i, ln in enumerate(body):
+        m = key_re.match(ln)
+        if m:
+            if cur is not None:
+                wanted[cur] = body[cur_start:i]
+            cur, cur_start = m.group(1), i
+    if cur is not None:
+        wanted[cur] = body[cur_start:len(body)]
+
+parts = []
+for key in ("outcome", "verification"):
+    if key in wanted:
+        parts.append("\n".join(ln.rstrip() for ln in wanted[key]))
+
+if not parts:
+    sys.exit(3)   # goal: block has neither outcome: nor verification:
+
+canonical = "\n\x1e\n".join(parts)
+print(hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:12])
 PY
 }
 
@@ -123,6 +223,74 @@ except Exception:
     raise
 print('recorded: goal_approved_version="%s" in %s' % (value, os.path.basename(overview)))
 PY
+}
+
+# ── --matches: which definition (narrow|legacy) does <stamp> match? ─────────
+matches() {
+    local OVERVIEW="$1" STAMP="$2" N L rc
+    set +e; N="$(hash_block "$OVERVIEW" narrow)"; rc=$?; set -e
+    if [[ "$rc" -ne 0 ]]; then
+        [[ "$rc" -eq 3 ]] && echo "ERROR: no goal: block in $OVERVIEW" >&2
+        exit "$rc"
+    fi
+    if [[ "$STAMP" == "$N" ]]; then echo narrow; return 0; fi
+    set +e; L="$(hash_block "$OVERVIEW" legacy)"; set -e
+    if [[ -n "$L" && "$STAMP" == "$L" ]]; then echo legacy; return 0; fi
+    printf '%s\n' "$N"
+    exit 1
+}
+
+# ── Read goal_approved_version (unquoted; empty when null/absent) ────────────
+read_stamp() {
+    python3 -c '
+import sys, re
+lines = open(sys.argv[1], encoding="utf-8").read().replace("\r\n", "\n").split("\n")
+if not lines or lines[0].strip() != "---":
+    sys.exit(0)
+for ln in lines[1:]:
+    if ln.strip() == "---":
+        break
+    m = re.match(r"^goal_approved_version:\s*(.*)$", ln)
+    if m:
+        v = m.group(1).strip().strip("\x27\"")
+        print("" if v.lower() in ("", "null", "~") else v)
+        break
+' "$1"
+}
+
+# ── --restamp-legacy: proof-gated migration of a legacy stamp to narrow ──────
+restamp_legacy() {
+    local OVERVIEW="$1" STAMP N L DIR REV TMPF RL RN rc
+    refuse() { echo "REFUSE: $1 -- re-harden" >&2; exit 4; }
+    STAMP="$(read_stamp "$OVERVIEW")"
+    [[ "$STAMP" =~ ^[0-9a-f]{12}$ ]] || refuse "goal_approved_version '${STAMP}' is not a sha256[:12] stamp"
+    set +e; N="$(hash_block "$OVERVIEW" narrow)"; rc=$?; set -e
+    [[ "$rc" -eq 0 ]] || refuse "no goal: block in $OVERVIEW"
+    if [[ "$STAMP" == "$N" ]]; then echo "noop: already narrow ($N)"; return 0; fi
+    set +e; L="$(hash_block "$OVERVIEW" legacy)"; set -e
+    if [[ "$STAMP" == "$L" ]]; then
+        echo "legacy stamp $STAMP matches the current goal block"
+        record "$OVERVIEW"; return 0
+    fi
+    # The whole block moved since approval; find the approved revision in git.
+    DIR="$(dirname "$OVERVIEW")"
+    git -C "$DIR" ls-files --error-unmatch -- "$(basename "$OVERVIEW")" >/dev/null 2>&1 \
+        || refuse "stamp $STAMP matches neither hash and $OVERVIEW is not tracked by git"
+    TMPF="$(mktemp)"
+    while IFS= read -r REV; do
+        git -C "$DIR" show "$REV:./$(basename "$OVERVIEW")" > "$TMPF" 2>/dev/null || continue
+        set +e; RL="$(hash_block "$TMPF" legacy)"; set -e
+        [[ "$RL" == "$STAMP" ]] || continue
+        set +e; RN="$(hash_block "$TMPF" narrow)"; set -e
+        rm -f "$TMPF"
+        if [[ "$RN" == "$N" ]]; then
+            echo "legacy stamp $STAMP proven at ${REV:0:8}; outcome:/verification: unchanged since"
+            record "$OVERVIEW"; return 0
+        fi
+        refuse "outcome:/verification: changed since approval at ${REV:0:8}"
+    done < <(git -C "$DIR" log --format=%H -- "$(basename "$OVERVIEW")")
+    rm -f "$TMPF"
+    refuse "no git revision of $OVERVIEW has legacy goal hash $STAMP"
 }
 
 # ── Self-test ────────────────────────────────────────────────────────────────
@@ -198,6 +366,31 @@ EOF
         no "record-roundtrip"
     fi
 
+    # (d) T10 narrow hash: a constraints:/boundaries:/iteration_policy:/
+    # blocked_stop: edit (outcome+verification unchanged) does NOT change the
+    # hash — b4.
+    _fixture "$d/wp-01-a/overview.md" "the thing is done"
+    h_a="$(bash "$SELF" "$d/wp-01-a")"
+    sed -i 's/constraints: \[\]/constraints: ["no regressions"]/' "$d/wp-01-a/overview.md"
+    sed -i 's/blocked_stop: "halt after 3 tries"/blocked_stop: "halt after 5 tries"/' "$d/wp-01-a/overview.md"
+    local h_a3
+    h_a3="$(bash "$SELF" "$d/wp-01-a")"
+    if [[ "$h_a3" == "$h_a" ]]; then
+        ok "constraints/blocked_stop edit does not change the narrow hash"
+    else
+        no "constraints/blocked_stop edit changed the narrow hash ($h_a vs $h_a3)"
+    fi
+
+    # (e) a verification: edit (outcome unchanged) DOES change the hash.
+    sed -i 's/check: "true"/check: "false"/' "$d/wp-01-a/overview.md"
+    local h_a4
+    h_a4="$(bash "$SELF" "$d/wp-01-a")"
+    if [[ "$h_a4" != "$h_a" ]]; then
+        ok "verification edit changes the narrow hash"
+    else
+        no "verification edit did not change the narrow hash"
+    fi
+
     echo ""
     echo "Results: $t_pass passed, $t_fail failed"
     [[ "$t_fail" -eq 0 ]]
@@ -206,11 +399,13 @@ EOF
 # ── Argument parsing ─────────────────────────────────────────────────────────
 RECORD=0
 SELFTEST=0
+MODE=""
 POS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --record)    RECORD=1; shift ;;
+        --legacy|--matches|--restamp-legacy) MODE="${1#--}"; shift ;;
         --self-test) SELFTEST=1; shift ;;
         -h|--help)   usage; exit 0 ;;
         --*)         echo "ERROR: unknown flag: $1" >&2; exit 1 ;;
@@ -230,7 +425,19 @@ fi
 
 OVERVIEW="$(resolve_overview "${POS[0]}")"
 
-if [[ "$RECORD" -eq 1 ]]; then
+if [[ "$MODE" == "matches" ]]; then
+    [[ "${#POS[@]}" -eq 2 ]] || { echo "ERROR: usage: goalforge-goal-hash.sh --matches <wp-path> <stamp>" >&2; exit 1; }
+    matches "$OVERVIEW" "${POS[1]}"
+elif [[ "$MODE" == "restamp-legacy" ]]; then
+    restamp_legacy "$OVERVIEW"
+elif [[ "$MODE" == "legacy" ]]; then
+    set +e; H="$(hash_block "$OVERVIEW" legacy)"; rc=$?; set -e
+    if [[ "$rc" -ne 0 ]]; then
+        [[ "$rc" -eq 3 ]] && echo "ERROR: no goal: block in $OVERVIEW" >&2
+        exit "$rc"
+    fi
+    printf '%s\n' "$H"
+elif [[ "$RECORD" -eq 1 ]]; then
     record "$OVERVIEW"
 else
     set +e; H="$(hash_block "$OVERVIEW")"; rc=$?; set -e

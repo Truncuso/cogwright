@@ -35,6 +35,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -80,6 +81,7 @@ _JSON_TYPES = {
     "object": dict,
     "string": str,
     "boolean": bool,
+    "array": list,
     # `integer`/`number` handled explicitly (bool is not a number here).
 }
 
@@ -96,9 +98,13 @@ def _type_ok(value, typ: str) -> bool:
 def _validate(instance, schema, path: str = "") -> list[str]:
     """Return a list of validation error strings ([] == valid).
 
-    Supports the keyword subset the trace schema uses: type, enum, const,
-    minimum, required, properties, additionalProperties(false), oneOf. Sibling
-    keywords are conjunctive (implicit allOf), matching draft-07.
+    Supports the keyword subset the trace schema and the stage.report payload
+    schema use: type (incl. `array`), enum, const, minimum, pattern, required,
+    properties, additionalProperties(false), items, minItems, oneOf. Sibling
+    keywords are conjunctive (implicit allOf), matching draft-07. `$ref` is NOT
+    resolved — a schema that factors a subschema out into `definitions` would
+    silently never be checked, so schemas validated here write subschemas out
+    at each site.
     """
     errors: list[str] = []
 
@@ -113,6 +119,17 @@ def _validate(instance, schema, path: str = "") -> list[str]:
     if "minimum" in schema and isinstance(instance, (int, float)) \
             and instance < schema["minimum"]:
         errors.append(f"{path}: {instance} < minimum {schema['minimum']}")
+    if "pattern" in schema and isinstance(instance, str) \
+            and re.search(schema["pattern"], instance) is None:
+        errors.append(f"{path}: {instance!r} does not match {schema['pattern']}")
+
+    if isinstance(instance, list):
+        if "minItems" in schema and len(instance) < schema["minItems"]:
+            errors.append(f"{path}: {len(instance)} items < minItems "
+                          f"{schema['minItems']}")
+        if "items" in schema:
+            for i, item in enumerate(instance):
+                errors.extend(_validate(item, schema["items"], f"{path}[{i}]"))
 
     if isinstance(instance, dict):
         props = schema.get("properties", {})

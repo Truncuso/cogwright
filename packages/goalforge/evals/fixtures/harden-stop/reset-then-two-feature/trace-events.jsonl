@@ -1,0 +1,5 @@
+{"seq":0,"ts":"2026-09-11T09:00:00Z","type":"harden.round","schema_version":1,"wp":"wp-reset-then-two","round":1,"tokens":999999}
+{"seq":1,"ts":"2026-09-11T09:05:00Z","type":"harden.parked","schema_version":1,"wp":"wp-reset-then-two","reason":"ceiling-breached","rounds":1}
+{"seq":2,"ts":"2026-09-11T09:10:00Z","type":"harden.reset","schema_version":1,"wp":"wp-reset-then-two","reason":"human ruling 2026-09-11 park-seq=1","rounds_cleared":1,"decision_ref":"findings.md"}
+{"seq":3,"ts":"2026-09-11T09:20:00Z","type":"harden.round","schema_version":1,"wp":"wp-reset-then-two","round":1,"tokens":1000}
+{"seq":4,"ts":"2026-09-11T09:30:00Z","type":"harden.round","schema_version":1,"wp":"wp-reset-then-two","round":2,"tokens":2000}

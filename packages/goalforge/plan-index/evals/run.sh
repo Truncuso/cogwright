@@ -18,7 +18,7 @@ ok() { if [ "$1" = "$2" ]; then echo "  PASS [BEHAVIORAL]: $3"; PASS=$((PASS+1))
        else echo "  FAIL [BEHAVIORAL]: $3 (got '$1' want '$2')"; FAIL=$((FAIL+1)); fi; }
 
 echo "=== goalforge-plan-index: contract + behavioral checks ==="
-check STATIC-CONTRACT "skill name declared" "name: goalforge-plan-index"
+check STATIC-CONTRACT "skill name declared" "name: plan-index"
 check STATIC-CONTRACT "version metadata present" "version: 1.0.0"
 check STATIC-CONTRACT "derives a DAG / build order" "build-order"
 check STATIC-CONTRACT "frontmatter is source of truth" "single source of truth"

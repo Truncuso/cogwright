@@ -1,0 +1,20 @@
+# V-1: a well-formed table whose `model` is a Claude tier rather than the
+# provider's own model id. The loader accepts it (the tier vocabulary is the
+# resolver's, not the table's); the RESOLVER must never admit on it.
+schema_version: 1
+
+admitted:
+  - task_class: code/py
+    leaf_closure:
+      skills/agent-dispatch/ollama/scripts/headless_dispatch: 1171ae396b110f29d27a68d495a4ee72f917b2de4e5735105e94fe5e3fbda6c7
+      skills/agent-dispatch/ollama/scripts/helper.sh: 5e9e9710ff6a9c2010768e25e87f38e43aeddd2e77f8b82a70a6afa465b1ed10
+      skills/agent-dispatch/ollama/scripts/lib/common.sh: c8f3d58a904dbc0900f24caf758fd76aa21f16fca4c4e2e63b6882ca108dad6f
+    max_egress: overview
+    provider: ollama
+    model: sonnet
+    leaf: skills/agent-dispatch/ollama/scripts/headless_dispatch
+    leaf_sha256: 1171ae396b110f29d27a68d495a4ee72f917b2de4e5735105e94fe5e3fbda6c7
+    evidence:
+      kind: user-experience
+      ref: fixtures/admission#claude-tier-as-model
+    permission_set: [read, write]

@@ -1,0 +1,100 @@
+# dispatch-nonnative-implement.yaml — dispatch-default.yaml with ONE row
+# changed: `implement`, a role the workflow compiler emits as an `agent()`
+# node, is moved onto the local stub provider and given a provider-shaped
+# model id (`glm-5.3:cloud`, the id the shipped second_opinion row carries).
+#
+# This is the KNOWN-BAD config for R3-1: `agent({model: "glm-5.3:cloud"})` is
+# undispatchable, so the compiler must refuse it (exit 2) instead of emitting
+# it. dispatch-default.yaml is pinned by b1/b5/b6/b7 and is NOT mutated for
+# this case — hence a separate fixture.
+#
+# Everything else is byte-identical to dispatch-default.yaml.
+
+schema_version: 1
+
+providers:
+  - name: anthropic
+    kind: native
+    leaf: null
+    propose_only: false
+  - name: stub-a
+    kind: local
+    leaf: skills/agent-dispatch/stub-a/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+  - name: stub-b
+    kind: foreign
+    leaf: skills/agent-dispatch/stub-b/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+
+stages:
+  implement:                      # KNOWN-BAD: non-native provider, provider model id
+    model: glm-5.3:cloud
+    effort: low
+    provider: stub-a
+    endpoint: leaf
+    egress: none
+  discovery:
+    model: sonnet
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  feature-audit:
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  harden-review:
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  wp-verify:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  simplify:
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  judge:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  panel:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: overview
+  integration-review:
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  second_opinion:
+    model: opus
+    effort: low
+    provider: stub-a
+    endpoint: leaf
+    egress: overview
+
+rollup:
+  token_warn: 250000
+
+harden:
+  token_ceiling: null
+
+second_opinion:
+  max_payload_bytes: 102400

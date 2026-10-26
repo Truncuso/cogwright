@@ -1,0 +1,125 @@
+# dispatch.yaml — per-stage dispatch configuration (wp-03, ticket-29/45/48/62).
+#
+# The single configured source for model, effort, provider, endpoint, and
+# egress class per stage. No provider is ever named in a SKILL.md; every
+# provider name in this file is data read by the scripts.
+# Documented key-by-key in references/schema.md §dispatch.yaml.
+#
+# Stage keys equal the ROLE_TIER keys in scripts/goalforge-pick-agent.py.
+#
+# Row/projection rule, enforced by `goalforge-pick-agent.py --test-tiers`:
+#
+#   * grader rows (judge, wp-verify) are opus@high on every profile — ticket-48
+#     (a grader must differ from the implementer in persona AND in model or
+#     effort). They are exempt from the projection check below.
+#   * every OTHER stage row's (model, effort) equals
+#     `tier_to_dispatch(ROLE_TIER[stage]["semi-autonomous"])`
+#     (references/tier-map.md), EXCEPT a row whose provider `kind` is not
+#     `native`: a leaf carries the PROVIDER's own model id, so only `effort` is
+#     checked there. The `implement` row's `by_register` sentinel defers to the
+#     WP's register/severity and is checked by the resolver, not by this rule.
+
+schema_version: 1
+
+# `propose_only` on a providers[] row is a DATA key with one meaning: the
+# default verdict for that provider when no admission row admits it for the
+# WP's task class. The admission table decides the resolver verdict for role
+# `implement` (references/admission.md); compile-level dispatch of a non-native
+# implement row stays refused until wp-08-admitted-execution.
+#
+# `kind` and `leaf` are DERIVED, never taken on the row's word: `kind: native`
+# with a `leaf`, or a duplicate `name`, is refused when this file loads, and an
+# admission row binds the leaf path AND its sha256 — repointing `leaf` under an
+# admitted provider name inherits no admission.
+
+providers:                        # preference order; first = default. No budget accounting.
+  - name: anthropic               # native: runs in-session via the Agent/Workflow tool.
+    kind: native
+    leaf: null                    # native has no agent-dispatch leaf
+    propose_only: false
+  - name: zai                     # GLM family, Anthropic-compatible transport.
+    kind: foreign
+    leaf: skills/agent-dispatch/zai/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+  - name: deepseek                # cheap/fast large-context foreign reviewer.
+    kind: foreign
+    leaf: skills/agent-dispatch/deepseek/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true
+  - name: codex                   # OpenAI foreign judge — the most distinct second opinion.
+    kind: foreign
+    leaf: skills/agent-dispatch/codex/scripts/headless_dispatch
+    max_budget_usd: 0.10
+    propose_only: true            # default verdict while no admission row admits this provider; the admission table decides the resolver verdict
+
+stages:
+  implement:                      # code-writing role: tier defers to the WP register/severity.
+    model: by_register
+    effort: by_register
+    provider: anthropic
+    endpoint: session
+    egress: none
+  discovery:                      # cheap specialist/expertise lookup.
+    model: sonnet
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  feature-audit:                  # read-only audit of a feature's shape.
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  harden-review:                  # renamed from wp-harden-delta; semi-autonomous band.
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  wp-verify:                      # grader — opus@high on every profile (ticket-48).
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  simplify:                       # post-implementation simplification pass.
+    model: opus
+    effort: low
+    provider: anthropic
+    endpoint: session
+    egress: none
+  judge:                          # grader — opus@high on every profile (ticket-48).
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  panel:                          # multi-reviewer harden panel; egress class ruled `overview`.
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: overview
+  integration-review:             # last-WP cross-WP integration pass.
+    model: opus
+    effort: high
+    provider: anthropic
+    endpoint: session
+    egress: none
+  second_opinion:                 # the one non-native leg shipped; propose-only FOR THIS ROLE (a second opinion is advice, never a gate decision), model id overridable in wp-05.
+    model: gpt-6-luna             # a PROVIDER model id (codex), not a Claude tier — a tier here exits 2 at the leaf. Pin tracks the paid tier: gpt-6-astra went model_not_found 2026-10-21 (unpaid month); probe before a verify run.
+    effort: low
+    provider: codex
+    endpoint: leaf
+    egress: overview
+
+rollup:
+  token_warn: 250000              # per-dispatch soft threshold; above it the rollup WARNs.
+
+harden:
+  token_ceiling: null             # null => tokens are a soft sensor (WARN); integer => hard ceiling (park above it).
+
+second_opinion:
+  max_payload_bytes: 102400       # cap on the `--prompt` argv payload (leaf-interface v1); over it the diff is truncated, and a payload still over the cap is skipped with reason `payload-oversize`.

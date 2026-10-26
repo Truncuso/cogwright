@@ -1,78 +1,62 @@
 name: goalforge-run
-description: "SDD planning chain, route-aware over the canonical enum fast|standard|wave: standard = capture → spec → decompose → harden → execute → verify; fast = capture → add-wp → deterministic gates → execute → verify"
+description: "goalforge chain: capture → spec → decompose → harden → execute → verify"
 
 inputs:
   feature: opt        # feature slug; required for /spec entry
   wp: opt             # WP slug; required for /plan /implement /verify entry
-  dry_run: opt        # --dry-run: resolve + print dispatch plan, no side effects
+  dry_run: opt        # --dry-run: resolve + print the step plan, no side effects
 
 ctx:
   identity: []
   semantic_recall: false
 
-# Chain route — read from the feature overview.md frontmatter `route:` field,
-# stamped by goalforge-capture (goalforge-route.sh; capture is the routing home).
-# Absent => standard (back-compat). Steps carry `when_route:`; a step without it
-# runs on every route.
-#   standard: goalforge-capture → goalforge-spec → goalforge-decompose → goalforge-harden → goalforge-execute → goalforge-verify
-#   fast: goalforge-capture → goalforge-decompose (add-wp, single WP, no spec.md)
-#         → deterministic gates (goalforge-validate + hooks/goalforge-open-questions-gate.sh --check
-#           + goalforge-wp-complexity: simple AND severity ≤ MEDIUM AND non-migration)
-#         → goalforge-transition <wp> ready --mode auto → goalforge-execute → goalforge-verify
-#   fast escalation: ANY gate trip leaves the WP at `spec` and routes it through
-#   goalforge-harden (the standard-route step) — the gates, not the classifier, are the
-#   safety net. goalforge-verify runs on EVERY route (never skipped).
+# One linear chain. The driver enters the single step admitted by the target's
+# on-disk `status:` (run/SKILL.md §Steps); it never reorders or extends this list.
 
 steps:
   - skill: goalforge/capture
-    purpose: "Elicit raw input; write feature overview.md (status: draft); classify + stamp route: via goalforge-route.sh (borderline verdict => confirm with human; unattended => standard)"
+    purpose: "Elicit the raw input; write the feature overview.md at status: draft"
     precondition: null   # chain entry; no prior status required
 
   - skill: goalforge/spec
-    when_route: standard     # fast path has no spec.md by design
-    purpose: "Write spec.md; author the feature goal object (outcome + verification + constraints/boundaries); advance feature status: draft → ready"
+    purpose: "Propose spec.md — the goal object (outcome + verification.behaviors) and the C1-C7 Interface Contract — on the ungated draft → spec proposal edge (or a respec proposal), then ratify it on the human-gated spec → ready edge"
     precondition:
       target: feature
-      status: draft
+      status: draft   # a feature at status spec (proposal awaiting ratification, or a respec) is also admitted
     human_gated: true
 
   - skill: goalforge/decompose
-    purpose: "Break spec into WP overview.md files; derive each WP goal block (inherits_from the feature goal object) with task stubs. route: fast => Add-WP mode instead: author the ONE WP (self-contained goal block) against the draft feature — no spec.md required"
+    purpose: "Break the spec into WP folders: the C1 8-section overview.md, checklist items with {files:} and behavior ids, per-WP contract_slice"
     precondition:
       target: feature
       status: ready
-    fast_route:
-      mode: add-wp                                # goalforge-decompose §Add-WP mode
-      precondition:
-        target: feature
-        status: draft
 
   - skill: goalforge/harden
-    when_route: standard     # fast path replaces harden with the deterministic gates above, then records the goal hash (goalforge-goal-hash.sh --record) before spec->ready --mode auto, exactly as harden's auto door does; a tripped fast WP re-enters HERE
-    purpose: "Grill each WP goal block facets via goalforge-interview (which drives the interview plugin engine); resolve open questions (status: spec → hardened → ready); delegate to goalforge-arbiter when ≥2 architectural approaches involve a hard-to-reverse bet (advisory)"
+    purpose: "Gates G1-G4 per WP: frontier deps, preharden + section lint, one review pass, goal validate + hash + changelog; spec → hardened → ready"
     precondition:
       target: wp
       status: spec
-    human_gated: true    # hardened → ready: human by default; signal-scoped auto-advance per goalforge-harden Step 2.3 / state-machine.md §Policy
+    human_gated: true    # hardened → ready
 
   - skill: goalforge/execute
-    purpose: "Run the goal object completion loop per WP: resolve effective goal → execute sub-cycle (pick-agent → dispatch → checkpoint) → evaluate goal verdict; delegate per-task + loop-back records to goalforge-recap"
+    purpose: "Dispatch one owning agent against the WP checklist, run goal.verification.command, land one commit; ready → executing → implemented"
     precondition:
       target: wp
       status: ready
+    workflow_script: run/workflows/<wp>.js   # compiled by scripts/goalforge-workflow-compile.py; launched via the Workflow tool
 
   - skill: goalforge/verify
-    purpose: "Run superpowers:verification-before-completion; mark WP verified; delegate semantic spec-vs-diff gap audit to goalforge-watchdog (advisory) and finalize the WP trace via goalforge-recap"
+    purpose: "Gates A (deterministic + owned-files boundary), B (fresh-context diff review), C (goal judge + one foreign second opinion); implemented → verified"
     precondition:
       target: wp
-      status: executing
+      status: implemented
 
   - skill: goalforge/redecompose
-    purpose: "Loop-back (re-entrant): on a learning that invalidates existing WPs, reconcile proposed re-decomposition against verified WPs — diff produces 5 buckets (same/changed/dropped/new/ambiguous); route changed+new to harden, supersede dropped-verified in place, surface ambiguous to judgment/human; idempotent re-entry"
-    precondition: null   # loop-back: triggered by a learning, not the linear status flow
+    purpose: "Loop-back (re-entrant): reconcile a proposed re-decomposition against verified WPs when a learning invalidates the plan"
+    precondition: null   # triggered by a learning, not the linear status flow
 
 recommended_agents:
-  - general-purpose    # discovery agent for specialist resolution inside goalforge-execute
+  - general-purpose    # specialist discovery inside goalforge-execute
 
 on_failure:
   - retry_step: false
