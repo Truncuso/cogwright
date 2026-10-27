@@ -100,6 +100,27 @@ else
 fi
 rm -rf "$JQ_STUB_DIR"
 
+# ── regression: an early-returning root lookup must not EPIPE its producer.
+#    A match on the FIRST root ($SDD_PLANS_DIR) returns before the producer has
+#    printed the $HOME leg. Streamed through `< <(...)`, that last printf hits a
+#    closed pipe; with SIGPIPE inherited as ignored (as on the CI runner) bash
+#    prints "printf: write error: Broken pipe" instead of dying silently. The
+#    child bash inherits SIG_IGN from `trap '' PIPE` and cannot un-ignore it, so
+#    this reproduces the CI condition on any machine.
+epipe_root="$WORK/epipe/plans"
+mkdir -p "$epipe_root/feat4/wp-01"
+epipe_file="$epipe_root/feat4/wp-01/overview.md"
+epipe_err="$( (trap '' PIPE; HOME="$WORK/epipe-home" SDD_PLANS_DIR="$epipe_root" bash -c '
+    . "$1" || exit 9
+    goalforge_under_plans_root "$2" || exit 3
+    goalforge_feature_dir_for "$2" >/dev/null || exit 4
+' _ "$HELPER" "$epipe_file") 2>&1 >/dev/null)"; epipe_rc=$?
+if [ "$epipe_rc" -eq 0 ] && [ -z "$epipe_err" ]; then
+    ok "SIGPIPE ignored + first-root match -> resolves, stderr empty (no EPIPE)"
+else
+    bad "SIGPIPE ignored + first-root match -> rc=$epipe_rc stderr='$epipe_err'"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] && exit 0 || exit 1

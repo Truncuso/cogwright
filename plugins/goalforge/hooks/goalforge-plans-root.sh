@@ -78,11 +78,18 @@ goalforge_under_plans_root() {
         *) return 1 ;;
     esac
     file="$(goalforge_normpath "$file")"
+    # The roots are read to EOF via command substitution BEFORE the loop, never
+    # streamed through `< <(...)`: the loop returns on the first match, and an
+    # early return closes a process-substitution pipe while the producer still
+    # has roots to print. With SIGPIPE inherited as ignored (as the GitHub
+    # Actions job shell sees it) that producer's printf fails with EPIPE instead
+    # of dying silently, and bash reports "printf: write error: Broken pipe" on
+    # the hook's stderr.
     while IFS= read -r root; do
         [ -n "$root" ] || continue
         root="$(goalforge_normpath "$root")"
         case "$file" in "$root"|"$root"/*) return 0 ;; esac
-    done < <(goalforge_plans_roots "$file")
+    done <<< "$(goalforge_plans_roots "$file")"
     return 1
 }
 
@@ -99,6 +106,7 @@ goalforge_feature_dir_for() {
         *) return 1 ;;
     esac
     norm="$(goalforge_normpath "$file")"
+    # Read to EOF first — early return below; see goalforge_under_plans_root.
     while IFS= read -r root; do
         [ -n "$root" ] || continue
         root="$(goalforge_normpath "$root")"
@@ -109,7 +117,7 @@ goalforge_feature_dir_for() {
                 [ -n "$slug" ] && printf '%s/%s\n' "$root" "$slug" && return 0
                 ;;
         esac
-    done < <(goalforge_plans_roots "$norm")
+    done <<< "$(goalforge_plans_roots "$norm")"
     return 1
 }
 

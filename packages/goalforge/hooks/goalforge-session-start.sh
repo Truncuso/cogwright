@@ -63,9 +63,13 @@ resolve_root() {
         [ -d "$SDD_PLANS_DIR" ] && printf '%s' "$SDD_PLANS_DIR"
         return 0
     fi
+    # Read the roots to EOF before the early return below: returning mid-stream
+    # from `< <(...)` closes the pipe on a still-printing producer, which under
+    # an inherited SIG_IGN for SIGPIPE surfaces as a "Broken pipe" write error
+    # (see goalforge_under_plans_root in goalforge-plans-root.sh).
     while IFS= read -r root; do
         [ -n "$root" ] && [ -d "$root" ] && { printf '%s' "$root"; return 0; }
-    done < <(goalforge_plans_roots "$PWD/plans/.")
+    done <<< "$(goalforge_plans_roots "$PWD/plans/.")"
     return 0
 }
 
