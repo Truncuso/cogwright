@@ -35,6 +35,8 @@ by_extension:
   .hpp: [agents/cpp-pro.md, skills/cpp-coding-standards]
   .cc: [agents/cpp-pro.md, skills/cpp-coding-standards]
   .h: [agents/cpp-pro.md, skills/cpp-coding-standards]
+  .lua: [agents/lua-engineer.md, skills/lua-patterns, rules/common/coding-style.md]
+  .toc: [agents/lua-engineer.md, skills/wow-addon-dev]
   .sh: [rules/common/coding-style.md, rules/common/hooks.md]
   .yaml: [rules/common/coding-style.md]
   .md: [rules/common/self-containment.md, rules/common/prompt-engineering.md]
@@ -50,6 +52,7 @@ by_tag:
   skills: [rules/common/skill-development.md, skills/skill-meta]
   agents: [rules/common/agent-development.md, rules/common/subagent-handoff.md]
   eval: [rules/common/evaluation.md, skills/ml-eval]
+  wow: [agents/lua-engineer.md, skills/wow-addon-dev, skills/lua-patterns]
 
 by_task_type:
   code: [rules/common/coding-style.md, rules/common/testing.md, rules/common/code-review.md]
