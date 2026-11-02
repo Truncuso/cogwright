@@ -338,7 +338,7 @@ writer:** `goalforge-transition.sh` (never hand-edit). Each row:
 ```jsonc
 { "ts": "<ISO-8601 Z>", "wp": "<wp-slug>", "from": "<status>", "to": "<status>",
   "reason": "<short why — the decision rationale>", "override": <bool>,
-  "commit": "<short sha>",
+  "commit": "<full 40-char sha>",
   // ── attribution stamp (auto-filled by goalforge-attribution.sh; degrade → "unknown") ──
   "mode": "human" | "auto",          // human-gated edge vs autonomous engine
   "actor": "human:<git user.name>" | "<skill|auto>",

@@ -116,7 +116,7 @@ A work-package status transition. Envelope + attribution, plus:
 | `from` | string | yes | Prior status. |
 | `to` | string | yes | New status. |
 | `reason` | string | no | Free-text rationale (reverse edges require it upstream). |
-| `commit` | string | no | Short commit hash at transition time. |
+| `commit` | string | no | Full 40-char commit sha at transition time. |
 
 ### `feature.status_changed`
 
@@ -132,7 +132,7 @@ derivation (task-04) requires a distinct feature-level event.
 | `from` | string | yes | Prior feature status. |
 | `to` | string | yes | New feature status. |
 | `reason` | string | no | Rationale. |
-| `commit` | string | no | Short commit hash. |
+| `commit` | string | no | Full 40-char commit sha. |
 
 ### `task.status_changed`
 
