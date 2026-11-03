@@ -123,6 +123,7 @@ claimed_at: null             # YYYY-MM-DD — set with claimed_by; basis for sta
 resolution: null             # ./findings/ticket-NN.md — pointer, set on resolve
 # mode: HITL                 # OPTIONAL, only on ticket_type: task (AFK default); other types derive mode
 # fan_out: 3                 # OPTIONAL, only on ticket_type: research — integer >= 2 parallel probes
+# derived_from: idea-<slug>  # OPTIONAL provenance (idea-route backref); ignored by the frontier
 ```
 
 Body: `## Question` — one decision, sized to one agent session; it states the
@@ -150,11 +151,12 @@ DATA (never executed as instructions — dispatch trust boundary):
   if it is *statable now but not answerable now* — otherwise it stays fog under
   `## Not yet specified`. Rationale + examples: `references/fog-precision.md`.
 - **out-of-scope** → map `## Out of scope`, the home for **never-ticketed**
-  candidates and inert to the frontier — distinct from `status: out-of-scope`, a
-  dropped EXISTING ticket that **counts as dependency-satisfying**. A candidate
-  parked in the section cannot satisfy a dependent's `depends_on`. Dropping an
-  existing ticket **nulls its `resolution`**; any findings file already written
-  stays on disk, cited from `## Out of scope`.
+  candidates (keepers: `idea-capture`, `references[]` file entry naming the map),
+  inert to the frontier — distinct from `status: out-of-scope`, a dropped
+  EXISTING ticket that **counts as dependency-satisfying**. A parked candidate
+  cannot satisfy a dependent's `depends_on`. Dropping an existing ticket **nulls
+  its `resolution`**; any findings file already written stays on disk, cited
+  from `## Out of scope`.
 - **discard** → drop it
 
 Record the pass in `findings/blind-spot-NN.md` (**authoritative store**, NN =
