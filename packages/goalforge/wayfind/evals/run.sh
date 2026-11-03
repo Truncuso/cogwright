@@ -349,6 +349,35 @@ run_rc "$VALIDATE_TICKET" "$(derived_as ticket-valid-fan-out.md ticket-25-fan-ou
   -e '/^fan_out: 3$/d')"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 with fan_out absent on a research ticket, got $RC"
 
+# --- derived_from (optional provenance backref, written by idea-route) ------
+# Shape `idea-<slug>` when present; absent stays valid (ticket-valid.md carries
+# none — every pre-existing valid ticket case above proves it). Hermetic: each
+# case derives its ticket from ticket-valid.md (sed-inserted before the closing
+# `---`), no live corpus. rc 1 cases also assert the stderr names the field.
+df_ticket() { # <intended-name> <derived_from line(s)>  → path
+  local nm="$1" ins="$2"
+  derived_as ticket-valid.md "$nm" -e "0,/^mode: HITL\$/s||mode: HITL\n${ins}|"
+}
+
+name=validate-ticket-derived-from-valid
+run_rc "$VALIDATE_TICKET" "$(df_ticket ticket-31-derived-from-valid.md 'derived_from: idea-foo-bar')"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on derived_from: idea-foo-bar, got $RC"
+
+name=validate-ticket-derived-from-wrong-prefix
+run_rc_err "$VALIDATE_TICKET" "$(df_ticket ticket-32-derived-from-prefix.md 'derived_from: source-foo')"
+if [ "$RC" -eq 1 ] && contains "$ERR" 'derived_from'; then pass "$name"
+else fail "$name" "expected exit 1 naming derived_from on 'source-foo', got rc=$RC stderr='$ERR'"; fi
+
+name=validate-ticket-derived-from-bad-charset
+run_rc_err "$VALIDATE_TICKET" "$(df_ticket ticket-33-derived-from-charset.md 'derived_from: idea-Foo_Bar')"
+if [ "$RC" -eq 1 ] && contains "$ERR" 'derived_from'; then pass "$name"
+else fail "$name" "expected exit 1 naming derived_from on 'idea-Foo_Bar', got rc=$RC stderr='$ERR'"; fi
+
+name=validate-ticket-derived-from-duplicate
+run_rc_err "$VALIDATE_TICKET" "$(df_ticket ticket-34-derived-from-dup.md 'derived_from: idea-foo\nderived_from: idea-bar')"
+if [ "$RC" -eq 1 ] && contains "$ERR" 'derived_from' && contains "$ERR" 'duplicate'; then pass "$name"
+else fail "$name" "expected exit 1 on duplicate derived_from, got rc=$RC stderr='$ERR'"; fi
+
 # --- learning goals (opt-in `## Learning goals` + `ticket_type: learning`) ---
 # The new enum value relaxes nothing, so the ticket half is proven by a POSITIVE
 # (a learning ticket validates) plus a NEGATIVE that an existing rule still
@@ -474,7 +503,7 @@ if grep -qE '^[[:space:]]+version: 0\.3\.0$' "$SKILL_MD"; then pass "$name"
 else fail "$name" "SKILL.md frontmatter does not read metadata.version: 0.3.0"; fi
 
 # Prose budget as an ASSERTION, not an inspection: SKILL.md is always-loaded, so
-# growth is a real cost. Ceiling 407 = 361 (0.2.0 as-built: 301 baseline + 60)
+# growth is a real cost. Ceiling 409 = 361 (0.2.0 as-built: 301 baseline + 60)
 # + 8 (0.3.0 ticket fan-out) + 12 (0.3.0 learning goals) + 4 slack
 # + 11 (claim-commit-visibility gotcha, 2026-08-20: a live parallel-session
 #   duplicate dispatch; the failure mode is invisible without the worked
@@ -484,11 +513,14 @@ else fail "$name" "SKILL.md frontmatter does not read metadata.version: 0.3.0"; 
 # + 1 (the §work partition caveat "at least one, NOT exactly one" — the overlap
 #   of blocked and claimed is load-bearing diagnostic behavior and must be
 #   documented; see frontier self-test case 16).
+# + 2 (derived_from optional provenance key in the chart-step-2 template, +1; the
+#   idea-capture clause on the out-of-scope triage bullet, +1 net after reflow —
+#   both are new documented contract surface, bumped-with-justification).
 # An unmeasured budget is not a constraint.
 name=skill-line-budget
 sk_lines="$(wc -l < "$SKILL_MD")"
-if [ "$sk_lines" -le 407 ]; then pass "$name"
-else fail "$name" "SKILL.md is $sk_lines lines, over the 407 ceiling (361 as-built at 0.2.0 + 8 fan-out + 12 learning + 4 slack + 11 claim-commit gotcha + 10 discovery + 1 partition caveat)"; fi
+if [ "$sk_lines" -le 409 ]; then pass "$name"
+else fail "$name" "SKILL.md is $sk_lines lines, over the 409 ceiling (361 as-built at 0.2.0 + 8 fan-out + 12 learning + 4 slack + 11 claim-commit gotcha + 10 discovery + 1 partition caveat + 2 derived_from/idea-capture)"; fi
 
 name=doc-chart-flow
 skgrep "chart flow" && pass "$name" || fail "$name" "SKILL.md missing 'chart flow' section"
