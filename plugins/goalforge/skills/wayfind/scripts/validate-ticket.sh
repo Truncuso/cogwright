@@ -79,7 +79,7 @@ NN="${BASE#ticket-}"; NN="${NN%%-*}"
 # --- read frontmatter -------------------------------------------------------
 T_TYPE=""; T_TT=""; T_STATUS=""; T_CBY=""; T_CAT=""; T_RES=""; T_MODE=""; T_FAN=""
 have_type=0; have_tt=0; have_status=0; have_cby=0; have_cat=0; have_res=0
-have_mode=0; have_fan=0; deps_islist=0; have_deps=0
+have_mode=0; have_fan=0; have_df=0; T_DF=""; deps_islist=0; have_deps=0
 DEPS_TOKENS=()
 
 first=1; in_fm=0; closed=0
@@ -131,6 +131,11 @@ while IFS= read -r line || [ -n "$line" ]; do
     fan_out:*)
       [ "$have_fan" -eq 0 ] || bad "fan_out" "duplicate key"
       T_FAN="$(fieldval "${line#fan_out:}")"; have_fan=1 ;;
+    # derived_from: provenance only — ignored by the frontier, written by
+    # idea-route (backref to the originating idea). Optional; shape-checked below.
+    derived_from:*)
+      [ "$have_df" -eq 0 ] || bad "derived_from" "duplicate key"
+      T_DF="$(fieldval "${line#derived_from:}")"; have_df=1 ;;
     depends_on:*)
       [ "$have_deps" -eq 0 ] || bad "depends_on" "duplicate key"
       have_deps=1
@@ -259,6 +264,14 @@ if [ "$have_fan" -eq 1 ]; then
     || bad "fan_out" "expected an integer >= 2, got '$T_FAN'"
   [ "$T_FAN" -ge 2 ] \
     || bad "fan_out" "expected an integer >= 2 (one probe is not a fan-out), got '$T_FAN'"
+fi
+
+# derived_from (provenance backref) is OPTIONAL on every type; when present it
+# must name an idea slug: `idea-` + lowercase alnum words joined by single `-`.
+# Provenance only — the frontier never reads it.
+if [ "$have_df" -eq 1 ]; then
+  [[ "$T_DF" =~ ^idea-[a-z0-9]+(-[a-z0-9]+)*$ ]] \
+    || bad "derived_from" "expected idea-<slug> (lowercase alnum, hyphen-separated), got '$T_DF'"
 fi
 
 exit 0

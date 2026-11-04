@@ -515,7 +515,7 @@ transition() {
     local LEDGER="$FEATURE_DIR/.sdd-transitions.jsonl"
     local TODAY TS COMMIT WP_NAME
     TODAY="$(date +%F)"
-    COMMIT="$(git -C "$FEATURE_DIR" rev-parse --short HEAD 2>/dev/null || true)"
+    COMMIT="$(git -C "$FEATURE_DIR" rev-parse HEAD 2>/dev/null || true)"
     WP_NAME="$(basename "$WP_DIR")"
 
     # ── Attribution stamp (auto-filled; degrade-not-block) ───────────────────

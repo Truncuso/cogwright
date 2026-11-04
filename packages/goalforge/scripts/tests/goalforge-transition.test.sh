@@ -95,6 +95,24 @@ else
     bad "known-good: ledger row written"
 fi
 
+# ── commit.linked carries the FULL 40-char sha (not the short form) ──────────
+# Implementers emit commit.linked with the full sha; a short sha here makes the
+# same commit appear twice to any consumer doing `sort -u` over linked shas.
+WPC="$(mkwp "$T/sha/feat-sha" wp-01-sha spec)"
+command git -C "$T/sha/feat-sha" init -q
+command git -C "$T/sha/feat-sha" -c user.name=t -c user.email=t@example.invalid \
+    commit -q --allow-empty -m "fixture"
+FULL_SHA="$(command git -C "$T/sha/feat-sha" rev-parse HEAD)"
+bash "$TRANSITION" "$WPC" hardened --reason "full-sha commit.linked" >/dev/null 2>&1
+LINKED="$(grep '"type":"commit.linked"' "$T/sha/feat-sha/trace-events.jsonl" 2>/dev/null | tail -n1)"
+LINKED_SHA="$(printf '%s' "$LINKED" | sed -n 's/.*"commit":"\([^"]*\)".*/\1/p')"
+if [[ "$LINKED_SHA" =~ ^[0-9a-f]{40}$ && "$LINKED_SHA" == "$FULL_SHA" ]]; then
+    ok "commit.linked: commit field is the full 40-char sha"
+else
+    bad "commit.linked: commit field is the full 40-char sha (got '$LINKED_SHA', want '$FULL_SHA')"
+    echo "$LINKED" | sed 's/^/        /'
+fi
+
 echo
 echo "goalforge-transition.test.sh: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
