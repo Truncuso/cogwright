@@ -162,17 +162,24 @@ else
   FAIL=$((FAIL+1))
 fi
 
-ROUTER_RC=0
-ROUTER_OUT="$(bash "$SKILL_DIR/scripts/goalforge-router.sh" --dry-run goalforge-run-wrapper-probe 2>&1)" || ROUTER_RC=$?
-RESOLVED_STEPS="$(printf '%s\n' "$ROUTER_OUT" | grep -c ': RESOLVED ' || true)"
-if [ "$ROUTER_RC" -eq 0 ] && [ "$RESOLVED_STEPS" -eq 7 ] \
-   && ! printf '%s\n' "$ROUTER_OUT" | grep -q 'UNRESOLVED'; then
-  echo "  PASS [WRAPPER]: router --dry-run resolves all 7 chain steps"
-  PASS=$((PASS+1))
+# The router resolves against the installed skills tree; on a host without
+# one (a CI runner) this check is a visible gap, not a failure.
+INSTALLED_SKILLS="${CLAUDE_SKILLS_ROOT:-$HOME/.claude/skills}"
+if [ ! -d "$INSTALLED_SKILLS" ]; then
+  echo "  gap: no installed skills tree at $INSTALLED_SKILLS -- router --dry-run over the installed chain not gated"
 else
-  echo "  FAIL [WRAPPER]: router --dry-run did not resolve all 7 chain steps (rc=$ROUTER_RC, resolved=$RESOLVED_STEPS)"
-  printf '%s\n' "$ROUTER_OUT" | sed 's/^/        /'
-  FAIL=$((FAIL+1))
+  ROUTER_RC=0
+  ROUTER_OUT="$(bash "$SKILL_DIR/scripts/goalforge-router.sh" --dry-run goalforge-run-wrapper-probe 2>&1)" || ROUTER_RC=$?
+  RESOLVED_STEPS="$(printf '%s\n' "$ROUTER_OUT" | grep -c ': RESOLVED ' || true)"
+  if [ "$ROUTER_RC" -eq 0 ] && [ "$RESOLVED_STEPS" -eq 7 ] \
+     && ! printf '%s\n' "$ROUTER_OUT" | grep -q 'UNRESOLVED'; then
+    echo "  PASS [WRAPPER]: router --dry-run resolves all 7 chain steps"
+    PASS=$((PASS+1))
+  else
+    echo "  FAIL [WRAPPER]: router --dry-run did not resolve all 7 chain steps (rc=$ROUTER_RC, resolved=$RESOLVED_STEPS)"
+    printf '%s\n' "$ROUTER_OUT" | sed 's/^/        /'
+    FAIL=$((FAIL+1))
+  fi
 fi
 
 

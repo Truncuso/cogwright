@@ -266,21 +266,10 @@ else bad "b5: harden.reset missing decision_ref -> exit 2, log byte-unchanged (r
 
 SCHEMA_DOC="$SD/../../references/trace-events.md"
 RUNSH="$SD/../../evals/trace-substrate/run.sh"
-if python3 - "$SCHEMA_DOC" "$RUNSH" <<'PY'
-import json, re, sys
-doc_path, runsh_path = sys.argv[1], sys.argv[2]
-lines = open(doc_path, encoding="utf-8").read().split("\n")
-start = next(i for i, l in enumerate(lines) if l.strip() == "```json") + 1
-end = next(j for j in range(start, len(lines)) if lines[j].strip() == "```")
-schema = json.loads("\n".join(lines[start:end]))
-branch_count = len(schema.get("oneOf", []))
-runsh = open(runsh_path, encoding="utf-8").read()
-m = re.search(r"== (\d+), \"expected \d+ schema branches\"", runsh)
-if not m:
-    sys.exit(1)
-pinned = int(m.group(1))
-sys.exit(0 if branch_count == pinned else 1)
-PY
+# The suite derives its pin from the ### headings; run its case (e) and require
+# the schema-branch pin line to pass.
+B5PIN_OUT="$(bash "$RUNSH" --case e 2>&1)"
+if grep -q '^PASS (e): embedded schema has one oneOf branch per heading' <<<"$B5PIN_OUT"
 then
     ok "b5: embedded schema oneOf branch count matches evals/trace-substrate/run.sh's pin"
 else bad "b5: embedded schema oneOf branch count matches evals/trace-substrate/run.sh's pin"; fi

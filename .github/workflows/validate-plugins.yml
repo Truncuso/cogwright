@@ -104,3 +104,9 @@ jobs:
       # ambient PyYAML and no ordering against the shared setup step above.
       - name: goalforge doctor self-test
         run: bash plugins/goalforge/scripts/goalforge-doctor.sh --self-test
+
+      # D4: the hermetic eval suites plus the coverage test; the full
+      # evals/run.sh stays the local gate. evals/selection.test.sh needs the
+      # jq that ubuntu-latest ships.
+      - name: goalforge eval suites
+        run: bash packages/goalforge/evals/run.sh --suites-only

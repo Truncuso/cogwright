@@ -15,6 +15,8 @@
 #   (f) self-test                  — emitter + derive --self-test both exit 0
 #   (g) combined-derive-live       — derive + live-emit on one feature: no
 #                                     duplicate, no mis-ordered seq (OQ3 cutover)
+#   (h) uncovered-heading          — known-bad: a copy with one extra ### heading
+#                                     and no fixture row fails (e) naming it
 #
 # Usage:
 #   run.sh                 run every case; exit 0 iff all green
@@ -29,6 +31,7 @@ CASES="$HERE/cases"
 FIXTURES="$HERE/fixtures"
 EMIT="$SCRIPTS/goalforge-trace-emit"
 DERIVE="$SCRIPTS/goalforge-trace-derive"
+TRACE_MD="$(cd "$HERE/../../references" && pwd)/trace-events.md"
 
 WORKROOT="$(mktemp -d)"
 trap 'rm -rf "$WORKROOT"' EXIT
@@ -58,6 +61,33 @@ if mode == "contiguous":
     if seqs != list(range(len(seqs))):
         print("seq not contiguous 0..n-1:", seqs); sys.exit(1)
 sys.exit(0)
+PY
+}
+
+# Event-type want-set: the ### `<type>` headings of references/trace-events.md
+# (the two prose ### headings are not of that form). Prints "OK <n>" when the
+# fixture's types equal the want-set, else names the missing/extra types.
+_heading_types() {
+    python3 - "$TRACE_MD" "$1" <<'PY'
+import sys, json, re
+want = set(re.findall(r"^### `([^`]+)`\s*$", open(sys.argv[1], encoding="utf-8").read(), re.M))
+seen = {json.loads(l)["type"] for l in open(sys.argv[2], encoding="utf-8") if l.strip()}
+if seen == want:
+    print("OK %d" % len(want))
+else:
+    print("MISSING " + ",".join(sorted(want - seen)) + " EXTRA " + ",".join(sorted(seen - want)))
+PY
+}
+
+# Schema-branch pin derived from the same headings: one oneOf branch per type.
+_schema_branch_pin() {
+    python3 - "$EMIT" "$TRACE_MD" <<'PY'
+import sys, re
+from importlib.machinery import SourceFileLoader
+mod = SourceFileLoader("emit", sys.argv[1]).load_module()
+want = len(re.findall(r"^### `[^`]+`\s*$", open(sys.argv[2], encoding="utf-8").read(), re.M))
+got = len(mod.load_schema().get("oneOf", []))
+print("OK %d branches" % want if got == want else "expected %d schema branches, got %d" % (want, got))
 PY
 }
 
@@ -164,7 +194,7 @@ case_d() {
 
 # ── (e) schema-validates-all ──────────────────────────────────────────────────
 case_e() {
-    local fx types
+    local fx types pin
     fx="$FIXTURES/all-events.jsonl"
     if [[ ! -f "$fx" ]]; then
         fail e "fixtures/all-events.jsonl missing"; return
@@ -172,21 +202,18 @@ case_e() {
     if ! _validate_log "$fx" >/dev/null 2>&1; then
         fail e "every fixture event should validate against the embedded schema"; return
     fi
-    # assert all 10 event types are represented
-    types="$(python3 - "$fx" <<'PY'
-import sys, json
-seen = {json.loads(l)["type"] for l in open(sys.argv[1]) if l.strip()}
-want = {"wp.status_changed","feature.status_changed","task.status_changed",
-        "commit.linked","gate.result","finding.recorded",
-        "dispatch.launched","dispatch.completed","issue.recorded",
-        "stage.report"}
-print("OK" if seen == want else "MISSING " + ",".join(sorted(want - seen)))
-PY
-)"
-    if [[ "$types" == "OK" ]]; then
-        pass e "all 10 event types present and schema-valid"
+    # want-set = the ### `<type>` headings of references/trace-events.md
+    types="$(_heading_types "$fx")"
+    if [[ "$types" == OK* ]]; then
+        pass e "all ${types#OK } event types (trace-events.md headings) present and schema-valid"
     else
         fail e "fixture coverage incomplete ($types)"
+    fi
+    pin="$(_schema_branch_pin)"
+    if [[ "$pin" == OK* ]]; then
+        pass e "embedded schema has one oneOf branch per heading (${pin#OK })"
+    else
+        fail e "schema-branch pin: $pin"
     fi
 }
 
@@ -251,9 +278,32 @@ PY
     fi
 }
 
+# ── (h) known-bad: an uncovered heading turns (e) red ─────────────────────────
+# Copies the suite, the two scripts and the reference as REAL files (the
+# emitter resolves its own path to find references/trace-events.md, so a
+# symlinked copy would read the real file) into a tree that mirrors the package
+# layout, adds one heading with no fixture row, and requires the copied suite's
+# case (e) to fail naming it.
+case_h() {
+    local tmp out
+    tmp="$(mktmp)"
+    mkdir -p "$tmp/evals/trace-substrate" "$tmp/scripts" "$tmp/references"
+    cp -RL "$HERE/run.sh" "$FIXTURES" "$CASES" "$tmp/evals/trace-substrate/"
+    cp -L "$EMIT" "$DERIVE" "$tmp/scripts/"
+    cp -L "$TRACE_MD" "$tmp/references/"
+    printf '\n### `x.fake`\n' >> "$tmp/references/trace-events.md"
+    if out="$(bash "$tmp/evals/trace-substrate/run.sh" --case e 2>&1)"; then
+        fail h "known-bad: copy with an uncovered x.fake heading should fail (e)"
+    elif grep -q 'x\.fake' <<<"$out"; then
+        pass h "known-bad: copy with an uncovered x.fake heading fails (e) naming it"
+    else
+        fail h "known-bad: copy failed (e) without naming x.fake: $out"
+    fi
+}
+
 # ── harness self-test ─────────────────────────────────────────────────────────
 self_test() {
-    local ok=0
+    local ok=0 pin
     echo "run.sh --self-test: harness sanity"
     for f in "$FIXTURES/all-events.jsonl" "$CASES/transition-wiring.sh" "$CASES/legacy-derivation.sh"; do
         if [[ -f "$f" ]]; then echo "  ok present: $f"; else echo "  MISSING: $f"; ok=1; fi
@@ -261,15 +311,10 @@ self_test() {
     for x in "$CASES/transition-wiring.sh" "$CASES/legacy-derivation.sh" "$EMIT" "$DERIVE"; do
         if [[ -x "$x" ]]; then echo "  ok executable: $x"; else echo "  NOT EXECUTABLE: $x"; ok=1; fi
     done
-    if python3 - "$EMIT" <<'PY'
-import sys
-from importlib.machinery import SourceFileLoader
-mod = SourceFileLoader("emit", sys.argv[1]).load_module()
-s = mod.load_schema()
-assert len(s.get("oneOf", [])) == 21, "expected 21 schema branches"
-print("  ok embedded schema parses (21 branches)")
-PY
-    then :; else echo "  SCHEMA PARSE FAILED"; ok=1; fi
+    pin="$(_schema_branch_pin 2>&1)" || true
+    if [[ "$pin" == OK* ]]; then
+        echo "  ok embedded schema parses (${pin#OK })"
+    else echo "  SCHEMA PARSE FAILED ($pin)"; ok=1; fi
     if _validate_log "$FIXTURES/all-events.jsonl" >/dev/null 2>&1; then
         echo "  ok fixtures/all-events.jsonl schema-valid"
     else
@@ -288,6 +333,7 @@ run_case() {
         e|schema-validates-all)       case_e ;;
         f|self-test)                  case_f ;;
         g|combined-derive-live)       case_g ;;
+        h|uncovered-heading)          case_h ;;
         *) echo "unknown case: $1" >&2; return 2 ;;
     esac
 }
@@ -304,7 +350,7 @@ main() {
         [[ "$c_fail" -eq 0 ]]
         exit $?
     fi
-    for c in a b c d e f g; do run_case "$c"; done
+    for c in a b c d e f g h; do run_case "$c"; done
     echo ""
     echo "Results: $c_pass passed, $c_fail failed"
     [[ "$c_fail" -eq 0 ]]
