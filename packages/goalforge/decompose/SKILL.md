@@ -38,12 +38,13 @@ signal. Confirm the list when a WP is large or the decomposition is non-obvious.
 
 ## Step 2 — Derive the WP frontmatter (C2) and goal block
 
-Per WP: `name: wp-NN-<slug>`, `severity`, `task_type`, `register` from the spec,
+Per WP: `name: wp-NN-<slug>`, `severity`, `task_type`, `register`,
 `depends_on` (backward-pointing slugs only), `parallel`,
 `owned_files` (the file boundary), `contract_slice` (the `### C…` ids of the
 Interface Contract this WP depends on — schema.md §Contract-slice hash),
 `human_required: null` or a reason string (C7), `schema_version: 6`,
 `plan: <feature>`, `goal_approved_version: null`.
+Copy `register:` from the spec; write `spike` only when the spec declares it.
 
 `goal.outcome`/`goal.verification` are always WP-authored, never inherited: one
 measurable outcome sentence, one `strategy`, one command-only

@@ -27,6 +27,21 @@ check() {
   fi
 }
 
+check_absent() {
+  local type="$1"
+  local desc="$2"
+  local pattern="$3"
+  local file="${4:-$SKILL_MD}"
+  if [ -f "$file" ] && ! grep -qF -- "$pattern" "$file"; then
+    echo "  PASS [$type]: $desc"
+    PASS=$((PASS+1))
+  else
+    echo "  FAIL [$type]: $desc"
+    echo "        expected NOT to find: $pattern"
+    FAIL=$((FAIL+1))
+  fi
+}
+
 file_check() {
   local type="$1"
   local desc="$2"
@@ -59,6 +74,13 @@ check STATIC-CONTRACT "WP frontmatter includes owned_files" "\`owned_files\` (th
 check STATIC-CONTRACT "WP frontmatter includes contract_slice" "\`contract_slice\`"
 check STATIC-CONTRACT "WP frontmatter includes goal_approved_version: null at birth" "goal_approved_version: null"
 check STATIC-CONTRACT "schema_version: 6 stamped" "schema_version: 6"
+
+# STATIC-CONTRACT: register copy rule (L0-2) and the template default it relies on
+check STATIC-CONTRACT "register copy rule stated" "Copy \`register:\` from the spec; write \`spike\` only when the spec declares it."
+check_absent STATIC-CONTRACT "old bare register phrase removed" "\`register\` from the spec"
+TEMPLATE_MD="$SKILL_DIR/../references/templates/wp-overview.md"
+check STATIC-CONTRACT "WP template defaults register to production" "register: production   # spike only when the spec declares it" "$TEMPLATE_MD"
+check_absent STATIC-CONTRACT "WP template no longer defaults register to spike" "register: spike" "$TEMPLATE_MD"
 
 # STATIC-CONTRACT: goal block always WP-authored
 check STATIC-CONTRACT "goal.outcome/verification always WP-authored, never inherited" "always WP-authored, never inherited"

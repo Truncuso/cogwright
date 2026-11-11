@@ -981,8 +981,8 @@ TERMINAL   = {'verified','archived','completed'}
 # wp-01 T6: `numeric` retired (verification.command is command-only, C2).
 STRATEGY_ENUM  = {'deterministic','judge','human'}
 STRATEGY_ENUM_LEGACY = STRATEGY_ENUM | {'numeric'}   # schema-5 read-only compat
-# WP rigor register (schema §WP frontmatter, C2). Absent ⇒ production, always
-# valid. `prototype` (schema-5 spelling) normalizes to `spike` on READ ONLY —
+# WP rigor register (schema §WP frontmatter, C2). Absent = production below
+# schema 6; ERROR at schema_version >= 6. `prototype` (schema-5 spelling) normalizes to `spike` on READ ONLY —
 # never written; see normalize_register() below.
 REGISTER_ENUM  = {'production','spike'}
 # wp-01 T7 (C2) narrows task_type to {code, docs, research, ops}; the wider
@@ -1461,7 +1461,8 @@ def check_register(path, fm, status):
     its findings-doc commit — but sits OUTSIDE the goal hash (schema NB) and
     outside WP_REQUIRED (required-subset check passes unknown fields
     silently). This explicit check is the only mechanical gate on it.
-    Absent ⇒ production, always valid (backward compatibility is the schema's
+    Absent = production below schema 6; ERROR at schema_version >= 6
+    (backward compatibility for schema 5 and unversioned WPs is the schema's
     own contract). All findings are plain ERRORs (gate under --strict), NOT
     fatal — same tier as evolved-goal/monotonicity.
       (a) value ∈ {production, spike} (schema-5 `prototype` accepted and
@@ -1474,11 +1475,28 @@ def check_register(path, fm, status):
     format — a schema-6 WP has no task files at all (C1)."""
     reg = fm.get('register')
     if reg is None:
+        # Absent/null schema_version and an integer < 6 stay legacy. Any other
+        # present value that is not a clean integer (bool, float, list,
+        # non-numeric string) counts as current — same as pick-agent
+        # _register_required.
+        sv = fm.get('schema_version')
+        if sv is None:
+            current = False
+        elif isinstance(sv, int) and not isinstance(sv, bool):
+            current = sv >= 6
+        elif isinstance(sv, str) and sv.strip().isdigit():
+            current = int(sv.strip()) >= 6
+        else:
+            current = True
+        if current:
+            err(path, "`register:` is required at schema_version >= 6 (spike|production)",
+                "Copy `register:` from the spec; write `spike` only when the spec declares it")
         return
     reg_s = normalize_register(reg)
     if reg_s not in REGISTER_ENUM:
         err(path, f"`register: {reg}` is not valid",
-            f"Use one of: production, prototype (normalizes to spike) — absent = production")
+            f"Use one of: production, prototype (normalizes to spike) — "
+            f"absent = production below schema 6; ERROR at schema_version >= 6")
         return
     if reg_s != 'spike':
         return

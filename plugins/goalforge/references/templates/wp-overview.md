@@ -3,7 +3,7 @@ name: <wp-id>
 title: "<human title>"
 status: spec               # spec|hardened|ready|executing|implemented|verified|abandoned|archived
 schema_version: 6          # C1-C7 slim shape (schema.md "Version lineage")
-register: spike             # spike|production
+register: production   # spike only when the spec declares it
 severity: MEDIUM            # LOW|MEDIUM|HIGH
 task_type: code             # code|docs|research|ops
 stage_updated: YYYY-MM-DD
@@ -21,6 +21,7 @@ goal:
   verification:
     strategy: deterministic   # deterministic | judge | human
     command: "<the exact reproducible command — command-only, no prose>"
+    # judge: command runs the judge pass, plus check: {artifact, rubric, block_on}
     behaviors: []             # optional; b1..bN oracle rows the Checklist tags reference
 goal_approved_version: null   # sha256[:12] of outcome+verification; set at harden gate
 ---
