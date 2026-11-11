@@ -104,8 +104,12 @@ chk "unresolved-feature render OMITS the section (empty body)" "[ -z \"\$BODY\" 
 # =============================================================================
 # smoke — the seam is wired into the handoff SKILL.md (task verify block half 1)
 SKILL="$HOME/.claude/skills/handoff/SKILL.md"
-chk "handoff SKILL.md wires goalforge-retrospect" "grep -qF 'goalforge-retrospect' '$SKILL'"
-chk "handoff SKILL.md names the resident capture prompt (goalforge-issue)" "grep -qF 'goalforge-issue' '$SKILL'"
+if [ -f "$SKILL" ]; then
+  chk "handoff SKILL.md wires goalforge-retrospect" "grep -qF 'goalforge-retrospect' '$SKILL'"
+  chk "handoff SKILL.md names the resident capture prompt (goalforge-issue)" "grep -qF 'goalforge-issue' '$SKILL'"
+else
+  printf 'gap: no installed handoff skill at %s -- handoff wiring of goalforge-retrospect/goalforge-issue not gated\n' "$SKILL"
+fi
 
 if [ "$fails" -ne 0 ]; then
   printf 'park-render.sh: FAIL (%d)\n' "$fails" >&2

@@ -2,6 +2,12 @@
 # Eval harness for the goalforge package — the single entrypoint (ticket-23).
 # Asserts the spec.md goal.verification.behaviors (b1-b8) plus the surviving
 # structural checks on the package's own SKILL.md files. Exit 0 = all pass.
+#
+# Usage: run.sh                  the full harness (local and feature gate)
+#        run.sh --suites-only    only the discovered eval suites plus
+#                                scripts/tests/goalforge-evals-coverage.test.sh
+#                                (CI runs this; skips the hooks/tests and
+#                                scripts/tests globs)
 
 set -uo pipefail
 
@@ -21,6 +27,76 @@ check() {
     FAIL=$((FAIL + 1))
   fi
 }
+
+run_test_file() {
+  local f="$1" label="$2"
+  if bash "$f" >/tmp/goalforge-run-sh-$$.out 2>&1; then
+    check "$label" "pass"
+    # a passing suite's ungated checks stay visible
+    grep -E '^[[:space:]]*gap:' "/tmp/goalforge-run-sh-$$.out" | sed 's/^[[:space:]]*/        /'
+  else
+    check "$label" "fail"
+    sed 's/^/        /' "/tmp/goalforge-run-sh-$$.out"
+  fi
+  rm -f "/tmp/goalforge-run-sh-$$.out"
+}
+
+# ── eval suite discovery (L0-4) ──────────────────────────────────────────────
+# The ONE discovery of hermetic eval suites: <child>/evals/run.sh,
+# evals/<suite>/run.sh and evals/*.test.sh, minus this file and EXCLUDED.
+# Each EXCLUDED entry is `<path>|<reason>`; an entry naming a missing file FAILs.
+EXCLUDED=(
+  "evals/convert-canonical.test.sh|needs external SKILL_TRIGGER_RUNNER"
+)
+
+is_excluded() {
+  local entry
+  for entry in "${EXCLUDED[@]}"; do
+    [ "${entry%%|*}" = "$1" ] && return 0
+  done
+  return 1
+}
+
+run_discovered_suites() {
+  local entry path f rel
+  echo "[ discovered eval suites (child, sibling, evals/*.test.sh) ]"
+  for entry in "${EXCLUDED[@]}"; do
+    path="${entry%%|*}"
+    if [ -f "$SKILL_DIR/$path" ]; then
+      echo "  EXCLUDED: $path (${entry#*|})"
+    else
+      check "EXCLUDED entry names a missing file: $path" "fail"
+    fi
+  done
+  for f in "$SKILL_DIR"/*/evals/run.sh "$SKILL_DIR"/evals/*/run.sh "$SKILL_DIR"/evals/*.test.sh; do
+    [ -e "$f" ] || continue  # a glob with no match stays literal
+    rel="${f#"$SKILL_DIR"/}"
+    [ "$rel" = "evals/run.sh" ] && continue
+    is_excluded "$rel" && continue
+    run_test_file "$f" "$rel"
+  done
+  echo ""
+}
+
+# b3: every gate sabotage-test pair (hooks/tests, scripts/tests), by glob.
+run_gate_tests() {
+  local f
+  for f in "$SKILL_DIR"/hooks/tests/*.test.sh "$SKILL_DIR"/scripts/tests/*.test.sh; do
+    [ -f "$f" ] || continue
+    run_test_file "$f" "${f#"$SKILL_DIR"/}"
+  done
+}
+
+if [ "${1:-}" = "--suites-only" ]; then
+  echo "=== goalforge package eval harness (--suites-only) ==="
+  echo ""
+  run_discovered_suites   # suites-only
+  echo "[ eval coverage test ]"
+  run_test_file "$SKILL_DIR/scripts/tests/goalforge-evals-coverage.test.sh" "scripts/tests/goalforge-evals-coverage.test.sh"
+  echo ""
+  echo "=== Results: $PASS passed, $FAIL failed ==="
+  [ "$FAIL" -eq 0 ] && exit 0 || exit 1
+fi
 
 echo "=== goalforge package eval harness ==="
 echo ""
@@ -234,8 +310,8 @@ echo ""
 # ── stage-report conformance tests (wp-07-stage-reports, b2) ────────────────
 # Every C7 touchpoint INVOKES the emitter, and the invocation must sit inside a
 # fenced ```bash block — a citation in prose is not a call. Known-bads: a
-# call-deleted copy of each stage file, and a copy of each `<= 125` assertion
-# site with the ceiling raised to 135.
+# copy of each stage file with its bash fences demoted to prose, and a copy of
+# each `<= 125` assertion site with the ceiling raised by one.
 echo "[ stage-report conformance tests ]"
 
 SR_TMP="$(mktemp -d)"
@@ -261,12 +337,15 @@ do
     && check "$STAGE/SKILL.md invokes $SCRIPT in a fenced bash block (>= $WANT)" "pass" \
     || check "$STAGE/SKILL.md invokes $SCRIPT in a fenced bash block (want >= $WANT, got $GOT)" "fail"
 
-  # KNOWN-BAD: delete the call lines; the same grep must then find nothing.
-  grep -v "scripts/$SCRIPT" "$SF" > "$SR_TMP/$STAGE.nocall.md"
-  SAB="$(bash_blocks "$SR_TMP/$STAGE.nocall.md" | grep -c "scripts/$SCRIPT" || true)"
-  [ "$SAB" -eq 0 ] \
-    && check "known-bad: $STAGE/SKILL.md with the call deleted fails the check" "pass" \
-    || check "known-bad: $STAGE/SKILL.md with the call deleted fails the check" "fail"
+  # KNOWN-BAD: demote every ```bash fence to ```text, so each call survives
+  # only as prose; the same fenced-block count must then fall below WANT.
+  sed 's/^\( *\)```bash$/\1```text/' "$SF" > "$SR_TMP/$STAGE.prose.md"
+  SAB="$(bash_blocks "$SR_TMP/$STAGE.prose.md" | grep -c "scripts/$SCRIPT" || true)"
+  if ! cmp -s "$SF" "$SR_TMP/$STAGE.prose.md" && [ "$SAB" -lt "$WANT" ]; then
+    check "known-bad: $STAGE/SKILL.md with its calls demoted to prose fails the check" "pass"
+  else
+    check "known-bad: $STAGE/SKILL.md with its calls demoted to prose fails the check (got $SAB)" "fail"
+  fi
 done
 
 # spec's revise round renders the DIFF, not the whole draft again (C7).
@@ -283,16 +362,22 @@ done
 check "no stage SKILL.md carries a report heading of its own" "$SR_HEAD_OK"
 
 # The three `<= 125` assertion sites still assert the LITERAL 125, so a future
-# ceiling raise cannot land in the SKILL.md size alone.
+# ceiling raise cannot land in the SKILL.md size alone. The pin text is built
+# from CEIL, so no line of this file other than the real site can match it.
+CEIL=125
+CEIL_PIN="[ \"\$LC\" -le $CEIL ]"
+pins_ceiling() { [ "$(grep -cF -- "$CEIL_PIN" "$1" || true)" -eq 1 ]; }
 for SITE in "evals/run.sh" "harden/evals/run.sh" "verify/evals/run.sh"; do
-  grep -q -- '-le 125' "$SKILL_DIR/$SITE" \
-    && check "$SITE asserts the literal 125" "pass" \
-    || check "$SITE asserts the literal 125" "fail"
-  # KNOWN-BAD: the same site with the ceiling raised to 135.
-  sed 's/-le 125/-le 135/' "$SKILL_DIR/$SITE" > "$SR_TMP/ceiling.sh"
-  grep -q -- '-le 125' "$SR_TMP/ceiling.sh" \
-    && check "known-bad: $SITE with the ceiling raised to 135 fails the check" "fail" \
-    || check "known-bad: $SITE with the ceiling raised to 135 fails the check" "pass"
+  pins_ceiling "$SKILL_DIR/$SITE" \
+    && check "$SITE asserts the literal $CEIL" "pass" \
+    || check "$SITE asserts the literal $CEIL" "fail"
+  # KNOWN-BAD (executed mutation): a copy of the site with the ceiling + 1.
+  sed "s/-le $CEIL\b/-le $((CEIL + 1))/" "$SKILL_DIR/$SITE" > "$SR_TMP/ceiling.sh"
+  if ! cmp -s "$SKILL_DIR/$SITE" "$SR_TMP/ceiling.sh" && ! pins_ceiling "$SR_TMP/ceiling.sh"; then
+    check "known-bad: $SITE with the ceiling raised to $((CEIL + 1)) fails the check" "pass"
+  else
+    check "known-bad: $SITE with the ceiling raised to $((CEIL + 1)) fails the check" "fail"
+  fi
 done
 
 # The template, the payload schema and the two prose homes are on disk.
@@ -317,64 +402,14 @@ rm -rf "$SR_TMP"
 
 echo ""
 
-# ── stage child eval suites (decompose/harden/execute/verify/run) ──────────
-# Each rewritten stage skill (wp-01-slim-core) owns its own C1-C7 contract
-# checks; a red child suite must turn this top-level harness red too.
-echo "[ stage child eval suites ]"
-
-for stage in capture decompose harden execute verify run; do
-  f="$SKILL_DIR/$stage/evals/run.sh"
-  [ -f "$f" ] || continue
-  if bash "$f" >/tmp/goalforge-run-sh-$$.out 2>&1; then
-    check "$stage/evals/run.sh" "pass"
-  else
-    check "$stage/evals/run.sh" "fail"
-    sed 's/^/        /' "/tmp/goalforge-run-sh-$$.out"
-  fi
-  rm -f "/tmp/goalforge-run-sh-$$.out"
-done
-
-echo ""
-
-# ── sibling eval suites (wave-route, schema-v5, selection) ─────────────────
-# Owned evals/ suites that sit beside the stage children above, not inside
-# them — same "a red child must redden this harness" contract (wp-01 round 2,
-# gate B/C new findings).
-echo "[ sibling eval suites (wave-route, schema-v5, selection) ]"
-
-for f in "$SKILL_DIR/evals/wave-route/run.sh" "$SKILL_DIR/evals/schema-v5/run.sh" "$SKILL_DIR/evals/selection.test.sh"; do
-  [ -f "$f" ] || continue
-  label="evals/$(basename "$(dirname "$f")")/$(basename "$f")"
-  [ "$(basename "$f")" = "selection.test.sh" ] && label="evals/selection.test.sh"
-  if bash "$f" >/tmp/goalforge-run-sh-$$.out 2>&1; then
-    check "$label" "pass"
-  else
-    check "$label" "fail"
-    sed 's/^/        /' "/tmp/goalforge-run-sh-$$.out"
-  fi
-  rm -f "/tmp/goalforge-run-sh-$$.out"
-done
-
-echo ""
+# ── discovered eval suites (child, sibling, evals/*.test.sh) ────────────────
+# A red suite must turn this top-level harness red too.
+run_discovered_suites
 
 # ── b3: every gate sabotage-test pair exits clean (discovered by glob) ──────
 echo "[ b3: gate sabotage-test pairs (hooks/tests, scripts/tests) ]"
 
-run_test_file() {
-  local f="$1" label="$2"
-  if bash "$f" >/tmp/goalforge-run-sh-$$.out 2>&1; then
-    check "$label" "pass"
-  else
-    check "$label" "fail"
-    sed 's/^/        /' "/tmp/goalforge-run-sh-$$.out"
-  fi
-  rm -f "/tmp/goalforge-run-sh-$$.out"
-}
-
-for f in "$SKILL_DIR"/hooks/tests/*.test.sh "$SKILL_DIR"/scripts/tests/*.test.sh; do
-  [ -f "$f" ] || continue
-  run_test_file "$f" "${f#"$SKILL_DIR"/}"
-done
+run_gate_tests
 
 if python3 "$SKILL_DIR/scripts/tests/test_goalforge_archive_sweep.py" >/tmp/goalforge-run-sh-$$.out 2>&1; then
   check "scripts/tests/test_goalforge_archive_sweep.py" "pass"

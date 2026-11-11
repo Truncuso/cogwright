@@ -124,7 +124,13 @@ if assumed:
 
 # ── validate (the oracle) ───────────────────────────────────────────────────
 try:
-    emitter = SourceFileLoader("goalforge_trace_emit", str(EMIT)).load_module()
+    # exec_module, not load_module(): the latter is gone in Python 3.15.
+    import importlib.util
+    _loader = SourceFileLoader("goalforge_trace_emit", str(EMIT))
+    _mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("goalforge_trace_emit", _loader))
+    sys.modules["goalforge_trace_emit"] = _mod
+    _loader.exec_module(_mod)
+    emitter = _mod
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
 except (OSError, ValueError) as exc:
     die(f"cannot load the stage.report schema or validator: {exc}")

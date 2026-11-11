@@ -83,7 +83,13 @@ _check_type() {
 import sys, json
 from importlib.machinery import SourceFileLoader
 emit_path, log_path, want = sys.argv[1], sys.argv[2], sys.argv[3]
-mod = SourceFileLoader("emit", emit_path).load_module()
+# exec_module, not load_module(): the latter is gone in Python 3.15.
+import importlib.util
+_loader = SourceFileLoader("emit", emit_path)
+_mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("emit", _loader))
+sys.modules["emit"] = _mod
+_loader.exec_module(_mod)
+mod = _mod
 schema = mod.load_schema()
 try:
     rows = [json.loads(ln) for ln in open(log_path, encoding="utf-8") if ln.strip()]

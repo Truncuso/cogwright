@@ -236,7 +236,10 @@ python3 "$WORK/schemas.py" "$FORK" >/dev/null 2>&1 \
   || ok "known-bad: a forked envelope branch fails the field-for-field check"
 
 # b5: the event roster in the trace-substrate suite carries stage.report.
-grep -q '"stage.report"' "$PKG/evals/trace-substrate/run.sh" \
+# The roster is the ### `<type>` headings of trace-events.md; case (e) passing
+# means the fixture covers every one of them.
+grep -qx '### `stage.report`' "$PKG/references/trace-events.md" \
+  && bash "$PKG/evals/trace-substrate/run.sh" --case e >/dev/null 2>&1 \
   && ok "trace-substrate case (e) roster names stage.report" \
   || bad "trace-substrate case (e) roster names stage.report"
 grep -q '"type":"stage.report"' "$PKG/evals/trace-substrate/fixtures/all-events.jsonl" \
