@@ -162,34 +162,38 @@ else
   FAIL=$((FAIL+1))
 fi
 
-# The router resolves against the installed skills tree; on a host without
-# one (a CI runner) this check is a visible gap, not a failure.
-INSTALLED_SKILLS="${CLAUDE_SKILLS_ROOT:-$HOME/.claude/skills}"
-if [ ! -d "$INSTALLED_SKILLS" ]; then
-  echo "  gap: no installed skills tree at $INSTALLED_SKILLS -- router --dry-run over the installed chain not gated"
+# The router resolves chain steps relative to its own tree, so this runs on
+# every host: CLAUDE_SKILLS_ROOT unset, HOME an empty dir (no installed tree
+# can satisfy it), and a fixture plans root holding the probe feature.
+WRAPPER_HOME="$(mktemp -d)"
+WRAPPER_PLANS="$(mktemp -d)"
+mkdir -p "$WRAPPER_PLANS/goalforge-run-wrapper-probe"
+ROUTER_RC=0
+ROUTER_OUT="$(cd "$WRAPPER_HOME" && env -u CLAUDE_SKILLS_ROOT HOME="$WRAPPER_HOME" SDD_PLANS_DIR="$WRAPPER_PLANS" \
+  bash "$SKILL_DIR/scripts/goalforge-router.sh" --dry-run goalforge-run-wrapper-probe 2>&1)" || ROUTER_RC=$?
+RESOLVED_STEPS="$(printf '%s\n' "$ROUTER_OUT" | grep -c ': RESOLVED ' || true)"
+if [ "$ROUTER_RC" -eq 0 ] && [ "$RESOLVED_STEPS" -eq 7 ] \
+   && ! printf '%s\n' "$ROUTER_OUT" | grep -q 'UNRESOLVED'; then
+  echo "  PASS [WRAPPER]: router --dry-run resolves all 7 chain steps"
+  PASS=$((PASS+1))
 else
-  ROUTER_RC=0
-  ROUTER_OUT="$(bash "$SKILL_DIR/scripts/goalforge-router.sh" --dry-run goalforge-run-wrapper-probe 2>&1)" || ROUTER_RC=$?
-  RESOLVED_STEPS="$(printf '%s\n' "$ROUTER_OUT" | grep -c ': RESOLVED ' || true)"
-  if [ "$ROUTER_RC" -eq 0 ] && [ "$RESOLVED_STEPS" -eq 7 ] \
-     && ! printf '%s\n' "$ROUTER_OUT" | grep -q 'UNRESOLVED'; then
-    echo "  PASS [WRAPPER]: router --dry-run resolves all 7 chain steps"
-    PASS=$((PASS+1))
-  else
-    echo "  FAIL [WRAPPER]: router --dry-run did not resolve all 7 chain steps (rc=$ROUTER_RC, resolved=$RESOLVED_STEPS)"
-    printf '%s\n' "$ROUTER_OUT" | sed 's/^/        /'
-    FAIL=$((FAIL+1))
-  fi
+  echo "  FAIL [WRAPPER]: router --dry-run did not resolve all 7 chain steps (rc=$ROUTER_RC, resolved=$RESOLVED_STEPS)"
+  printf '%s\n' "$ROUTER_OUT" | sed 's/^/        /'
+  FAIL=$((FAIL+1))
 fi
+rm -rf "$WRAPPER_HOME" "$WRAPPER_PLANS"
 
 
 # ── HERMETIC: chain resolution proven against a fixture skills tree ──────────
-# The WRAPPER router run above resolves against the INSTALLED tree
-# ($HOME/.claude/skills), so it passes or fails with the author's machine and
-# its UNRESOLVED path is never exercised. These two runs pin
+# The WRAPPER router run above resolves against the router's own tree under an
+# empty HOME, where every step SKILL.md exists, so its UNRESOLVED path is never
+# exercised. These two runs pin
 # CLAUDE_SKILLS_ROOT — the override goalforge-router.sh already supports — at a
 # tree this harness builds, so both the resolve and the fail path are real.
 HERMETIC_ROOT="$(mktemp -d)"
+# The router checks the feature dir before resolving steps; give the probe one.
+HERMETIC_PLANS="$(mktemp -d)"
+mkdir -p "$HERMETIC_PLANS/hermetic-probe"
 CHAIN_STEPS="$(grep -E '^[[:space:]]*- skill:' "$CHAIN_YAML" | sed 's/.*skill:[[:space:]]*//')"
 for s in $CHAIN_STEPS; do
   mkdir -p "$HERMETIC_ROOT/$s"
@@ -197,7 +201,7 @@ for s in $CHAIN_STEPS; do
 done
 
 H_RC=0
-H_OUT="$(CLAUDE_SKILLS_ROOT="$HERMETIC_ROOT" bash "$SKILL_DIR/scripts/goalforge-router.sh" \
+H_OUT="$(CLAUDE_SKILLS_ROOT="$HERMETIC_ROOT" SDD_PLANS_DIR="$HERMETIC_PLANS" bash "$SKILL_DIR/scripts/goalforge-router.sh" \
   --dry-run hermetic-probe 2>&1)" || H_RC=$?
 H_RESOLVED="$(printf '%s\n' "$H_OUT" | grep -c ': RESOLVED ' || true)"
 if [ "$H_RC" -eq 0 ] && [ "$H_RESOLVED" -eq 7 ] \
@@ -216,7 +220,7 @@ fi
 BROKEN_STEP="$(printf '%s\n' "$CHAIN_STEPS" | head -1)"
 rm -f "$HERMETIC_ROOT/$BROKEN_STEP/SKILL.md"
 B_RC=0
-B_OUT="$(CLAUDE_SKILLS_ROOT="$HERMETIC_ROOT" bash "$SKILL_DIR/scripts/goalforge-router.sh" \
+B_OUT="$(CLAUDE_SKILLS_ROOT="$HERMETIC_ROOT" SDD_PLANS_DIR="$HERMETIC_PLANS" bash "$SKILL_DIR/scripts/goalforge-router.sh" \
   --dry-run hermetic-probe 2>&1)" || B_RC=$?
 if [ "$B_RC" -ne 0 ] && printf '%s\n' "$B_OUT" | grep -q "^$BROKEN_STEP: UNRESOLVED$"; then
   echo "  PASS [HERMETIC]: a missing step SKILL.md is UNRESOLVED and exits non-zero"
@@ -226,7 +230,7 @@ else
   printf '%s\n' "$B_OUT" | sed 's/^/        /'
   FAIL=$((FAIL+1))
 fi
-rm -rf "$HERMETIC_ROOT"
+rm -rf "$HERMETIC_ROOT" "$HERMETIC_PLANS"
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [ "$FAIL" -gt 0 ]; then
