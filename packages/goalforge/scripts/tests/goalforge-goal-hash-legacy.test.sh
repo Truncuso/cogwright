@@ -184,6 +184,77 @@ else
     bad "(e') untracked file, unprovable stamp -> exit 4 (rc=$RS_RC)"
 fi
 
+# ── (f) walk-back to ready: the hash gate's hint carries the WP directory ────
+# goalforge-transition.sh <wp-dir> ready --reason from an in-flight status. A
+# legacy stamp gets --restamp-legacy; a changed outcome, a stray stamp on a
+# goal-less unversioned WP and a failing goal-hash call get --record. Every
+# hint names the WP directory as the script resolved it, never a bare name.
+# Each transition runs in a package-layout mirror (scripts/ plus references/)
+# under HOME=$T/home.
+PKG_DIR="$(cd "$SD/../.." && pwd)"
+mirror() { # $1=mirror dir -> a copy of scripts/ + references/
+    mkdir -p "$1"; cp -a "$PKG_DIR/scripts" "$PKG_DIR/references" "$1/"
+}
+f_hint() { # $1=transition $2=wp-dir $3=label $4=needle option (--restamp-legacy|--record)
+    local st out rc wpd
+    st="$(grep -m1 '^status:' "$2/overview.md")"
+    wpd="$(cd "$2" && pwd)"
+    out="$(HOME="$T/home" bash "$1" "$2" ready --reason "walk back for the hint check" 2>&1)"; rc=$?
+    if [[ "$rc" -ne 0 && "$(grep -m1 '^status:' "$2/overview.md")" == "$st" ]] \
+            && grep -qF -- "goalforge-goal-hash.sh $4 $wpd)" <<<"$out" \
+            && { [[ "$4" == --restamp-legacy ]] || ! grep -qF -- '--restamp-legacy' <<<"$out"; }; then
+        return 0
+    fi
+    echo "      $3: rc=$rc out=$out"
+    return 1
+}
+mkdir -p "$T/home"
+FM="$T/f/mirror"; mirror "$FM"; FTR="$FM/scripts/goalforge-transition.sh"
+f_fixture() { # $1=case dir $2=status $3=stamp -> legacy-stamped WP under a feature
+    mk_feature "$1" wp-01-legacy
+    mk_wp "$1/tmpfeat/wp-01-legacy" "$3"
+    sed -i "s/^status: ready$/status: $2/" "$1/tmpfeat/wp-01-legacy/overview.md"
+}
+f_all() { # $1=transition -> 0 when every (f) case holds
+    local rc=0 s d
+    for s in executing implemented verified; do
+        d="$T/f/run$RANDOM/$s"; f_fixture "$d" "$s" "\"$PINNED_LEGACY\""
+        f_hint "$1" "$d/tmpfeat/wp-01-legacy" "legacy stamp at $s" --restamp-legacy || rc=1
+    done
+    d="$T/f/run$RANDOM/outcome"; f_fixture "$d" executing "\"$PINNED_LEGACY\""
+    sed -i 's/outcome: "the legacy thing is done"/outcome: "the legacy thing is DONE"/' "$d/tmpfeat/wp-01-legacy/overview.md"
+    f_hint "$1" "$d/tmpfeat/wp-01-legacy" "outcome changed under a legacy stamp" --record || rc=1
+    d="$T/f/run$RANDOM/stray"; f_fixture "$d" executing '"0123456789ab"'
+    sed -i '/^goal:$/,/^inherits_from:/{/^inherits_from:/!d}' "$d/tmpfeat/wp-01-legacy/overview.md"
+    f_hint "$1" "$d/tmpfeat/wp-01-legacy" "goal-less unversioned WP with a stray stamp" --record || rc=1
+    return "$rc"
+}
+if f_all "$FTR"; then
+    ok "(f) walk-back to ready: legacy stamp -> --restamp-legacy, changed outcome and stray stamp -> --record, all with the WP directory path"
+else
+    bad "(f) walk-back to ready: hash-gate hints with the WP directory path"
+fi
+SM="$T/f/stub"; mirror "$SM"
+printf '#!/usr/bin/env bash\nexit 1\n' > "$SM/scripts/goalforge-goal-hash.sh"
+d="$T/f/stubcase"; f_fixture "$d" executing "\"$PINNED_LEGACY\""
+if f_hint "$SM/scripts/goalforge-transition.sh" "$d/tmpfeat/wp-01-legacy" "goal-hash stub exiting 1" --record; then
+    ok "(f) a goal-hash call exiting non-zero other than 3 -> --record hint with the WP directory path"
+else
+    bad "(f) a goal-hash call exiting non-zero other than 3 -> --record hint with the WP directory path"
+fi
+# Sabotage arm: the pre-L0-6 refusal (bare WP name, --record for a legacy stamp)
+# must turn (f) red.
+SB="$T/f/sabotage"; mirror "$SB"
+sed -e 's/--record \$WP_DIR)/--record $(basename "$WP_DIR"))/' \
+    -e 's/--restamp-legacy \$WP_DIR)/--record $(basename "$WP_DIR"))/' "$FTR" > "$SB/scripts/goalforge-transition.sh"
+if cmp -s "$FTR" "$SB/scripts/goalforge-transition.sh"; then
+    bad "(f) sabotage arm is not a mutant (sed matched nothing)"
+elif f_all "$SB/scripts/goalforge-transition.sh" >/dev/null; then
+    bad "(f) sabotage arm (bare-name hints, no --restamp-legacy) stays green"
+else
+    ok "(f) sabotage arm (bare-name hints, no --restamp-legacy) turns (f) red"
+fi
+
 echo
 echo "goalforge-goal-hash-legacy.test.sh: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

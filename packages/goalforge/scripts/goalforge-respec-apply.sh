@@ -265,7 +265,7 @@ def wp_plan():
             problems.append("%s is in flight at %s and names %s: walk it back to `%s` first "
                             "(goalforge-transition.sh %s %s --reason \"<respec>\"), then rerun"
                             % (wp.name, status, ",".join(sorted(ids & flight_keys, key=c_order)),
-                               back, wp.name, back))
+                               back, wp, back))
             continue
         hit = sorted(keys & ids, key=c_order)
         if hit:
@@ -332,7 +332,8 @@ for ov, text, end, fm, status, ids, hit in plan:
                 "Written by goalforge-respec-apply.sh from the human-ratified proposal `%s`.\n\n" % REL
                 + "## Goal Impact\n\n"
                 "Re-develop the goal facets that depend on %s at `hardened`: the next harden entry\n" % ",".join(hit)
-                + "takes `ready -> hardened --mode evidence --evidence <this file>`.\n"
+                + "takes `goalforge-transition.sh <wp-dir> hardened --mode evidence --evidence <this file> --reason \"<text>\"`\n"
+                "(references/respec.md §Re-entry).\n"
             ).encode("utf-8"))
     else:
         other.append(wp.name)

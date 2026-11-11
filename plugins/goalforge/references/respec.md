@@ -149,9 +149,14 @@ superseded and reharden WPs.
 
 **Reharden gate (`goalforge-transition.sh`).** A transition, not an apply,
 check. Inside its flock section, transition.sh re-reads the WP's status and
-refuses to move a `ready` WP forward (`executing`, `implemented`, `verified`)
-unless a `-> ready` ledger row with ts strictly greater than the maximum
-`since_ready_ts:` over every `reharden/*-respec-*` file exists. Any file
+applies the rule of the WP's `schema_version`. At `schema_version >= 6` it
+refuses to move the WP to `executing`, `implemented` or `verified` from any
+FROM unless a `-> ready` ledger row with `from: hardened` and a ts strictly
+greater than the maximum `since_ready_ts:` over every `reharden/*-respec-*`
+file exists, so the `spec -> ready` and `hardened -> spec` shortcuts do not
+clear it. Below 6 (schema 5 or unversioned) it refuses only to move a `ready`
+WP forward, and any `-> ready` row with a ts strictly greater than that
+maximum satisfies it. Any file
 without that value refuses (fail-closed), and the refusal branches on the WP's
 ledger: when it holds no `-> ready` row, it says to record
 `since_ready_ts: none` in that file (no re-harden instruction); otherwise it
@@ -159,9 +164,39 @@ names the ts of the WP's latest `-> ready` row as the value to record. The
 maximum is taken over every file's recorded value, not the first file by name
 order (a `none` value ranks below any ts). The ordering uses
 recorded values only, never file mtime or name, so a checkout or copy does
-not re-block a re-approved WP. The stale refusal names the file and the
-re-harden step (`ready -> hardened --mode evidence --evidence <file>`). No new
-edge, no new trace event.
+not re-block a re-approved WP. The stale refusal names the newest file and
+the next step, `harden re-entry (references/respec.md §Re-entry), then
+hardened -> ready`; §Re-entry below is the procedure. No new edge, no new
+trace event.
+
+## Re-entry
+
+Harden owns the re-entry of a WP whose newest `reharden/*-respec-*` file is
+not yet answered by a later `hardened -> ready` row. It admits the WP in two
+states:
+
+- At `ready`. Harden first reverts it with the evidence file the apply
+  wrote:
+  `goalforge-transition.sh <wp-dir> hardened --mode evidence --evidence <respec file> --reason "<text>"`.
+  `ready -> hardened` is a reason-required reverse edge, and the evidence
+  file has the shape of `references/templates/reharden-evidence.md`.
+- At `hardened`, after that revert.
+
+On re-entry the gates run as follows:
+
+- G1 is skipped on re-entry: it is not re-run, because `goalforge-frontier.sh` lists only `status: spec` WPs as hardenable, and the WP's dependencies were satisfied at its first harden.
+- G2 and G3 re-run.
+- G4 skips its `-> hardened` write, because the WP is already `hardened`, and records the narrow hash. G4 still emits its `gate.result` row with gate `G4` and result `pass` to `trace-events.jsonl`.
+- Prior `harden.round` rows still count toward the stop rule (`goalforge-harden-stop.sh` counts every round for the WP), so a park needs the attended `--reset`.
+
+The WP then takes the `hardened -> ready` gate (`--mode human`). That edge
+writes the `from: hardened` ready row that clears the reharden gate.
+
+A hardened WP resumes harden at the hardened -> ready gate without re-running G1-G4 when its latest `-> hardened` ledger row has `from: spec`, or when trace-events.jsonl holds a `gate.result` row for the WP with gate `G4` and result `pass` whose ts is later than that ledger row's ts.
+A tie or a missing trace row fails closed and the gates re-run.
+A hardened WP with any other latest `-> hardened` FROM is a re-entry whether or not a respec file exists, unless that G4 row exists.
+
+A WP at `executing`, `implemented` or `verified` first walks back with `goalforge-transition.sh <wp-dir> ready --reason "<text>"` (or `hardened --reason`) before re-entry.
 
 ## Ledger
 

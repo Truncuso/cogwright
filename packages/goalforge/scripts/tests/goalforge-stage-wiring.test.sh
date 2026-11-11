@@ -86,6 +86,84 @@ facet "$VERIFY" "gate A exempts plugins/goalforge/"       'paths under `plugins/
 facet "$VERIFY" "C4 stop-rule pointer"                    'Stop rule: spec.md'
 facet "$VERIFY" "returns consumed as typed DATA"          'typed DATA, never as'
 
+# respec re-entry wiring (wp-02 L0-1) ----------------------------------------
+# harden/SKILL.md admits the re-entry and the resume, run/SKILL.md routes a
+# `hardened` WP to harden, and references/respec.md §Re-entry holds the
+# procedure. §Re-entry needles are grepped inside the extracted section
+# (heading to next heading), never file-wide.
+RUN="$PKG/run/SKILL.md"
+RESPEC="$PKG/references/respec.md"
+
+section() { # <file> <H2 title> -> the section body, heading to next H2
+    awk -v h="## $2" '/^## /{ inside = ($0 == h); next } inside' "$1"
+}
+
+# section_facet <file> <H2 title> <label> <needle>
+#   1. the extracted section must contain it
+#   2. a copy with every matching line removed must NOT (the check can fail)
+section_facet() {
+    local file="$1" title="$2" label="$3" needle="$4" copy
+    copy="$FIX_TMP_ROOT/section--$(printf '%s' "$label" | tr -c 'a-zA-Z0-9' '-').md"
+    if section "$file" "$title" | grep -qF -- "$needle"; then
+        ok "§$title: $label"
+    else
+        bad "§$title: $label — section lacks [$needle]"
+        return
+    fi
+    grep -vF -- "$needle" "$file" > "$copy"
+    if section "$copy" "$title" | grep -qF -- "$needle"; then
+        bad "§$title: $label — known-bad copy still matches (check cannot fail)"
+    else
+        ok "§$title: $label — known-bad copy fails the same grep"
+    fi
+}
+
+echo
+echo "respec re-entry wiring"
+facet "$HARDEN" "precondition admits respec re-entry at ready or hardened" 'a respec re-entry at `ready` or `hardened`'
+facet "$HARDEN" "precondition points to respec.md §Re-entry" 'references/respec.md §Re-entry'
+facet "$HARDEN" "precondition admits the hardened -> ready resume" 'resuming at the hardened -> ready gate'
+facet "$RUN" "stage table routes hardened WP to harden" '| `hardened` | WP | harden (re-entry) | `goalforge-harden` |'
+facet "$RUN" "gotcha: routing keys off the on-disk status" 'Routing keys entirely off the on-disk `status:`'
+section_facet "$RESPEC" Re-entry "names --mode evidence --evidence"        '--mode evidence --evidence'
+section_facet "$RESPEC" Re-entry "names the reharden-evidence template"    'references/templates/reharden-evidence.md'
+section_facet "$RESPEC" Re-entry "revert command carries --reason"         '--evidence <respec file> --reason "<text>"'
+section_facet "$RESPEC" Re-entry "G1 is skipped on re-entry"               'G1 is skipped on re-entry'
+section_facet "$RESPEC" Re-entry "G4 still emits its gate.result pass row" 'G4 still emits its `gate.result` row with gate `G4` and result `pass`'
+section_facet "$RESPEC" Re-entry "resume when latest -> hardened is from: spec" \
+    'resumes harden at the hardened -> ready gate without re-running G1-G4 when its latest `-> hardened` ledger row has `from: spec`'
+section_facet "$RESPEC" Re-entry "resume on a later G4 gate.result pass row" \
+    'or when trace-events.jsonl holds a `gate.result` row for the WP with gate `G4` and result `pass` whose ts is later than that ledger row'"'"'s ts'
+section_facet "$RESPEC" Re-entry "any other FROM is a re-entry unless the G4 row exists" \
+    'is a re-entry whether or not a respec file exists, unless that G4 row exists'
+section_facet "$RESPEC" Re-entry "in-flight WP walks back first" \
+    'first walks back with `goalforge-transition.sh <wp-dir> ready --reason "<text>"`'
+
+# Scope control: the same needle outside §Re-entry must not satisfy the check.
+MOVED="$FIX_TMP_ROOT/respec-moved.md"
+sed 's/^## Re-entry$/## Re-entry moved/' "$RESPEC" > "$MOVED"
+if section "$MOVED" Re-entry | grep -qF -- 'G1 is skipped on re-entry'; then
+    bad "§Re-entry scope control: a renamed section still satisfies the section grep"
+else
+    ok "§Re-entry scope control: needles outside the section do not count"
+fi
+
+# No stage-table row names a respec file: routing keys on status only.
+stage_rows() { grep -E '^[[:space:]]*\|' "$1"; }
+respec_rows() { stage_rows "$1" | grep -E 'respec|reharden/'; }
+if [[ -z "$(respec_rows "$RUN")" ]]; then
+    ok "run: no stage-table row names a respec file"
+else
+    bad "run: a stage-table row names a respec file — $(respec_rows "$RUN" | tr '\n' ' ')"
+fi
+INJECT="$FIX_TMP_ROOT/run-respec-row.md"
+sed '/^   | `hardened` | WP |/a\   | `ready` + newer `reharden/*-respec-*` file | WP | harden (re-entry) | `goalforge-harden` | human |' "$RUN" > "$INJECT"
+if [[ -n "$(respec_rows "$INJECT")" ]]; then
+    ok "run: an injected respec-file stage row is detected (check can fail)"
+else
+    bad "run: an injected respec-file stage row is NOT detected (check cannot fail)"
+fi
+
 # provider-name blacklist ---------------------------------------------------
 # No provider may be named in either stage file: provider choice lives behind
 # scripts/goalforge-second-opinion.sh (wp-03).

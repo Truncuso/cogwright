@@ -471,16 +471,23 @@ transition() {
             fi
             APPROVED="$(read_goal_approved "$OVERVIEW")"
             if [[ -n "$APPROVED" && "$APPROVED" != "null" ]]; then
-                echo "ready refused: goal_approved_version missing or != recomputed hash (run goalforge-goal-hash.sh --record $(basename "$WP_DIR"))" >&2
+                echo "ready refused: goal_approved_version missing or != recomputed hash (run goalforge-goal-hash.sh --record $WP_DIR)" >&2
                 return 1
             fi
         elif [[ "$GH_RC" -ne 0 ]]; then
-            echo "ready refused: goal_approved_version missing or != recomputed hash (run goalforge-goal-hash.sh --record $(basename "$WP_DIR"))" >&2
+            echo "ready refused: goal_approved_version missing or != recomputed hash (run goalforge-goal-hash.sh --record $WP_DIR)" >&2
             return 1
         else
             APPROVED="$(read_goal_approved "$OVERVIEW")"
             if [[ -z "$APPROVED" || "$APPROVED" == "null" || "$APPROVED" != "$RECOMPUTED" ]]; then
-                echo "ready refused: goal_approved_version missing or != recomputed hash (run goalforge-goal-hash.sh --record $(basename "$WP_DIR"))" >&2
+                # L0-6: an untouched pre-2026-09-09 whole-block stamp gets the
+                # proof-gated restamp, never a fresh --record over it.
+                if [[ -n "$APPROVED" && "$APPROVED" != "null" ]] \
+                        && [[ "$(bash "$GOAL_HASH_SH" --matches "$OVERVIEW" "$APPROVED" 2>/dev/null)" == "legacy" ]]; then
+                    echo "ready refused: goal_approved_version is a legacy (pre-2026-09-09) whole-block stamp (run goalforge-goal-hash.sh --restamp-legacy $WP_DIR)" >&2
+                    return 1
+                fi
+                echo "ready refused: goal_approved_version missing or != recomputed hash (run goalforge-goal-hash.sh --record $WP_DIR)" >&2
                 return 1
             fi
         fi
@@ -546,23 +553,39 @@ transition() {
         flock -u 9; exec 9>&-
         echo "ERROR: status of $OVERVIEW changed from $FROM to ${FROM_NOW:-<none>} before the write; refused" >&2; return 1
     fi
-    # ── respec reharden gate (wp-10 H1-r2, M1-l7, H1-l8) ─────────────────────
-    # A `ready` WP leaves forward only when a `-> ready` ledger row has ts
-    # strictly greater than the MAXIMUM since_ready_ts: (the last `-> ready`
-    # ts the apply read under this lock; `none` = no row then) over EVERY
-    # reharden/*-respec-* file. Recorded values only, never mtime or name
+    # ── respec reharden gate (wp-10 H1-r2, M1-l7, H1-l8; L0-1) ───────────────
+    # A WP moves to executing|implemented|verified only when a `-> ready` ledger
+    # row has ts strictly greater than the MAXIMUM since_ready_ts: (the last
+    # `-> ready` ts the apply read under this lock; `none` = no row then) over
+    # EVERY reharden/*-respec-* file. Recorded values only, never mtime or name
     # order. Any file without a parseable since_ready_ts: refuses (fail-closed).
-    if [[ "$KIND" == "wp" && "$FROM" == "ready" && "$TO" =~ ^(executing|implemented|verified)$ ]]; then
-        STALE_EV="$(python3 - "$WP_DIR" "$LEDGER" <<'PY'
+    # At schema_version >= 6 the gate runs for every FROM and only a
+    # `from: hardened` row counts, so the spec -> ready and hardened -> spec
+    # shortcuts do not clear it; below 6 it stays FROM = ready, any row (A2).
+    local RESPEC_SV RESPEC_STRICT=0
+    # Normalise here only (the goal-mandatory gate reads the raw value): drop an
+    # inline ` # comment`, whitespace and quotes. An integer compares in base 10
+    # (`08` is not octal); a present value that is not an integer is strict
+    # (fail closed); absent (unversioned) keeps the weak rule.
+    RESPEC_SV="$(read_schema_version "$OVERVIEW")"
+    RESPEC_SV="${RESPEC_SV%%#*}"
+    RESPEC_SV="$(printf '%s' "$RESPEC_SV" | tr -d " \t\"'")"
+    if [[ "$RESPEC_SV" =~ ^[0-9]+$ ]]; then
+        if (( 10#$RESPEC_SV >= 6 )); then RESPEC_STRICT=1; fi
+    elif [[ -n "$RESPEC_SV" ]]; then
+        RESPEC_STRICT=1
+    fi
+    if [[ "$KIND" == "wp" && ( "$RESPEC_STRICT" == 1 || "$FROM" == "ready" ) && "$TO" =~ ^(executing|implemented|verified)$ ]]; then
+        STALE_EV="$(python3 - "$WP_DIR" "$LEDGER" "$RESPEC_STRICT" <<'PY'
 import sys, json, os, glob, re
 from datetime import datetime
-wp_dir, ledger = sys.argv[1], sys.argv[2]
+wp_dir, ledger, strict = sys.argv[1], sys.argv[2], sys.argv[3] == "1"
 def ts(v):
     try:
         return datetime.strptime(v, "%Y-%m-%dT%H:%M:%SZ")
     except (TypeError, ValueError):
         return None
-def ready_rows():  # [(parsed ts, raw ts)] of this WP's `-> ready` ledger rows
+def ready_rows():  # [(parsed ts, raw ts, from)] of this WP's `-> ready` ledger rows
     rows = []
     if os.path.isfile(ledger):
         for ln in open(ledger, encoding="utf-8"):
@@ -574,7 +597,7 @@ def ready_rows():  # [(parsed ts, raw ts)] of this WP's `-> ready` ledger rows
                 continue
             t = ts(row.get("ts"))
             if t is not None:
-                rows.append((t, row["ts"]))
+                rows.append((t, row["ts"], row.get("from")))
     return rows
 since, last = None, None
 for ev in sorted(glob.glob(os.path.join(wp_dir, "reharden", "*-respec-*"))):
@@ -591,11 +614,12 @@ for ev in sorted(glob.glob(os.path.join(wp_dir, "reharden", "*-respec-*"))):
         since, last = t, ev
 if last is None:
     sys.exit(0)
-for t, _ in ready_rows():
+for t, _, frm in ready_rows():
+    if strict and frm != "hardened": continue
     if t is not None and (since is None or t > since):
         sys.exit(0)
-print("%s has no -> ready ledger row after the max since_ready_ts: %s; re-harden it first (goalforge-transition.sh %s hardened --mode evidence --evidence %s)"
-      % (last, since.strftime("%Y-%m-%dT%H:%M:%SZ") if since else "none", wp_dir, last))
+print("%s has no %s-> ready ledger row after the max since_ready_ts: %s; next step for %s: harden re-entry (references/respec.md §Re-entry), then hardened -> ready"
+      % (last, "hardened " if strict else "", since.strftime("%Y-%m-%dT%H:%M:%SZ") if since else "none", wp_dir))
 PY
 )" || { flock -u 9; exec 9>&-; echo "ERROR: respec reharden check failed for $WP_DIR; refused" >&2; return 1; }
         if [[ -n "$STALE_EV" ]]; then

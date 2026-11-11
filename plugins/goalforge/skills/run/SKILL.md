@@ -24,6 +24,7 @@ Sibling `chain.yaml` declares the step sequence; never reorder or extend it here
    | `spec` | feature | spec (ratify) | `goalforge-spec` | human at `spec → ready` |
    | `ready` | feature | decompose | `goalforge-decompose` | auto |
    | `spec` | WP | harden | `goalforge-harden` | human at `hardened → ready` |
+   | `hardened` | WP | harden (re-entry) | `goalforge-harden` | human at `hardened → ready` |
    | `ready` / `executing` | WP | execute (resume) | `goalforge-execute` | auto |
    | `implemented` | WP | verify | `goalforge-verify` | auto |
    | `verified` / `abandoned` / `archived` | WP | — | — | complete |

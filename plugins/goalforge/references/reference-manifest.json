@@ -215,6 +215,10 @@
     },
     {
       "from": "references/respec.md",
+      "path": "references/templates/reharden-evidence.md"
+    },
+    {
+      "from": "references/respec.md",
       "path": "scripts/goalforge-respec-apply.sh"
     },
     {
