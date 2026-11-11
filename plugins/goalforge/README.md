@@ -56,7 +56,7 @@ orientation block twice.
 ### Hooks the plugin registers
 
 Wired in `hooks/hooks.json`; the registration is asserted by
-`hooks/tests/goalforge-hooks-json.test.sh`.
+`hooks/tests/goalforge-hooks-json.test.sh` (maintainer tree only; not shipped in the plugin).
 
 | Hook | Event | Matcher |
 |---|---|---|
