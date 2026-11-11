@@ -50,7 +50,13 @@ _validate_log() {
 import sys, json
 from importlib.machinery import SourceFileLoader
 emit_path, log_path, mode = sys.argv[1], sys.argv[2], (sys.argv[3] if len(sys.argv) > 3 else "")
-mod = SourceFileLoader("emit", emit_path).load_module()
+# exec_module, not load_module(): the latter is gone in Python 3.15.
+import importlib.util
+_loader = SourceFileLoader("emit", emit_path)
+_mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("emit", _loader))
+sys.modules["emit"] = _mod
+_loader.exec_module(_mod)
+mod = _mod
 schema = mod.load_schema()
 rows = [json.loads(ln) for ln in open(log_path, encoding="utf-8") if ln.strip()]
 bad = [r for r in rows if mod._validate(r, schema)]
@@ -84,7 +90,13 @@ _schema_branch_pin() {
     python3 - "$EMIT" "$TRACE_MD" <<'PY'
 import sys, re
 from importlib.machinery import SourceFileLoader
-mod = SourceFileLoader("emit", sys.argv[1]).load_module()
+# exec_module, not load_module(): the latter is gone in Python 3.15.
+import importlib.util
+_loader = SourceFileLoader("emit", sys.argv[1])
+_mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("emit", _loader))
+sys.modules["emit"] = _mod
+_loader.exec_module(_mod)
+mod = _mod
 want = len(re.findall(r"^### `[^`]+`\s*$", open(sys.argv[2], encoding="utf-8").read(), re.M))
 got = len(mod.load_schema().get("oneOf", []))
 print("OK %d branches" % want if got == want else "expected %d schema branches, got %d" % (want, got))
@@ -254,7 +266,13 @@ EOF
     res="$(python3 - "$EMIT" "$log" <<'PY'
 import sys, json
 from importlib.machinery import SourceFileLoader
-mod = SourceFileLoader("emit", sys.argv[1]).load_module()
+# exec_module, not load_module(): the latter is gone in Python 3.15.
+import importlib.util
+_loader = SourceFileLoader("emit", sys.argv[1])
+_mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("emit", _loader))
+sys.modules["emit"] = _mod
+_loader.exec_module(_mod)
+mod = _mod
 schema = mod.load_schema()
 rows = [json.loads(l) for l in open(sys.argv[2]) if l.strip()]
 bad = [r for r in rows if mod._validate(r, schema)]

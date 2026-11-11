@@ -94,7 +94,13 @@ _validate_log() {
     python3 - "$EMIT" "$LOG" <<'PY'
 import sys, json
 from importlib.machinery import SourceFileLoader
-mod = SourceFileLoader("emit", sys.argv[1]).load_module()
+# exec_module, not load_module(): the latter is gone in Python 3.15.
+import importlib.util
+_loader = SourceFileLoader("emit", sys.argv[1])
+_mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("emit", _loader))
+sys.modules["emit"] = _mod
+_loader.exec_module(_mod)
+mod = _mod
 schema = mod.load_schema()
 rows = [json.loads(ln) for ln in open(sys.argv[2], encoding="utf-8") if ln.strip()]
 bad = [r for r in rows if mod._validate(r, schema)]

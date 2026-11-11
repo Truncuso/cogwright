@@ -76,7 +76,13 @@ def _emitter_path() -> Path:
 def _load_emitter():
     """Import the extensionless emitter module (SourceFileLoader — a null loader
     is returned for a suffix-less file via spec_from_file_location)."""
-    return SourceFileLoader("goalforge_trace_emit", str(_emitter_path())).load_module()
+    # exec_module, not load_module(): the latter is gone in Python 3.15.
+    import importlib.util
+    _loader = SourceFileLoader("goalforge_trace_emit", str(_emitter_path()))
+    _mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("goalforge_trace_emit", _loader))
+    sys.modules["goalforge_trace_emit"] = _mod
+    _loader.exec_module(_mod)
+    return _mod
 
 
 # ---------------------------------------------------------------------------
