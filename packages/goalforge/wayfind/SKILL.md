@@ -56,9 +56,9 @@ Resolve `<PLANS_ROOT>` per the goalforge/references/schema.md
 (`${CLAUDE_PLUGIN_ROOT}/references/schema.md`) §PLANS_ROOT resolution: env `SDD_PLANS_DIR` → project git-root `plans/` →
 global `~/.claude/plans/`. Wayfind cites that rule, never its own convention.
 
-**Auto-phase (`/wayfind <effort-slug>`):** no `wayfind/` map present → **chart**;
-map present → **work** (work offers graduate when the frontier script reports
-`converged: true`). `/wayfind <effort-slug> chart` forces a re-chart / add-tickets pass.
+**Auto-phase (`/wayfind <effort-slug>`):** no `wayfind/` map present → **chart**; a map at
+`status: graduated` is terminal (no work mode, no second graduate): report its `graduated_to` and stop;
+any other map → **work** (work offers graduate when the frontier script reports `converged: true`). `/wayfind <effort-slug> chart` forces a re-chart / add-tickets pass.
 
 **Discovery (`/wayfind` with NO slug)** — the session-resume entry point: run
 `bash ${CLAUDE_SKILL_DIR}/scripts/wayfind-status.sh <PLANS_ROOT>` and present the
@@ -81,7 +81,7 @@ description (or a graduating idea).
 
 ```yaml
 type: wayfind-map
-status: charting | working      # convergence is COMPUTED by the frontier script, never stored
+status: charting | working | graduated  # convergence is COMPUTED by the frontier script, never stored
 destination: "<one-line pinned scope>"
 created: YYYY-MM-DD
 context_pointers: []            # paths/globs the blind-spot pass sweeps (set at chart, editable)
@@ -176,10 +176,10 @@ The blind-spot pass is **propose-only**: it never writes tickets itself. A
 triaged like any other candidate — learning is opt-in, never auto-created.
 
 **4. Close chart** — commit map + initial tickets, then write map status
-`charting → working`. That is the ONLY status write here. There is **no
+`charting → working`; graduate step 6 makes the only other status write. There is **no
 `converged` status** — convergence is computed by the frontier script, never
 stored. (The two status edges the wayfind skill ever writes: `charting → working`
-at chart completion; nothing else.)
+at chart completion; `working → graduated` at graduate step 6.)
 
 ---
 
@@ -338,7 +338,7 @@ which point the map is simply `working` again (no status unwind needed).
    (status: draft) — spec/decompose proceed through the normal SDD chain; carried
    task tickets are consumed by `goalforge-decompose` from the spec, not wayfind.
 
-6. **`wayfind/` stays in place** as provenance.
+6. **`wayfind/` stays in place** as provenance; once capture succeeds, write map `status: graduated`, `graduated_to`, `graduated_on` (brief §5).
 
 ---
 

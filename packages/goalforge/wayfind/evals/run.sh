@@ -467,6 +467,109 @@ name=validate-ticket-template-comments
 run_rc "$VALIDATE_TICKET" "$(copy_as ticket-template-comments.md ticket-03-template-comments.md)"
 [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on ticket-template-comments.md (as ticket-03-template-comments.md), got $RC"
 
+# The graduated-map and wayfind-status.sh cases below are Family 1 (script
+# behaviour), never touched by a SKILL.md mutation, so the mutate.sh child runs
+# skip them: each child re-runs this whole file, and the suite has a CI budget.
+if [ -z "${WAYFIND_MUTATION_CHILD:-}" ]; then
+
+# --- graduated map end state (validate-map-graduated) ------------------------
+# A graduated map carries graduated_to (PLANS_ROOT-relative, ending in
+# /overview.md) and graduated_on (YYYY-MM-DD). Each invalid variant must exit
+# EXACTLY 1 and NAME its field; its repaired_as control must flip to exit 0, so
+# the variant fails for its intended rule and nothing else.
+name=validate-map-graduated-valid
+run_rc "$VALIDATE_MAP" "$ARTIFACTS/map-valid-graduated.md"
+[ "$RC" -eq 0 ] && pass "$name" || fail "$name" "expected exit 0 on map-valid-graduated.md, got $RC"
+
+TO_LINE='graduated_to: demo-effort/overview.md'
+ON_LINE='graduated_on: 2026-07-20'
+for gv in "no-to|graduated_to|/^graduated_on:/i\\
+$TO_LINE" \
+          "to-absolute|graduated_to|s|^graduated_to: .*\$|$TO_LINE|" \
+          "to-suffix|graduated_to|s|^graduated_to: .*\$|$TO_LINE|" \
+          "no-on|graduated_on|/^graduated_to:/a\\
+$ON_LINE" \
+          "on-not-date|graduated_on|s|^graduated_on: .*\$|$ON_LINE|"; do
+  gv_case="${gv%%|*}"; gv_rest="${gv#*|}"
+  gv_field="${gv_rest%%|*}"; gv_fix="${gv_rest#*|}"
+  name="validate-map-graduated-$gv_case"
+  run_rc_err "$VALIDATE_MAP" "$ARTIFACTS/map-invalid-graduated-$gv_case.md"
+  if [ "$RC" -eq 1 ] && contains "$ERR" "invalid map ($gv_field)"; then pass "$name"
+  else fail "$name" "expected exit 1 naming 'invalid map ($gv_field)', got $RC: $ERR"; fi
+  name="control-map-graduated-$gv_case-repaired"
+  run_rc "$VALIDATE_MAP" "$(repaired_as "map-invalid-graduated-$gv_case.md" map.md -e "$gv_fix")"
+  [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "graduated $gv_case fixture still fails once $gv_field is repaired — it fails incidentally (got $RC)"
+done
+
+# --- wayfind-status.sh: discovery over parsed frontier JSON -----------------
+STATUS_SH="$SCRIPTS_DIR/wayfind-status.sh"
+STATUS_FIX="$EVALS_DIR/fixtures/status"
+  # json_check <json> <python-expr over d> -> 0 iff stdin parses and expr holds
+  json_check() { printf '%s' "$1" | python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if eval(sys.argv[1]) else 1)' "$2" 2>/dev/null; }
+  status_run() { set +e; OUT="$(PATH="${2:-$PATH}" bash "${3:-$STATUS_SH}" "$1" 2>/dev/null)"; RC=$?; set -e; }
+
+  # regression guard (passes on main): a graduated map is not a live effort.
+  name=wayfind-status-skips-graduated
+  GR_ROOT="$(mktemp -d "$COPY_ROOT/XXXXXX")"
+  mkdir -p "$GR_ROOT/demo-effort/wayfind"
+  cp "$ARTIFACTS/map-valid-graduated.md" "$GR_ROOT/demo-effort/wayfind/map.md"
+  cp "$STATUS_FIX/bracket-effort/wayfind/ticket-01-a]b.md" "$GR_ROOT/demo-effort/wayfind/"
+  status_run "$GR_ROOT"
+  if [ "$RC" -eq 0 ] && json_check "$OUT" 'd == {"efforts": []}'; then pass "$name"
+  else fail "$name" "graduated map listed as a live effort (rc $RC): $OUT"; fi
+
+  # a ticket slug holding `]` must survive the frontier parse as valid JSON.
+  name=wayfind-status-bracket-slug
+  status_run "$STATUS_FIX"
+  if [ "$RC" -eq 0 ] && json_check "$OUT" \
+       'd["efforts"][0]["slug"] == "bracket-effort" and d["efforts"][0]["frontier"] == ["ticket-01-a]b"]'; then
+    pass "$name"
+  else fail "$name" "expected valid JSON with frontier [\"ticket-01-a]b\"] (rc $RC): $OUT"; fi
+
+  # an unparseable frontier output degrades THAT effort to an error entry and the
+  # others still list. The stub output is not JSON yet holds `"converged": false`.
+  name=wayfind-status-unparseable-frontier
+  UF_DIR="$(mktemp -d "$COPY_ROOT/XXXXXX")"
+  cp "$STATUS_SH" "$UF_DIR/wayfind-status.sh"
+  { printf '#!/usr/bin/env bash\n'
+    printf 'case "$(basename "$1")" in\n'
+    printf '  aaa-stubbed) printf '"'"'%%s\\n'"'"' '"'"'{"frontier": [1,, "converged": false}'"'"' ;;\n'
+    printf '  *) exec bash %q "$@" ;;\n' "$FRONTIER"
+    printf 'esac\n'
+  } > "$UF_DIR/wayfind-frontier.sh"
+  UF_ROOT="$UF_DIR/root"; mkdir -p "$UF_ROOT/aaa-stubbed/wayfind"
+  cp -r "$STATUS_FIX/bracket-effort" "$UF_ROOT/"
+  cp "$STATUS_FIX/bracket-effort/wayfind/map.md" "$UF_ROOT/aaa-stubbed/wayfind/map.md"
+  status_run "$UF_ROOT" "" "$UF_DIR/wayfind-status.sh"
+  if [ "$RC" -eq 0 ] && json_check "$OUT" \
+       'd["efforts"][0]["slug"] == "aaa-stubbed" and "error" in d["efforts"][0] and "frontier" not in d["efforts"][0] and d["efforts"][1]["frontier"] == ["ticket-01-a]b"]'; then
+    pass "$name"
+  else fail "$name" "expected an error entry for aaa-stubbed and bracket-effort still listed (rc $RC): $OUT"; fi
+
+  # python3 absent: every active effort degrades to the named error entry, rc 0.
+  # Positive control: the SAME sandbox PATH plus python3 parses the frontier, so
+  # the sandbox is not failing on some other missing command.
+  SB="$(mktemp -d "$COPY_ROOT/XXXXXX")"
+  for c in bash basename dirname mktemp rm sort tr cat date readlink sed awk grep wc head; do
+    ln -sf "$(command -v "$c")" "$SB/$c"
+  done
+  name=wayfind-status-no-python3
+  status_run "$STATUS_FIX" "$SB"
+  if [ "$RC" -eq 0 ] && json_check "$OUT" \
+       'd == {"efforts": [{"slug": "bracket-effort", "status": "charting", "error": "python3 unavailable: frontier not parsed"}]}'; then
+    pass "$name"
+  else fail "$name" "expected rc 0 and the python3-unavailable error entry (rc $RC): $OUT"; fi
+  name=control-wayfind-status-sandbox-python3
+  ln -sf "$(command -v python3)" "$SB/python3"
+  status_run "$STATUS_FIX" "$SB"
+  if [ "$RC" -eq 0 ] && json_check "$OUT" 'd["efforts"][0]["frontier"] == ["ticket-01-a]b"]'; then pass "$name"
+  else fail "$name" "sandbox PATH + python3 should parse the frontier (rc $RC): $OUT"; fi
+
+  name=wayfind-status-self-test
+  set +e; bash "$STATUS_SH" --self-test >/dev/null 2>&1; RC=$?; set -e
+  [ "$RC" -eq 0 ] && pass "$name" || fail "$name" "wayfind-status.sh --self-test exited $RC"
+fi
+
 # --- validate-linkage.sh over the linkage fixture tree ----------------------
 # Cross-file invariants: every resolved ticket is pointed at from map
 # `## Decisions so far`; no pointer targets an open ticket; every `resolution:`
@@ -888,6 +991,46 @@ if contains "$gotchas_lc" 'that is exactly why graduate is gated'; then
 fi
 if [ -z "$missing" ]; then pass "$name"
 else fail "$name" "Gotchas slice: converged-vs-fog not rewritten to compose with the mid-loop moves:$missing"; fi
+
+# Graduated map end state. The map frontmatter enum (the `status:` line in the
+# chart-flow yaml block) lists `graduated`; the wayfind-status.sh stdout enum
+# keeps `working|charting` only, pinned as an exact literal (an absence check
+# has no fixed needle); the close-chart edge list names the graduate edge and
+# no longer calls `charting → working` the only status write.
+chart="$(section '## chart flow' '## work flow')"
+name=doc-map-enum-graduated
+if printf '%s\n' "$chart" | grep -E '^status: charting \| working' | grep -qF 'graduated'; then pass "$name"
+else fail "$name" "chart-flow map frontmatter enum does not list graduated"; fi
+
+name=doc-stdout-enum-no-graduated
+if grep -qF -- '"status": working|charting, "frontier"' "$SKILL_MD"; then pass "$name"
+else fail "$name" "Discovery stdout enum is not the exact literal '\"status\": working|charting, \"frontier\"'"; fi
+
+name=doc-no-only-status-write
+if skgrep 'ONLY status write'; then fail "$name" "SKILL.md still calls charting → working the ONLY status write"
+else pass "$name"; fi
+
+name=doc-close-chart-graduated-edge
+close_chart="$(section '**4. Close chart**' '## work flow')"
+if contains "$close_chart" '`working → graduated`'; then pass "$name"
+else fail "$name" "close-chart edge list does not name \`working → graduated\`"; fi
+
+# A graduated map is terminal: the auto-phase never re-enters work on it.
+name=doc-auto-phase-graduated-terminal
+if skgrep '`status: graduated` is terminal (no work mode, no second graduate): report its `graduated_to` and stop'; then pass "$name"
+else fail "$name" "auto-phase does not state that a graduated map is terminal (report graduated_to, stop)"; fi
+
+# Graduate step 6 names all three keys validate-map.sh requires on a graduated map.
+name=doc-graduate-step6-three-keys
+if printf '%s\n' "$grad" | grep -E '^6\. ' | grep -F 'status: graduated' | grep -F 'graduated_to' | grep -qF 'graduated_on'; then pass "$name"
+else fail "$name" "graduate step 6 does not name status: graduated, graduated_to and graduated_on"; fi
+
+name=doc-graduation-brief-status-write
+BRIEF="$SKILL_DIR/references/graduation-brief.md"
+if grep -qE '^## 5\. ' "$BRIEF" && grep -qF 'status: graduated' "$BRIEF" \
+   && grep -qF 'graduated_to: <effort-slug>/overview.md' "$BRIEF" \
+   && grep -qF 'ends in /overview.md' "$BRIEF" && grep -qF 'graduated_on:' "$BRIEF"; then pass "$name"
+else fail "$name" "graduation-brief.md lacks the §5 graduate step writing status, graduated_to and graduated_on"; fi
 
 # ============================================================================
 # Family 3 — trigger evals over the frontmatter description STRING only

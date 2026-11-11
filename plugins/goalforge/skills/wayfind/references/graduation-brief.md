@@ -127,3 +127,19 @@ graduation is in-place, so the self-link points back at the surviving `wayfind/`
   itself.
 - `wayfind/` is **not** deleted or moved; it stays as provenance, reachable via
   the `wayfind-<effort-slug>` self-link in `sources[]`.
+
+## 5. Graduate status write (SKILL.md graduate step 6)
+
+Only after `goalforge-capture` succeeds — the point where `graduated_to` is
+known — write three keys into the map frontmatter, then commit the map:
+
+```yaml
+status: graduated
+graduated_to: <effort-slug>/overview.md   # PLANS_ROOT-relative, ends in /overview.md
+graduated_on: YYYY-MM-DD
+```
+
+This is the second and last status edge the skill writes (`working → graduated`).
+An abort at any earlier gate writes nothing, so the map stays `working`.
+`validate-map.sh` accepts the graduated map and requires both fields;
+`wayfind-status.sh` no longer lists it as a live effort.

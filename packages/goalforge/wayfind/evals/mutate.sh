@@ -78,6 +78,14 @@ MUTATIONS=(
   'doc-learning-blind-spot-candidate|knowledge-gap signal'
   'doc-learning-dispatch-row|| learning | HITL |'
   'doc-learning-opt-in|**default none**'
+  # graduated end state: each marker is unique to the ONE line its check reads —
+  # the chart-flow yaml enum line, the close-chart edge-list line, and the
+  # Discovery stdout enum literal.
+  'doc-map-enum-graduated|status: charting | working | graduated'
+  'doc-close-chart-graduated-edge|at chart completion; `working → graduated`'
+  'doc-stdout-enum-no-graduated|"status": working|charting, "frontier"'
+  'doc-auto-phase-graduated-terminal|`status: graduated` is terminal'
+  'doc-graduate-step6-three-keys|6. **`wayfind/` stays in place**'
 )
 
 for m in "${MUTATIONS[@]}"; do
