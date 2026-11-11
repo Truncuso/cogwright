@@ -178,7 +178,8 @@ schema_version: 6                 # the C1-C7 slim shape (see "Version lineage"
 stage_updated: YYYY-MM-DD
 severity: HIGH|MEDIUM|LOW
 task_type: code|docs|research|ops
-register: spike|production        # required. `prototype` normalizes to `spike`
+register: spike|production        # absent = production below schema 6; ERROR at
+                                  # schema_version >= 6. `prototype` normalizes to `spike`
                                   # on READ only — never written. spike ⇒
                                   # declared (CLAUDE.md Principle 2, declared in
                                   # the WP — never post-hoc): the WP answers ONE
@@ -189,7 +190,8 @@ register: spike|production        # required. `prototype` normalizes to `spike`
                                   # changes execution semantics silently; treat a
                                   # register change as a goal change: re-run goalforge-harden.
                                   # Mechanically gated by goalforge-validate.sh check_register
-                                  # (ERROR under --strict): enum ∈ {spike,production}.
+                                  # (ERROR under --strict): enum ∈ {spike,production};
+                                  # absent is an ERROR at schema_version >= 6.
 depends_on: [wp-00-x]            # slug list; validator resolves them
 owned_files: [packages/a/, packages/b/file.py]  # the WP's file boundary; diff
                                   # paths at verify gate A must be a subset
@@ -374,7 +376,7 @@ goal:
   verification:                 # the Verification Surface (router input)
     strategy: deterministic | judge | human
     command: "<the exact reproducible command — command-only, no prose>"
-    check: "<schema-5 alias of command — WARN-only baseline compat>"
+    check: "<schema-5 string alias of command; under strategy: judge (any schema_version), the mapping {artifact, rubric, block_on}>"
     behaviors:                  # optional; the b1..bN oracle rows checklist
       - id: b1                  #   items reference in their `[b1,b2]` tags
         given: "<precondition>"
@@ -398,7 +400,7 @@ inherits_from: <feature-slug | null>    # cascade source; WP-only (a feature spe
 | `strategy` | `command` shape | How completion is decided |
 |---|---|---|
 | `deterministic` | string command, e.g. `"pytest tests/auth -q"` — command-only, no prose | exit 0 = met |
-| `judge` | string command that runs a judge pass, e.g. `"bash evals/judge.sh <wp>"` | judge verdict; met iff no finding at/above a `block_on` severity named in the command's own rubric |
+| `judge` | string command that runs a judge pass, e.g. `"bash evals/judge.sh <wp>"`, plus a `check` mapping `{artifact, rubric, block_on}`: the `artifact` judged, the `rubric` file, and the `block_on` severity list | judge verdict; met iff no finding at or above a `block_on` severity |
 | `human` | string gate prompt | NON-BLOCKING in an autonomous loop (pause → write findings → exit → resume next run) |
 
 Schema-6 WPs require `verification.command` (ERROR under `goalforge-validate.sh
@@ -453,6 +455,10 @@ When a `goal:` block is present:
 - `verification.command` is a non-empty, command-shaped string (no prose) —
   **ERROR** under `--strict` on a schema-6 WP; **WARN** on a schema-5 WP whose
   legacy `check:` alias is present instead.
+- `strategy: judge` needs a `check` mapping `{artifact, rubric, block_on}` next
+  to the string `command`: `artifact` and `rubric` non-empty, `block_on` a
+  non-empty list of severities — a command-only judge goal is a **fatal** goal
+  error.
 - `task_type`, when present, ∈ the `task_type` enum.
 - `inherits_from`, when set on a WP, resolves to an existing feature spec slug.
 

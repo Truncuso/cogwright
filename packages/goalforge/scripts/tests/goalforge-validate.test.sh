@@ -189,9 +189,10 @@ fi
 # known-bad: schema_version:6 WP with a goal: block but NO verification.command
 # -> ERROR, --strict exit non-zero. known-good: same WP WITH verification.command
 # -> --strict exit 0.
-mkschema6wp() { # $1=plans-root $2=feature $3=wp-slug $4=command-line (or "") $5=check-line (default: legacy check: "true"; "" = none)
+mkschema6wp() { # $1=plans-root $2=feature $3=wp-slug $4=command-line (or "") $5=check-line (default: legacy check: "true"; "" = none) $6=register-line (default: register: production; "" = none) $7=schema_version (default 6) $8=strategy (default deterministic)
     mkdir -p "$1/$2/$3"
     local check_line="${5-    check: \"true\"}"
+    local register_line="${6-register: production}"
     cat > "$1/$2/$3/overview.md" <<EOF
 ---
 name: $3
@@ -202,12 +203,13 @@ severity: LOW
 parallel: false
 depends_on: []
 plan: $2
-schema_version: 6
+schema_version: ${7:-6}
+$register_line
 task_type: code
 goal:
   outcome: "the thing is done"
   verification:
-    strategy: deterministic
+    strategy: ${8:-deterministic}
 $check_line
 $4
   constraints: []
@@ -246,6 +248,119 @@ assert_clean "schema6-with-command: known-good -- validates clean, --strict exit
 GOOD6NC="$ROOT/schema6-command-no-check"; mkfeature "$GOOD6NC" feat
 mkschema6wp "$GOOD6NC" feat wp-01-a "    command: \"true\"" ""
 assert_clean "schema6-command-no-check: known-good -- command without check: alias validates clean" "$GOOD6NC"
+
+# ── L0-2 (b4): register is required at schema_version >= 6 ──────────────────
+# The two fixtures differ only in schema_version; both omit register and keep
+# the helper's default legacy `check:` string.
+REG6="$ROOT/schema6-no-register"; mkfeature "$REG6" feat
+mkschema6wp "$REG6" feat wp-01-a "    command: \"true\"" "    check: \"true\"" ""
+OUT="$(bash "$VALIDATE" --strict --show "$REG6" 2>&1)"; RC=$?
+if [ "$RC" -ne 0 ] && echo "$OUT" | grep -qF '`register:` is required at schema_version >= 6 (spike|production)'; then
+    ok "schema6-no-register: ERROR naming register + --strict exit non-zero"
+else
+    bad "schema6-no-register: ERROR naming register + --strict exit non-zero (rc=$RC)"
+    echo "${OUT:-<no output>}" | sed 's/^/        /'
+fi
+
+REG5="$ROOT/schema5-no-register"; mkfeature "$REG5" feat
+mkschema6wp "$REG5" feat wp-01-a "    command: \"true\"" "    check: \"true\"" "" 5
+assert_clean "schema5-no-register: absent register = production below schema 6, --strict exit 0" "$REG5"
+
+# A present schema_version that is not a clean integer counts as current: a
+# missing register is the same ERROR (matches pick-agent _register_required).
+for SVBAD in 5.9 true v6 "[6]"; do
+    RB="$ROOT/schemabad-no-register-$(echo "$SVBAD" | tr -c 'a-z0-9' '_')"; mkfeature "$RB" feat
+    mkschema6wp "$RB" feat wp-01-a "    command: \"true\"" "    check: \"true\"" "" "$SVBAD"
+    OUT="$(bash "$VALIDATE" --strict --show "$RB" 2>&1)"; RC=$?
+    if [ "$RC" -ne 0 ] && echo "$OUT" | grep -qF '`register:` is required at schema_version >= 6 (spike|production)'; then
+        ok "schema_version ${SVBAD} (not a clean integer), no register: register ERROR + --strict exit non-zero"
+    else
+        bad "schema_version ${SVBAD} (not a clean integer), no register: register ERROR + --strict exit non-zero (rc=$RC)"
+        echo "${OUT:-<no output>}" | sed 's/^/        /'
+    fi
+done
+
+# A YAML-null schema_version stays legacy: absent register = production.
+RNULL="$ROOT/schemanull-no-register"; mkfeature "$RNULL" feat
+mkschema6wp "$RNULL" feat wp-01-a "    command: \"true\"" "    check: \"true\"" "" "null"
+assert_clean "schema_version null, no register: legacy, --strict exit 0" "$RNULL"
+
+# ── L0-12 (b16): judge goal shape = command + check {artifact, rubric, block_on}
+JUDGE_CHECK='    check:
+      artifact: "findings.md"
+      rubric: "rubric.md"
+      block_on: [HIGH]'
+
+J1="$ROOT/schema6-judge-command-and-check"; mkfeature "$J1" feat
+mkschema6wp "$J1" feat wp-01-a "    command: \"bash evals/judge.sh\"" "$JUDGE_CHECK" "register: production" 6 judge
+assert_clean "schema6-judge-command-and-check: validates clean" "$J1"
+
+J2="$ROOT/schema6-judge-command-only"; mkfeature "$J2" feat
+mkschema6wp "$J2" feat wp-01-a "    command: \"bash evals/judge.sh\"" "" "register: production" 6 judge
+OUT="$(bash "$VALIDATE" --strict --show "$J2" 2>&1)"; RC=$?
+if [ "$RC" -ne 0 ] && echo "$OUT" | grep -qF '`judge` goal `check` must be a mapping'; then
+    ok "schema6-judge-command-only: ERROR naming the judge check mapping + --strict exit non-zero"
+else
+    bad "schema6-judge-command-only: ERROR naming the judge check mapping + --strict exit non-zero (rc=$RC)"
+    echo "${OUT:-<no output>}" | sed 's/^/        /'
+fi
+
+J3="$ROOT/schema5-judge-check-no-command"; mkfeature "$J3" feat
+mkschema6wp "$J3" feat wp-01-a "" "$JUDGE_CHECK" "" 5 judge
+assert_clean "schema5-judge-check-no-command: no new error at schema 5" "$J3"
+
+# Judge mapping integrity: each malformed field raises its existing error.
+judge_bad() { # $1=label $2=check-lines $3=expected error literal
+    local d="$ROOT/judge-bad-$1"; mkfeature "$d" feat
+    mkschema6wp "$d" feat wp-01-a "    command: \"bash evals/judge.sh\"" "$2" "register: production" 6 judge
+    local out rc
+    out="$(bash "$VALIDATE" --strict --show "$d" 2>&1)"; rc=$?
+    if [ "$rc" -ne 0 ] && echo "$out" | grep -qF -- "$3"; then
+        ok "schema6-judge-$1: ERROR + --strict exit non-zero"
+    else
+        bad "schema6-judge-$1: ERROR + --strict exit non-zero (rc=$rc)"
+        echo "${out:-<no output>}" | sed 's/^/        /'
+    fi
+}
+judge_bad block_on-string '    check:
+      artifact: "findings.md"
+      rubric: "rubric.md"
+      block_on: HIGH' '`judge` goal `check.block_on` must be a non-empty list'
+judge_bad block_on-empty '    check:
+      artifact: "findings.md"
+      rubric: "rubric.md"
+      block_on: []' '`judge` goal `check.block_on` must be a non-empty list'
+judge_bad rubric-empty '    check:
+      artifact: "findings.md"
+      rubric: ""
+      block_on: [HIGH]' '`judge` goal `check.rubric` is empty'
+
+# ── L0-12 (b16): schema.md and the WP template document the judge shape ─────
+REFS="$SD/../../references"
+SCHEMA_MD="$REFS/schema.md"
+TEMPLATE_MD="$REFS/templates/wp-overview.md"
+doc_absent() { # $1=label $2=fixed-string $3=file
+    if [ -f "$3" ] && ! grep -qF -- "$2" "$3"; then ok "$1"; else bad "$1"; fi
+}
+doc_present_re() { # $1=label $2=ERE $3=file
+    if grep -qE -- "$2" "$3" 2>/dev/null; then ok "$1"; else bad "$1"; fi
+}
+doc_absent "schema.md judge row no longer says the rubric is named in the command" \
+    "named in the command's own rubric" "$SCHEMA_MD"
+doc_present_re "schema.md judge row names check {artifact, rubric, block_on} and the block_on rule" \
+    '^\| `judge` \|.*`check`.*`artifact`.*`rubric`.*`block_on`.*at or above a `block_on` severity' "$SCHEMA_MD"
+doc_absent "schema.md goal-block check comment is no longer only a schema-5 alias" \
+    "<schema-5 alias of command — WARN-only baseline compat>" "$SCHEMA_MD"
+doc_present_re "schema.md goal-block check comment names the judge mapping" \
+    '^ +check: .*\{artifact, rubric, block_on\}' "$SCHEMA_MD"
+doc_present_re "schema.md integrity list carries the judge-mapping bullet" \
+    '^- `strategy: judge` needs a `check` mapping `\{artifact, rubric, block_on\}`' "$SCHEMA_MD"
+doc_present_re "schema.md register field comment: absent = production below schema 6" \
+    '^register: spike\|production +# absent = production below schema 6; ERROR at$' "$SCHEMA_MD"
+doc_present_re "schema.md register gate note: absent is an ERROR at schema_version >= 6" \
+    '^ +# absent is an ERROR at schema_version >= 6\.$' "$SCHEMA_MD"
+doc_present_re "template carries a judge comment line with {artifact, rubric, block_on}" \
+    '^ *#.*judge.*\{artifact, rubric, block_on\}' "$TEMPLATE_MD"
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
