@@ -192,7 +192,7 @@ ROLE_AGENT: dict[str, str] = {
     "discovery":          "goalforge-researcher",
     "feature-audit":      "goalforge-reviewer",
     "harden-review":      "goalforge-reviewer",
-    "wp-verify":          "goalforge-evaluation-expert",
+    "wp-verify":          "goalforge-reviewer",
     "simplify":           "goalforge-reviewer",
     "judge":              "goalforge-evaluation-expert",
     "panel":              "goalforge-reviewer",
@@ -747,6 +747,21 @@ def _native_row_incoherence(
     return None
 
 
+def _register_required(frontmatter: dict) -> bool:
+    """True when an absent ``register:`` must be refused: schema_version >= 6.
+
+    A schema-5 or unversioned WP predates the required C2 ``register`` and
+    resolves as ``production``. A schema_version that is not an integer is
+    treated as current (refuse), never as legacy."""
+    version = frontmatter.get("schema_version")
+    if version is None:
+        return False
+    try:
+        return int(str(version).strip()) >= 6
+    except ValueError:
+        return True
+
+
 def resolve_stage(
     role: str,
     frontmatter: dict,
@@ -788,6 +803,8 @@ def resolve_stage(
         # schema-5 spelling normalizes to `spike` on READ ONLY, mirroring
         # goalforge-validate.sh's normalize_register().
         register = "spike"
+    if register is None and not _register_required(frontmatter):
+        register = "production"
     severity = frontmatter.get("severity")
     blast_hit = blast_radius(touched_files, file_threshold=8)
 
@@ -1481,6 +1498,13 @@ def _test_tiers() -> int:
         if roster and agent not in roster:
             failures.append(f"role {role!r} names agent {agent!r}, absent from agents/")
 
+    # Gate B (wp-verify) and gate C (judge) must be different personas.
+    if ROLE_AGENT["wp-verify"] == ROLE_AGENT["judge"]:
+        failures.append(
+            f"gate B/gate C persona distinct: wp-verify and judge both "
+            f"resolve to {ROLE_AGENT['judge']!r}"
+        )
+
     # ── retired input must be gone ───────────────────────────────────────
     if (PKG_ROOT / "references" / "specialist-map.yaml").exists():
         failures.append("references/specialist-map.yaml still on disk (retired by wp-03)")
@@ -1646,13 +1670,15 @@ def main(argv: list[str] | None = None) -> int:
         frontmatter.get("_touched_files") or frontmatter.get("owned_files") or []
     )
 
-    # A `by_register` stage row needs the WP's own C2 `register:`; every other
-    # row carries an explicit band and does not.
+    # A `by_register` stage row needs the WP's own C2 `register:` at
+    # schema_version >= 6 or a non-integer value (schema-5 and unversioned WPs
+    # resolve as production); every other row carries an explicit band.
     try:
         row = stage_row(dispatch, _resolve_role_alias(args.role))
     except EscalationRequired as exc:
         return _escalate(exc)
-    if row.get("model") == "by_register" and frontmatter.get("register") is None:
+    if (row.get("model") == "by_register" and frontmatter.get("register") is None
+            and _register_required(frontmatter)):
         print(
             f"ERROR: {task_path} has no 'register:' (required, C2 WP frontmatter)",
             file=sys.stderr,

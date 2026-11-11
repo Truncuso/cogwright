@@ -294,6 +294,104 @@ else
     bad "b4(viii) setup: $NOGIT_REP sits inside a git work tree"
 fi
 
+# ── legacy register default (b20) ────────────────────────────────────────
+# A schema-5 or unversioned WP without `register:` resolves as production:
+# the expected band is read from schema6-no-complexity.md (register:
+# production) in this run, never hardcoded. Schema 6 without a register
+# still exits 2 for implement and resolves for judge (regression guards).
+band() { python3 "$SCRIPT" --task "$1" --role "$2" 2>"$T/err" \
+         | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["model"], d["effort"])'; }
+WANT_PROD="$(band "$WP" implement)"
+for fx in schema5-no-register unversioned-no-register; do
+    GOT="$(band "$FIXTURES/$fx.md" implement)"
+    if [[ -n "$WANT_PROD" && "$GOT" == "$WANT_PROD" ]]; then
+        ok "b20 $fx: implement resolves as production ($GOT)"
+    else
+        bad "b20 $fx: implement resolves as production (got='$GOT', want='$WANT_PROD', err=$(cat "$T/err"))"
+    fi
+done
+# Above 6 or not an integer (string, bool, float, empty string) still refuses.
+for fx in schema-7 schema-six schema-true schema-5-9 schema-empty; do
+    OUT="$(python3 "$SCRIPT" --task "$FIXTURES/$fx-no-register.md" --role implement 2>&1)"
+    RC=$?
+    if [[ "$RC" -eq 2 ]] && grep -q "has no 'register:'" <<<"$OUT"; then
+        ok "b20 $fx-no-register: implement exits 2"
+    else
+        bad "b20 $fx-no-register: implement exits 2 (rc=$RC, out=$OUT)"
+    fi
+done
+python3 "$SCRIPT" --task "$FIXTURES/no-register.md" --role judge >"$T/b20-judge.out" 2>&1
+RC=$?
+if [[ "$RC" -eq 0 ]]; then
+    ok "b20 schema-6 no register: judge resolves without a register"
+else
+    bad "b20 schema-6 no register: judge resolves (rc=$RC, out=$(cat "$T/b20-judge.out"))"
+fi
+# In-process: the compiler path calls resolve_stage directly, never main().
+if python3 - "$SCRIPT" "$FIXTURES" >"$T/b20-inproc.out" 2>&1 <<'PY'
+import importlib.util, sys
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("pick_agent", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+fx = Path(sys.argv[2])
+fm = lambda n: m._parse_frontmatter((fx / n).read_text(encoding="utf-8"))
+d, e = m.load_dispatch(), m.load_expertise_map()
+def band(name):
+    r = m.resolve_stage("implement", fm(name), [], d, e)
+    return r["model"], r["effort"]
+want = band("schema6-no-complexity.md")
+got = band("schema5-no-register.md")
+assert got == want, f"schema-5 no register: got {got}, want {want}"
+try:
+    band("no-register.md")
+except m.EscalationRequired:
+    pass
+else:
+    raise AssertionError("schema-6 no register: resolve_stage did not raise EscalationRequired")
+PY
+then
+    ok "b20 in-process resolve_stage: schema-5 = production band, schema-6 raises EscalationRequired"
+else
+    bad "b20 in-process resolve_stage: $(tail -3 "$T/b20-inproc.out")"
+fi
+
+# ── gate B / gate C personas (b14) ───────────────────────────────────────
+for pair in "wp-verify goalforge-reviewer" "judge goalforge-evaluation-expert"; do
+    set -- $pair
+    GOT="$(python3 "$SCRIPT" --task "$WP" --role "$1" 2>"$T/err" | jget agent 2>/dev/null)"
+    if [[ "$GOT" == "$2" ]]; then
+        ok "b14 --role $1 resolves to $2"
+    else
+        bad "b14 --role $1 resolves to $2 (got='$GOT', err=$(cat "$T/err"))"
+    fi
+done
+# known-bad: a replica whose wp-verify persona equals judge's must fail
+# --test-tiers with the pinned label.
+PERSONA_REP="$T/persona-replica"
+mkdir -p "$PERSONA_REP"
+cp -r "$PKG/." "$PERSONA_REP/"
+find "$PERSONA_REP" -name __pycache__ -type d -prune -exec rm -rf {} +
+if python3 - "$PERSONA_REP/scripts/goalforge-pick-agent.py" <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+anchor = '    "wp-verify":          "goalforge-reviewer",\n'
+assert s.count(anchor) == 1, f"anchor count {s.count(anchor)} != 1"
+open(p, "w", encoding="utf-8").write(
+    s.replace(anchor, '    "wp-verify":          "goalforge-evaluation-expert",\n'))
+PY
+then
+    python3 "$PERSONA_REP/scripts/goalforge-pick-agent.py" --test-tiers >"$T/b14-rep.out" 2>&1
+    RC=$?
+    if [[ "$RC" -eq 1 ]] && grep -q "FAIL: gate B/gate C persona distinct" "$T/b14-rep.out"; then
+        ok "known-bad red: b14 equal gate B/gate C personas (why: gate B/gate C persona distinct)"
+    else
+        bad "known-bad b14 (rc=$RC): $(tail -5 "$T/b14-rep.out")"
+    fi
+else
+    bad "known-bad b14: wp-verify anchor substitution did not apply"
+fi
+
 echo
 echo "goalforge-pick-agent.test.sh: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]
