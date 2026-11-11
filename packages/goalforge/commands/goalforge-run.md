@@ -30,6 +30,10 @@ skill" — do not retry that call. This command is its only entry.
    It prints one `RESOLVED`/`UNRESOLVED` line per chain step and exits non-zero
    if any step is unresolved. `UNRESOLVED` contains the substring `RESOLVED`, so
    guard any count with `! grep -q UNRESOLVED` — the exit code is authoritative.
+   Exit codes: 0 all steps resolved; 1 an unresolved step, or chain.yaml
+   missing, unparseable or empty, or the plans-root helper missing; 2 usage;
+   3 feature directory not found under any candidate plans root. The router
+   checks for a feature directory only, so a WP slug now exits 3.
 4. Otherwise run the chain from the step matching the target's current
    `status:`, honouring each step's `precondition:` and `human_gated:` flag.
 
