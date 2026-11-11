@@ -522,11 +522,14 @@ lint_version() {
 # doctor dep check): an unparseable frontmatter must FAIL, and only a real YAML
 # parse can tell that apart from a marker that is merely absent.
 #
-# Scan unit is the child SKILL.md, so SCANNED is the child count. The expected
-# count is PINNED: a child silently dropped by the generator, or added at
-# source without review, is exactly what this section exists to catch. Bump it
-# deliberately in the change that adds or removes a child — together with the
-# skill count quoted in the goalforge catalog row, README.md:90.
+# Scan unit is the child SKILL.md, so SCANNED is the child count. The child
+# NAME SET is PINNED: a child silently dropped or renamed by the generator, or
+# added at source without review, is exactly what this section exists to catch.
+# The set is compared with plugins/goalforge/skills/*/ and with the package
+# child dirs packages/goalforge/*/SKILL.md, so adding a child needs both edits
+# by design — together with the skill count quoted in the goalforge catalog
+# row. Every one of these children is plugin-discoverable, so the package
+# Gotcha must carry PRIVACY_GOTCHA_PHRASE.
 #
 # The marker literal itself lives INSIDE the python heredoc, not in a shell
 # variable passed through argv — see the note there.
@@ -541,7 +544,8 @@ lint_version() {
 # today. Tracked residual (wp-09 / feature-2). Note the marker alone consumes
 # 61 characters of every child's budget.
 PRIVACY_MAX_DESC=1024
-PRIVACY_EXPECTED_CHILDREN=13
+PRIVACY_EXPECTED_CHILDREN="archive capture decompose execute harden onboard plan-index prototype redecompose run spec verify wayfind"
+PRIVACY_GOTCHA_PHRASE="plugin-discoverable as goalforge:<child>"
 
 lint_privacy_marker() {
   VIOLATIONS=0
@@ -551,7 +555,7 @@ lint_privacy_marker() {
   fi
 
   local n rc=0
-  n="$(python3 - "$PRIVACY_MAX_DESC" "$PRIVACY_EXPECTED_CHILDREN" <<'PY'
+  n="$(python3 - "$PRIVACY_MAX_DESC" "$PRIVACY_EXPECTED_CHILDREN" "$PRIVACY_GOTCHA_PHRASE" <<'PY'
 import glob, sys, yaml
 
 # MARKER is a PYTHON LITERAL, mirroring MARKER in scripts/goalforge-generate.sh
@@ -565,8 +569,9 @@ MARKER = "goalforge-internal — use entry commands; do not auto-trigger"
 # in ordinary prose; this phrase does not.
 TAIL = "do not auto-trigger"
 
-max_desc, expected = int(sys.argv[1]), int(sys.argv[2])
+max_desc, expected, phrase = int(sys.argv[1]), set(sys.argv[2].split()), sys.argv[3]
 parent = "plugins/goalforge/SKILL.md"
+package_parent = "packages/goalforge/SKILL.md"
 children = sorted(glob.glob("plugins/goalforge/skills/*/SKILL.md"))
 bad = 0
 
@@ -603,9 +608,27 @@ def description(path):
 
 print(len(children))  # SCANNED, on stdout; violations go to stderr
 
-if len(children) != expected:
-    print("  plugins/goalforge/skills/: %d child SKILL.md, expected %d"
-          % (len(children), expected), file=sys.stderr)
+trees = {
+    "plugins/goalforge/skills/": {p.split("/")[-2] for p in children},
+    "packages/goalforge/": {p.split("/")[-2]
+                            for p in glob.glob("packages/goalforge/*/SKILL.md")},
+}
+for where, found in trees.items():
+    if found != expected:
+        print("  %s: child set differs from the pinned name set; unexpected: %s;"
+              " missing: %s" % (where, " ".join(sorted(found - expected)) or "-",
+                                " ".join(sorted(expected - found)) or "-"),
+              file=sys.stderr)
+        bad += 1
+
+try:
+    gotcha = open(package_parent, encoding="utf-8").read()
+except OSError as exc:
+    gotcha = ""
+    print("  %s: unreadable (%s)" % (package_parent, exc), file=sys.stderr)
+if phrase not in gotcha:
+    print("  %s: Gotcha lacks the pinned phrase %r" % (package_parent, phrase),
+          file=sys.stderr)
     bad += 1
 
 for path in children:

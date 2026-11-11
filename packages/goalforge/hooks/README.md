@@ -75,4 +75,4 @@ unless the edited file is under a resolved `PLANS_ROOT`.
 - `goalforge-pre-commit.sh` — git hook, installed into `.git/hooks/`, not a
   Claude Code hook.
 
-Regression tests for each hook live in `tests/`.
+Regression tests for each hook live in `tests/` (maintainer tree only; not shipped in the plugin).

@@ -104,9 +104,9 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh execute <wp-id> --j
    check. On failure re-dispatch with the full failure output as context, bounded
    by step 5 — never silent-pass a red eval.
 2. Tick the completed `## Checklist` boxes in `<wp>/overview.md`.
-3. Run `bash scripts/goalforge-generate.sh` from the repo root to regenerate the
-   `plugins/goalforge/` mirror — generated, outside `owned_files:`, exempt gate A.
-4. Stage only paths inside `owned_files:` and make **exactly one** conventional
+3. Only where `scripts/goalforge-generate.sh` exists (cogwright maintainers), run it
+   from the repo root to regenerate the `plugins/goalforge/` mirror (exempt gate A).
+4. Stage `owned_files:`, plus that mirror when 6.3 ran; make **exactly one** conventional
    commit (`<type>(<scope>): <subject>`, <=72 chars, body for `feat`/`fix`, no AI
    co-author trailer); emit `commit.linked` with its sha.
 5. Advance the status and hand off to `goalforge-verify`:

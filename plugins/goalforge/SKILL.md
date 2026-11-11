@@ -52,7 +52,7 @@ and a checklist; there are no task files.
 | File templates | `${CLAUDE_PLUGIN_ROOT}/references/templates/` |
 | Trace event schema | `${CLAUDE_PLUGIN_ROOT}/references/trace-events.md` |
 | Gate, hash, transition scripts | `${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-*.sh` |
-| Gate sabotage pairs + harness | `hooks/tests/`, `scripts/tests/`, `evals/run.sh` |
+| Gate sabotage pairs + harness | `hooks/tests/`, `scripts/tests/`, `evals/run.sh` (maintainer tree only; not shipped in the plugin) |
 
 ## Entry points
 
@@ -75,9 +75,12 @@ name map: `references/alias-map.md`.
   name.** It is a PRIVATE nested child with no discovery entry; invoking
   `goalforge-run` by name answers "Unknown skill". `commands/goalforge-run.md`
   loads `run/SKILL.md` by path.
-- **No nested child resolves via the Skill tool.** Discovery is one level deep:
-  only `goalforge`, `prototype`, and `wayfind` are discoverable. Every other
-  name in the Children table is reached by reading `<child>/SKILL.md` by path.
+- **Package tree and plugin tree discover children differently.** In the
+  package tree discovery is one level deep: only `goalforge`, `prototype`, and
+  `wayfind` are discoverable, and every other child is read by path. The plugin
+  emits all 13 children under `skills/`, so each child is
+  plugin-discoverable as goalforge:<child>, guarded by the do-not-auto-trigger
+  description marker.
 - **A gate that does not emit `gate.result` is not a gate.** Every PreToolUse
   guard and gate script emits through `scripts/goalforge-trace-emit` and ships
   a sabotage pair (known-bad exit 2, known-good exit 0) under `evals/run.sh`.

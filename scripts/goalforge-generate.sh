@@ -52,7 +52,9 @@
 #         prefix "goalforge-internal — use entry commands; do not auto-trigger"
 #         (60 chars), injected YAML-aware per scalar form (quoted -> inside the
 #         quotes; block -> first content line; plain -> re-emitted quoted).
-#         Parent SKILL.md untouched; packages/ sources untouched.
+#         Parent SKILL.md untouched; packages/ sources untouched. All 13
+#         children land under skills/, so each child is
+#         plugin-discoverable as goalforge:<child>; the marker is the guard.
 #
 # .vendored-allowlist.txt is the last hand-authored, non-package plugin file:
 # it is PRESERVED, never regenerated and never deleted by this script.
