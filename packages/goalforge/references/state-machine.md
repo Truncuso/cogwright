@@ -35,19 +35,35 @@ is illegal.
   and the WP monotonicity check are the guardrails, not a hand-curated
   reverse subset.
 - **Human-gated**: `hardened→ready` (WP gate) carries `human_gated: yes`. The
-  gate is enforced by the calling skill (it must obtain human approval before
-  invoking the mechanism); the mechanism only records it. `human_gated` does
-  not change edge legality or `reason_required`. A WP whose frontmatter sets
-  `human_required:` is never auto-advanced regardless of signal (C7).
-- **Signal-scoped auto-advance exception (`hardened→ready` only).** The calling
-  skill may advance `hardened→ready` WITHOUT human approval **iff** all hold:
-  `severity ≤ MEDIUM`, `human_required:` is unset, and — where a `task_type`
-  is declared — `task_type ≠ migration`. The transition MUST be written with
-  `--mode auto` and a `--reason` naming the rule + signal evidence — the
-  ledger row is the audit record. HIGH/CRITICAL severity, a set
-  `human_required:`, or a migration `task_type` keeps the human gate.
+  calling skill obtains the human approval; at `schema_version >= 6`
+  `goalforge-transition.sh` enforces the gate: it refuses `hardened→ready`, and
+  the table-ungated `spec→ready`, unless `--mode human` is passed or it finds
+  the auto-advance predicate below true (exit 2, stderr `human gate refused:`).
+  `--override` does not lift the refusal. Schema 5 and unversioned WPs are
+  exempt. `human_gated` does not change edge legality or `reason_required`. A
+  WP whose frontmatter sets `human_required:` is never auto-advanced regardless
+  of signal (C7).
+- **Signal-scoped auto-advance exception (WP `hardened→ready` and `spec→ready`).**
+  The calling skill may advance a WP to `ready` WITHOUT human approval **iff**
+  all hold: `severity` is `LOW` or `MEDIUM` (absent or any other value keeps
+  the gate), `human_required:` is unset (absent, empty or `null`), and — where
+  a `task_type` is declared — `task_type ≠ migration`. The transition MUST be
+  written with `--mode auto` and a `--reason` naming the rule + signal
+  evidence — the ledger row is the audit record. At `schema_version >= 6` the
+  script re-checks this predicate from the WP frontmatter on `hardened→ready
+  --mode auto` and on `spec→ready --mode auto`, and refuses a failed one with
+  exit 2, naming the failing clause (`severity`, `human_required` or
+  `task_type`). HIGH/CRITICAL severity, a set `human_required:`, or a
+  migration `task_type` keeps the human gate.
   *(Deliberate guardrail change — ADR: adaptive-chain-routing; narrowed at
   wp-01 T6 with the complexity-route removal.)*
+- **Ready-row gate.** At `schema_version >= 6` a WP move to `executing`,
+  `implemented` or `verified`, from any status, needs a `-> ready` ledger row
+  later in the ledger than its latest move into `spec` or `hardened`;
+  `goalforge-transition.sh` refuses the move otherwise (exit 2, stderr
+  `<to> refused:`), and `--override` does not lift it. The
+  `spec|hardened → executing|implemented|verified` table rows stay legal; this
+  gate, not the table, keeps a WP from skipping the human gate.
 - **Evidence-gated revert exception (`ready→hardened` only).** This one reverse
   edge — re-opening a `ready` WP back to `hardened` to re-develop its goals — is
   NOT a bare FREE-REVERSE move. The edge row stays legal
@@ -155,8 +171,11 @@ Feature states are linearly ordered:
 - **Human-gated**: `spec -> ready` is the single spec-approval gate (the
   ratification of a first spec and of a revision alike) and the only feature
   edge that carries `human_gated: yes`. `draft -> spec` is the ungated
-  proposal edge. The gate is enforced by the calling skill; the mechanism
-  only records it.
+  proposal edge. At `schema_version >= 6` `goalforge-transition.sh` enforces
+  the gate: `spec -> ready` passes only with `--mode human` (exit 2, stderr
+  `human gate refused:` otherwise). A feature has no auto exception, and
+  `--override` does not lift the refusal. Schema 5 and unversioned features are
+  exempt.
 - **Respec edges**: `ready -> spec`, `active -> spec`, `executing -> spec` and
   `completed -> spec` are the reverse rows a spec-invalidating learning takes
   (`--reason "<learning>"`); a feature at `spec` means "a proposal awaits

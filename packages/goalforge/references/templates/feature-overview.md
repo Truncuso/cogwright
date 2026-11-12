@@ -2,8 +2,8 @@
 name: <feature>
 title: "<human title>"
 status: draft
-schema_version: 5          # opt-in marker (schema.md "Version lineage"): makes
-                            # a WP's goal: mandatory at ready/executing/verified
+schema_version: 6          # schema.md "Version lineage"; at 6 transition.sh
+                            # admits spec -> ready only with --mode human
 created: YYYY-MM-DD
 feature: <feature>
 # execution_plan:                  # optional; absent = standard route, all-inline

@@ -243,15 +243,16 @@ ceremony is skipped. After Step 5:
    ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-goal-hash.sh --record <wp>
    ```
-4. **Advance `spec → ready`** (a legal non-human-gated edge; the signal-scoped
-   conditions are the policy guard on taking it autonomously):
+4. **Advance `spec → ready`** (at `schema_version >= 6` the script re-checks the
+   auto-advance predicate in references/state-machine.md §Policy and refuses a
+   failed one with exit 2, leaving the WP at `spec`):
    ```bash
    bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp> ready \
      --mode auto --reason "fast-path: route=fast, OQ=0, goal validates"
    ```
-5. **Escalate on any trip.** A failed gate, or HIGH/CRITICAL severity means fast
-   was wrong: leave the WP at `spec` and run full `goalforge-harden` (review +
-   human gate). Never force a tripped WP through.
+5. **Escalate on any trip.** A failed gate, an exit 2 from the advance, or
+   HIGH/CRITICAL severity means fast was wrong: leave the WP at `spec` and run
+   full `goalforge-harden` (review + human gate). Never force a tripped WP through.
 6. **Execute + verify unchanged:** `goalforge-execute` then `goalforge-verify` — every path
    ends at the single semantic gate; fast never skips verification.
 

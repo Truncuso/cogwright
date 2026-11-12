@@ -100,13 +100,13 @@ One changelog row per goal facet changed; an invalid goal block never transition
 
 A human decides iff any of: `human_required` is set (a **veto** over the
 auto-advance predicate — an agent may set it, never clear it, and no other
-signal overrides it); `register: production` and `severity: HIGH`; the stop rule
-parked; or an irreversible action is in scope. RENDER that gate through
-`goalforge-stage-report.sh` — resolved questions, accepted risks and the goal
-block are its `changed[]`/`issues[]`, and the template (C7) is the only human
-format; advance only on an explicit yes. Otherwise advance
-autonomously with signal evidence in the ledger. One door, never both
-(`--mode human` here, `--mode auto` with an `auto: OQ=0, G1-G4 pass` reason):
+signal overrides it); the auto-advance predicate in references/state-machine.md
+§Policy fails (the script re-checks it: exit 2); the stop rule parked; or an
+irreversible action is in scope. RENDER that gate via `goalforge-stage-report.sh`
+(C7 template, the only human format; resolved questions, accepted risks and
+goal block in `changed[]`/`issues[]`) and advance only on an explicit yes.
+When none of these applies, advance autonomously with signal evidence in the ledger.
+One door, never both (`--mode human` here, `--mode auto` with an `auto: OQ=0, G1-G4 pass` reason):
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh harden <wp-id> \
