@@ -313,7 +313,7 @@ b5_case() {  # $1 apply SUT, $2 variant name (a variant adding wp-06-zeta must n
   if [[ -f "$v/wp-06-zeta/overview.md" ]] && ! grep -qF 'wp-06-zeta' "$T/b5.err"; then
     why "$2: the refusal does not name wp-06-zeta on stderr"; rc=1
   fi
-  if [[ "$2" == *-hardened ]] && ! grep -qF 'goalforge-transition.sh wp-06-zeta spec ' "$T/b5.err"; then
+  if [[ "$2" == *-hardened ]] && ! grep -qF "goalforge-transition.sh $(cd "$r/feat" && pwd -P)/wp-06-zeta spec " "$T/b5.err"; then
     why "$2: the refusal does not walk the hardened WP back to spec"; rc=1
   fi
   return "$rc"
@@ -321,6 +321,19 @@ b5_case() {  # $1 apply SUT, $2 variant name (a variant adding wp-06-zeta must n
 VARIANTS=(01-no-ratified 02-missing-date 03-missing-diff-sha 04-missing-base-sha 05-sha-mismatch 06-no-changelog-row 07-stale-diff 08-base-edited)
 INFLIGHT=(09-inflight-hardened 10-inflight-executing 11-inflight-implemented 12-inflight-dropped-key 13-inflight-block-zero-indent 14-inflight-renumber 16-inflight-status-comment)
 VARIANTS+=("${INFLIGHT[@]}" 15-unparseable-slice)
+
+# wp-02 L0-1 (b3): the walk-back command names the WP directory the apply
+# resolved under the resolved feature dir, and that path exists from the cwd
+# the apply ran in (relative arguments, run from the plans root).
+walkback_path_case() {  # $1 apply SUT
+  local r p
+  r="$(fresh tree)"
+  cp -a "$FX/variants/09-inflight-hardened/." "$r/feat/"
+  (cd "$r" && bash "$1" feat "feat/$PROP_REL") >/dev/null 2>"$T/wb.err" && { why "walk-back: apply exited 0"; return 1; }
+  p="$(grep -o 'goalforge-transition.sh [^ ]* spec ' "$T/wb.err" | head -1 | cut -d' ' -f2)"
+  [[ -n "$p" && "$p" == */wp-06-zeta && "$p" != wp-06-zeta ]] || { why "walk-back: WP argument '$p' is not the resolved WP directory path"; return 1; }
+  (cd "$r" && [[ -d "$p" ]]) || { why "walk-back: WP argument '$p' does not exist from the apply's cwd"; return 1; }
+}
 
 # M1-r2: two applies of two ratified proposals on one base, released at once
 # from a lock the test holds, serialize: exactly one writes, the other refuses
@@ -387,8 +400,8 @@ gate_row() { printf '{"ts": "%s", "wp": "wp-01-a", "from": "%s", "to": "%s"}\n' 
 gate_refuses() {  # $1 transition, $2 wp dir, $3 to, $4 file the refusal must name, $5 label, [$6 recovery text]
   bash "$1" "$2" "$3" >"$T/gate.out" 2>&1 && { why "gate $5: ready -> $3 not refused (expected a refusal naming $4)"; return 1; }
   grep -qx 'status: ready' "$2/overview.md" || { why "gate $5: status moved off ready"; return 1; }
-  grep -qF "$4" "$T/gate.out" && grep -qF "${6:-re-harden}" "$T/gate.out" \
-    || { why "gate $5: refusal does not name $4 and '${6:-re-harden}': $(tail -1 "$T/gate.out")"; return 1; }
+  grep -qF "$4" "$T/gate.out" && grep -qF "${6:-harden re-entry}" "$T/gate.out" \
+    || { why "gate $5: refusal does not name $4 and '${6:-harden re-entry}': $(tail -1 "$T/gate.out")"; return 1; }
 }
 reharden_gate_case() {  # $1 transition SUT
   local c tr f ev x y rc=0
@@ -450,7 +463,7 @@ reharden_msg_case() {  # $1 transition SUT
   gate_ev "$f/wp-01-a/reharden/2026-09-02-respec-z.md"
   gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-02-respec-z.md" "no-row" "since_ready_ts: none" \
     || { why "gate no-row: refusal does not tell to record since_ready_ts: none"; rc=1; }
-  grep -qF "re-harden" "$T/gate.out" && { why "gate no-row: refusal says re-harden: $(tail -1 "$T/gate.out")"; rc=1; }
+  grep -qF "harden re-entry" "$T/gate.out" && { why "gate no-row: refusal says harden re-entry: $(tail -1 "$T/gate.out")"; rc=1; }
   # (iii) two -> ready rows: name the LATEST row's ts, not the earlier, not none;
   # an earlier parseable file does not mask the valueless one
   f="$(gate_fx "$(gate_row 2026-09-01T10:00:00Z hardened ready; gate_row 2026-09-02T11:00:00Z ready hardened
@@ -460,7 +473,7 @@ reharden_msg_case() {  # $1 transition SUT
   gate_refuses "$tr" "$f/wp-01-a" executing "reharden/2026-09-02-respec-z.md" "two-row" "since_ready_ts: 2026-09-03T10:00:00Z" \
     || { why "gate two-row: refusal does not name the latest -> ready ts 2026-09-03T10:00:00Z"; rc=1; }
   grep -qF "2026-09-01T10:00:00Z" "$T/gate.out" && { why "gate two-row: refusal names the earlier -> ready ts: $(tail -1 "$T/gate.out")"; rc=1; }
-  grep -qE "re-harden|\bnone\b" "$T/gate.out" && { why "gate two-row: refusal says re-harden or none: $(tail -1 "$T/gate.out")"; rc=1; }
+  grep -qE "harden re-entry|\bnone\b" "$T/gate.out" && { why "gate two-row: refusal says harden re-entry or none: $(tail -1 "$T/gate.out")"; rc=1; }
   return "$rc"
 }
 
@@ -490,6 +503,97 @@ inlock_case() {  # $1 transition SUT
   f="$(gate_fx "$(gate_row 2026-09-01T10:00:00Z hardened ready)")"
   inlock_trial "$tr" "$f" 'sed -i "s/^status: ready$/status: hardened/" "$f/wp-01-a/overview.md"' || rc=1
   grep -qx 'status: hardened' "$f/wp-01-a/overview.md" || { why "in-lock status flip: the write overwrote the flipped status"; rc=1; }
+  return "$rc"
+}
+
+# wp-02 L0-1 (b1): at schema_version >= 6 the respec gate runs for every FROM
+# and only a `from: hardened` -> ready row newer than the max since_ready_ts:
+# clears it; schema 5 and unversioned WPs keep the ready-only rule (A2). The
+# respec file carries a hand-written past since_ready_ts: equal to the last
+# -> ready row, so every row the run writes is later.
+S6_EV="reharden/2026-09-02-respec-x.md"
+s6_fx() {  # $1 schema_version ('' = no key), $2 status -> prints a feature dir holding wp-01-a (goal stamped)
+  local f w; f="$(mktemp -d "$T/plans.XXXXXX")/feat"; w="$f/wp-01-a"
+  mkdir -p "$w/reharden" "$T/home"
+  printf -- '---\nname: feat\ntitle: respec gate fixture\nstatus: active\nfeature: feat\nwork_packages: [wp-01-a]\n---\n' >"$f/overview.md"
+  { printf -- '---\nname: wp-01-a\ntitle: respec gate fixture\nstatus: %s\nplan: feat\n' "$2"
+    [[ -z "$1" ]] || printf 'schema_version: %s\n' "$1"
+    printf 'goal:\n  outcome: "respec gate fixture"\n  verification:\n    strategy: deterministic\n    command: "true"\ngoal_approved_version: null\n---\n'; } >"$w/overview.md"
+  { gate_row 2026-08-31T10:00:00Z spec hardened; gate_row 2026-09-01T10:00:00Z hardened ready; } >"$f/.sdd-transitions.jsonl"
+  gate_ev "$w/$S6_EV" 2026-09-01T10:00:00Z
+  bash "$PKG/scripts/goalforge-goal-hash.sh" --record "$w" >/dev/null 2>&1
+  printf '%s\n' "$f"
+}
+s6_refuses() {  # $1 transition, $2 wp dir, $3 to, $4 label, [rest = extra args]
+  local tr="$1" w="$2" to="$3" label="$4" st rc; shift 4
+  st="$(grep -m1 '^status:' "$w/overview.md")"
+  HOME="$T/home" bash "$tr" "$w" "$to" "$@" >"$T/s6.out" 2>&1; rc=$?
+  [[ "$rc" -eq 1 ]] || { why "s6 $label: exit $rc, expected 1 (not refused)"; return 1; }
+  [[ "$(grep -m1 '^status:' "$w/overview.md")" == "$st" ]] || { why "s6 $label: status moved off ${st#status: }"; return 1; }
+  grep -qF "$S6_EV" "$T/s6.out" && grep -qF 'harden re-entry (references/respec.md §Re-entry)' "$T/s6.out" \
+    || { why "s6 $label: refusal does not name $S6_EV and 'harden re-entry (references/respec.md §Re-entry)': $(tail -1 "$T/s6.out")"; return 1; }
+  ! grep -qF 'its latest move into spec or hardened' "$T/s6.out" || { why "s6 $label: the ready-row gate refused, not the respec gate"; return 1; }
+}
+s6_takes() {  # $1 transition, $2 wp dir, $3 to, $4 label, [rest = extra args]
+  local tr="$1" w="$2" to="$3" label="$4"; shift 4
+  HOME="$T/home" bash "$tr" "$w" "$to" "$@" >"$T/s6.out" 2>&1 && grep -qx "status: $to" "$w/overview.md" \
+    || { why "s6 $label: -> $to refused: $(tail -1 "$T/s6.out")"; return 1; }
+}
+s6_revert() {  # $1 transition, $2 wp dir, $3 label: the evidence-gated ready -> hardened re-entry revert
+  s6_takes "$1" "$2" hardened "$3" --mode evidence --evidence "$2/$S6_EV" --reason "respec re-entry"
+}
+respec6_case() {  # $1 transition SUT
+  local c tr f w sv to rc=0
+  c="$(pkg_mirror goalforge-transition.sh "$1")"; tr="$c/scripts/goalforge-transition.sh"
+  # from ready; then harden re-entry and a hardened -> ready row (--mode human, D14) recover it
+  f="$(s6_fx 6 ready)"; w="$f/wp-01-a"
+  for to in executing implemented verified; do s6_refuses "$tr" "$w" "$to" "from-ready -> $to" || rc=1; done
+  s6_revert "$tr" "$w" "recovery revert" || rc=1
+  s6_takes "$tr" "$w" ready "recovery hardened -> ready" --mode human || rc=1
+  s6_takes "$tr" "$w" executing "recovered ready -> executing" || rc=1
+  # from hardened (after the evidence revert), from spec (via hardened -> spec),
+  # and the spec -> ready shortcut, whose ready row is not `from: hardened`
+  f="$(s6_fx 6 ready)"; w="$f/wp-01-a"
+  s6_revert "$tr" "$w" "from-hardened revert" || rc=1
+  for to in executing implemented verified; do s6_refuses "$tr" "$w" "$to" "from-hardened -> $to" || rc=1; done
+  s6_takes "$tr" "$w" spec "hardened -> spec" --reason "respec walk-back" || rc=1
+  for to in executing implemented verified; do s6_refuses "$tr" "$w" "$to" "from-spec -> $to" || rc=1; done
+  s6_takes "$tr" "$w" ready "shortcut spec -> ready" --mode human || rc=1
+  s6_refuses "$tr" "$w" executing "shortcut ready -> executing" || rc=1
+  # in flight: executing, implemented, and the verified reverse edges
+  f="$(s6_fx 6 executing)"; w="$f/wp-01-a"
+  for to in implemented verified; do s6_refuses "$tr" "$w" "$to" "from-executing -> $to" || rc=1; done
+  f="$(s6_fx 6 implemented)"; w="$f/wp-01-a"
+  s6_refuses "$tr" "$w" verified "from-implemented -> verified" || rc=1
+  f="$(s6_fx 6 verified)"; w="$f/wp-01-a"
+  for to in executing implemented; do s6_refuses "$tr" "$w" "$to" "from-verified -> $to" --reason "respec walk-back" || rc=1; done
+  # schema 5 and unversioned: refused from ready, allowed from hardened (A2)
+  for sv in 5 ''; do
+    f="$(s6_fx "$sv" ready)"; w="$f/wp-01-a"
+    s6_refuses "$tr" "$w" executing "schema ${sv:-unversioned} from-ready -> executing" || rc=1
+    s6_revert "$tr" "$w" "schema ${sv:-unversioned} revert" || rc=1
+    s6_takes "$tr" "$w" executing "schema ${sv:-unversioned} from-hardened -> executing" || rc=1
+  done
+  # B-H1: a schema_version value is normalised (inline comment, quotes) and a
+  # present value that is not an integer fails closed to the strict rule
+  local v
+  for v in '6          # C1-C7 slim shape' '6.0' '08' 'six'; do
+    f="$(s6_fx "$v" ready)"; w="$f/wp-01-a"
+    s6_revert "$tr" "$w" "schema '$v' revert" || rc=1
+    s6_refuses "$tr" "$w" executing "schema '$v' from-hardened -> executing" || rc=1
+  done
+  f="$(s6_fx '5   # older shape' ready)"; w="$f/wp-01-a"
+  s6_revert "$tr" "$w" "schema '5 # comment' revert" || rc=1
+  s6_takes "$tr" "$w" executing "schema '5 # comment' from-hardened -> executing" || rc=1
+  # B-L4: a `since_ready_ts: none` file is refused from hardened until a
+  # `from: hardened` ready row exists, then -> executing passes
+  f="$(s6_fx 6 ready)"; w="$f/wp-01-a"
+  gate_ev "$w/$S6_EV" none
+  gate_row 2026-08-31T10:00:00Z spec hardened >"$f/.sdd-transitions.jsonl"  # no -> ready row: `none` is honest
+  s6_revert "$tr" "$w" "since-none revert" || rc=1
+  s6_refuses "$tr" "$w" executing "since-none from-hardened -> executing" || rc=1
+  s6_takes "$tr" "$w" ready "since-none hardened -> ready" --mode human || rc=1
+  s6_takes "$tr" "$w" executing "since-none recovered ready -> executing" || rc=1
   return "$rc"
 }
 
@@ -529,6 +633,8 @@ reharden_record_case "$RESPEC_APPLY" && ok "M1-l7 apply records the WP's last ->
 reharden_gate_case "$RESPEC_TRANSITION_SUT" && ok "H1-r2/H1-l8 transition refuses ready -> executing|implemented|verified until a -> ready row follows the max recorded ts over every file; re-harden recovers" || bad "H1-r2 reharden gate"
 reharden_msg_case "$RESPEC_TRANSITION_SUT" && ok "L1-l9 a valueless reharden file refuses naming since_ready_ts: none (no -> ready row) or the latest -> ready ts" || bad "L1-l9 reharden gate message"
 inlock_case "$RESPEC_TRANSITION_SUT" && ok "M1-l8 a transition queued on the lock sees a respec file and a status flip written while it waited" || bad "M1-l8 in-lock re-read"
+respec6_case "$RESPEC_TRANSITION_SUT" && ok "L0-1 b1 schema 6: respec gate refuses executing|implemented|verified from every FROM until a later from: hardened -> ready row; schema 5 and unversioned keep the ready-only rule" || bad "L0-1 b1 schema-6 respec gate"
+walkback_path_case "$RESPEC_APPLY" && ok "L0-1 b3 apply walk-back command names the resolved WP directory, which exists from the apply's cwd" || bad "L0-1 b3 walk-back path"
 b6_case "$RESPEC_APPLY" && ok "b6 ratified apply writes the proposal and one outcome row" || bad "b6 ratified apply"
 if bash "$PKG/spec/evals/run.sh" >"$T/spec-evals.out" 2>&1; then ok "spec/evals/run.sh rc 0"; else bad "spec/evals/run.sh"; sed 's/^/      /' "$T/spec-evals.out"; fi
 
@@ -623,6 +729,16 @@ sed 's/^        if latest:$/        if False:/' "$RESPEC_TRANSITION_SUT" >"$T/m-
 red m-transition-msg-always-none --why "2026-09-03T10:00:00Z" reharden_msg_case "$T/m-msg-always-none.sh"
 sed 's/if \[\[ "\$FROM_NOW" != "\$FROM" \]\]; then/if false; then/' "$RESPEC_TRANSITION_SUT" >"$T/m-no-from-reread.sh"
 red m-transition-no-in-lock-from-reread --why "in-lock" inlock_case "$T/m-no-from-reread.sh"
+# wp-02 L0-1: the schema-6 gate's three parts, each red on a case whose failure
+# text no later gate (wp-03 ready row, wp-04 verified) changes.
+s6_mutant() {  # $1 label, $2 sed expression over the live transition, $3 --why target
+  sed "$2" "$RESPEC_TRANSITION_SUT" >"$T/$1.sh"
+  if cmp -s "$RESPEC_TRANSITION_SUT" "$T/$1.sh"; then bad "not a mutant (sed matched nothing): $1"; return 0; fi
+  red "$1" --why "$3" respec6_case "$T/$1.sh"
+}
+s6_mutant m-transition-respec-ready-only 's/( "\$RESPEC_STRICT" == 1 || "\$FROM" == "ready" )/"$FROM" == "ready"/' "s6 from-executing -> implemented:"
+s6_mutant m-transition-respec-any-ready-row '/if strict and frm != "hardened":/d' "s6 shortcut ready -> executing:"
+s6_mutant m-transition-respec-no-schema-guard 's/(( 10#\$RESPEC_SV >= 6 ))/true/' "s6 schema 5 from-hardened -> executing:"
 red b6-apply-noop b6_case "$KB/b6-apply-noop.sh"
 
 echo ""

@@ -35,7 +35,7 @@ steps:
     purpose: "Gates G1-G4 per WP: frontier deps, preharden + section lint, one review pass, goal validate + hash + changelog; spec → hardened → ready"
     precondition:
       target: wp
-      status: spec
+      status: spec    # harden also admits a respec re-entry at ready or hardened and a hardened WP resuming at the hardened → ready gate (references/respec.md §Re-entry)
     human_gated: true    # hardened → ready
 
   - skill: goalforge/execute

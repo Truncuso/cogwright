@@ -14,8 +14,8 @@ hooks:
 # goalforge-harden
 
 Two transitions, four gates, in this order. Precondition: the WP `overview.md`
-exists at `status: spec` in the C1 eight-section shape. Contract: spec.md §C3
-(gates), §C4 (stop rule), §C7 (human touchpoints); schema and legal edges:
+exists at `status: spec` in the C1 eight-section shape, or is a respec re-entry at `ready` or `hardened` (references/respec.md §Re-entry), or a `hardened` WP resuming at the hardened -> ready gate (same section).
+Contract: spec.md §C3 (gates), §C4 (stop rule), §C7 (human touchpoints); schema and legal edges:
 `${CLAUDE_PLUGIN_ROOT}/references/schema.md`, `…/references/state-machine.md`.
 A gate that cannot evaluate its input exits 2 and blocks. One row per gate:
 
@@ -121,5 +121,5 @@ Unattended with a human required: write the gate prompt verbatim to
 ## Gotchas
 
 - A goal edit after approval trips `evolved-goal-without-reharden` under
-  `--strict`: re-open `ready → hardened` on the reverse edge. A park is
+  `--strict`: re-enter per references/respec.md §Re-entry. A park is
   reviewable only through `harden.parked` + `answered_by: agent` — write both.
