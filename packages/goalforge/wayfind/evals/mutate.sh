@@ -43,7 +43,10 @@ fail() { printf 'FAIL [mutate:%s]: %s\n' "$1" "$2" >&2; fail_count=$((fail_count
 pass() { printf 'ok   [mutate:%s]\n' "$1"; }
 
 WORK="$(mktemp -d)"
-trap 'rm -rf "$WORK"' EXIT
+# kill still-running mutation children first (e.g. on SIGTERM), then clean up.
+trap 'kill $(jobs -p) 2>/dev/null || true; rm -rf "$WORK"' EXIT
+trap 'exit 143' TERM
+trap 'exit 130' INT
 
 # One entry per NEW Family 2 case: <case-name>|<marker>. The marker is a
 # fixed string; every SKILL.md line containing it is deleted from the copy.
@@ -108,9 +111,14 @@ run_one() {
 
   grep -vF -- "$marker" "$SKILL_SRC" > "$dir/SKILL.md" || true
 
-  local rc
+  # run.sh runs as a tracked child so a TERM to this subshell (from the
+  # parent's EXIT trap) is forwarded instead of orphaning it.
+  local rc child
   set +e
-  WAYFIND_MUTATION_CHILD=1 SKILL_MD="$dir/SKILL.md" bash "$RUN_SH" > "$dir/out" 2>&1
+  WAYFIND_MUTATION_CHILD=1 SKILL_MD="$dir/SKILL.md" bash "$RUN_SH" > "$dir/out" 2>&1 &
+  child=$!
+  trap 'kill "$child" 2>/dev/null; exit 143' TERM
+  wait "$child"
   rc=$?
   set -e
 
@@ -134,11 +142,23 @@ fi
 case "$jobs_max" in
   ''|*[!0-9]*|0) printf 'mutate.sh: WAYFIND_MUTATE_JOBS must be a positive integer, got %s\n' "$jobs_max" >&2; exit 2 ;;
 esac
+# `wait -n` needs bash >= 4.3; older bash runs the children one at a time.
+if [ "${BASH_VERSINFO[0]}" -lt 4 ] || { [ "${BASH_VERSINFO[0]}" -eq 4 ] && [ "${BASH_VERSINFO[1]}" -lt 3 ]; }; then
+  jobs_max=1
+fi
+
+# Work dirs are keyed by case name: a duplicate name would share one dir and the
+# last verdict would mask the other. Reject duplicates before spawning anything.
+dup_names="$(printf '%s\n' "${MUTATIONS[@]%%|*}" | sort | uniq -d)"
+if [ -n "$dup_names" ]; then
+  printf 'mutate.sh: duplicate case name(s) in MUTATIONS: %s\n' "$(printf '%s' "$dup_names" | tr '\n' ' ')" >&2
+  exit 2
+fi
 
 running=0
 for m in "${MUTATIONS[@]}"; do
   if [ "$running" -ge "$jobs_max" ]; then
-    wait -n || true
+    if [ "$jobs_max" -eq 1 ]; then wait || true; else wait -n || true; fi
     running=$((running - 1))
   fi
   run_one "${m%%|*}" "${m#*|}" &
