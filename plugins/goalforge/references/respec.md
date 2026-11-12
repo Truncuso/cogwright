@@ -209,8 +209,8 @@ after the apply as the record of what was ratified.
 ## Enforcement limit
 
 The marker records, not proves, a human reply. `goalforge-transition.sh`
-records `human_gated` but does not enforce it (`state-machine.md`, Feature
-policy), and the sha256 bindings tie a ratification to the exact proposal,
-diff and base bytes without proving who wrote the line. Enforcing
-`--mode human` on `human_gated: yes` edges is tracked as an idea outside this
-edge.
+enforces `--mode human` on the `human_gated: yes` feature edge `spec -> ready`
+at `schema_version >= 6` (`state-machine.md`, Feature policy), but
+`--mode human` is self-asserted: neither it, the marker nor the sha256
+bindings, which tie a ratification to the exact proposal, diff and base
+bytes, prove who wrote the line.

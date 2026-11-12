@@ -24,6 +24,19 @@ check() {
   fi
 }
 
+check_absent() {
+  local desc="$1"
+  local pattern="$2"
+  if grep -qF -- "$pattern" "$SKILL_MD"; then
+    echo "  FAIL [STATIC-CONTRACT]: $desc"
+    echo "        must not contain: $pattern"
+    FAIL=$((FAIL+1))
+  else
+    echo "  PASS [STATIC-CONTRACT]: $desc"
+    PASS=$((PASS+1))
+  fi
+}
+
 echo "=== goalforge-harden: contract checks ==="
 
 LC="$(wc -l < "$SKILL_MD")"
@@ -72,8 +85,11 @@ check "G4 records the hash last (goal_approved_version)" "# hash last: goal_appr
 
 # hardened -> ready human gate (C7)
 check "human_required is a veto an agent may set but never clear" "a **veto** over"
-check "human decides iff register production and severity HIGH" "register: production\` and \`severity: HIGH\`"
+check "human decides when the state-machine auto-advance predicate fails" "the auto-advance predicate in references/state-machine.md"
+check_absent "the gate no longer keys the human decision on register production and severity HIGH" "\`register: production\` and \`severity: HIGH\`"
 check "auto-advance leaves signal evidence in the ledger" "autonomously with signal evidence in the ledger"
+check_absent "a declined gate never reads as leave to auto-advance" "explicit yes, otherwise"
+check "advance on the human door only on an explicit yes" "advance only on an explicit yes"
 
 # Gotchas
 check "goal edit after approval trips evolved-goal-without-reharden under --strict" "evolved-goal-without-reharden"

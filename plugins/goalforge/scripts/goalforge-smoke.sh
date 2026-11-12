@@ -250,8 +250,8 @@ walk_chain() {
 
     # The feature edge table's forward path — also exercises classify_target's
     # `feature` branch. The spec -> ready hop is a mechanism exercise, not a
-    # chain ratification: transition.sh records human_gated, never enforces it
-    # (state-machine.md §Feature policy).
+    # chain ratification: at schema_version >= 6 transition.sh enforces the gate
+    # and admits only --mode human (state-machine.md §Feature policy).
     bash "$TRANSITION" "$FEATURE_DIR" spec --reason "smoke: feature draft to spec (proposal)"
     assert_status "$FEATURE_OVERVIEW" spec "feature draft->spec"
 

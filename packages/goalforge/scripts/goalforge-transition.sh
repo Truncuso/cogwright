@@ -128,8 +128,10 @@ PY
 }
 
 # ── Read schema_version from a WP overview.md frontmatter ───────────────────
+# $2 = raw keeps the value's quotes (schema_strict6 tells a quoted `#` from a
+# comment by them); by default one layer of quotes is stripped.
 read_schema_version() {
-    python3 - "$1" <<'PY'
+    python3 - "$1" "${2:-}" <<'PY'
 import sys, re
 val = ""
 started = infm = False
@@ -146,9 +148,78 @@ for ln in text.splitlines():
     if infm:
         m = re.match(r"^schema_version:\s*(.*)$", ln)
         if m:
-            val = m.group(1).strip().strip("'\"")
+            val = m.group(1).strip()
+            if sys.argv[2] != "raw":
+                val = val.strip("'\"")
             break
 print(val)
+PY
+}
+
+# ── Is the target under the schema-6 gates? (respec, human, ready-row) ───────
+# Prints 1 (strict) or 0 (exempt). The one normalisation the three gates share
+# (the goal-mandatory gate reads its own value): a quoted value runs to its
+# closing quote, so a `#` inside it is data; an unquoted value drops an inline
+# `# comment`; then whitespace and quotes go. Only ASCII digits make an
+# integer. Leading zeros are dropped; two or more significant digits are
+# strict before any arithmetic, so a value past 2^63 cannot wrap; one digit
+# compares in base 10 and is strict at >= 6. A present value that is not an
+# integer is strict (fail closed); absent (unversioned) is exempt. RESPEC_SV
+# keeps its historical name: goalforge-respec.test.sh mutates the comparison
+# line below by its text.
+schema_strict6() {
+    local RESPEC_SV q
+    RESPEC_SV="$(read_schema_version "$1" raw)"
+    case "$RESPEC_SV" in
+        \"*|\'*) q="${RESPEC_SV:0:1}"; RESPEC_SV="${RESPEC_SV:1}"; RESPEC_SV="${RESPEC_SV%%"$q"*}" ;;
+        *)       RESPEC_SV="${RESPEC_SV%%#*}" ;;
+    esac
+    RESPEC_SV="$(printf '%s' "$RESPEC_SV" | tr -d " \t\"'")"
+    if [[ -n "$RESPEC_SV" && "$RESPEC_SV" != *[!0123456789]* ]]; then
+        RESPEC_SV="${RESPEC_SV#"${RESPEC_SV%%[!0]*}"}"
+        RESPEC_SV="${RESPEC_SV:-0}"
+        if (( ${#RESPEC_SV} > 1 )); then echo 1
+        elif (( 10#$RESPEC_SV >= 6 )); then echo 1; else echo 0; fi
+    elif [[ -n "$RESPEC_SV" ]]; then
+        echo 1
+    else
+        echo 0
+    fi
+}
+
+# ── The auto-advance predicate (references/state-machine.md §Policy) ─────────
+# Prints the failing clauses of a WP's frontmatter, space-separated; empty means
+# the predicate holds. Clauses: `severity` unless LOW or MEDIUM (absent or any
+# other value fails closed); `human_required` unless unset (absent, empty or
+# null, as goalforge-pre-commit.sh _gf_hr_is_null reads it); `task_type` when
+# it is declared as migration. Exits 0 with its verdict; a crash exits non-zero.
+auto_predicate_failures() {
+    python3 - "$1" <<'PY'
+import sys, re
+fm, started = {}, False
+for ln in open(sys.argv[1], encoding="utf-8").read().splitlines():
+    if ln.strip() == "---":
+        if started:
+            break
+        started = True
+        continue
+    if started:
+        m = re.match(r"^(severity|task_type):\s*(.*)$", ln)
+        if m and m.group(1) not in fm:
+            fm[m.group(1)] = re.sub(r"\s+#.*$", "", m.group(2)).strip().strip("'\"")
+        m = re.match(r"^\s*human_required:\s*(.*)$", ln)
+        if m and "human_required" not in fm:
+            v = m.group(1).strip()
+            v = re.sub(r"^['\"]", "", v)
+            fm["human_required"] = re.sub(r"['\"]$", "", v).rstrip()
+fail = []
+if fm.get("severity") not in ("LOW", "MEDIUM"):
+    fail.append("severity")
+if fm.get("human_required", "") not in ("", "null"):
+    fail.append("human_required")
+if fm.get("task_type", "").lower() == "migration":
+    fail.append("task_type")
+print(" ".join(fail))
 PY
 }
 
@@ -396,6 +467,32 @@ transition() {
         echo "ERROR: reverse transition $FROM -> $TO requires --reason" >&2; return 1
     fi
 
+    # ── Human gate (references/state-machine.md §Policy) ─────────────────────
+    # At schema_version >= 6 an edge whose row carries `human_gated: yes` (WP
+    # hardened -> ready, feature spec -> ready), and WP spec -> ready, which the
+    # table leaves ungated, pass only with --mode human. On the two WP edges
+    # --mode auto also passes when this script finds the auto-advance predicate
+    # true. --override changes nothing here. Runs before the evidence, hash and
+    # findings.md steps, so a refusal leaves no trace. Refusal: exit 2.
+    local HG_GATED=0 HG_AUTO=0 PRED_FAIL
+    [[ "$HG" == "yes" ]] && HG_GATED=1
+    if [[ "$KIND" == "wp" && "$TO" == "ready" && ( "$FROM" == "hardened" || "$FROM" == "spec" ) ]]; then
+        HG_GATED=1; HG_AUTO=1
+    fi
+    if [[ "$HG_GATED" == 1 && "$MODE" != "human" && "$(schema_strict6 "$OVERVIEW")" == 1 ]]; then
+        if [[ "$HG_AUTO" == 1 && "$MODE" == "auto" ]]; then
+            PRED_FAIL="$(auto_predicate_failures "$OVERVIEW")" \
+                || { echo "ERROR: auto-advance predicate reader failed on $OVERVIEW; refused" >&2; return 1; }
+            if [[ -n "$PRED_FAIL" ]]; then
+                echo "human gate refused: $(basename "$WP_DIR") $FROM -> $TO --mode auto: the auto-advance predicate fails on ${PRED_FAIL// /, }; pass --mode human (references/state-machine.md §Policy)" >&2
+                return 2
+            fi
+        else
+            echo "human gate refused: $(basename "$WP_DIR") $FROM -> $TO is human-gated at schema_version >= 6 and --mode $MODE does not pass it; pass --mode human (references/state-machine.md §Policy)" >&2
+            return 2
+        fi
+    fi
+
     # ── ready→hardened evidence-gated revert exception (wp-02) ────────────────
     # This one reverse edge — re-opening a `ready` WP to `hardened` to re-develop
     # its goals — is NOT a bare FREE-REVERSE: `--reason` alone (which satisfies
@@ -553,6 +650,11 @@ transition() {
         flock -u 9; exec 9>&-
         echo "ERROR: status of $OVERVIEW changed from $FROM to ${FROM_NOW:-<none>} before the write; refused" >&2; return 1
     fi
+    # The respec and ready-row gates read the target's schema once, under the
+    # lock, through schema_strict6. Unversioned and schema < 6 are exempt from
+    # the ready-row gate and keep the respec gate's weak rule.
+    local RESPEC_STRICT
+    RESPEC_STRICT="$(schema_strict6 "$OVERVIEW")"
     # ── respec reharden gate (wp-10 H1-r2, M1-l7, H1-l8; L0-1) ───────────────
     # A WP moves to executing|implemented|verified only when a `-> ready` ledger
     # row has ts strictly greater than the MAXIMUM since_ready_ts: (the last
@@ -562,19 +664,6 @@ transition() {
     # At schema_version >= 6 the gate runs for every FROM and only a
     # `from: hardened` row counts, so the spec -> ready and hardened -> spec
     # shortcuts do not clear it; below 6 it stays FROM = ready, any row (A2).
-    local RESPEC_SV RESPEC_STRICT=0
-    # Normalise here only (the goal-mandatory gate reads the raw value): drop an
-    # inline ` # comment`, whitespace and quotes. An integer compares in base 10
-    # (`08` is not octal); a present value that is not an integer is strict
-    # (fail closed); absent (unversioned) keeps the weak rule.
-    RESPEC_SV="$(read_schema_version "$OVERVIEW")"
-    RESPEC_SV="${RESPEC_SV%%#*}"
-    RESPEC_SV="$(printf '%s' "$RESPEC_SV" | tr -d " \t\"'")"
-    if [[ "$RESPEC_SV" =~ ^[0-9]+$ ]]; then
-        if (( 10#$RESPEC_SV >= 6 )); then RESPEC_STRICT=1; fi
-    elif [[ -n "$RESPEC_SV" ]]; then
-        RESPEC_STRICT=1
-    fi
     if [[ "$KIND" == "wp" && ( "$RESPEC_STRICT" == 1 || "$FROM" == "ready" ) && "$TO" =~ ^(executing|implemented|verified)$ ]]; then
         STALE_EV="$(python3 - "$WP_DIR" "$LEDGER" "$RESPEC_STRICT" <<'PY'
 import sys, json, os, glob, re
@@ -625,6 +714,42 @@ PY
         if [[ -n "$STALE_EV" ]]; then
             flock -u 9; exec 9>&-
             echo "ERROR: $FROM -> $TO refused: $STALE_EV" >&2; return 1
+        fi
+    fi
+    # ── ready-row gate (references/state-machine.md §Policy) ─────────────────
+    # At schema_version >= 6 a WP moves to executing|implemented|verified, from
+    # any FROM, only when its ledger holds a `-> ready` row later in the file
+    # than its latest move into spec or hardened; with no such move, any ready
+    # row will do. Ledger order, not ts: ts has one-second resolution, so two
+    # rows can share it. A missing ledger or no ready row refuses (fail closed);
+    # an unparseable line is skipped. --override does not lift it. Refusal:
+    # exit 2; a reader crash: exit 1. After the respec gate, whose refusal names
+    # harden re-entry, which also clears this gate.
+    local NO_READY_ROW
+    if [[ "$KIND" == "wp" && "$RESPEC_STRICT" == 1 && "$TO" =~ ^(executing|implemented|verified)$ ]]; then
+        NO_READY_ROW="$(python3 - "$LEDGER" "$WP_NAME" <<'PY'
+import sys, json, os
+ledger, wp = sys.argv[1], sys.argv[2]
+pre, ready = None, []  # (ledger line index, ts) of this WP's rows
+if os.path.isfile(ledger):
+    for i, ln in enumerate(open(ledger, encoding="utf-8")):
+        try:
+            row = json.loads(ln)
+        except ValueError:
+            continue
+        if not isinstance(row, dict) or row.get("wp") != wp:
+            continue
+        if row.get("to") in ("spec", "hardened"):
+            pre = (i, str(row.get("ts", "")))
+        elif row.get("to") == "ready":
+            ready.append((i, str(row.get("ts", ""))))
+print("" if any(pre is None or r[0] > pre[0] for r in ready) else "refuse")
+PY
+)" || { flock -u 9; exec 9>&-; echo "ERROR: ready-row check failed for $WP_DIR; refused" >&2; return 1; }
+        if [[ -n "$NO_READY_ROW" ]]; then
+            flock -u 9; exec 9>&-
+            echo "$TO refused: $WP_NAME has no -> ready ledger row after its latest move into spec or hardened (harden it, then hardened -> ready --mode human)" >&2
+            return 2
         fi
     fi
     TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"  # inside the lock: ts order == ledger order (L1-l8)

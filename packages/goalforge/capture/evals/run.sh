@@ -41,6 +41,20 @@ check_order() {
   fi
 }
 
+# Absence check: $2 must NOT appear in SKILL.md (a retired claim stays retired).
+check_absent() {
+  local desc="$1"
+  local pattern="$2"
+  if grep -qF "$pattern" "$SKILL_MD"; then
+    echo "  FAIL: $desc"
+    echo "        must not contain: $pattern"
+    FAIL=$((FAIL+1))
+  else
+    echo "  PASS: $desc"
+    PASS=$((PASS+1))
+  fi
+}
+
 # Regex-aware check: the archived-collision guard is prose whose exact wording is
 # not pinned by the contract — assert its load-bearing tokens, not a sentence.
 check_re() {
@@ -120,6 +134,9 @@ check "fast path never skips verification" "never skips verification"
 check "fast path records goal hash (reconciles wp-01 ready-gate)" "goalforge-goal-hash.sh --record"
 check_order "fast path records goal hash BEFORE spec->ready --mode auto" \
   "goalforge-goal-hash.sh --record" "goalforge-transition.sh <wp> ready"
+check "fast path advance: exit 2 refusal leaves the WP at spec" "failed one with exit 2, leaving the WP at \`spec\`"
+check "fast path escalates an exit 2 to full harden" "an exit 2 from the advance"
+check_absent "fast path no longer calls spec->ready a non-human-gated edge" "non-human-gated edge"
 
 # Route classifier self-test (deterministic regression)
 if bash "$SKILL_DIR/../scripts/goalforge-route.sh" --self-test >/dev/null 2>&1; then

@@ -164,6 +164,59 @@ else
     bad "run: an injected respec-file stage row is NOT detected (check cannot fail)"
 fi
 
+# human-gate and ready-row prose (wp-03) -------------------------------------
+# The prose states what goalforge-transition.sh enforces at schema_version >= 6.
+# A presence facet strips its needle in the known-bad copy; an absence check
+# re-adds the retired text in its known-bad copy and must then catch it.
+SM="$PKG/references/state-machine.md"
+CAPTURE="$PKG/capture/SKILL.md"
+SMOKE="$PKG/scripts/goalforge-smoke.sh"
+
+# absent <file> <label> <retired literal>
+absent() {
+    local file="$1" label="$2" needle="$3" copy
+    copy="$FIX_TMP_ROOT/absent--$(printf '%s' "$label" | tr -c 'a-zA-Z0-9' '-').md"
+    if grep -qF -- "$needle" "$file"; then
+        bad "$(basename "$file"): $label — still carries [$needle]"
+        return
+    fi
+    ok "$(basename "$file"): $label"
+    { cat "$file"; printf '%s\n' "$needle"; } > "$copy"
+    if grep -qF -- "$needle" "$copy"; then
+        ok "$(basename "$file"): $label — known-bad copy with the retired text is caught"
+    else
+        bad "$(basename "$file"): $label — known-bad copy is not caught (check cannot fail)"
+    fi
+}
+
+echo
+echo "human-gate and ready-row prose"
+absent "$SM" "no policy bullet says the mechanism only records the gate" 'only records it'
+facet "$SM" "WP gate: the script enforces it"            '`goalforge-transition.sh` enforces the gate: it refuses `hardened→ready`'
+facet "$SM" "WP gate names --mode human"                 'unless `--mode human` is passed'
+facet "$SM" "feature gate: --mode human only"            'the gate: `spec -> ready` passes only with `--mode human`'
+facet "$SM" "predicate also applies to WP spec -> ready" 'and on `spec→ready --mode auto`'
+absent "$SM" "auto-advance heading is not hardened->ready only" '(`hardened→ready` only)'
+facet "$SM" "ready-row gate sentence"                    'needs a `-> ready` ledger row'
+facet "$SM" "ready-row gate keeps the table rows legal"  'table rows stay legal'
+section_facet "$RESPEC" "Enforcement limit" "the script enforces --mode human" \
+    'enforces `--mode human` on the `human_gated: yes` feature edge'
+section_facet "$RESPEC" "Enforcement limit" "--mode human is self-asserted" '`--mode human` is self-asserted'
+absent "$RESPEC" "respec.md no longer says the script does not enforce the gate" 'does not enforce it'
+facet "$HARDEN" "gate points to the state-machine predicate" 'the auto-advance predicate in references/state-machine.md'
+facet "$HARDEN" "human_required veto kept"               'a **veto** over'
+absent "$HARDEN" "no register production + severity HIGH human decision" '`register: production` and `severity: HIGH`'
+facet "$CAPTURE" "fast path: exit 2 leaves the WP at spec" 'failed one with exit 2, leaving the WP at `spec`'
+facet "$CAPTURE" "fast path: an exit 2 escalates to full harden" 'an exit 2 from the advance'
+absent "$CAPTURE" "fast path: spec -> ready is not called non-human-gated" 'non-human-gated edge'
+absent "$SMOKE" "smoke comment: transition.sh enforces the gate" 'never enforces it'
+facet "$SMOKE" "smoke comment names the enforcement"     'transition.sh enforces the gate'
+if [[ "$(wc -l < "$HARDEN")" -eq 125 ]]; then
+    ok "harden/SKILL.md is 125 lines"
+else
+    bad "harden/SKILL.md is $(wc -l < "$HARDEN") lines, expected 125"
+fi
+
 # provider-name blacklist ---------------------------------------------------
 # No provider may be named in either stage file: provider choice lives behind
 # scripts/goalforge-second-opinion.sh (wp-03).
