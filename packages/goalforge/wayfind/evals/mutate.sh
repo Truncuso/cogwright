@@ -19,6 +19,10 @@
 #
 # Usage:  bash evals/mutate.sh          # exit 0 all mutations detected, 1 otherwise
 #
+# Mutations run in parallel (bounded by WAYFIND_MUTATE_JOBS, default CPU count
+# capped at 8), each in its own $WORK/<case-name>/ dir; results are reported in
+# MUTATIONS order. A child that dies without a verdict counts as a failure.
+#
 # All paths resolve relative to THIS script (BASH_SOURCE), never cwd.
 
 set -euo pipefail
@@ -88,32 +92,71 @@ MUTATIONS=(
   'doc-graduate-step6-three-keys|6. **`wayfind/` stays in place**'
 )
 
-for m in "${MUTATIONS[@]}"; do
-  name="${m%%|*}"
-  marker="${m#*|}"
+# One mutation, run in its own work dir so concurrent children never share a
+# mutant path. Writes exactly one verdict file on completion; a child that dies
+# before writing it is reported as a crash (never a pass) by the collector.
+run_one() {
+  local name="$1" marker="$2" dir="$WORK/$1"
+  mkdir -p "$dir"
 
   # a marker that no longer exists makes the mutation vacuous (it would delete
   # nothing and the case would pass on an UNMUTATED file) — that is a failure.
   if ! grep -qF -- "$marker" "$SKILL_SRC"; then
-    fail "$name" "marker not present in SKILL.md — mutation is vacuous: $marker"
-    continue
+    printf 'FAIL\tmarker not present in SKILL.md — mutation is vacuous: %s\n' "$marker" > "$dir/verdict"
+    return 0
   fi
 
-  mutant="$WORK/SKILL.md"
-  grep -vF -- "$marker" "$SKILL_SRC" > "$mutant" || true
+  grep -vF -- "$marker" "$SKILL_SRC" > "$dir/SKILL.md" || true
 
+  local rc
   set +e
-  out="$(WAYFIND_MUTATION_CHILD=1 SKILL_MD="$mutant" bash "$RUN_SH" 2>&1)"
+  WAYFIND_MUTATION_CHILD=1 SKILL_MD="$dir/SKILL.md" bash "$RUN_SH" > "$dir/out" 2>&1
   rc=$?
   set -e
 
   if [ "$rc" -eq 0 ]; then
-    fail "$name" "run.sh still PASSED with the rule removed — the case is not load-bearing"
-  elif ! printf '%s' "$out" | grep -qF -- "FAIL [$name]"; then
-    fail "$name" "run.sh failed (rc=$rc) but NOT on [$name] — the mutation broke something else"
+    printf 'FAIL\trun.sh still PASSED with the rule removed — the case is not load-bearing\n' > "$dir/verdict.tmp"
+  elif ! grep -qF -- "FAIL [$name]" "$dir/out"; then
+    printf 'FAIL\trun.sh failed (rc=%s) but NOT on [%s] — the mutation broke something else\n' "$rc" "$name" > "$dir/verdict.tmp"
   else
-    pass "$name"
+    printf 'ok\n' > "$dir/verdict.tmp"
   fi
+  mv "$dir/verdict.tmp" "$dir/verdict"
+}
+
+# Bounded concurrency (CI budget: spec D4 keeps the eval-suites step under 60s).
+# WAYFIND_MUTATE_JOBS overrides; default is the CPU count capped at 8.
+jobs_max="${WAYFIND_MUTATE_JOBS:-}"
+if [ -z "$jobs_max" ]; then
+  jobs_max="$(nproc 2>/dev/null || getconf _NPROCESSORS_ONLN 2>/dev/null || echo 1)"
+  [ "$jobs_max" -gt 8 ] && jobs_max=8
+fi
+case "$jobs_max" in
+  ''|*[!0-9]*|0) printf 'mutate.sh: WAYFIND_MUTATE_JOBS must be a positive integer, got %s\n' "$jobs_max" >&2; exit 2 ;;
+esac
+
+running=0
+for m in "${MUTATIONS[@]}"; do
+  if [ "$running" -ge "$jobs_max" ]; then
+    wait -n || true
+    running=$((running - 1))
+  fi
+  run_one "${m%%|*}" "${m#*|}" &
+  running=$((running + 1))
+done
+wait || true
+
+# Collect in MUTATIONS order so the report is deterministic.
+for m in "${MUTATIONS[@]}"; do
+  name="${m%%|*}"
+  verdict_file="$WORK/$name/verdict"
+  if [ ! -f "$verdict_file" ]; then
+    fail "$name" "mutation child crashed before writing a verdict"
+    continue
+  fi
+  IFS=$'\t' read -r status msg < "$verdict_file" || true
+  if [ "$status" = "ok" ]; then pass "$name"
+  else fail "$name" "${msg:-malformed verdict}"; fi
 done
 
 if [ "$fail_count" -eq 0 ]; then
