@@ -52,6 +52,20 @@ plans-root/feat-alpha/wp-01/overview.md
 plans-root/feat-alpha/wp-02/overview.md
 plans-root/effort-map/wayfind/ticket-01-first.md
 plans-root/effort-map/wayfind/ticket-02-second.md
+plans-root/effort-map/wayfind/map.md
+wayfind-cases/effort-blocked/wayfind/map.md
+wayfind-cases/effort-blocked/wayfind/ticket-01-root.md
+wayfind-cases/effort-blocked/wayfind/ticket-02-child.md
+wayfind-cases/effort-blocked/wayfind/ticket-03-grandchild.md
+wayfind-cases/effort-graduated/wayfind/map.md
+wayfind-cases/effort-graduated/wayfind/ticket-01-leftover.md
+wayfind-cases/effort-nomap/wayfind/ticket-01-orphan.md
+wayfind-cases/effort-comment/wayfind/map.md
+wayfind-cases/effort-comment/wayfind/ticket-01-one.md
+wayfind-cases/effort-crlf/wayfind/map.md
+wayfind-cases/effort-crlf/wayfind/ticket-01-one.md
+wayfind-cases/effort-charting/wayfind/map.md
+wayfind-cases/effort-charting/wayfind/ticket-01-one.md
 handoffs/feat-alpha/2026-01-01-handoff.md
 handoffs/other/2026-01-01-handoff.md
 "
@@ -67,7 +81,7 @@ if [ -n "$MISSING" ]; then
     echo "Results: 0 passed, 1 failed"
     exit 1
 fi
-ok "copied fixture root is complete (7 files, no gitignored segment)"
+ok "copied fixture root is complete (21 files, no gitignored segment)"
 
 PLANS="$WORK/fixture/plans-root"
 HANDOFFS="$WORK/fixture/handoffs"
@@ -146,6 +160,106 @@ case "$OUT_V4" in *"zz-active: wp-01 [ready]"*) ok "the active feature survives 
     *) bad "active feature evicted by completed features: '$OUT_V4'" ;; esac
 case "$OUT_V4" in *aa-done-*) bad "a completed feature was printed: '$OUT_V4'" ;;
     *) ok "no completed feature is printed" ;; esac
+
+# ── wayfind counts come from the PARSED frontier JSON, over live maps only ──
+# Each case root = the active feature + effort-map (working, 2 open, 2 on the
+# frontier) + one case effort, so the line is exact and the case effort's
+# contribution is the difference from 2/2.
+wayfind_root() { # <case name> [case effort] -> prints a fresh plans root
+    local r="$WORK/wf-$1/plans-root"
+    mkdir -p "$r"
+    cp -r "$PLANS/feat-alpha" "$PLANS/effort-map" "$r/"
+    [ -z "${2:-}" ] || cp -r "$WORK/fixture/wayfind-cases/$2" "$r/"
+    printf '%s' "$r"
+}
+wayfind_line() { grep '^  wayfind: ' <<<"$1"; }
+
+OUT_WF="$(run_on "$(wayfind_root base)" "$WORK/empty")"
+[ "$(wayfind_line "$OUT_WF")" = "  wayfind: 2 open, 2 on the frontier" ] \
+    && ok "effort-map (working) -> 2 open, 2 on the frontier" \
+    || bad "effort-map counts wrong: '$(wayfind_line "$OUT_WF")'"
+
+# blocked tickets and their waiting_on ids are NOT frontier entries: +3 open, +1.
+OUT_WF="$(run_on "$(wayfind_root blocked effort-blocked)" "$WORK/empty")"
+[ "$(wayfind_line "$OUT_WF")" = "  wayfind: 5 open, 3 on the frontier" ] \
+    && ok "blocked tickets -> frontier counts len(frontier) only" \
+    || bad "blocked-ticket counts wrong (want 5 open, 3 on the frontier): '$(wayfind_line "$OUT_WF")'"
+
+# a graduated map contributes 0 to both counts, open tickets notwithstanding.
+OUT_WF="$(run_on "$(wayfind_root graduated effort-graduated)" "$WORK/empty")"
+[ "$(wayfind_line "$OUT_WF")" = "  wayfind: 2 open, 2 on the frontier" ] \
+    && ok "graduated map -> contributes 0 to open and frontier" \
+    || bad "graduated-map counts wrong (want 2 open, 2 on the frontier): '$(wayfind_line "$OUT_WF")'"
+
+# a wayfind dir with no map.md contributes 0 to both counts.
+OUT_WF="$(run_on "$(wayfind_root nomap effort-nomap)" "$WORK/empty")"
+[ "$(wayfind_line "$OUT_WF")" = "  wayfind: 2 open, 2 on the frontier" ] \
+    && ok "no map.md -> contributes 0 to open and frontier" \
+    || bad "no-map counts wrong (want 2 open, 2 on the frontier): '$(wayfind_line "$OUT_WF")'"
+
+# the hook reads a map's status the way validate-map.sh does: a trailing
+# ` # comment` (the SKILL.md template carries one), CRLF line endings and a
+# quoted value all leave a live map live. Each adds 1 open, 1 on the frontier;
+# the charting map pins the `charting` arm of the live-status filter.
+for wc in comment crlf charting; do
+    OUT_WF="$(run_on "$(wayfind_root "$wc" "effort-$wc")" "$WORK/empty")"
+    [ "$(wayfind_line "$OUT_WF")" = "  wayfind: 3 open, 3 on the frontier" ] \
+        && ok "map status ($wc) -> counted as a live map" \
+        || bad "map status ($wc) counts wrong (want 3 open, 3 on the frontier): '$(wayfind_line "$OUT_WF")'"
+done
+
+# spec D8: an effort whose frontier output does not parse into a list counts 0
+# and the others still count. (i) a stub frontier script, beside a copy of the
+# hook, prints a string `frontier` for effort-comment only and runs the real
+# script for effort-map: want 3 open (2 + 1), 2 on the frontier (effort-map's
+# 2 + 0) — len("abcdefg") would give 9, dropping the frontier count "3 open".
+# (ii) a python3 that is present but fails: every parse fails, so 0.
+NL="$WORK/nonlist"
+mkdir -p "$NL/hooks" "$NL/wayfind/scripts"
+cp "$HD"/goalforge-*.sh "$NL/hooks/"
+{ printf '#!/usr/bin/env bash\n'
+  printf 'case "$(basename "$1")" in\n'
+  printf '  effort-comment) printf '"'"'%%s\\n'"'"' '"'"'{"frontier": "abcdefg"}'"'"' ;;\n'
+  printf '  *) exec bash %q "$@" ;;\n' "$HD/../wayfind/scripts/wayfind-frontier.sh"
+  printf 'esac\n'
+} > "$NL/wayfind/scripts/wayfind-frontier.sh"
+OUT_WF="$(run_hook_on "$NL/hooks/goalforge-session-start.sh" "$(wayfind_root nonlist effort-comment)" "$WORK/empty")"
+[ "$(wayfind_line "$OUT_WF")" = "  wayfind: 3 open, 2 on the frontier" ] \
+    && ok "non-list frontier -> that effort counts 0, the others still count" \
+    || bad "non-list frontier (want '  wayfind: 3 open, 2 on the frontier'): '$(wayfind_line "$OUT_WF")'"
+
+FP="$WORK/failpy-bin"
+mkdir -p "$FP"
+for c in bash readlink dirname basename sed head grep wc cat tr date mktemp rm sort; do
+    ln -sf "$(command -v "$c")" "$FP/$c"
+done
+printf '#!/bin/sh\nexit 1\n' > "$FP/python3"; chmod +x "$FP/python3"
+FP_ROOT="$(wayfind_root failpy)"
+OUT_WF="$(PATH="$FP" SDD_PLANS_DIR="$FP_ROOT" GOALFORGE_HANDOFFS_DIR="$WORK/empty" bash "$HOOK" </dev/null 2>&1)"
+[ "$(wayfind_line "$OUT_WF")" = "  wayfind: 2 open, 0 on the frontier" ] \
+    && ok "failing python3 parse -> every effort counts 0 on the frontier" \
+    || bad "failing python3 parse (want '  wayfind: 2 open, 0 on the frontier'): '$(wayfind_line "$OUT_WF")'"
+
+# python3 absent: the wayfind line is omitted and the hook still exits 0. The
+# sandbox PATH carries the other commands the hook and the frontier script use;
+# the positive control adds python3 back and must print the line, so the run is
+# not short-circuiting on some other missing command.
+SB="$WORK/sandbox-bin"
+mkdir -p "$SB"
+for c in bash readlink dirname basename sed head grep wc cat tr date mktemp rm sort; do
+    ln -sf "$(command -v "$c")" "$SB/$c"
+done
+WF_BASE="$(wayfind_root nopy)"
+OUT_NOPY="$(PATH="$SB" SDD_PLANS_DIR="$WF_BASE" GOALFORGE_HANDOFFS_DIR="$WORK/empty" bash "$HOOK" </dev/null 2>&1)"; rc=$?
+{ [ "$rc" -eq 0 ] && case "$OUT_NOPY" in *"feat-alpha: wp-02 [ready]"*) true ;; *) false ;; esac \
+    && [ -z "$(wayfind_line "$OUT_NOPY")" ]; } \
+    && ok "python3 missing from PATH -> wayfind line omitted, exit 0" \
+    || bad "python3 missing: want rc 0, the feature line and no wayfind line (rc=$rc): '$OUT_NOPY'"
+ln -sf "$(command -v python3)" "$SB/python3"
+OUT_PY="$(PATH="$SB" SDD_PLANS_DIR="$WF_BASE" GOALFORGE_HANDOFFS_DIR="$WORK/empty" bash "$HOOK" </dev/null 2>&1)"
+[ "$(wayfind_line "$OUT_PY")" = "  wayfind: 2 open, 2 on the frontier" ] \
+    && ok "sandbox PATH + python3 -> wayfind line printed (control)" \
+    || bad "sandbox PATH + python3 should print the wayfind line (control): '$OUT_PY'"
 
 # ── sabotage copies of the HOOK ────────────────────────────────────────────
 # The stubs live in a COPY of the hooks dir: the hook sources

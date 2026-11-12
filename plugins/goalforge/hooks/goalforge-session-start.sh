@@ -16,10 +16,14 @@
 #   handoffs     $GOALFORGE_HANDOFFS_DIR, default <cwd git root>/docs/handoffs.
 #                "ready" is a `status: ready` frontmatter key on a handoff .md,
 #                the same predicate the handoff tooling lists on.
-#   wayfind      <plans root>/<effort>/wayfind/ticket-*.md. The frontier count
-#                comes from wayfind-frontier.sh when it resolves beside this
-#                package; otherwise only the open count is printed (degrade,
-#                never block).
+#   wayfind      <plans root>/<effort>/wayfind/ticket-*.md, for efforts whose
+#                map.md status is charting|working only. The frontier count is
+#                len(frontier) of wayfind-frontier.sh's JSON, parsed by python3,
+#                when the script resolves beside this package; otherwise only
+#                the open count is printed. An effort whose frontier output
+#                does not parse, has no `frontier` key or whose `frontier` is
+#                not a list adds 0 to the frontier count; the others still
+#                count. No python3 ⇒ no wayfind line (degrade, never block).
 #   routing      ONE constant line. Its wording belongs to the stage-report
 #                template owner, not to this hook; nothing asserts the text.
 #   size         at most 15 lines, hard-capped on the way out.
@@ -133,17 +137,42 @@ ready_handoffs() {
     printf '%s' "${out# }"
 }
 
-# "<open> open, <frontier> on the frontier" (or just the open count).
+# The `status:` value of wayfind map $1, normalised the way validate-map.sh
+# reads it: CR dropped, a ` # comment` stripped, whitespace trimmed, one pair
+# of surrounding quotes removed. Prints nothing when the map is absent.
+wayfind_map_status() {
+    local v
+    [ -f "$1" ] || return 0
+    v="$(sed -n 's/^status:\(.*\)$/\1/p' "$1" 2>/dev/null | head -n 1)"
+    v="${v//$'\r'/}"
+    v="${v%%[[:space:]]#*}"
+    v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+    case "$v" in
+        '"'*'"') v="${v#\"}"; v="${v%\"}" ;;
+        "'"*"'") v="${v#\'}"; v="${v%\'}" ;;
+    esac
+    printf '%s' "$v"
+}
+
+# "<open> open, <frontier> on the frontier" (or just the open count), summed
+# over maps at charting|working only. The frontier count is len(frontier) of
+# the PARSED frontier JSON; an effort whose frontier output does not parse, has
+# no `frontier` key or whose `frontier` is not a list counts 0 and the others
+# still count. No python3 to parse it ⇒ no wayfind line at all.
 wayfind_counts() {
     local root="$1" eff open=0 front="" total_front=0 have_front=0 script out
+    command -v python3 >/dev/null 2>&1 || return 0
     script="$HOOK_DIR/../wayfind/scripts/wayfind-frontier.sh"
     [ -f "$script" ] || script="$HOOK_DIR/../skills/wayfind/scripts/wayfind-frontier.sh"
     for eff in "$root"/*/; do
-        [ -d "$eff/wayfind" ] || continue
+        case "$(wayfind_map_status "$eff/wayfind/map.md")" in
+            charting|working) ;;
+            *) continue ;;
+        esac
         open=$((open + $(grep -l '^status:[[:space:]]*open' "$eff"/wayfind/ticket-*.md 2>/dev/null | wc -l)))
         if [ -f "$script" ]; then
             out="$(bash "$script" "$eff" 2>/dev/null)" || out=""
-            front="$(printf '%s' "$out" | tr ',' '\n' | grep -c '"ticket-' 2>/dev/null)" || front=0
+            front="$(printf '%s' "$out" | python3 -c 'import json,sys; f=json.load(sys.stdin)["frontier"]; assert isinstance(f, list); print(len(f))' 2>/dev/null)" || front=""
             case "$front" in ''|*[!0-9]*) front=0 ;; esac
             total_front=$((total_front + front)); have_front=1
         fi

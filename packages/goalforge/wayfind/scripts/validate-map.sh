@@ -69,8 +69,8 @@ MAP="$1"
 
 # --- read frontmatter -------------------------------------------------------
 # Populate: raw scalar per key (M_*), and a flag for list-shaped fields.
-M_TYPE=""; M_STATUS=""; M_DEST=""; M_CREATED=""
-have_type=0; have_status=0; have_dest=0; have_created=0
+M_TYPE=""; M_STATUS=""; M_DEST=""; M_CREATED=""; M_GTO=""; M_GON=""
+have_type=0; have_status=0; have_dest=0; have_created=0; have_gto=0; have_gon=0
 cp_islist=0; ref_islist=0; have_cp=0; have_ref=0
 # raw element capture for the two list-shaped fields: CP_/REF_INLINE hold the
 # `[...]` body for the inline form; CP_/REF_LINES hold the trimmed block-form
@@ -120,6 +120,12 @@ while IFS= read -r line || [ -n "$line" ]; do
     destination:*)
       [ "$have_dest" -eq 0 ] || bad "destination" "duplicate key"
       M_DEST="$(fieldval "${line#destination:}")"; have_dest=1 ;;
+    graduated_to:*)
+      [ "$have_gto" -eq 0 ] || bad "graduated_to" "duplicate key"
+      M_GTO="$(fieldval "${line#graduated_to:}")"; have_gto=1 ;;
+    graduated_on:*)
+      [ "$have_gon" -eq 0 ] || bad "graduated_on" "duplicate key"
+      M_GON="$(fieldval "${line#graduated_on:}")"; have_gon=1 ;;
     context_pointers:*)
       [ "$have_cp" -eq 0 ] || bad "context_pointers" "duplicate key"
       have_cp=1
@@ -149,9 +155,27 @@ done < "$MAP"
 
 [ "$have_status" -eq 1 ] || bad "status" "field missing"
 case "$M_STATUS" in
-  charting|working) ;;
-  *) bad "status" "expected charting|working, got '$M_STATUS'" ;;
+  charting|working|graduated) ;;
+  *) bad "status" "expected charting|working|graduated, got '$M_STATUS'" ;;
 esac
+
+# A graduated map records where it went and when (graduate flow, written only
+# after goalforge-capture succeeds). graduated_to is shape-checked, not resolved:
+# PLANS_ROOT-relative and ending in /overview.md.
+if [ "$M_STATUS" = "graduated" ]; then
+  [ "$have_gto" -eq 1 ] || bad "graduated_to" "field missing (required when status is graduated)"
+  [ -n "$M_GTO" ] || bad "graduated_to" "must be non-empty"
+  case "$M_GTO" in
+    /*|'~'*) bad "graduated_to" "must be PLANS_ROOT-relative, got '$M_GTO'" ;;
+  esac
+  case "$M_GTO" in
+    */overview.md) ;;
+    *) bad "graduated_to" "must end in /overview.md, got '$M_GTO'" ;;
+  esac
+  [ "$have_gon" -eq 1 ] || bad "graduated_on" "field missing (required when status is graduated)"
+  [[ "$M_GON" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \
+    || bad "graduated_on" "must be YYYY-MM-DD, got '$M_GON'"
+fi
 
 [ "$have_created" -eq 1 ] || bad "created" "field missing"
 [[ "$M_CREATED" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] \

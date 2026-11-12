@@ -107,15 +107,26 @@ map_status() {
 # The sibling emits ONE pinned single-line object:
 #   {"frontier": [..], "blocked": [..], "claimed": [..], "stale_claims": [..],
 #    "converged": bool}
-# These slice that pinned shape; they never re-derive any of its values.
+# It is PARSED as JSON (never sliced: a ticket slug holding `]` cut a sliced
+# array short); none of its values is re-derived here.
 
-# slice_between <json> <open-key> <close-marker> -> inner text of the array
-slice_between() {
-  local j="$1" openk="$2" closek="$3" rest
-  case "$j" in *"$openk"*) ;; *) return 1 ;; esac
-  rest="${j#*"$openk"}"
-  case "$rest" in *"$closek"*) ;; *) return 1 ;; esac
-  printf '%s' "${rest%%"$closek"*}"
+# parse_frontier <json> -> three lines: frontier array, stale_claims array,
+# converged (true|false), each re-serialised as JSON. Returns 1 when the input
+# does not parse or does not carry the pinned keys with their pinned types.
+parse_frontier() {
+  printf '%s' "$1" | python3 -c '
+import json, sys
+try:
+    d = json.loads(sys.stdin.read())
+    f, s, c = d["frontier"], d["stale_claims"], d["converged"]
+except Exception:
+    sys.exit(1)
+if not (isinstance(f, list) and isinstance(s, list) and isinstance(c, bool)):
+    sys.exit(1)
+print(json.dumps(f, ensure_ascii=False))
+print(json.dumps(s, ensure_ascii=False))
+print("true" if c else "false")
+' 2>/dev/null
 }
 
 # --- open count -------------------------------------------------------------
@@ -186,6 +197,12 @@ if [ "${1:-}" = "--self-test" ]; then
       contains "$1" '"efforts"'
     fi
   }
+  # Without python3 every active effort degrades to an error entry, so the
+  # cases that assert frontier content are skipped (HAVE_PY=0), never failed.
+  need_py() {
+    [ "$HAVE_PY" -eq 1 ] && return 0
+    printf 'skip [%s]: python3 unavailable\n' "$1"; return 1
+  }
 
   # fixture builders -------------------------------------------------------
   mk_map() { # mk_map <effort-dir> <status>
@@ -231,7 +248,8 @@ if [ "${1:-}" = "--self-test" ]; then
   mk_ticket "$ROOT/gamma" ticket-01-done resolved '[]'
   run_case "$ROOT"
   name=mixed-root
-  if [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
+  if ! need_py "$name"; then :
+  elif [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
   elif ! is_valid_json "$OUT"; then fail "$name" "stdout is not valid JSON: $OUT"
   elif ! contains "$OUT" '{"slug": "alpha", "status": "working", "frontier": ["ticket-01-first"], "open": 2, "converged": false, "stale_claims": []}'; then
     fail "$name" "alpha entry wrong: $OUT"
@@ -247,7 +265,8 @@ if [ "${1:-}" = "--self-test" ]; then
   mk_ticket "$ROOT_DEG/zzz-healthy" ticket-01-live open '[]'
   run_case "$ROOT_DEG"
   name=degrade-not-block
-  if [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0 (a broken effort killed the scan): $ERR"
+  if ! need_py "$name"; then :
+  elif [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0 (a broken effort killed the scan): $ERR"
   elif ! is_valid_json "$OUT"; then fail "$name" "stdout is not valid JSON: $OUT"
   elif ! contains "$OUT" '"slug": "aaa-broken", "status": "working", "error":'; then
     fail "$name" "broken effort not reported as an error entry: $OUT"
@@ -261,7 +280,8 @@ if [ "${1:-}" = "--self-test" ]; then
   mk_ticket "$ROOT_CONV/done" ticket-01-done resolved '[]'
   run_case "$ROOT_CONV"
   name=converged
-  if [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
+  if ! need_py "$name"; then :
+  elif [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
   elif ! contains "$OUT" '"frontier": [], "open": 0, "converged": true, "stale_claims": []'; then
     fail "$name" "converged shape wrong: $OUT"
   else pass "$name"; fi
@@ -273,7 +293,8 @@ if [ "${1:-}" = "--self-test" ]; then
   mk_ticket "$ROOT_STALE/held" ticket-01-held open '[]' session-dead 2026-07-01
   run_case "$ROOT_STALE"
   name=stale-claim
-  if [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
+  if ! need_py "$name"; then :
+  elif [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
   elif ! contains "$OUT" '"frontier": [], "open": 1, "converged": false, "stale_claims": ["ticket-01-held"]'; then
     fail "$name" "stale-claim shape wrong: $OUT"
   else pass "$name"; fi
@@ -312,7 +333,8 @@ if [ "${1:-}" = "--self-test" ]; then
   mk_ticket "$ROOT_DBL/dbl" ticket-02-held open '[ticket-01]' session-x
   run_case "$ROOT_DBL"
   name=blocked-and-claimed-not-double-counted
-  if [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
+  if ! need_py "$name"; then :
+  elif [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
   elif ! contains "$OUT" '"frontier": ["ticket-01-first"], "open": 2, "converged": false'; then
     fail "$name" "expected open 2 (ticket counted once): $OUT"
   else pass "$name"; fi
@@ -324,7 +346,8 @@ if [ "${1:-}" = "--self-test" ]; then
   mk_ticket "$ROOT_COMMA/comma" 'ticket-01-a,b' open '[]'
   run_case "$ROOT_COMMA"
   name=comma-in-basename
-  if [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
+  if ! need_py "$name"; then :
+  elif [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0: $ERR"
   elif ! is_valid_json "$OUT"; then fail "$name" "stdout is not valid JSON: $OUT"
   elif ! contains "$OUT" '"open": 1'; then fail "$name" "expected open 1: $OUT"
   else pass "$name"; fi
@@ -337,7 +360,8 @@ if [ "${1:-}" = "--self-test" ]; then
   mk_ticket "$ROOT_MAPDIR/zzz-healthy" ticket-01-live open '[]'
   run_case "$ROOT_MAPDIR"
   name=map-is-a-directory
-  if [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0 (an unreadable map killed the scan): $ERR"
+  if ! need_py "$name"; then :
+  elif [ "$RC" -ne 0 ]; then fail "$name" "exit $RC != 0 (an unreadable map killed the scan): $ERR"
   elif ! is_valid_json "$OUT"; then fail "$name" "stdout is not valid JSON: $OUT"
   elif ! contains "$OUT" '{"slug": "aaa-mapdir", "error":'; then
     fail "$name" "unreadable map not reported as an error entry: $OUT"
@@ -383,6 +407,10 @@ trap 'rm -f "$FERR"' EXIT
 
 entries=()
 
+# One python3 probe before the first parse; see the per-effort degrade below.
+HAVE_PY=0
+if command -v python3 >/dev/null 2>&1; then HAVE_PY=1; fi
+
 for map in "${MAPS[@]}"; do
   # Keep the effort dir as the caller wrote it (no symlink resolution) so the
   # slug is the plans-root entry name the user will type back at /wayfind.
@@ -403,6 +431,13 @@ for map in "${MAPS[@]}"; do
   esac
   status_j="$(json_escape "$M_STATUS")"
 
+  # Without python3 the frontier JSON cannot be parsed: degrade this effort to
+  # an error entry rather than abort the scan (exit stays 0).
+  if [ "$HAVE_PY" -eq 0 ]; then
+    entries+=("{\"slug\": \"$slug_j\", \"status\": \"$status_j\", \"error\": \"python3 unavailable: frontier not parsed\"}")
+    continue
+  fi
+
   # Sole computer of convergence — shelled out to, never re-implemented.
   set +e
   fjson="$(bash "$FRONTIER" "$effort_dir" 2>"$FERR")"; frc=$?
@@ -415,20 +450,18 @@ for map in "${MAPS[@]}"; do
     continue
   fi
 
-  f_inner="$(slice_between "$fjson" '"frontier": [' ']' || true)"
-  s_inner="$(slice_between "$fjson" '"stale_claims": [' ']' || true)"
-
-  case "$fjson" in
-    *'"converged": true'*)  converged=true ;;
-    *'"converged": false'*) converged=false ;;
-    *) entries+=("{\"slug\": \"$slug_j\", \"status\": \"$status_j\", \"error\": \"unparseable frontier output\"}"); continue ;;
-  esac
+  parsed=()
+  mapfile -t parsed < <(parse_frontier "$fjson" || true)
+  if [ "${#parsed[@]}" -ne 3 ]; then
+    entries+=("{\"slug\": \"$slug_j\", \"status\": \"$status_j\", \"error\": \"unparseable frontier output\"}"); continue
+  fi
+  f_arr="${parsed[0]}"; s_arr="${parsed[1]}"; converged="${parsed[2]}"
 
   # `open` is counted DIRECTLY from the ticket files — the sibling's arrays are
   # not a partition (blocked ∩ claimed ≠ ∅), so deriving from them double-counts.
   open="$(count_open_tickets "$effort_dir")"
 
-  entries+=("{\"slug\": \"$slug_j\", \"status\": \"$status_j\", \"frontier\": [$(trim "$f_inner")], \"open\": $open, \"converged\": $converged, \"stale_claims\": [$(trim "$s_inner")]}")
+  entries+=("{\"slug\": \"$slug_j\", \"status\": \"$status_j\", \"frontier\": $f_arr, \"open\": $open, \"converged\": $converged, \"stale_claims\": $s_arr}")
 done
 
 join() { local sep="$1"; shift; local out="" first=1 x
