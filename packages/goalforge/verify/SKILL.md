@@ -38,18 +38,18 @@ gates.
 
 ## Gate protocol
 
-Before each gate, ask the budget script whether it may run; after each gate,
-emit its verdict:
+Before each gate, ask the budget script; after it, emit one row (`<wp-id>` = WP directory name):
 
 ```bash
 bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-gate-budget.sh <gate> --feature-dir <PLANS_ROOT>/<feature>   # 0 run, 4 disabled, 2 error
 ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-trace-emit \
-  --feature-dir <PLANS_ROOT>/<feature> --event '<gate.result payload>'
+  --feature-dir <PLANS_ROOT>/<feature> --event '{"type":"gate.result","wp":"<wp-id>","gate":"A|B|C","result":"pass|fail","reason":"<text>"}'
 ```
 
 Exit 4 = the gate BLOCKed twice this session with no shipped fix: the script
-writes the `gate.disabled` WARN row, you skip that gate and note it in
-`<wp>/findings.md`. A gate's internal error is exit 2 — a failure, never a pass.
+writes the `gate.disabled` WARN row. Park the WP at `implemented`, name the disabled gate in `<wp>/findings.md`, and do not transition;
+`--override` is the human's decision. A gate's internal error is exit 2 — a failure, never a pass.
+Gates A, B and C all re-run after any return to `implemented` (gate A BLOCK or gate B HIGH re-dispatch).
 
 ## Gate A — deterministic
 
