@@ -56,6 +56,7 @@ check "C4 stop rule cited (spec C4)" "Stop rule: spec.md"
 
 # Gate A
 check "gate A: repo lint and type-check whole-repo once" "Repo lint and type-check, whole-repo, once"
+check "gate A: no declared lint command records none-declared, never a silent pass" "\`reason: none-declared\`"
 check "gate A: goal.verification.command exactly as written" "The WP's \`goal.verification.command\`, exactly as written"
 check "gate A: boundary check — diff paths inside owned_files, else BLOCK" "every path in the cumulative diff is inside the WP's"
 check "gate A failure sends the WP back to executing" "send the WP back to"
