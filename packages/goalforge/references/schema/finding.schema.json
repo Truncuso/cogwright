@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://goalforge/finding.schema.json",
+  "title": "goalforge finding v1",
+  "description": "One flat JSON finding, schema_version 1. Normative spec: references/finding-contract.md. SARIF 2.1.0 is the import/export mapping, not the wire format. Per-producer mandatory fields are encoded as allOf of if/then; the only validator in this package (goalforge-trace-emit `_validate`) supports allOf and if/then but not `$ref`, so every subschema is written out at its site. `suppression`, `baseline_state` and `route_to` are reserved: producers never set them, consumers stamp them.",
+  "type": "object",
+  "required": ["schema_version", "id", "producer", "severity", "location", "what", "analysis_kind"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "id": { "description": "uuid.", "type": "string" },
+    "producer": {
+      "type": "object",
+      "required": ["name", "kind"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "type": "string", "enum": ["deterministic", "model"] }
+      }
+    },
+    "rule_id": { "description": "Mandatory for deterministic producers, optional for model producers.", "type": "string" },
+    "severity": { "type": "string", "enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"] },
+    "confidence": { "type": "string", "enum": ["high", "medium", "low"] },
+    "location": {
+      "type": "object",
+      "required": ["file", "start_line"],
+      "additionalProperties": false,
+      "properties": {
+        "file": { "type": "string" },
+        "start_line": { "type": "integer", "minimum": 1 },
+        "end_line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "what": { "description": "One plain sentence.", "type": "string" },
+    "analysis_kind": {
+      "type": "string",
+      "enum": ["taint", "path", "pattern", "complexity", "secret", "dep", "intent"]
+    },
+    "why_it_matters": { "description": "Concrete failure or exploit scenario. Mandatory for model producers.", "type": "string" },
+    "trace": {
+      "description": "Source to sink. Mandatory when producer.kind is deterministic and analysis_kind is taint or path.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["file", "start_line"],
+        "additionalProperties": false,
+        "properties": {
+          "file": { "type": "string" },
+          "start_line": { "type": "integer", "minimum": 1 },
+          "end_line": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "fix": { "description": "Prose.", "type": "string" },
+    "fingerprint": { "description": "Mandatory for deterministic producers; model producers do not emit it (not enforced in v1). Key and algorithm owned by ticket-03.", "type": "string" },
+    "suppression": { "description": "Reserved, consumer-stamped (ticket-22). Producers never set it.", "type": "object" },
+    "baseline_state": { "description": "Reserved, consumer-stamped (ticket-03). Producers never set it.", "type": "string" },
+    "route_to": { "description": "Reserved, consumer-stamped (ticket-30). Producers never set it.", "type": "string" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["producer"],
+        "properties": { "producer": { "properties": { "kind": { "const": "deterministic" } } } }
+      },
+      "then": { "required": ["rule_id", "fingerprint"] }
+    },
+    {
+      "if": {
+        "required": ["producer", "analysis_kind"],
+        "properties": {
+          "producer": { "properties": { "kind": { "const": "deterministic" } } },
+          "analysis_kind": { "enum": ["taint", "path"] }
+        }
+      },
+      "then": { "required": ["trace"] }
+    },
+    {
+      "if": {
+        "required": ["producer"],
+        "properties": { "producer": { "properties": { "kind": { "const": "model" } } } }
+      },
+      "then": { "required": ["why_it_matters"] }
+    }
+  ]
+}
