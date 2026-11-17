@@ -1,0 +1,48 @@
+# shellcheck-baseline.txt — pre-existing shellcheck findings, `<path>::<SC code>::<count>`.
+# pinned-version: 0.11.0
+#
+# REMOVAL-ONLY ratchet (ci-lints.sh section `shellcheck`): a (path, SC) pair
+# above its count here fails, and so does an entry whose count has since dropped.
+# Severity floor: warning. Scope: scripts/ + packages/ *.sh, excluding fixtures/.
+# Regenerate (only to RECORD accepted debt, never to silence a new finding):
+#   git ls-files -z 'scripts/*.sh' 'packages/*.sh' | grep -zv /fixtures/ \
+#     | xargs -0 shellcheck --severity=warning -f gcc | sed -nE \
+#     's/^([^:]+):[0-9]+:[0-9]+: [a-z]+: .*\[(SC[0-9]+)\]$/\1::\2/p' | sort | uniq -c \
+#     | sed -E 's/^ *([0-9]+) (.*)$/\2::\1/' | sort
+packages/goalforge/evals/retrospective/cases/park-render.sh::SC2034::1
+packages/goalforge/evals/retrospective/run.sh::SC2034::2
+packages/goalforge/evals/schema-v5/run.sh::SC2034::1
+packages/goalforge/evals/workflow-authoring/run.sh::SC2046::9
+packages/goalforge/hooks/goalforge-frontmatter-touch.sh::SC2088::1
+packages/goalforge/hooks/goalforge-plans-root.sh::SC2088::2
+packages/goalforge/hooks/goalforge-transition-guard.sh::SC2034::3
+packages/goalforge/hooks/tests/goalforge-plans-root.test.sh::SC2034::1
+packages/goalforge/hooks/tests/goalforge-pre-commit.test.sh::SC1090::1
+packages/goalforge/scripts/goalforge-frontier.sh::SC2034::2
+packages/goalforge/scripts/goalforge-goal-changelog.sh::SC2034::1
+packages/goalforge/scripts/goalforge-goal-hash.sh::SC2034::2
+packages/goalforge/scripts/goalforge-harden-surface.sh::SC2034::2
+packages/goalforge/scripts/goalforge-learning-route.sh::SC2034::1
+packages/goalforge/scripts/goalforge-path-idiom-lint.sh::SC2088::1
+packages/goalforge/scripts/goalforge-preharden-lint.sh::SC2318::2
+packages/goalforge/scripts/goalforge-reconcile-diff.sh::SC2034::2
+packages/goalforge/scripts/goalforge-second-opinion.sh::SC2088::1
+packages/goalforge/scripts/goalforge-transition.sh::SC2034::1
+packages/goalforge/scripts/goalforge-validate.sh::SC2034::2
+packages/goalforge/scripts/tests/goalforge-archived-collision.test.sh::SC2319::11
+packages/goalforge/scripts/tests/goalforge-archive.test.sh::SC2319::12
+packages/goalforge/scripts/tests/goalforge-harden-reset.test.sh::SC2034::1
+packages/goalforge/scripts/tests/goalforge-harness-check.test.sh::SC2034::1
+packages/goalforge/scripts/tests/goalforge-harness-check.test.sh::SC2100::2
+packages/goalforge/scripts/tests/goalforge-path-idiom-lint.test.sh::SC2088::1
+packages/goalforge/scripts/tests/goalforge-preharden-lint.test.sh::SC2046::1
+packages/goalforge/scripts/tests/goalforge-prototype-retain.test.sh::SC2164::6
+packages/goalforge/scripts/tests/goalforge-prototype-retain.test.sh::SC2319::8
+packages/goalforge/scripts/tests/goalforge-respec.test.sh::SC2034::2
+packages/goalforge/scripts/tests/goalforge-roster.test.sh::SC2010::1
+packages/goalforge/scripts/tests/goalforge-transition-evidence.test.sh::SC2319::10
+packages/goalforge/scripts/tests/goalforge-workflow-compile.test.sh::SC2115::1
+packages/goalforge/scripts/tests/goalforge-workflow-compile.test.sh::SC2155::1
+packages/goalforge/wayfind/scripts/wayfind-frontier.sh::SC2034::1
+packages/goalforge/wayfind/scripts/wayfind-frontier.sh::SC2100::1
+packages/goalforge/wayfind/scripts/wayfind-status.sh::SC2100::1
