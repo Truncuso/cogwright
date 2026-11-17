@@ -24,10 +24,10 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 2
 
 # Registry of runnable sections, in run order.
-SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet relation-claims interview-contract)
+SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet relation-claims interview-contract shellcheck)
 
 # Opt-out list for the per-section zero-scan gate: sections named here may
 # legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
@@ -1058,6 +1058,108 @@ lint_interview_contract() {
   fi
 
   [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# Section: shellcheck — no NEW shellcheck finding enters the repo's shell sources.
+#
+# Interim deterministic sensor (wayfind code-sensor-toolchain ticket-31): CI ran
+# no shell linter although the repo is mostly shell. ZERO-NEW RATCHET over the
+# findings that existed at registration, keyed by `<path>::<SC code>::<count>`
+# in SHELLCHECK_BASELINE_FILE — line numbers are deliberately not part of the
+# key, so unrelated edits do not churn it. Fails on (a) a (path, SC) pair whose
+# count exceeds its baseline entry, and (b) a baseline entry whose count is now
+# higher than reality (stale — shrink or delete it), same removal-only contract
+# as the other baselines.
+#
+# SEVERITY FLOOR: warning (`shellcheck --severity=warning` — error + warning;
+# info/style findings are out of scope). Scope: tracked *.sh under scripts/ and
+# packages/. plugins/ is the generated mirror of packages/ (double-counting),
+# and `fixtures/` trees hold deliberately-bad known-bad corpora for evals.
+# Scan unit is the .sh file, so SCANNED is the file count.
+#
+# Regenerate the baseline (only to record accepted pre-existing debt):
+#   bash scripts/ci-lints.sh --only shellcheck   # lists the offending pairs
+#   see SHELLCHECK_BASELINE_FILE header for the one-liner.
+# ---------------------------------------------------------------------------
+SHELLCHECK_BASELINE_FILE="scripts/lint-baselines/shellcheck-baseline.txt"
+SHELLCHECK_SEVERITY="warning"
+# Findings are version-dependent (0.11 added SC2318/SC2319), so the baseline is
+# only valid for ONE shellcheck release: its `# pinned-version: X` header line is
+# the single source of truth, and the section fails closed on any other version.
+# SHELLCHECK=<path> selects a specific binary (default: shellcheck on PATH).
+SHELLCHECK="${SHELLCHECK:-shellcheck}"
+
+# Usage: shellcheck_counts <file>... — prints `<path>::<SC>::<count>` lines, sorted.
+shellcheck_counts() {
+  "$SHELLCHECK" --severity="$SHELLCHECK_SEVERITY" -f gcc -- "$@" 2>/dev/null \
+    | sed -nE 's/^([^:]+):[0-9]+:[0-9]+: [a-z]+: .*\[(SC[0-9]+)\]$/\1::\2/p' \
+    | sort | uniq -c \
+    | sed -E 's/^ *([0-9]+) (.*)$/\2::\1/' \
+    | sort
+}
+
+lint_shellcheck() {
+  command -v "$SHELLCHECK" >/dev/null 2>&1 \
+    || die 2 "shellcheck not found ($SHELLCHECK) — refusing to report PASS"
+  local pinned found
+  pinned="$(sed -nE 's/^# pinned-version: *([0-9][0-9.]*).*$/\1/p' "$SHELLCHECK_BASELINE_FILE" 2>/dev/null | head -n1)"
+  [ -n "$pinned" ] || die 2 "$SHELLCHECK_BASELINE_FILE has no '# pinned-version: X' header"
+  found="$("$SHELLCHECK" --version 2>/dev/null | sed -nE 's/^version: *([0-9][0-9.]*).*$/\1/p' | head -n1)"
+  [ "$found" = "$pinned" ] \
+    || die 2 "shellcheck $pinned required, found ${found:-unknown} (set SHELLCHECK=<path> to a $pinned binary)"
+  local -a files=()
+  local f
+  while IFS= read -r -d '' f; do
+    case "$f" in */fixtures/*) continue ;; esac
+    files+=("$f")
+  done < <(list_files 'scripts/*.sh' 'packages/*.sh')
+  SCANNED="${#files[@]}"
+  [ "$SCANNED" -gt 0 ] || return 0
+
+  local actual base key n bn bad=0
+  actual="$(shellcheck_counts "${files[@]}")"
+  base=""
+  [ -f "$SHELLCHECK_BASELINE_FILE" ] \
+    && base="$(grep -vE '^[[:space:]]*(#|$)' "$SHELLCHECK_BASELINE_FILE" | sort)"
+
+  # Parse errors (SC1xxx) can never be baselined: shellcheck aborts the whole
+  # file on one, hiding every other finding. SC1090/SC1091 (cannot follow a
+  # sourced file) are not parse errors and stay baselinable.
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    printf '  %s: SC1xxx parse error is not baselinable (%s)\n' "$SHELLCHECK_BASELINE_FILE" "$line" >&2
+    bad=$(( bad + 1 ))
+  done < <(printf '%s\n' "$base" | grep -E '::SC1[0-9]{3}::' | grep -vE '::SC109[01]::')
+
+  # New or grown findings.
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key="${line%::*}"; n="${line##*::}"
+    bn="$(printf '%s
+' "$base" | awk -F'::' -v k="$key" '$1"::"$2==k{print $3; exit}')"
+    if [ "${n}" -gt "${bn:-0}" ]; then
+      printf '  %s: %s finding(s) of %s, baseline allows %s\n' \
+        "${key%%::*}" "$n" "${key##*::}" "${bn:-0}" >&2
+      bad=$(( bad + 1 ))
+    fi
+  done <<< "$actual"
+
+  # Stale baseline entries (fixed debt must be removed from the baseline).
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key="${line%::*}"; bn="${line##*::}"
+    n="$(printf '%s
+' "$actual" | awk -F'::' -v k="$key" '$1"::"$2==k{print $3; exit}')"
+    if [ "${n:-0}" -lt "$bn" ]; then
+      printf '  %s: baseline lists %s of %s but only %s remain — lower or delete the entry in %s\n' \
+        "${key%%::*}" "$bn" "${key##*::}" "${n:-0}" "$SHELLCHECK_BASELINE_FILE" >&2
+      bad=$(( bad + 1 ))
+    fi
+  done <<< "$base"
+
+  VIOLATIONS="$bad"
+  [ "$bad" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------

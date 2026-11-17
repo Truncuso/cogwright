@@ -73,8 +73,27 @@ jobs:
       - name: goalforge artifact drift gate
         run: bash scripts/goalforge-generate.sh --check
 
+      # Pinned: shellcheck findings are version-dependent, so the lint baseline
+      # (scripts/lint-baselines/shellcheck-baseline.txt, `# pinned-version:`) is
+      # only valid for this exact release. Keep the two in lockstep.
+      - name: Install pinned shellcheck
+        run: |
+          set -euo pipefail
+          VER=0.11.0
+          SHA=8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+          T="shellcheck-v${VER}.linux.x86_64.tar.xz"
+          curl -fsSL -o "$RUNNER_TEMP/$T" "https://github.com/koalaman/shellcheck/releases/download/v${VER}/$T"
+          echo "${SHA}  $RUNNER_TEMP/$T" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$T" -C "$RUNNER_TEMP"
+          echo "SHELLCHECK=$RUNNER_TEMP/shellcheck-v${VER}/shellcheck" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/shellcheck-v${VER}/shellcheck" --version
+
       - name: repo lints
         run: bash scripts/ci-lints.sh
+
+      # stdlib unittest (no pytest, no extra install); hermetic fixture tree.
+      - name: goalforge archive-sweep python test
+        run: python3 packages/goalforge/scripts/tests/test_goalforge_archive_sweep.py
 
       - name: claude plugin validate --strict
         run: |
