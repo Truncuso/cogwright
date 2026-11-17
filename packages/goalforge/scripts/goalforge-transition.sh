@@ -752,6 +752,51 @@ PY
             return 2
         fi
     fi
+    # ── verified gate (references/state-machine.md §Policy; rows per
+    # references/trace-events.md) ─────────────────────────────────────────────
+    # At schema_version >= 6 a WP moves to verified, from any FROM, only when its
+    # newest wp.status_changed row by seq goes -> implemented and, after it,
+    # trace holds gate.result rows with gate exactly A, B and C and result
+    # pass for this WP. gate.disabled rows and gate-a/b/c spellings do not count.
+    # A missing or empty trace has no implemented row. The trace is read strict
+    # through goalforge-trace-read (no lock of its own, so no nesting with flock
+    # 9). --override skips the read; the ledger row records override: true.
+    # Refusal: exit 2; a reader crash or corrupt interior line: exit 1.
+    local NO_GATE_ROW
+    if [[ "$KIND" == "wp" && "$RESPEC_STRICT" == 1 && "$TO" == "verified" && "$OVERRIDE" != "true" ]]; then
+        NO_GATE_ROW="$(python3 - "$SCRIPT_DIR/goalforge-trace-read" "$FEATURE_DIR/trace-events.jsonl" "$WP_NAME" <<'PY'
+import sys, json, os, subprocess
+reader, log, wp = sys.argv[1], sys.argv[2], sys.argv[3]
+rows = []
+if os.path.isfile(log):
+    p = subprocess.run([sys.executable, reader, log], capture_output=True, text=True)
+    if p.returncode != 0:
+        print(p.stderr.strip() or "goalforge-trace-read exit %d" % p.returncode)
+        sys.exit(1)
+    rows = [json.loads(ln) for ln in p.stdout.splitlines() if ln.strip()]
+rows = [r for r in rows if r.get("wp") == wp]
+for r in rows:
+    if type(r.get("seq")) is not int:
+        print("trace row has a non-integer seq: %s" % json.dumps(r))
+        sys.exit(1)
+moves = [r for r in rows if r.get("type") == "wp.status_changed"]
+impl = [r for r in moves if r.get("to") == "implemented"]
+if not impl or max(moves, key=lambda r: r["seq"]).get("to") != "implemented":
+    sys.exit(print("%s has no implemented transition" % wp))
+anchor = max(impl, key=lambda r: r["seq"])
+passed = {r.get("gate") for r in rows
+          if r.get("type") == "gate.result" and r.get("result") == "pass" and r["seq"] > anchor["seq"]}
+for g in ("A", "B", "C"):
+    if g not in passed:
+        sys.exit(print("gate %s has no pass row since implemented (run gate %s or --override)" % (g, g)))
+PY
+)" || { flock -u 9; exec 9>&-; echo "ERROR: verified check failed for $WP_DIR: $NO_GATE_ROW; refused" >&2; return 1; }
+        if [[ -n "$NO_GATE_ROW" ]]; then
+            flock -u 9; exec 9>&-
+            echo "verified refused: $NO_GATE_ROW" >&2
+            return 2
+        fi
+    fi
     TS="$(date -u +%Y-%m-%dT%H:%M:%SZ)"  # inside the lock: ts order == ledger order (L1-l8)
     do_write "$OVERVIEW" "$TO" "$TODAY" "$LEDGER" "$WP_NAME" "$FROM" \
              "$REASON" "$ACTOR" "$OVERRIDE" "$COMMIT" "$TS" \
