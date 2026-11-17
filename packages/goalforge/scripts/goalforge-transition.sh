@@ -755,8 +755,8 @@ PY
     # ── verified gate (references/state-machine.md §Policy; rows per
     # references/trace-events.md) ─────────────────────────────────────────────
     # At schema_version >= 6 a WP moves to verified, from any FROM, only when its
-    # trace holds a wp.status_changed -> implemented row and, after the newest
-    # such row by seq, gate.result rows with gate exactly A, B and C and result
+    # newest wp.status_changed row by seq goes -> implemented and, after it,
+    # trace holds gate.result rows with gate exactly A, B and C and result
     # pass for this WP. gate.disabled rows and gate-a/b/c spellings do not count.
     # A missing or empty trace has no implemented row. The trace is read strict
     # through goalforge-trace-read (no lock of its own, so no nesting with flock
@@ -775,8 +775,13 @@ if os.path.isfile(log):
         sys.exit(1)
     rows = [json.loads(ln) for ln in p.stdout.splitlines() if ln.strip()]
 rows = [r for r in rows if r.get("wp") == wp]
-impl = [r for r in rows if r.get("type") == "wp.status_changed" and r.get("to") == "implemented"]
-if not impl:
+for r in rows:
+    if type(r.get("seq")) is not int:
+        print("trace row has a non-integer seq: %s" % json.dumps(r))
+        sys.exit(1)
+moves = [r for r in rows if r.get("type") == "wp.status_changed"]
+impl = [r for r in moves if r.get("to") == "implemented"]
+if not impl or max(moves, key=lambda r: r["seq"]).get("to") != "implemented":
     sys.exit(print("%s has no implemented transition" % wp))
 anchor = max(impl, key=lambda r: r["seq"])
 passed = {r.get("gate") for r in rows
