@@ -48,7 +48,7 @@ writes the `gate.disabled` WARN row, you skip that gate and note it in
 
 ## Gate A — deterministic
 
-1. Repo lint and type-check, whole-repo, once: the repo-declared command (CLAUDE.md, Makefile, manifest). None: `gate.result` `warn`, `reason: none-declared`.
+1. Repo lint and type-check, whole-repo, once: run the repo-declared command(s) (CLAUDE.md, Makefile, manifest). Any not declared: `gate.result` `warn`, `reason: none-declared`, and continue (steps 2-3 still run); if only one of lint/type-check is declared, run it and record the other `none-declared`.
 2. The WP's `goal.verification.command`, exactly as written.
 3. **Boundary check:** every path in the cumulative diff is inside the WP's
    `owned_files:`. A path outside it BLOCKS — the WP wrote where it does not own.

@@ -24,7 +24,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 2
 
 # Registry of runnable sections, in run order.
 SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet relation-claims interview-contract shellcheck)
@@ -1061,7 +1061,7 @@ lint_interview_contract() {
 }
 
 # ---------------------------------------------------------------------------
-# shellcheck — no NEW shellcheck finding enters the repo's shell sources.
+# Section: shellcheck — no NEW shellcheck finding enters the repo's shell sources.
 #
 # Interim deterministic sensor (wayfind code-sensor-toolchain ticket-31): CI ran
 # no shell linter although the repo is mostly shell. ZERO-NEW RATCHET over the
@@ -1085,7 +1085,7 @@ lint_interview_contract() {
 SHELLCHECK_BASELINE_FILE="scripts/lint-baselines/shellcheck-baseline.txt"
 SHELLCHECK_SEVERITY="warning"
 
-# shellcheck_counts <file>... — prints `<path>::<SC>::<count>` lines, sorted.
+# Usage: shellcheck_counts <file>... — prints `<path>::<SC>::<count>` lines, sorted.
 shellcheck_counts() {
   shellcheck --severity="$SHELLCHECK_SEVERITY" -f gcc -- "$@" 2>/dev/null \
     | sed -nE 's/^([^:]+):[0-9]+:[0-9]+: [a-z]+: .*\[(SC[0-9]+)\]$/\1::\2/p' \
@@ -1112,11 +1112,21 @@ lint_shellcheck() {
   [ -f "$SHELLCHECK_BASELINE_FILE" ] \
     && base="$(grep -vE '^[[:space:]]*(#|$)' "$SHELLCHECK_BASELINE_FILE" | sort)"
 
+  # Parse errors (SC1xxx) can never be baselined: shellcheck aborts the whole
+  # file on one, hiding every other finding. SC1090/SC1091 (cannot follow a
+  # sourced file) are not parse errors and stay baselinable.
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    printf '  %s: SC1xxx parse error is not baselinable (%s)\n' "$SHELLCHECK_BASELINE_FILE" "$line" >&2
+    bad=$(( bad + 1 ))
+  done < <(printf '%s\n' "$base" | grep -E '::SC1[0-9]{3}::' | grep -vE '::SC109[01]::')
+
   # New or grown findings.
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     key="${line%::*}"; n="${line##*::}"
-    bn="$(printf '%s\n' "$base" | sed -nE "s|^$(printf '%s' "$key" | sed 's/[][\.*^$|]/\\&/g')::([0-9]+)\$|\1|p" | head -n1)"
+    bn="$(printf '%s
+' "$base" | awk -F'::' -v k="$key" '$1"::"$2==k{print $3; exit}')"
     if [ "${n}" -gt "${bn:-0}" ]; then
       printf '  %s: %s finding(s) of %s, baseline allows %s\n' \
         "${key%%::*}" "$n" "${key##*::}" "${bn:-0}" >&2
@@ -1128,7 +1138,8 @@ lint_shellcheck() {
   while IFS= read -r line; do
     [ -n "$line" ] || continue
     key="${line%::*}"; bn="${line##*::}"
-    n="$(printf '%s\n' "$actual" | sed -nE "s|^$(printf '%s' "$key" | sed 's/[][\.*^$|]/\\&/g')::([0-9]+)\$|\1|p" | head -n1)"
+    n="$(printf '%s
+' "$actual" | awk -F'::' -v k="$key" '$1"::"$2==k{print $3; exit}')"
     if [ "${n:-0}" -lt "$bn" ]; then
       printf '  %s: baseline lists %s of %s but only %s remain — lower or delete the entry in %s\n' \
         "${key%%::*}" "$bn" "${key##*::}" "${n:-0}" "$SHELLCHECK_BASELINE_FILE" >&2

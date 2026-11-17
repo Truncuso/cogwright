@@ -40,5 +40,3 @@ packages/goalforge/scripts/tests/goalforge-workflow-compile.test.sh::SC2155::1
 packages/goalforge/wayfind/scripts/wayfind-frontier.sh::SC2034::1
 packages/goalforge/wayfind/scripts/wayfind-frontier.sh::SC2100::1
 packages/goalforge/wayfind/scripts/wayfind-status.sh::SC2100::1
-scripts/ci-lints.sh::SC1072::1
-scripts/ci-lints.sh::SC1073::1
