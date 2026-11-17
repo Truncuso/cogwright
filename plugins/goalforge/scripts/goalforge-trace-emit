@@ -106,6 +106,8 @@ def _validate(instance, schema, path: str = "") -> list[str]:
     resolved — a schema that factors a subschema out into `definitions` would
     silently never be checked, so schemas validated here write subschemas out
     at each site.
+    `else`, `anyOf` and `not` are likewise ignored silently, so schemas validated
+    here must not use them.
     """
     errors: list[str] = []
 

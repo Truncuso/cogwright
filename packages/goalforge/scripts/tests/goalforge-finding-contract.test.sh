@@ -51,6 +51,17 @@ check "deterministic pattern without trace valid" valid   '{**{k: v for k, v in 
 check "model without why_it_matters fails"        invalid '{k: v for k, v in model.items() if k != "why_it_matters"}'
 check "bad severity enum fails"                   invalid '{**det, "severity": "BLOCKER"}'
 check "unknown extra field fails"                 invalid '{**det, "extra": 1}'
+check "producer.kind outside enum fails"         invalid '{**det, "producer": {"name": "x", "kind": "tool"}}'
+check "analysis_kind outside enum fails"         invalid '{**det, "analysis_kind": "vibes"}'
+check "missing what fails"                       invalid '{k: v for k, v in det.items() if k != "what"}'
+check "schema_version 2 fails"                   invalid '{**det, "schema_version": 2}'
+check "extra key in location fails"              invalid '{**det, "location": {**det["location"], "col": 3}}'
+check "extra key in trace item fails"            invalid '{**det, "trace": [{**det["trace"][0], "col": 3}]}'
+check "start_line 0 fails"                       invalid '{**det, "location": {"file": "a.py", "start_line": 0}}'
+check "trace not an array of locations fails"    invalid '{**det, "trace": "app/routes.py:18"}'
+check "trace items not locations fail"           invalid '{**det, "trace": ["app/routes.py:18"]}'
+check "confidence outside enum fails"            invalid '{**det, "confidence": "certain"}'
+check "model taint without trace valid"          valid   '{**model, "analysis_kind": "taint"}'
 
 echo "=== Results: $PASS passed, $FAIL failed ==="
 [ "$FAIL" -eq 0 ]
