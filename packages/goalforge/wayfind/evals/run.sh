@@ -619,13 +619,13 @@ else fail "$name" "SKILL.md frontmatter does not read metadata.version: 0.3.1"; 
 # + 2 (derived_from optional provenance key in the chart-step-2 template, +1; the
 #   idea-capture clause on the out-of-scope triage bullet, +1 net after reflow —
 #   both are new documented contract surface, bumped-with-justification).
-# + 6 (0.3.1 linkage-token gotcha, 2026-11-17: the bare-token grep in
-#   validate-linkage.sh is by design, but the trap recurred in two sessions).
+# 409 is a hard ceiling (goalforge-contract-drift spec: ceilings are not
+# raised); 0.3.1 added the linkage-token rule line-neutrally.
 # An unmeasured budget is not a constraint.
 name=skill-line-budget
 sk_lines="$(wc -l < "$SKILL_MD")"
-if [ "$sk_lines" -le 415 ]; then pass "$name"
-else fail "$name" "SKILL.md is $sk_lines lines, over the 415 ceiling (361 as-built at 0.2.0 + 8 fan-out + 12 learning + 4 slack + 11 claim-commit gotcha + 10 discovery + 1 partition caveat + 2 derived_from/idea-capture + 6 linkage-token gotcha)"; fi
+if [ "$sk_lines" -le 409 ]; then pass "$name"
+else fail "$name" "SKILL.md is $sk_lines lines, over the 409 ceiling (361 as-built at 0.2.0 + 8 fan-out + 12 learning + 4 slack + 11 claim-commit gotcha + 10 discovery + 1 partition caveat + 2 derived_from/idea-capture)"; fi
 
 name=doc-chart-flow
 skgrep "chart flow" && pass "$name" || fail "$name" "SKILL.md missing 'chart flow' section"

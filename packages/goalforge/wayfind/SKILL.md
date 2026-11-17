@@ -98,7 +98,7 @@ entry stays legal and reads as `{locator: <string>}` — legacy prose entries ca
 over LOSSILY (id/type/note/retrieved dropped), not unexecutably.
 
 Body sections: `## Destination`, `## Decisions so far` (pointers to resolved
-tickets), `## Not yet specified` (the fog — seeded/refreshed by the blind-spot
+tickets; `validate-linkage.sh` reads every bare `ticket-NN` there as one, so name open tickets by description), `## Not yet specified` (the fog — seeded/refreshed by the blind-spot
 pass), `## Out of scope`, the OPTIONAL `## Learning goals` (rows
 `- <slug>: <objective>`, slug kebab-case, shape-validated; the `(why: …)` tail
 is convention), and the OPTIONAL `## Notes` — the per-effort dispatch
@@ -393,12 +393,6 @@ which point the map is simply `working` again (no status unwind needed).
   `findings/ticket-NN.md`, a committed claim stamp with no findings, or a
   `status: resolved` ticket whose map pointer was not updated all leave the next
   session computing a frontier from a state that never existed.
-
-- **Every `ticket-NN` token in `## Decisions so far` is a pointer.**
-  `validate-linkage.sh` greps bare `ticket-[0-9]+` tokens there, prose
-  included, so naming an OPEN ticket ("deferred to ticket-21") fails with
-  `pointer to open ticket`. Name open tickets by description; use the number
-  only for the resolved ticket a decision points at (hit twice, 2026-11-17).
 
 ## Dependencies
 
