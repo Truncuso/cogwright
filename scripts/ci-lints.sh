@@ -27,7 +27,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Registry of runnable sections, in run order.
-SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet relation-claims interview-contract)
+SECTIONS=(author-paths manifest package-refs version privacy-marker retired-vocab prose-eval-ratchet relation-claims interview-contract shellcheck)
 
 # Opt-out list for the per-section zero-scan gate: sections named here may
 # legitimately scan zero files and still report PASS. EMPTY BY DESIGN — a lint
@@ -1058,6 +1058,86 @@ lint_interview_contract() {
   fi
 
   [ "$VIOLATIONS" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# shellcheck — no NEW shellcheck finding enters the repo's shell sources.
+#
+# Interim deterministic sensor (wayfind code-sensor-toolchain ticket-31): CI ran
+# no shell linter although the repo is mostly shell. ZERO-NEW RATCHET over the
+# findings that existed at registration, keyed by `<path>::<SC code>::<count>`
+# in SHELLCHECK_BASELINE_FILE — line numbers are deliberately not part of the
+# key, so unrelated edits do not churn it. Fails on (a) a (path, SC) pair whose
+# count exceeds its baseline entry, and (b) a baseline entry whose count is now
+# higher than reality (stale — shrink or delete it), same removal-only contract
+# as the other baselines.
+#
+# SEVERITY FLOOR: warning (`shellcheck --severity=warning` — error + warning;
+# info/style findings are out of scope). Scope: tracked *.sh under scripts/ and
+# packages/. plugins/ is the generated mirror of packages/ (double-counting),
+# and `fixtures/` trees hold deliberately-bad known-bad corpora for evals.
+# Scan unit is the .sh file, so SCANNED is the file count.
+#
+# Regenerate the baseline (only to record accepted pre-existing debt):
+#   bash scripts/ci-lints.sh --only shellcheck   # lists the offending pairs
+#   see SHELLCHECK_BASELINE_FILE header for the one-liner.
+# ---------------------------------------------------------------------------
+SHELLCHECK_BASELINE_FILE="scripts/lint-baselines/shellcheck-baseline.txt"
+SHELLCHECK_SEVERITY="warning"
+
+# shellcheck_counts <file>... — prints `<path>::<SC>::<count>` lines, sorted.
+shellcheck_counts() {
+  shellcheck --severity="$SHELLCHECK_SEVERITY" -f gcc -- "$@" 2>/dev/null \
+    | sed -nE 's/^([^:]+):[0-9]+:[0-9]+: [a-z]+: .*\[(SC[0-9]+)\]$/\1::\2/p' \
+    | sort | uniq -c \
+    | sed -E 's/^ *([0-9]+) (.*)$/\2::\1/' \
+    | sort
+}
+
+lint_shellcheck() {
+  command -v shellcheck >/dev/null 2>&1 \
+    || die 2 "shellcheck not installed (apt-get install shellcheck) — refusing to report PASS"
+  local -a files=()
+  local f
+  while IFS= read -r -d '' f; do
+    case "$f" in */fixtures/*) continue ;; esac
+    files+=("$f")
+  done < <(list_files 'scripts/*.sh' 'packages/*.sh')
+  SCANNED="${#files[@]}"
+  [ "$SCANNED" -gt 0 ] || return 0
+
+  local actual base key n bn bad=0
+  actual="$(shellcheck_counts "${files[@]}")"
+  base=""
+  [ -f "$SHELLCHECK_BASELINE_FILE" ] \
+    && base="$(grep -vE '^[[:space:]]*(#|$)' "$SHELLCHECK_BASELINE_FILE" | sort)"
+
+  # New or grown findings.
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key="${line%::*}"; n="${line##*::}"
+    bn="$(printf '%s\n' "$base" | sed -nE "s|^$(printf '%s' "$key" | sed 's/[][\.*^$|]/\\&/g')::([0-9]+)\$|\1|p" | head -n1)"
+    if [ "${n}" -gt "${bn:-0}" ]; then
+      printf '  %s: %s finding(s) of %s, baseline allows %s\n' \
+        "${key%%::*}" "$n" "${key##*::}" "${bn:-0}" >&2
+      bad=$(( bad + 1 ))
+    fi
+  done <<< "$actual"
+
+  # Stale baseline entries (fixed debt must be removed from the baseline).
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    key="${line%::*}"; bn="${line##*::}"
+    n="$(printf '%s\n' "$actual" | sed -nE "s|^$(printf '%s' "$key" | sed 's/[][\.*^$|]/\\&/g')::([0-9]+)\$|\1|p" | head -n1)"
+    if [ "${n:-0}" -lt "$bn" ]; then
+      printf '  %s: baseline lists %s of %s but only %s remain — lower or delete the entry in %s\n' \
+        "${key%%::*}" "$bn" "${key##*::}" "${n:-0}" "$SHELLCHECK_BASELINE_FILE" >&2
+      bad=$(( bad + 1 ))
+    fi
+  done <<< "$base"
+
+  VIOLATIONS="$bad"
+  [ "$bad" -eq 0 ]
 }
 
 # ---------------------------------------------------------------------------

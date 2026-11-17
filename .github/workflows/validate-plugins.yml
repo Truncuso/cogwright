@@ -73,8 +73,22 @@ jobs:
       - name: goalforge artifact drift gate
         run: bash scripts/goalforge-generate.sh --check
 
+      # ubuntu-latest images ship shellcheck preinstalled; the guard installs it
+      # only if a runner image ever drops it (the `shellcheck` lint section
+      # fails closed, exit 2, when the binary is absent).
+      - name: Ensure shellcheck
+        run: |
+          command -v shellcheck >/dev/null 2>&1 || {
+            sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          }
+          shellcheck --version
+
       - name: repo lints
         run: bash scripts/ci-lints.sh
+
+      # stdlib unittest (no pytest, no extra install); hermetic fixture tree.
+      - name: goalforge archive-sweep python test
+        run: python3 packages/goalforge/scripts/tests/test_goalforge_archive_sweep.py
 
       - name: claude plugin validate --strict
         run: |
