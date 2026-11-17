@@ -14,7 +14,7 @@ description: >
 argument-hint: "<effort-slug> [chart]"
 metadata:
   skill-kind: preference
-  version: 0.3.0
+  version: 0.3.1
 hooks:
   Stop:
     - hooks:
@@ -393,6 +393,12 @@ which point the map is simply `working` again (no status unwind needed).
   `findings/ticket-NN.md`, a committed claim stamp with no findings, or a
   `status: resolved` ticket whose map pointer was not updated all leave the next
   session computing a frontier from a state that never existed.
+
+- **Every `ticket-NN` token in `## Decisions so far` is a pointer.**
+  `validate-linkage.sh` greps bare `ticket-[0-9]+` tokens there, prose
+  included, so naming an OPEN ticket ("deferred to ticket-21") fails with
+  `pointer to open ticket`. Name open tickets by description; use the number
+  only for the resolved ticket a decision points at (hit twice, 2026-11-17).
 
 ## Dependencies
 
