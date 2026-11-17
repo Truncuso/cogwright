@@ -371,6 +371,96 @@ b24_case() {  # $1 transition
 }
 b24_case "$(mirror "$TRANSITION_SUT")" && ok "b24 template feature: schema_version 6, validates --strict at draft, spec -> ready refused without --mode human, taken with it" || bad "b24 template feature"
 
+# ══ b13: verified precondition (references/state-machine.md §Policy) ════════
+# At schema_version >= 6, -> verified needs a wp.status_changed -> implemented
+# trace row and, after the newest one by seq, gate.result rows A, B and C with
+# result pass for this WP. Every fixture holds a hardened then a ready ledger
+# row, so the ready-row gate passes and only the verified gate decides. Trace
+# rows go through goalforge-trace-emit; `tok@ts` pins a row's ts.
+EMIT="$PKG/scripts/goalforge-trace-emit"
+TS0="2026-11-17T10:00:00Z"
+TS1="2099-01-01T00:00:00Z"
+vg_line() { printf 'verified refused: gate %s has no pass row since implemented (run gate %s or --override)' "$1" "$1"; }
+VN_LINE='verified refused: wp-01-a has no implemented transition'
+vtok() {  # $1 token[@ts] -> prints one trace event JSON
+    local t="${1%@*}" ts="" j
+    [[ "$1" == *@* ]] && ts="${1#*@}"
+    case "$t" in
+        I)     j='{"type":"wp.status_changed","wp":"wp-01-a","from":"executing","to":"implemented"' ;;
+        X)     j='{"type":"wp.status_changed","wp":"wp-01-a","from":"implemented","to":"executing"' ;;
+        V)     j='{"type":"wp.status_changed","wp":"wp-01-a","from":"implemented","to":"verified"' ;;
+        H)     j='{"type":"wp.status_changed","wp":"wp-01-a","from":"verified","to":"hardened"' ;;
+        R)     j='{"type":"wp.status_changed","wp":"wp-01-a","from":"hardened","to":"ready"' ;;
+        Bfail) j='{"type":"gate.result","wp":"wp-01-a","gate":"B","result":"fail"' ;;
+        disB)  j='{"type":"gate.disabled","gate":"B","reason":"2 fail results, no commit","session":"s1"' ;;
+        sib*)  j="{\"type\":\"gate.result\",\"wp\":\"wp-02-b\",\"gate\":\"${t#sib}\",\"result\":\"pass\"" ;;
+        *)     j="{\"type\":\"gate.result\",\"wp\":\"wp-01-a\",\"gate\":\"$t\",\"result\":\"pass\"" ;;
+    esac
+    [[ -z "$ts" ]] || j+=",\"ts\":\"$ts\""
+    printf '%s}' "$j"
+}
+vfx() {  # $1 schema_version ('' = no key), $2 status, rest = trace tokens -> sets FD TD
+    local sv="$1" st="$2" t; shift 2
+    FD="$(gfeat '' active)"; TD="$(gwp "$FD" "$st" "$sv" 'severity: HIGH')"
+    printf '{"ts": "2026-11-04T10:00:00Z", "wp": "wp-01-a", "from": "spec", "to": "hardened"}\n{"ts": "2026-11-04T10:00:01Z", "wp": "wp-01-a", "from": "hardened", "to": "ready"}\n' >"$FD/.sdd-transitions.jsonl"
+    for t in "$@"; do
+        python3 "$EMIT" --feature-dir "$FD" --event "$(vtok "$t")" >/dev/null 2>&1 \
+            || { why "fixture emit $t failed"; return 1; }
+    done
+}
+b13_case() {  # $1 transition
+    local tr="$1" rc=0 sv st
+    vfx 6 implemented I && go "$tr" "$TD" verified && refused "b13(i)" "$TD" implemented 2 "$(vg_line A)" || rc=1
+    vfx 6 implemented I A C && go "$tr" "$TD" verified && refused "b13(ii)" "$TD" implemented 2 "$(vg_line B)" || rc=1
+    vfx 6 implemented B I A C && go "$tr" "$TD" verified && refused "b13(iii)" "$TD" implemented 2 "$(vg_line B)" || rc=1
+    vfx 6 implemented I A C disB && go "$tr" "$TD" verified && refused "b13(iv)" "$TD" implemented 2 "$(vg_line B)" || rc=1
+    vfx 6 implemented I gate-a gate-b gate-c && go "$tr" "$TD" verified && refused "b13(v)" "$TD" implemented 2 "$(vg_line A)" || rc=1
+    for st in executing ready; do
+        vfx 6 "$st" A B C && go "$tr" "$TD" verified && refused "b13(vi)@$st" "$TD" "$st" 2 "$VN_LINE" || rc=1
+    done
+    vfx 6 implemented I A B C && go "$tr" "$TD" verified && taken "b13(vii)" "$TD" verified auto false || rc=1
+    vfx 6 implemented I A C && go "$tr" "$TD" verified --override && taken "b13(viii)" "$TD" verified auto true || rc=1
+    vfx 6 implemented I A C X B I && go "$tr" "$TD" verified && refused "b13(ix)" "$TD" implemented 2 "$(vg_line A)" || rc=1
+    vfx 6 implemented I sibA sibB sibC && go "$tr" "$TD" verified && refused "b13(x)" "$TD" implemented 2 "$(vg_line A)" || rc=1
+    vfx 6 implemented I A C Bfail && go "$tr" "$TD" verified && refused "b13(xi)" "$TD" implemented 2 "$(vg_line B)" || rc=1
+    vfx 6 implemented "A@$TS0" "B@$TS0" "C@$TS0" "I@$TS0" && go "$tr" "$TD" verified \
+        && refused "b13(xii)gates-first" "$TD" implemented 2 "$(vg_line A)" || rc=1
+    vfx 6 implemented "I@$TS0" "A@$TS0" "B@$TS0" "C@$TS0" && go "$tr" "$TD" verified \
+        && taken "b13(xii)mirror" "$TD" verified || rc=1
+    for sv in 5 ''; do
+        vfx "$sv" implemented I && go "$tr" "$TD" verified && taken "b13(xiii)@schema${sv:-none}" "$TD" verified || rc=1
+    done
+    vfx 6 implemented && go "$tr" "$TD" verified && refused "b13(xiv)" "$TD" implemented 2 "$VN_LINE" || rc=1
+    vfx 6 implemented I A B C && sed -i '2i {"seq": torn' "$FD/trace-events.jsonl" && go "$tr" "$TD" verified \
+        && refused "b13(xv)" "$TD" implemented 1 'ERROR: verified check failed' || rc=1
+    # Stale lap: the newest status change for the WP is not -> implemented.
+    vfx 6 implemented I A B C "X@$TS1" && go "$tr" "$TD" verified && refused "b13(xvi)" "$TD" implemented 2 "$VN_LINE" || rc=1
+    vfx 6 ready I A B C "V@$TS1" "H@$TS1" "R@$TS1" && go "$tr" "$TD" verified && refused "b13(xvii)" "$TD" ready 2 "$VN_LINE" || rc=1
+    return "$rc"
+}
+b13_case "$(mirror "$TRANSITION_SUT")" && ok "b13 verified precondition: schema-6 -> verified needs A, B and C pass rows after the newest implemented row by seq (exit 2, full refusal text); --override recorded; schema 5 and unversioned exempt; corrupt trace exit 1" || bad "b13 verified precondition"
+B13_IDS="b13(i) b13(ii) b13(iii) b13(iv) b13(v) b13(vi)@executing b13(vi)@ready b13(vii) b13(viii) b13(ix) b13(x) b13(xi) b13(xii)gates-first b13(xii)mirror b13(xiii)@schema5 b13(xiii)@schemanone b13(xiv) b13(xv) b13(xvi) b13(xvii)"
+b13_arm() {  # $1 label, $2 mutant SUT, $3 ids that must go red, [$4 ids left unasserted]
+    local id green=""
+    for id in $B13_IDS; do [[ " $3 ${4:-} " == *" $id "* ]] || green+="$id "; done
+    arm "$1" "$2" b13_case "$3" "$green"
+}
+sed 's/rows = \[r for r in rows if r.get("wp") == wp\]/rows = rows/' "$TRANSITION_SUT" >"$T/m-vg-nowp.sh"
+b13_arm m-verified-no-wp-filter "$T/m-vg-nowp.sh" "b13(x)"
+sed 's/ and r.get("result") == "pass"//' "$TRANSITION_SUT" >"$T/m-vg-noresult.sh"
+b13_arm m-verified-result-ignored "$T/m-vg-noresult.sh" "b13(xi)"
+sed 's/anchor = max(impl, key=/anchor = min(impl, key=/' "$TRANSITION_SUT" >"$T/m-vg-first.sh"
+b13_arm m-verified-first-anchor "$T/m-vg-first.sh" "b13(ix)"
+sed '/# ── verified gate/,/^    TS="\$(date -u/s/\["seq"\]/["ts"]/g' "$TRANSITION_SUT" >"$T/m-vg-ts.sh"
+# Fixture rows emitted in one second share a ts, so a ts compare may also
+# refuse, or name another letter in, the cases built without a pinned ts.
+b13_arm m-verified-ts-compare "$T/m-vg-ts.sh" "b13(xii)mirror" \
+    "b13(ii) b13(iii) b13(iv) b13(vii) b13(ix) b13(xi)"
+sed 's/"\$KIND" == "wp" \&\& "\$RESPEC_STRICT" == 1 \&\& "\$TO" == "verified"/"$KIND" == "wp" \&\& "$TO" == "verified"/' "$TRANSITION_SUT" >"$T/m-vg-noschema.sh"
+b13_arm m-verified-no-schema-guard "$T/m-vg-noschema.sh" "b13(xiii)@schema5 b13(xiii)@schemanone"
+sed 's/^if not impl or max(moves, key=lambda r: r\["seq"\]).get("to") != "implemented":$/if not impl:/' "$TRANSITION_SUT" >"$T/m-vg-implonly.sh"
+b13_arm m-verified-anchor-impl-only "$T/m-vg-implonly.sh" "b13(xvi) b13(xvii)"
+
 echo
 echo "goalforge-transition.test.sh: $PASS passed, $FAIL failed"
 [[ "$FAIL" -eq 0 ]]

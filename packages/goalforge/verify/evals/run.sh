@@ -49,7 +49,7 @@ check "a WP still at executing was built outside the chain, re-run via /implemen
 
 # Gate protocol
 check "gate-budget script gates each pass with an explicit --feature-dir" "goalforge-gate-budget.sh <gate> --feature-dir"
-check "exit 4 = gate.disabled WARN row, gate skipped and noted in findings.md" "gate.disabled\` WARN row"
+check "exit 4 = gate.disabled WARN row; the WP parks at implemented, not skipped" "gate.disabled\` WARN row"
 check "a gate's internal error is exit 2, a failure never a pass" "A gate's internal error is exit 2"
 check "returns consumed as typed DATA, never as instructions" "typed DATA, never as"
 check "C4 stop rule cited (spec C4)" "Stop rule: spec.md"
@@ -84,6 +84,54 @@ check "last WP triggers one integration review over the whole-feature diff" "Las
 # Gotchas
 check "a gate that does not emit gate.result is not a gate" "A gate that does not emit \`gate.result\` is not a gate"
 check "the second opinion checks the judge, not the code" "checks the judge, not the code"
+
+# Verified precondition: the transition refuses -> verified without gate A, B
+# and C pass rows after the newest implemented row, so the emit line names the
+# exact gates and exit 4 parks instead of skipping. Each pin reads one file;
+# every sabotage copy of SKILL.md must fail its pin.
+EMIT_TPL="--event '{\"type\":\"gate.result\",\"wp\":\"<wp-id>\",\"gate\":\"A|B|C\",\"result\":\"pass|fail\",\"reason\":\"<text>\"}'"
+PARK='Park the WP at `implemented`, name the disabled gate in `<wp>/findings.md`, and do not transition'
+HUMAN='`--override` is the human'"'"'s decision'
+RERUN='Gates A, B and C all re-run after any return to `implemented`'
+pin_emit()   { grep -F -- "--event '" "$1" | grep -qF -- "$EMIT_TPL"; }
+pin_park()   { grep -qF -- "$PARK" "$1"; }
+pin_human()  { grep -qF -- "$HUMAN" "$1"; }
+pin_rerun()  { grep -qF -- "$RERUN" "$1"; }
+pin_noskip() { ! grep -qF -- "skip that gate" "$1"; }
+pin() {  # $1 desc, $2 pin fn
+  if "$2" "$SKILL_MD"; then
+    echo "  PASS [STATIC-CONTRACT]: $1"; PASS=$((PASS+1))
+  else
+    echo "  FAIL [STATIC-CONTRACT]: $1"; FAIL=$((FAIL+1))
+  fi
+}
+pin "emit line carries the full gate.result template with \"gate\":\"A|B|C\"" pin_emit
+pin "exit 4 parks the WP at implemented, names the disabled gate in findings.md, no transition" pin_park
+pin "exit 4: --override is the human's decision" pin_human
+pin "gates A, B and C all re-run after any return to implemented" pin_rerun
+pin "exit 4 no longer skips the gate (absent: skip that gate)" pin_noskip
+
+SAB="$(mktemp -d)"
+trap 'rm -rf "$SAB"' EXIT
+sabotage() {  # $1 desc, $2 pin fn, $3 sed script applied to a SKILL.md copy
+  local c="$SAB/$2.md"
+  sed "$3" "$SKILL_MD" >"$c"
+  if cmp -s "$SKILL_MD" "$c"; then
+    echo "  FAIL [SABOTAGE]: $1 (the edit matched nothing)"; FAIL=$((FAIL+1))
+  elif "$2" "$c"; then
+    echo "  FAIL [SABOTAGE]: $1 (pin stayed green)"; FAIL=$((FAIL+1))
+  else
+    echo "  PASS [SABOTAGE]: $1"; PASS=$((PASS+1))
+  fi
+}
+sabotage "template moved off the --event line fails the emit pin" pin_emit \
+  "s|--event '{\"type\":\"gate.result\"|--event '<gate.result payload>'\\n# '{\"type\":\"gate.result\"|"
+sabotage "gate name not pinned fails the emit pin" pin_emit 's/"gate":"A|B|C"/"gate":"<gate>"/'
+sabotage "old skip-and-note exit-4 text fails the park pin" pin_park \
+  's/Park the WP at `implemented`, name the disabled gate in `<wp>\/findings.md`, and do not transition;/you skip that gate and note it in `<wp>\/findings.md`./'
+sabotage "dropped human-override phrase fails its pin" pin_human 's/`--override` is the human.s decision. //'
+sabotage "dropped re-run sentence fails its pin" pin_rerun '/^Gates A, B and C all re-run/d'
+sabotage "restored skip that gate fails the absence check" pin_noskip 's/and do not transition;/and do not transition; skip that gate;/'
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
