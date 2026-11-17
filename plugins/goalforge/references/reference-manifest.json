@@ -186,6 +186,10 @@
       "path": "skills/execute/references/dispatch-resolution.md"
     },
     {
+      "from": "references/finding-contract.md",
+      "path": "references/schema/finding.schema.json"
+    },
+    {
       "from": "references/harness-dependencies.md",
       "path": "references/harness-primitives.txt"
     },

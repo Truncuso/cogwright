@@ -337,7 +337,8 @@ Plus attribution fields.
 
 A structured review/verify finding. Gains a producer this WP: `execute/SKILL.md`
 §5 emits it on every stop except "goal met", alongside the `<wp>/findings.md`
-append. `wp` is required.
+append. `wp` is required. `severity`, `summary` and `category` are a projection of
+`finding-contract.md` (`summary` ← `what`, `category` ← `analysis_kind`).
 
 | Field | Type | Required | Semantics |
 |---|---|---|---|

@@ -100,11 +100,14 @@ def _validate(instance, schema, path: str = "") -> list[str]:
 
     Supports the keyword subset the trace schema and the stage.report payload
     schema use: type (incl. `array`), enum, const, minimum, pattern, required,
-    properties, additionalProperties(false), items, minItems, oneOf. Sibling
+    properties, additionalProperties(false), items, minItems, oneOf, allOf, and
+    if/then (no else). Sibling
     keywords are conjunctive (implicit allOf), matching draft-07. `$ref` is NOT
     resolved — a schema that factors a subschema out into `definitions` would
     silently never be checked, so schemas validated here write subschemas out
     at each site.
+    `else`, `anyOf` and `not` are likewise ignored silently, so schemas validated
+    here must not use them.
     """
     errors: list[str] = []
 
@@ -144,6 +147,11 @@ def _validate(instance, schema, path: str = "") -> list[str]:
             if key in instance:
                 errors.extend(_validate(instance[key], sub,
                                         f"{path}.{key}" if path else key))
+
+    for branch in schema.get("allOf", []):
+        errors.extend(_validate(instance, branch, path))
+    if "if" in schema and "then" in schema and not _validate(instance, schema["if"], path):
+        errors.extend(_validate(instance, schema["then"], path))
 
     if "oneOf" in schema:
         matches = sum(1 for branch in schema["oneOf"]
