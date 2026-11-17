@@ -226,8 +226,8 @@ A dependency naming a nonexistent ticket (typo, deletion, or a zero-padding slip
 like `ticket-1` for `ticket-01-<slug>.md`) is a structural error, not a stall —
 the exit-2 fail-close above names the file and the token. Fix it and re-run.
 
-**Claim** — stamp `claimed_by` + `claimed_at` **only**. Status stays `open` (the
-ticket status enum has no `claimed` value). Claim is stamp-only. Claiming is
+**Claim** — stamp `claimed_by` + `claimed_at` (`YYYY-MM-DD`, never a full ISO
+stamp) **only**. Status stays `open` (no `claimed` status value). Claiming is
 **MANDATORY before dispatch or resolve** — never dispatch or resolve an
 unclaimed ticket; the stamp is the only signal another session has that the
 ticket is live work, so working one unclaimed invites a concurrent dispatch over
