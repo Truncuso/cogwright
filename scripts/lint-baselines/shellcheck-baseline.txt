@@ -1,4 +1,5 @@
 # shellcheck-baseline.txt — pre-existing shellcheck findings, `<path>::<SC code>::<count>`.
+# pinned-version: 0.11.0
 #
 # REMOVAL-ONLY ratchet (ci-lints.sh section `shellcheck`): a (path, SC) pair
 # above its count here fails, and so does an entry whose count has since dropped.
@@ -23,18 +24,23 @@ packages/goalforge/scripts/goalforge-goal-hash.sh::SC2034::2
 packages/goalforge/scripts/goalforge-harden-surface.sh::SC2034::2
 packages/goalforge/scripts/goalforge-learning-route.sh::SC2034::1
 packages/goalforge/scripts/goalforge-path-idiom-lint.sh::SC2088::1
+packages/goalforge/scripts/goalforge-preharden-lint.sh::SC2318::2
 packages/goalforge/scripts/goalforge-reconcile-diff.sh::SC2034::2
 packages/goalforge/scripts/goalforge-second-opinion.sh::SC2088::1
 packages/goalforge/scripts/goalforge-transition.sh::SC2034::1
 packages/goalforge/scripts/goalforge-validate.sh::SC2034::2
+packages/goalforge/scripts/tests/goalforge-archived-collision.test.sh::SC2319::11
+packages/goalforge/scripts/tests/goalforge-archive.test.sh::SC2319::12
 packages/goalforge/scripts/tests/goalforge-harden-reset.test.sh::SC2034::1
 packages/goalforge/scripts/tests/goalforge-harness-check.test.sh::SC2034::1
 packages/goalforge/scripts/tests/goalforge-harness-check.test.sh::SC2100::2
 packages/goalforge/scripts/tests/goalforge-path-idiom-lint.test.sh::SC2088::1
 packages/goalforge/scripts/tests/goalforge-preharden-lint.test.sh::SC2046::1
 packages/goalforge/scripts/tests/goalforge-prototype-retain.test.sh::SC2164::6
+packages/goalforge/scripts/tests/goalforge-prototype-retain.test.sh::SC2319::8
 packages/goalforge/scripts/tests/goalforge-respec.test.sh::SC2034::2
 packages/goalforge/scripts/tests/goalforge-roster.test.sh::SC2010::1
+packages/goalforge/scripts/tests/goalforge-transition-evidence.test.sh::SC2319::10
 packages/goalforge/scripts/tests/goalforge-workflow-compile.test.sh::SC2115::1
 packages/goalforge/scripts/tests/goalforge-workflow-compile.test.sh::SC2155::1
 packages/goalforge/wayfind/scripts/wayfind-frontier.sh::SC2034::1

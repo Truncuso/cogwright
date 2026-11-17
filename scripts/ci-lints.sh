@@ -1084,10 +1084,15 @@ lint_interview_contract() {
 # ---------------------------------------------------------------------------
 SHELLCHECK_BASELINE_FILE="scripts/lint-baselines/shellcheck-baseline.txt"
 SHELLCHECK_SEVERITY="warning"
+# Findings are version-dependent (0.11 added SC2318/SC2319), so the baseline is
+# only valid for ONE shellcheck release: its `# pinned-version: X` header line is
+# the single source of truth, and the section fails closed on any other version.
+# SHELLCHECK=<path> selects a specific binary (default: shellcheck on PATH).
+SHELLCHECK="${SHELLCHECK:-shellcheck}"
 
 # Usage: shellcheck_counts <file>... — prints `<path>::<SC>::<count>` lines, sorted.
 shellcheck_counts() {
-  shellcheck --severity="$SHELLCHECK_SEVERITY" -f gcc -- "$@" 2>/dev/null \
+  "$SHELLCHECK" --severity="$SHELLCHECK_SEVERITY" -f gcc -- "$@" 2>/dev/null \
     | sed -nE 's/^([^:]+):[0-9]+:[0-9]+: [a-z]+: .*\[(SC[0-9]+)\]$/\1::\2/p' \
     | sort | uniq -c \
     | sed -E 's/^ *([0-9]+) (.*)$/\2::\1/' \
@@ -1095,8 +1100,14 @@ shellcheck_counts() {
 }
 
 lint_shellcheck() {
-  command -v shellcheck >/dev/null 2>&1 \
-    || die 2 "shellcheck not installed (apt-get install shellcheck) — refusing to report PASS"
+  command -v "$SHELLCHECK" >/dev/null 2>&1 \
+    || die 2 "shellcheck not found ($SHELLCHECK) — refusing to report PASS"
+  local pinned found
+  pinned="$(sed -nE 's/^# pinned-version: *([0-9][0-9.]*).*$/\1/p' "$SHELLCHECK_BASELINE_FILE" 2>/dev/null | head -n1)"
+  [ -n "$pinned" ] || die 2 "$SHELLCHECK_BASELINE_FILE has no '# pinned-version: X' header"
+  found="$("$SHELLCHECK" --version 2>/dev/null | sed -nE 's/^version: *([0-9][0-9.]*).*$/\1/p' | head -n1)"
+  [ "$found" = "$pinned" ] \
+    || die 2 "shellcheck $pinned required, found ${found:-unknown} (set SHELLCHECK=<path> to a $pinned binary)"
   local -a files=()
   local f
   while IFS= read -r -d '' f; do
