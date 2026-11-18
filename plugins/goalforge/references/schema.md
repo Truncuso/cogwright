@@ -309,8 +309,12 @@ field (see `evals/schema-v5/fixtures/e-v5-complete-goal-present-dep/` for a live
 
 - `implemented`/`verified` ⇒ exactly one WP commit is linked (C5: one
   conventional commit per WP; no per-task commits).
-- `verified` ⇒ gates A, B, C each have a recorded `gate.result` PASS
-  (`trace-events.jsonl`) and `findings.md` exists.
+- `verified` ⇒ `findings.md` exists (`goalforge-validate.sh`), and gates A,
+  B, C each have a `gate.result` PASS in `trace-events.jsonl` after the WP's
+  newest `-> implemented` status row. `goalforge-transition.sh` enforces the
+  gate rows on every `-> verified` move at `schema_version >= 6`
+  (state-machine.md §Policy, Verified gate; `--override` recorded); the
+  validator does not read the trace.
 - `depends_on: [x]` ⇒ `x` exists and is `ready`+ (or `verified`/`abandoned`/`archived`).
 - `owned_files:` non-empty on a schema-6 WP; the verify-gate-A diff must be a
   subset of it.

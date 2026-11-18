@@ -170,7 +170,7 @@ gate's fire count — never the hook's own state.
 | Field | Type | Required | Semantics |
 |---|---|---|---|
 | `wp` | string | yes | WP the gate ran against. |
-| `gate` | string | yes | Gate name (e.g. `ready-hash`, `verify`, `open-questions`). |
+| `gate` | string | yes | Gate name (e.g. `ready-hash`, `verify`, `open-questions`). The verify gates write exactly `A`, `B`, `C`; the transition's verified gate reads only those names with `result: pass` and `seq` after the newest `wp.status_changed -> implemented` row. |
 | `result` | string (`pass`\|`fail`\|`warn`) | yes | Outcome. `fail` is the noise-budget signal: `goalforge-gate-budget.sh` (T19) counts a `fail` row for a gate as one of its two self-disable strikes (C4). `warn` runs the gate's warning branch (the row is informational, never counted toward self-disable). |
 | `reason` | string | no | Detail. |
 

@@ -46,6 +46,7 @@ REQUIRED=(
     "execute/SKILL.md|tool_uses"
     "execute/SKILL.md|plugins/goalforge/"
     "execute/SKILL.md|regenerate"
+    "execute/SKILL.md|plus that mirror"
     "run/SKILL.md|run/workflows/"
     "run/chain.yaml|run/workflows/"
     "verify/SKILL.md|plugins/goalforge/"

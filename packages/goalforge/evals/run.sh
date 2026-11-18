@@ -380,6 +380,24 @@ for SITE in "evals/run.sh" "harden/evals/run.sh" "verify/evals/run.sh"; do
   fi
 done
 
+# The wayfind `<= 409` site asserts the LITERAL 409 the same way (M2). The pin
+# is a text match: it catches a bump of that one literal (the PR #15 failure),
+# not a rewrite of the site around it.
+WF_CEIL=409
+WF_SITE="wayfind/evals/run.sh"
+WF_PIN="[ \"\$sk_lines\" -le $WF_CEIL ]"
+pins_wf_ceiling() { [ "$(grep -cF -- "$WF_PIN" "$1" || true)" -eq 1 ]; }
+pins_wf_ceiling "$SKILL_DIR/$WF_SITE" \
+  && check "$WF_SITE asserts the literal $WF_CEIL" "pass" \
+  || check "$WF_SITE asserts the literal $WF_CEIL" "fail"
+# KNOWN-BAD (executed mutation): a copy of the site with the ceiling + 1.
+sed "s/-le $WF_CEIL\b/-le $((WF_CEIL + 1))/" "$SKILL_DIR/$WF_SITE" > "$SR_TMP/wf-ceiling.sh"
+if ! cmp -s "$SKILL_DIR/$WF_SITE" "$SR_TMP/wf-ceiling.sh" && ! pins_wf_ceiling "$SR_TMP/wf-ceiling.sh"; then
+  check "known-bad: $WF_SITE with the ceiling raised to $((WF_CEIL + 1)) fails the check" "pass"
+else
+  check "known-bad: $WF_SITE with the ceiling raised to $((WF_CEIL + 1)) fails the check" "fail"
+fi
+
 # The template, the payload schema and the two prose homes are on disk.
 SR_REFS_OK="pass"
 for f in \
