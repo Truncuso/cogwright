@@ -34,6 +34,10 @@
 # `--from` is an optimistic-lock assertion: when given it must equal the on-disk
 # status, else the transition is rejected (non-zero). The `.sdd-transitions.lock`
 # file is gitignored, never committed.
+#
+# Exit: 0 transition written; 1 illegal edge, respec gate or unreadable trace;
+# 2 gate refusal — human gate, ready-row gate, verified gate
+# (references/state-machine.md §Policy). Callers branch on 2.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

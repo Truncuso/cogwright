@@ -64,6 +64,18 @@ is illegal.
   `<to> refused:`), and `--override` does not lift it. The
   `spec|hardened → executing|implemented|verified` table rows stay legal; this
   gate, not the table, keeps a WP from skipping the human gate.
+- **Verified gate.** At `schema_version >= 6` a WP move to `verified`, from
+  any status, needs the WP's newest `wp.status_changed` row in
+  `trace-events.jsonl` (by `seq`) to go `-> implemented`, and, with a greater
+  `seq`, a `gate.result` row with `result: pass` for each of `gate: A`, `B`
+  and `C`. Names are exact: `gate-a|b|c` spellings, `gate.disabled` rows and
+  the transition's own `gate: verified` row do not count.
+  `goalforge-transition.sh` reads the trace strict through
+  `goalforge-trace-read` and refuses otherwise (exit 2, stderr `verified
+  refused:`); an unreadable trace refuses with exit 1. `--override` skips the
+  check and is recorded as `override: true` on the ledger row. Inside the
+  lock the order is respec gate, ready-row gate, verified gate; one call gets
+  one refusal. Schema 5 and unversioned WPs are exempt.
 - **Evidence-gated revert exception (`ready→hardened` only).** This one reverse
   edge — re-opening a `ready` WP back to `hardened` to re-develop its goals — is
   NOT a bare FREE-REVERSE move. The edge row stays legal
