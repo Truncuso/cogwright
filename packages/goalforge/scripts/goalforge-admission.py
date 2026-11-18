@@ -78,6 +78,12 @@ EGRESS_LEVELS: tuple[str, ...] = ("none", "diff-only", "overview", "full")
 # The goalforge pre-commit installer's marker block (scripts/goalforge-install-hooks.sh).
 HOOK_MARKER_OPEN = "# >>> sdd-pre-commit >>>"
 HOOK_MARKER_CLOSE = "# <<< sdd-pre-commit <<<"
+# The current marker pair. Exactly these two pairs are read; a block opens at
+# either open marker and closes at either close marker.
+HOOK_MARKER_OPEN_GOALFORGE = "# >>> goalforge-pre-commit >>>"
+HOOK_MARKER_CLOSE_GOALFORGE = "# <<< goalforge-pre-commit <<<"
+HOOK_MARKER_OPENS: tuple[str, ...] = (HOOK_MARKER_OPEN, HOOK_MARKER_OPEN_GOALFORGE)
+HOOK_MARKER_CLOSES: tuple[str, ...] = (HOOK_MARKER_CLOSE, HOOK_MARKER_CLOSE_GOALFORGE)
 PRE_COMMIT_HOOK = PKG_ROOT / "hooks" / "goalforge-pre-commit.sh"
 
 # The executable the row's evidence was gathered against. Checked AFTER the
@@ -349,10 +355,10 @@ def _marker_hook_paths(text: str) -> list[str]:
     inside = False
     for line in text.splitlines():
         stripped = line.strip()
-        if stripped == HOOK_MARKER_OPEN:
+        if stripped in HOOK_MARKER_OPENS:
             inside = True
             continue
-        if stripped == HOOK_MARKER_CLOSE:
+        if stripped in HOOK_MARKER_CLOSES:
             inside = False
             continue
         m = re.match(r'^bash\s+"([^"]+)"', stripped) if inside else None

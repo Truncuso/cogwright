@@ -1004,6 +1004,41 @@ case_b13_vi() {
     b13_expect b13-vi "unguarded"
 }
 case_b13_vi
+# (vi-a..vi-d) the two recognised marker pairs, on ONE replica with no
+# installer: its untracked pre-commit is rewritten by hand before each case.
+# Admission knows exactly the legacy pair and the goalforge-pre-commit pair;
+# a third pair is not a marker block, and a stub path is not the guard.
+R5="$T/replica5"
+mk_replica "$R5" nohook
+b13_hook() { # <marker id> <invoked path>
+    printf '#!/usr/bin/env bash\n# >>> %s >>>\nbash "%s" || exit $?\n# <<< %s <<<\n' \
+        "$1" "$2" "$1" > "$R5/.git/hooks/pre-commit"
+    chmod +x "$R5/.git/hooks/pre-commit"
+}
+case_b13_r5() { # <name>
+    local RCOMPILE="$R5/scripts/goalforge-workflow-compile.py"
+    local WPA="$R5/scripts/tests/fixtures/dispatch/wp-admitted.md"
+    seam_compile "$1" "$R5/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$D_ADM"
+}
+b13_admitted() { # <name> <label>
+    if [ "$RC" -eq 0 ] && [ -f "$T/$1/wp-fx-admitted.js" ]; then
+        ok "b13 $1 $2 admits"
+    else
+        bad "b13 $1 $2 admits (rc=$RC): $(cat "$T/$1.err")"
+    fi
+}
+b13_hook sdd-pre-commit "$R5/hooks/goalforge-pre-commit.sh"
+case_b13_r5 b13-vi-a
+b13_admitted b13-vi-a "legacy marker pair around the package's own hook"
+b13_hook goalforge-pre-commit "$R5/hooks/goalforge-pre-commit.sh"
+case_b13_r5 b13-vi-b
+b13_admitted b13-vi-b "new marker pair around the package's own hook"
+b13_hook goalforge-pre-commit "$T/stub-hooks/goalforge-pre-commit.sh"
+case_b13_r5 b13-vi-c
+b13_expect b13-vi-c "unguarded"
+b13_hook goalforge-other "$R5/hooks/goalforge-pre-commit.sh"
+case_b13_r5 b13-vi-d
+b13_expect b13-vi-d "unguarded"
 # (vii-a) a forged GLOBAL core.hooksPath in the redirected temp home.
 mkdir -p "$T/home-forged/.config" "$T/elsewhere-hooks"
 printf '[core]\n\thooksPath = %s\n' "$T/elsewhere-hooks" > "$T/home-forged/.gitconfig"
@@ -1471,19 +1506,29 @@ case_b15_xvid() {
     for s in "${SHIM_SCRIPTS[@]}"; do cp -p "$RA/scripts/$s" "$ADMIT_DIR/scripts/$s"; done
     cp -r "$RA/hooks" "$RA/agents" "$ADMIT_DIR/"
     cp -p "$RA_HOOK" "$T/ra-pre-commit.orig"
-    awk -v p="$copy_hook" '$0 == "# <<< sdd-pre-commit <<<" { printf "bash \"%s\" || exit $?\n", p } { print }' \
+    awk -v p="$copy_hook" '$0 == "# <<< sdd-pre-commit <<<" || $0 == "# <<< goalforge-pre-commit <<<" { printf "bash \"%s\" || exit $?\n", p } { print }' \
         "$T/ra-pre-commit.orig" > "$RA_HOOK"
     if grep -qxF "bash \"$copy_hook\" || exit \$?" "$RA_HOOK"; then
         ok "b15(xvi-d) setup: the marker block also invokes the copy's hook"
     else
         bad "b15(xvi-d) setup: the marker block does not invoke the copy's hook"
     fi
-    ATTACK_PKG="$ADMIT_DIR" attack b15-xvi-d "copy shim, its own hook in the marker block" "$SELF_ABSENT" "$SELF_ABSENT"
+    ATTACK_PKG="$ADMIT_DIR" attack "${1:-b15-xvi-d}" "copy shim, its own hook in the ${2:-marker block}" "$SELF_ABSENT" "$SELF_ABSENT"
     cp -p "$T/ra-pre-commit.orig" "$RA_HOOK"
     shim_clean
 }
+# (xvi-d-new) the same attack under a hand-written hook carrying the
+# goalforge-pre-commit marker pair; the installed hook is restored afterwards.
+case_b15_xvid_new() {
+    cp -p "$RA_HOOK" "$T/ra-pre-commit.newpair.orig"
+    printf '#!/usr/bin/env bash\n# >>> goalforge-pre-commit >>>\nbash "%s" || exit $?\n# <<< goalforge-pre-commit <<<\n' \
+        "$RA/hooks/goalforge-pre-commit.sh" > "$RA_HOOK"
+    case_b15_xvid b15-xvi-d-new "goalforge-pre-commit marker block"
+    cp -p "$T/ra-pre-commit.newpair.orig" "$RA_HOOK"
+}
 case_b15_xvic
 case_b15_xvid
+case_b15_xvid_new
 # (xvi-e) R3-H1 guard identity: in the ADMITTING replica, the package's own
 # guard file replaced by an in-tree symlink to an untracked no-op hook. The
 # installed marker path then resolves to the no-op, so a realpath identity
@@ -1565,6 +1610,8 @@ red "b15(s) guard identity by realpath, not the walk, (xvi-e)" "marker=yes" \
     "$ADM_PY:guard-realpath" -- case_b15_xvie
 RED_ROOT="$RA" red "b15(t) no HEAD binding of the admission script, (xvi-d)" "marker=yes" \
     "$ADM_PY:no-tracked-self" -- case_b15_xvid
+RED_ROOT="$RA" red "b15(t) no HEAD binding of the admission script, (xvi-d-new)" "marker=yes" \
+    "$ADM_PY:no-tracked-self" -- case_b15_xvid_new
 RED_ROOT="$RA" red "b15(u) historical lock: the 5f071b3 package identity, (xvi-c)" "marker=yes" \
     "$ADM_PY:identity-5f071b3" -- case_b15_xvic
 # b15 (v), xv-c ledger assertion (r5): an `admitted` row appended BEFORE
