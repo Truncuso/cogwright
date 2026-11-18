@@ -380,8 +380,9 @@ for SITE in "evals/run.sh" "harden/evals/run.sh" "verify/evals/run.sh"; do
   fi
 done
 
-# The wayfind `<= 409` site asserts the LITERAL 409 the same way (M2): the pin
-# text is built from WF_CEIL, so only the real site can match it.
+# The wayfind `<= 409` site asserts the LITERAL 409 the same way (M2). The pin
+# is a text match: it catches a bump of that one literal (the PR #15 failure),
+# not a rewrite of the site around it.
 WF_CEIL=409
 WF_SITE="wayfind/evals/run.sh"
 WF_PIN="[ \"\$sk_lines\" -le $WF_CEIL ]"

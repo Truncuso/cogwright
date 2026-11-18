@@ -35,9 +35,10 @@
 # status, else the transition is rejected (non-zero). The `.sdd-transitions.lock`
 # file is gitignored, never committed.
 #
-# Exit: 0 transition written; 1 illegal edge, respec gate or unreadable trace;
-# 2 gate refusal — human gate, ready-row gate, verified gate
-# (references/state-machine.md §Policy). Callers branch on 2.
+# Exit: 0 transition written (or --help); 2 gate refusal — human gate,
+# ready-row gate, verified gate (references/state-machine.md §Policy); 1 every
+# other refusal or error (illegal edge, --from mismatch, respec gate, the
+# ->ready goal-hash gate, evidence gate, reader crash, usage). Callers branch on 2.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
