@@ -16,8 +16,9 @@
 #   # <<< goalforge-<id> <<<
 #
 # Two phases. Phase one validates every selected entry (known id, payload
-# present, shared-path guard passed for its target) and writes nothing. Phase
-# two handles each selected entry in list order:
+# present, shared-path guard passed for its target); it creates the hooks
+# directory if it is missing and writes no hook file. Phase two handles each
+# selected entry in list order:
 #   - target absent              → write a shebang and the block, chmod +x.
 #   - target carries the block   → no-op ("already installed").
 #   - pre-commit only: the target carries the legacy marker pair → rename the

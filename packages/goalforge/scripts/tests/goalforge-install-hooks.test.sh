@@ -527,12 +527,16 @@ fi
 repo="$(new_repo w)"; pc="$repo/.git/hooks/pre-commit"
 mk_legacy "$pc" "$LEG_OPEN" "$LEG_CLOSE" /legacy/goalforge-pre-commit.sh yes
 chmod 755 "$pc"; cp "$pc" "$WORK/w-before"
-mkdir -p "$WORK/w-bin"; printf '#!/bin/sh\nexit 1\n' > "$WORK/w-bin/mv"; chmod +x "$WORK/w-bin/mv"
+mkdir -p "$WORK/w-bin"
+# The shim records that it was reached, so an installer that fails before the
+# move cannot pass this case.
+printf '#!/bin/sh\n: > "%s"\nexit 1\n' "$WORK/w-mv-called" > "$WORK/w-bin/mv"; chmod +x "$WORK/w-bin/mv"
 PATH="$WORK/w-bin:$PATH" bash "$INSTALLER" --only pre-commit "$repo" >/dev/null 2>&1; rc=$?
-if [ "$rc" -ne 0 ] && cmp -s "$pc" "$WORK/w-before" && no_tmp "$repo/.git/hooks"; then
+if [ "$rc" -ne 0 ] && cmp -s "$pc" "$WORK/w-before" && no_tmp "$repo/.git/hooks" \
+   && [ -e "$WORK/w-mv-called" ]; then
   ok "w: a failed mv exits non-zero, hook byte-identical, no temp file left"
 else
-  no "w: a failed mv exits non-zero, hook byte-identical, no temp file left (rc=$rc)"
+  no "w: a failed mv exits non-zero, hook byte-identical, no temp file left (rc=$rc, mv shim reached: $([ -e "$WORK/w-mv-called" ] && echo yes || echo no))"
 fi
 
 # ── y: argument errors -> exit 1 with a usage line, nothing written ─────────
