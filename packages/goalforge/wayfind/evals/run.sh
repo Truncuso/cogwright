@@ -583,6 +583,13 @@ for lk in "ok 0" "missing-map-pointer 1" "pointer-to-open 1" "missing-findings 1
   [ "$RC" -eq "$2" ] && pass "$name" || fail "$name" "expected exit $2 on fixtures/linkage/$1, got $RC"
 done
 
+# The open-pointer violation carries its remedy: the bare-token rule recurred in
+# prose mentions ("stays ticket-36's") after it was documented in the body.
+name=validate-linkage-open-pointer-remedy
+set +e; lk_out="$(bash "$VALIDATE_LINKAGE" "$LINKAGE/pointer-to-open" 2>&1)"; set -e
+contains "$lk_out" 'name the open ticket by description' && pass "$name" \
+  || fail "$name" "pointer-to-open violation lacks the remedy: $lk_out"
+
 # NEGATIVE CONTROL: the linkage validator must never fork the frontier's sole
 # authority over convergence — no `converged` key, no convergence claim, on
 # either stream, in the clean case or the violating one.
