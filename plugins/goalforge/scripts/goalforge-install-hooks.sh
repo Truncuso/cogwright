@@ -208,7 +208,7 @@ has_marker() {
     return 1
 }
 
-# ── Phase one: validate every selected entry; write nothing ──────────────────
+# ── Phase one: validate every selected entry; write no hook file ─────────────
 for entry in "${SELECTED[@]}"; do
     payload="$PKG_ROOT/$(entry_payload "$entry")"
     if [[ ! -f "$payload" ]]; then
