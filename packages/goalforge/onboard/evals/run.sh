@@ -84,10 +84,10 @@ else
     fail ".git/hooks/pre-commit missing"
 fi
 
-if grep -qF '# >>> sdd-pre-commit >>>' "$TMPDIR1/.git/hooks/pre-commit" 2>/dev/null; then
-    pass "pre-commit contains sdd-pre-commit marker"
+if grep -qF '# >>> goalforge-pre-commit >>>' "$TMPDIR1/.git/hooks/pre-commit" 2>/dev/null; then
+    pass "pre-commit contains goalforge-pre-commit marker"
 else
-    fail "pre-commit missing sdd-pre-commit marker"
+    fail "pre-commit missing goalforge-pre-commit marker"
 fi
 
 if [[ -f "$TMPDIR1/CLAUDE.md" ]]; then

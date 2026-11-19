@@ -40,15 +40,6 @@ plugins/goalforge/README.md::the legacy `sdd-*`
 packages/goalforge/SKILL.md::The `sdd-*` skill/script aliases were RETIRED
 plugins/goalforge/SKILL.md::The `sdd-*` skill/script aliases were RETIRED
 
-# ── installed-hook idempotency marker ────────────────────────────────────────
-# retired-by: permanent — installed-hook idempotency marker; INSTALL.md:245
-# documents the block as the never-overwritten contract, and renaming it breaks
-# idempotent re-detection of an already-installed hook.
-packages/goalforge/onboard/SKILL.md::the idempotency marker (`# >>> sdd-pre-commit >>>`)
-plugins/goalforge/skills/onboard/SKILL.md::the idempotency marker (`# >>> sdd-pre-commit >>>`)
-packages/goalforge/onboard/SKILL.md::(`# >>> sdd-pre-commit >>>`) prevents double-installation
-plugins/goalforge/skills/onboard/SKILL.md::(`# >>> sdd-pre-commit >>>`) prevents double-installation
-
 # ── persisted-data identifiers ───────────────────────────────────────────────
 # retired-by: permanent — persisted-data identifier; renaming the ledger file
 # breaks every existing plans/ feature directory already carrying one.

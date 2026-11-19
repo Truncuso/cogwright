@@ -1039,6 +1039,33 @@ b13_expect b13-vi-c "unguarded"
 b13_hook goalforge-other "$R5/hooks/goalforge-pre-commit.sh"
 case_b13_r5 b13-vi-d
 b13_expect b13-vi-d "unguarded"
+# (vi-e) the upgrade path (wp-03): a hand-written legacy install around the
+# replica's own guard, the replica's installer run over it, then admission.
+# The hook holds the goalforge-pre-commit pair and no legacy marker line, and
+# the compile is admitted.
+R6="$T/replica6"
+mk_replica "$R6" nohook
+printf '#!/usr/bin/env bash\n# >>> sdd-pre-commit >>>\nbash "%s" || exit $?\n# <<< sdd-pre-commit <<<\n' \
+    "$R6/hooks/goalforge-pre-commit.sh" > "$R6/.git/hooks/pre-commit"
+chmod +x "$R6/.git/hooks/pre-commit"
+env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    bash "$R6/scripts/goalforge-install-hooks.sh" "$R6" >/dev/null 2>&1
+case_b13_vi_e() {
+    local RCOMPILE="$R6/scripts/goalforge-workflow-compile.py"
+    local WPA="$R6/scripts/tests/fixtures/dispatch/wp-admitted.md"
+    seam_compile b13-vi-e "$R6/scripts/tests/fixtures/admission/admitted-ok/references/admitted-providers.yaml" "$D_ADM"
+}
+case_b13_vi_e
+R6_HOOK="$R6/.git/hooks/pre-commit"
+if [ "$(grep -cxF '# >>> goalforge-pre-commit >>>' "$R6_HOOK")" = 1 ] \
+   && [ "$(grep -cxF '# <<< goalforge-pre-commit <<<' "$R6_HOOK")" = 1 ] \
+   && ! grep -qxF '# >>> sdd-pre-commit >>>' "$R6_HOOK" \
+   && ! grep -qxF '# <<< sdd-pre-commit <<<' "$R6_HOOK" \
+   && [ "$RC" -eq 0 ] && [ -f "$T/b13-vi-e/wp-fx-admitted.js" ]; then
+    ok "b13 b13-vi-e legacy install upgraded by the real installer holds the new pair and admits"
+else
+    bad "b13 b13-vi-e legacy install upgraded by the real installer holds the new pair and admits (rc=$RC): $(cat "$R6_HOOK"; cat "$T/b13-vi-e.err")"
+fi
 # (vii-a) a forged GLOBAL core.hooksPath in the redirected temp home.
 mkdir -p "$T/home-forged/.config" "$T/elsewhere-hooks"
 printf '[core]\n\thooksPath = %s\n' "$T/elsewhere-hooks" > "$T/home-forged/.gitconfig"
