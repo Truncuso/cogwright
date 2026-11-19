@@ -69,7 +69,7 @@ universe_file="$(mktemp)"
 phrase_file="$(mktemp)"
 trap 'rm -f "$universe_file" "$phrase_file"' EXIT
 {
-    find -L "$PKG_ROOT" -mindepth 2 -name SKILL.md -printf '%h\n' 2>/dev/null | xargs -r -n1 basename
+    find -L "$PKG_ROOT" -mindepth 2 -name SKILL.md -printf '%h\n' 2>/dev/null | xargs -r -d '\n' -n1 basename
     find -L "$PKG_ROOT/commands" -maxdepth 1 -name '*.md' -printf '%f\n' 2>/dev/null | sed 's/\.md$//'
 } | sort -u >"$universe_file"
 
@@ -128,7 +128,7 @@ else
 
     {
         find -L "$PKG_ROOT" -name evals.json -path '*/evals/evals.json' -printf '%h\n' 2>/dev/null \
-            | xargs -r -n1 dirname | xargs -r -n1 basename
+            | xargs -r -d '\n' -n1 dirname | xargs -r -d '\n' -n1 basename
         find -L "$PKG_ROOT/commands" -maxdepth 1 -name '*.md' -printf '%f\n' 2>/dev/null \
             | sed 's/\.md$//'
     } | sort -u >"$expected_file"

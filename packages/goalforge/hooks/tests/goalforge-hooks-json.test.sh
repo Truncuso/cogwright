@@ -37,7 +37,7 @@ argv: <hooks.json> <package-root> <README.md>
 Prints one `PASS|<msg>` or `FAIL|<msg>` line per assertion; exits 1 if any
 assertion failed, 2 if the file could not be parsed at all.
 """
-import json, re, sys, os
+import json, re, shlex, sys, os
 
 MUST_HAVE = {
     # script basename -> (event, matcher) — every matcher is a literal str;
@@ -107,7 +107,7 @@ for event, matcher, cmd in entries:
         continue
     resolved = cmd.replace("${CLAUDE_PLUGIN_ROOT}", root)
     target = None
-    for token in resolved.replace('"', " ").split():
+    for token in shlex.split(resolved):
         if token.endswith(".sh"):
             target = token
             break
