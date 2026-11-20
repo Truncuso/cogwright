@@ -140,7 +140,7 @@ done
 # invariant 2 — no map pointer targets an OPEN ticket
 for nn in $POINTED; do
   if [ "${NN_STATUS[$nn]:-}" = "open" ]; then
-    report "pointer to open ticket" "map.md ## Decisions so far points at $nn, which is still open"
+    report "pointer to open ticket" "map.md ## Decisions so far points at $nn, which is still open (every bare ticket-NN there counts, prose included: resolve it, or name the open ticket by description)"
   fi
 done
 
