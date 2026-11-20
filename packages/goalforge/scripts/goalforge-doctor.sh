@@ -365,14 +365,18 @@ check_git_hook() {
     fi
     while IFS= read -r line || [ -n "$line" ]; do
         case "$line" in
-            *'>>> sdd-pre-commit >>>'*) ok "git-hook $hook (repo $repo)"; return ;;
+            *'>>> goalforge-pre-commit >>>'*) ok "git-hook $hook (repo $repo)"; return ;;
+            *'>>> sdd-pre-commit >>>'*)
+                ok "git-hook $hook (repo $repo)"
+                note "legacy marker pair: rerun goalforge-install-hooks.sh to upgrade it"
+                return ;;
         esac
     done < "$hook"
     warnx "git-hook (repo $repo: pre-commit hook at $hook carries no goalforge block)"
 }
 
 # ---------------------------------------------------------------------------
-# Self-test — 12 hermetic offline cases proving each arm actually fires.
+# Self-test — 14 hermetic offline cases proving each arm actually fires.
 #
 # Every case runs the doctor against a SYNTHETIC root with PATH narrowed to a
 # shim dir, so the suite never consults the host's PATH, its site-packages, or a
@@ -567,11 +571,11 @@ self_test() {
         fi
         if [ -n "$why" ]; then
             fail=$(( fail + 1 ))
-            printf 'case %d/12: %s FAIL (%s)\n' "$n" "$name" "$why"
+            printf 'case %d/14: %s FAIL (%s)\n' "$n" "$name" "$why"
             while IFS= read -r line; do printf '    | %s\n' "$line"; done <<<"$out"
         else
             pass=$(( pass + 1 ))
-            printf 'case %d/12: %s PASS\n' "$n" "$name"
+            printf 'case %d/14: %s PASS\n' "$n" "$name"
         fi
     }
 
@@ -611,6 +615,21 @@ self_test() {
     mkdir -p "$worktree_hooks" || return 3
     printf '#!/bin/sh\nexit 0\n' > "$worktree_hooks/pre-commit" || return 3
     chmod +x "$worktree_hooks/pre-commit"
+
+    # Cases 13 and 14's fixtures: real work trees whose pre-commit carries a
+    # goalforge block. d1's hook is written by the real installer (the sibling
+    # of this script); d2's is a hand-written legacy-pair hook.
+    local hook_new="$sandbox/hook-new-repo" hook_legacy="$sandbox/hook-legacy-repo"
+    mkdir -p "$hook_new" "$hook_legacy" || return 3
+    hook_new="$(cd "$hook_new" && pwd -P)" || return 3
+    hook_legacy="$(cd "$hook_legacy" && pwd -P)" || return 3
+    "$real_git" -C "$hook_new" init -q >/dev/null 2>&1 || return 3
+    "$real_git" -C "$hook_legacy" init -q >/dev/null 2>&1 || return 3
+    env GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+        "$real_bash" "$SCRIPT_DIR/goalforge-install-hooks.sh" "$hook_new" >/dev/null 2>&1 || return 3
+    printf '#!/usr/bin/env bash\n# >>> sdd-pre-commit >>>\nbash "%s" || exit $?\n# <<< sdd-pre-commit <<<\n' \
+        "$SCRIPT_DIR/../hooks/goalforge-pre-commit.sh" > "$hook_legacy/.git/hooks/pre-commit" || return 3
+    chmod +x "$hook_legacy/.git/hooks/pre-commit"
 
     local shim_full="$sandbox/shim-full"
     local shim_nojq="$sandbox/shim-nojq"
@@ -658,6 +677,19 @@ self_test() {
         return "$rc1"
     }
 
+    # Cases 13 and 14 pair bare and --strict like case 12: a hook carrying
+    # either marker pair must keep both runs at exit 0.
+    case_git_hook_marked() { # <repo>
+        local rc1 rc2
+        cd "$1" || return 3
+        "${base[@]}" PATH="$shim_realgit" HOME="$fake_home" GF_DOCTOR_ROOT="$r_plugin" \
+            "$real_bash" "$SELF"; rc1=$?
+        "${base[@]}" PATH="$shim_realgit" HOME="$fake_home" GF_DOCTOR_ROOT="$r_plugin" \
+            "$real_bash" "$SELF" --strict; rc2=$?
+        [ "$rc2" -eq 0 ] || return 3
+        return "$rc1"
+    }
+
     # Case 9 needs the cwd inside the fixture repo: the helper anchors the
     # git-root leg on the file argument's directory.
     case_plans_root_leg2() {
@@ -666,7 +698,7 @@ self_test() {
             GF_DOCTOR_ROOT="$r_plugin" "$real_bash" "$SELF"
     }
 
-    printf '=== goalforge doctor self-test (12 cases) ===\n'
+    printf '=== goalforge doctor self-test (14 cases) ===\n'
 
     run_case positive-control 0 'ok   route plugin' "$hard;WARN:" \
         "${base[@]}" PATH="$shim_full" GF_DOCTOR_ROOT="$r_plugin" \
@@ -714,6 +746,14 @@ self_test() {
 
     run_case git-hook-in-work-tree 0 "WARN: git-hook;repo $worktree" "$hard" \
         case_git_hook_in_work_tree
+
+    run_case git-hook-installer-block 0 'ok   git-hook' \
+        "$hard;WARN:;carries no goalforge block;rerun goalforge-install-hooks.sh" \
+        case_git_hook_marked "$hook_new"
+
+    run_case git-hook-legacy-block 0 'ok   git-hook;rerun goalforge-install-hooks.sh' \
+        "$hard;WARN:;carries no goalforge block" \
+        case_git_hook_marked "$hook_legacy"
 
     printf '=== self-test: %d passed, %d failed ===\n' "$pass" "$fail"
     [ "$fail" -eq 0 ]

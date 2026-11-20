@@ -39,12 +39,12 @@
       "id": "functional-1-bootstrap",
       "should_trigger": true,
       "prompt": "functional: run goalforge-onboard.sh on a fresh git-init temp dir and assert expected on-disk artifacts",
-      "expected_output": "plans/ directory exists; .git/hooks/pre-commit exists and contains sdd-pre-commit marker; CLAUDE.md exists with exactly one '## SDD' block",
-      "description": "goalforge-onboard.sh bootstraps a fresh temp repo: creates plans/, installs pre-commit hook with sdd marker, and stamps ## SDD in CLAUDE.md",
+      "expected_output": "plans/ directory exists; .git/hooks/pre-commit exists and contains goalforge-pre-commit marker; CLAUDE.md exists with exactly one '## SDD' block",
+      "description": "goalforge-onboard.sh bootstraps a fresh temp repo: creates plans/, installs pre-commit hook with goalforge-pre-commit marker, and stamps ## SDD in CLAUDE.md",
       "expectations": [
         "plans/ directory exists after onboarding",
         ".git/hooks/pre-commit exists after onboarding",
-        ".git/hooks/pre-commit contains '# >>> sdd-pre-commit >>>' marker",
+        ".git/hooks/pre-commit contains '# >>> goalforge-pre-commit >>>' marker",
         "CLAUDE.md exists after onboarding",
         "CLAUDE.md contains exactly one '## SDD' heading"
       ]
