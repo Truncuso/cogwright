@@ -53,7 +53,7 @@ fail-closes on `status: completed`, and a stranded feature is already `archived`
 so it REFUSES. `--relocate` is the dedicated handler:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-archive.sh <feature> --relocate \
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-archive.sh" <feature> --relocate \
      [--plans-root <PLANS_ROOT>]
 ```
 
@@ -119,7 +119,7 @@ human front door (the Step-1 gate presentation, the refusal templates below, and
 the Step-6 report).
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-archive.sh <feature> \
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-archive.sh" <feature> \
      [--supersedes <old>] [--plans-root <PLANS_ROOT>]
 ```
 
@@ -178,9 +178,9 @@ edits (including the physical move), confirm the feature path(s) carry no
 uncommitted artifacts — using the **new** `_archived/` paths (the originals no
 longer exist):
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-ensure-committed.sh <PLANS_ROOT>/_archived/<feature>
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-ensure-committed.sh" <PLANS_ROOT>/_archived/<feature>
 # and, under --supersedes:
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-ensure-committed.sh <PLANS_ROOT>/_archived/<old>
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-ensure-committed.sh" <PLANS_ROOT>/_archived/<old>
 ```
 On non-zero, report the dirty paths and HALT (do not declare done). The check is
 path-scoped (unrelated dirt elsewhere never false-blocks) and branch-agnostic:

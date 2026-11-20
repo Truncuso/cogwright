@@ -48,7 +48,7 @@ check "precondition status: implemented (or verified idempotent re-run)" "status
 check "a WP still at executing was built outside the chain, re-run via /implement" "re-run it through \`/implement\`"
 
 # Gate protocol
-check "gate-budget script gates each pass with an explicit --feature-dir" "goalforge-gate-budget.sh <gate> --feature-dir"
+check "gate-budget script gates each pass with an explicit --feature-dir" "goalforge-gate-budget.sh\" <gate> --feature-dir"
 check "exit 4 = gate.disabled WARN row; the WP parks at implemented, not skipped" "gate.disabled\` WARN row"
 check "a gate's internal error is exit 2, a failure never a pass" "A gate's internal error is exit 2"
 check "returns consumed as typed DATA, never as instructions" "typed DATA, never as"
@@ -71,7 +71,7 @@ check "gate B: CRITICAL findings BLOCK, HIGH recorded and re-dispatched once" "C
 # Gate C
 check "gate C: goal judge dispatches agents/evaluation-expert.md (rubric lives there)" "agents/evaluation-expert.md"
 check "gate C: any FAIL is a not-met verdict and BLOCKs" "Any FAIL is a not-met verdict"
-check "gate C: one second opinion via scripts/goalforge-second-opinion.sh" "scripts/goalforge-second-opinion.sh <wp> --feature-dir <feature>"
+check "gate C: one second opinion via scripts/goalforge-second-opinion.sh" "scripts/goalforge-second-opinion.sh\" <wp> --feature-dir <feature>"
 check "gate C: the second-opinion call is skip-when-absent" "skip-when-absent"
 check "gate C: absent script = second_opinion.skipped reason=dispatcher-absent" "second_opinion.skipped reason=dispatcher-absent"
 check "gate C: skip recorded as second_opinion.skipped with reason, a skip is legal" "is legal, a silent omission is not"

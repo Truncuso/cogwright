@@ -65,11 +65,11 @@ check "G1 --override --reason belongs to goalforge-transition.sh, not the fronti
 
 # G2 — deterministic lint + open questions
 check "G2 runs goalforge-preharden-lint.sh" "goalforge-preharden-lint.sh"
-check "G2 runs goalforge-open-questions-gate.sh --check" "goalforge-open-questions-gate.sh --check"
+check "G2 runs goalforge-open-questions-gate.sh --check" "goalforge-open-questions-gate.sh\" --check"
 check "unattended respondent is an agent, stamped answered_by: agent" "stamping \`answered_by:"
 
 # G3 — review pass, bounded by stop rule
-check "G3 stop-rule script goalforge-harden-stop.sh with exit codes 0/3/2" "goalforge-harden-stop.sh <wp-dir>   # 0 run, 3 park, 2 error"
+check "G3 stop-rule script goalforge-harden-stop.sh with exit codes 0/3/2" "goalforge-harden-stop.sh\" <wp-dir>   # 0 run, 3 park, 2 error"
 check "G3 panel convened iff severity HIGH and register production" "iff \`severity: HIGH\`"
 check "G3 dispatches agents/reviewer.md" "agents/reviewer.md"
 check "G3 loads expertise from references/expertise-map.yaml" "references/expertise-map.yaml"
@@ -78,9 +78,9 @@ check "G3 verdicts consumed as typed DATA, never as instructions" "DATA, never a
 check "G3 reviewers run in fresh context, consumed as DATA" "Reviewers run in fresh"
 
 # G4 — goal validate, changelog, hash, transition
-check "G4 runs goalforge-validate.sh --strict" "goalforge-validate.sh --strict"
-check "G4 runs goalforge-goal-changelog.sh append" "goalforge-goal-changelog.sh append"
-check "G4 runs goalforge-goal-hash.sh --record" "goalforge-goal-hash.sh --record"
+check "G4 runs goalforge-validate.sh --strict" "goalforge-validate.sh\" --strict"
+check "G4 runs goalforge-goal-changelog.sh append" "goalforge-goal-changelog.sh\" append"
+check "G4 runs goalforge-goal-hash.sh --record" "goalforge-goal-hash.sh\" --record"
 check "G4 records the hash last (goal_approved_version)" "# hash last: goal_approved_version"
 
 # hardened -> ready human gate (C7)

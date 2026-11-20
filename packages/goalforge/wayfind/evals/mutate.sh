@@ -53,7 +53,7 @@ trap 'exit 130' INT
 # A mutation may collaterally break other cases — only the named one is asserted.
 MUTATIONS=(
   'doc-plans-root-citation|§PLANS_ROOT resolution'
-  'doc-work-loop-plans-root|wayfind-frontier.sh <PLANS_ROOT>/<effort-slug>'
+  'doc-work-loop-plans-root|wayfind-frontier.sh" <PLANS_ROOT>/<effort-slug>'
   'doc-references-canonical-citation|idea/references/provenance-mapping.md'
   'doc-references-bare-string-lossy|LOSSILY'
   # the marker below is itself pipe-delimited; the split takes the FIRST `|`

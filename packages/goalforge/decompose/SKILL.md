@@ -90,8 +90,8 @@ A rule that needs a spec change surfaces to the user; never encode a guess.
 ## Step 6 — Lint, then update the feature overview
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-section-lint.sh <wp-path>/overview.md
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-validate.sh --feature <feature> --show <PLANS_ROOT>
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-section-lint.sh" <wp-path>/overview.md
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-validate.sh" --feature <feature> --show <PLANS_ROOT>
 ```
 
 Section lint exit 2 = a disallowed H2. Fix every `invalid YAML frontmatter`

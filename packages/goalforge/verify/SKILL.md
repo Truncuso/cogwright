@@ -41,8 +41,8 @@ gates.
 Before each gate, ask the budget script; after it, emit one row (`<wp-id>` = WP directory name):
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-gate-budget.sh <gate> --feature-dir <PLANS_ROOT>/<feature>   # 0 run, 4 disabled, 2 error
-${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-trace-emit \
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-gate-budget.sh" <gate> --feature-dir <PLANS_ROOT>/<feature>   # 0 run, 4 disabled, 2 error
+"${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-trace-emit" \
   --feature-dir <PLANS_ROOT>/<feature> --event '{"type":"gate.result","wp":"<wp-id>","gate":"A|B|C","result":"pass|fail","reason":"<text>"}'
 ```
 
@@ -87,8 +87,8 @@ Any FAIL is a not-met verdict and BLOCKs.
 Then take ONE second opinion on that verdict:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-second-opinion.sh <wp> --feature-dir <feature> --verdict <gate-C-verdict-file> --diff <wp-diff-file>
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh verify <wp-id> --json <report.json> --feature-dir <feature>   # on judge/second-opinion disagreement (C7)
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-second-opinion.sh" <wp> --feature-dir <feature> --verdict <gate-C-verdict-file> --diff <wp-diff-file>
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh" verify <wp-id> --json <report.json> --feature-dir <feature>   # on judge/second-opinion disagreement (C7)
 ```
 
 Concern-class ownership across the Gate A/Gate B/Gate C split, and what a
@@ -107,9 +107,9 @@ never break the tie yourself.
 
 1. Advance the status, then emit `wp.verified`:
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp> verified \
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh" <wp> verified \
      --from implemented --reason "gates A/B/C passed" --actor goalforge-verify
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh verify <wp-id> --json <report.json> --feature-dir <feature>   # gate completion (C7)
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh" verify <wp-id> --json <report.json> --feature-dir <feature>   # gate completion (C7)
    ```
 2. **Last WP?** If every sibling `wp-*/overview.md` is now `verified`, run one
    integration review over the whole-feature diff (role `integration-review`)

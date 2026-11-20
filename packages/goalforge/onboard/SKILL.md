@@ -32,7 +32,7 @@ Bootstraps the SDD chain in a repository. Three idempotent steps:
 ## Usage
 
 ```bash
-bash ${CLAUDE_SKILL_DIR}/scripts/goalforge-onboard.sh [<repo-dir>]
+bash "${CLAUDE_SKILL_DIR}/scripts/goalforge-onboard.sh" [<repo-dir>]
 ```
 
 `<repo-dir>` defaults to `git rev-parse --show-toplevel` from the current

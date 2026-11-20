@@ -736,7 +736,7 @@ fi
 # script — scoped to the work-flow slice, not presence-anywhere — and no
 # cwd-relative `plans/<effort-slug>` may survive anywhere in SKILL.md.
 name=doc-work-loop-plans-root
-if contains "$work" 'wayfind-frontier.sh <PLANS_ROOT>/<effort-slug>' \
+if contains "$work" 'wayfind-frontier.sh" <PLANS_ROOT>/<effort-slug>' \
    && ! grep -qF -- 'plans/<effort-slug>' "$SKILL_MD"; then
   pass "$name"
 else

@@ -25,7 +25,7 @@ skill" — do not retry that call. This command is its only entry.
 3. **`--dry-run`** — resolve and print the dispatch plan with no side effects
    (no files written, no subagents dispatched). The deterministic gate is:
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/skills/run/scripts/goalforge-router.sh --dry-run <feature>
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/run/scripts/goalforge-router.sh" --dry-run <feature>
    ```
    It prints one `RESOLVED`/`UNRESOLVED` line per chain step and exits non-zero
    if any step is unresolved. `UNRESOLVED` contains the substring `RESOLVED`, so

@@ -27,14 +27,14 @@ one commit landed — not quality-signed-off: `verified` is written only by
 2. Otherwise assert `status: ready` and advance through the single writer —
    never hand-edit `status:`:
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp> executing \
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh" <wp> executing \
      --from ready --reason "goalforge-execute entry" --actor goalforge-execute
    ```
 3. Read `register:`, `severity:`, `owned_files:`, `human_required:`, `goal:`, `##
    Checklist`. A set `human_required:`, or `register: production` with `severity:
    HIGH`, is a human gate (C7): render it through the one human template, wait.
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh execute <wp-id> --json <report.json> --feature-dir <feature>
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh" execute <wp-id> --json <report.json> --feature-dir <feature>
    ```
 4. Before any dispatch run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-harness-check.sh" <availability-file>`, the file written from this session's actual tool list (never a fixture); hard-required per `references/harness-dependencies.md`: Agent tool, git, python3, jq, flock, timeout, realpath, tar, PyYAML; a WARN names the lost fallback; a non-zero exit stops the run per §5 (exit 1 floor breach, exit 2 bad declaration).
 
@@ -55,19 +55,19 @@ a malformed split — fall back to one owner. Batches run concurrently, return t
 
 Resolve the dispatch deterministically from `references/dispatch.yaml` — the brief states model AND effort explicitly, never the agent default, and blast radius or `severity: HIGH` escalates the tier (detail: `references/dispatch-resolution.md`):
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-pick-agent.py --task <wp>/overview.md --role implement
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-pick-agent.py" --task <wp>/overview.md --role implement
 ```
 Its JSON fills `model`, `effort`, `provider`, `endpoint`, the owning agent, and
 the §4 `Expertise refs:` slot. When batching applies, compile the checklist and
 launch the emitted script through the Workflow tool (degradable, see `references/harness-dependencies.md`):
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-workflow-compile.py <wp>/overview.md \
-  --dispatch ${CLAUDE_PLUGIN_ROOT}/references/dispatch.yaml   # -> run/workflows/<wp>.js
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-workflow-compile.py" <wp>/overview.md \
+  --dispatch "${CLAUDE_PLUGIN_ROOT}/references/dispatch.yaml"   # -> run/workflows/<wp>.js
 ```
 Emit `dispatch.launched` on dispatch and, on return, `dispatch.completed`
 carrying integer `tokens` and `tool_uses`:
 ```bash
-${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-trace-emit --feature-dir <PLANS_ROOT>/<feature> --event '<payload>'
+"${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-trace-emit" --feature-dir <PLANS_ROOT>/<feature> --event '<payload>'
 ```
 
 ## 4 — The WP brief
@@ -95,7 +95,7 @@ SDD_WP_TOKEN_CEILING` (default `400000`); a premise-blocked return; the same gat
 failed twice with the same reason. On every stop except "goal met": append the reason to
 `<wp>/findings.md`, emit `finding.recorded` (`wp` required), leave `status: executing`, escalate to the human through the stage report (C7) — under `SDD_AUTONOMY=unattended`, park and exit cleanly. A status is never advanced past a blocker.
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh execute <wp-id> --json <report.json> --feature-dir <feature>   # stop/escalate
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh" execute <wp-id> --json <report.json> --feature-dir <feature>   # stop/escalate
 ```
 
 ## 6 — Deterministic eval, then the one commit
@@ -111,7 +111,7 @@ bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh execute <wp-id> --j
    co-author trailer); emit `commit.linked` with its sha.
 5. Advance the status and hand off to `goalforge-verify`:
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <wp> implemented \
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh" <wp> implemented \
      --reason "checklist complete; verification.command green" \
      --actor goalforge-execute
    ```

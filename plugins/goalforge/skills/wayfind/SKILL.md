@@ -56,7 +56,7 @@ global `~/.claude/plans/`. Wayfind cites that rule, never its own convention.
 any other map → **work** (work offers graduate when the frontier script reports `converged: true`). `/wayfind <effort-slug> chart` forces a re-chart / add-tickets pass.
 
 **Discovery (`/wayfind` with NO slug)** — the session-resume entry point: run
-`bash ${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-status.sh <PLANS_ROOT>` and present the
+`bash "${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-status.sh" <PLANS_ROOT>` and present the
 active efforts it lists (slug, `open` count, `frontier`) to pick from; the pick
 continues into the auto-phase above. Read-only; `frontier`/`converged`/`stale_claims`
 pass through verbatim from the sibling frontier script; `open` is counted directly
@@ -93,7 +93,7 @@ entry stays legal and reads as `{locator: <string>}` — legacy prose entries ca
 over LOSSILY (id/type/note/retrieved dropped), not unexecutably.
 
 Body sections: `## Destination`, `## Decisions so far` (pointers to resolved
-tickets; `validate-linkage.sh` reads every bare `ticket-NN` there as one, so name open tickets by description), `## Not yet specified` (the fog — seeded/refreshed by the blind-spot
+tickets; `validate-linkage.sh` reads every `ticket-NN` token there (links, code spans and prose included) as one, so name open tickets by description), `## Not yet specified` (the fog — seeded/refreshed by the blind-spot
 pass), `## Out of scope`, the OPTIONAL `## Learning goals` (rows
 `- <slug>: <objective>`, slug kebab-case, shape-validated; the `(why: …)` tail
 is convention), and the OPTIONAL `## Notes` — the per-effort dispatch
@@ -183,7 +183,7 @@ at chart completion; `working → graduated` at graduate step 6.)
 The multi-session loop. **ALWAYS run the frontier script first:**
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-frontier.sh <PLANS_ROOT>/<effort-slug>
+bash "${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-frontier.sh" <PLANS_ROOT>/<effort-slug>
 ```
 
 Consume its stdout JSON. **This section is the authoritative CLI contract** —
