@@ -12,6 +12,8 @@ into whitespace-delimited fields and EVERY field starting with one of
 REF_PREFIXES (package-side additionally SKILL_DIR_PREFIXES) is a ref, so both a
 quoted invocation (`hooks/foo.sh --check`) and an interpreter-prefixed one
 (`bash ${CLAUDE_PLUGIN_ROOT}/scripts/x.sh --flag`) yield the path they name. A
+field's surrounding shell quotes are stripped first, so the space-safe form
+(`bash "${CLAUDE_PLUGIN_ROOT}/scripts/x.sh" --flag`) names the same ref. A
 token carrying a shell glob metacharacter (`*`, `?`, `[`) or a trailing `/` is a
 pattern or a directory, not a ref.
 
@@ -52,6 +54,7 @@ def ref_tokens(text, prefixes=REF_PREFIXES):
     for m in _QUOTED_RE.finditer(text):
         span = (m.group(1) if m.group(1) is not None else m.group(2)).strip()
         for tok in span.split():
+            tok = tok.strip("\"'")
             if not tok.startswith(prefixes):
                 continue
             if tok.endswith("/") or any(c in tok for c in "*?["):

@@ -167,7 +167,7 @@ check_b3() {
 }
 
 # span_of <execute-skill> -> line number of the check span, or empty
-SPAN_RE='`bash \$\{CLAUDE_PLUGIN_ROOT\}/scripts/goalforge-harness-check\.sh <availability-file>`'
+SPAN_RE='`bash "\$\{CLAUDE_PLUGIN_ROOT\}/scripts/goalforge-harness-check\.sh" <availability-file>`'
 # check_b4 <execute-skill> -> span exists before `## 2`; run against fixtures
 check_b4() {
   local f="$1" rc=0 span_ln h2_ln span cmd out code
@@ -180,7 +180,7 @@ check_b4() {
     || { echo "    span line lacks the non-zero-exit stop (§5, exit 1/2)"; rc=1; }
   for env in missing-degradable missing-hard-required; do
     case "$env" in missing-degradable) src=env-missing-degradable.txt ;; *) src=env-missing-hard.txt ;; esac
-    cmd="${span//<availability-file>/$FIX/$src}"
+    cmd="${span//<availability-file>/$(printf '%q' "$FIX/$src")}"
     out="$(env PATH="$T/shim-full" CLAUDE_PLUGIN_ROOT="$PKG" "$BASH" -c "$cmd" 2>&1)"; code=$?
     if [[ $env == missing-degradable ]]; then
       [[ $code -eq 0 && "$out" == *"WARN: Workflow tool"* ]] || { echo "    $env: rc=$code"; rc=1; }
