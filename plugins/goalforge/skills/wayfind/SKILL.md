@@ -56,7 +56,7 @@ global `~/.claude/plans/`. Wayfind cites that rule, never its own convention.
 any other map → **work** (work offers graduate when the frontier script reports `converged: true`). `/wayfind <effort-slug> chart` forces a re-chart / add-tickets pass.
 
 **Discovery (`/wayfind` with NO slug)** — the session-resume entry point: run
-`bash ${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-status.sh <PLANS_ROOT>` and present the
+`bash "${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-status.sh" <PLANS_ROOT>` and present the
 active efforts it lists (slug, `open` count, `frontier`) to pick from; the pick
 continues into the auto-phase above. Read-only; `frontier`/`converged`/`stale_claims`
 pass through verbatim from the sibling frontier script; `open` is counted directly
@@ -183,7 +183,7 @@ at chart completion; `working → graduated` at graduate step 6.)
 The multi-session loop. **ALWAYS run the frontier script first:**
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-frontier.sh <PLANS_ROOT>/<effort-slug>
+bash "${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-frontier.sh" <PLANS_ROOT>/<effort-slug>
 ```
 
 Consume its stdout JSON. **This section is the authoritative CLI contract** —

@@ -27,7 +27,7 @@ skill owns chart/work/graduate.
 2. **Discovery** — `$ARGUMENTS` empty (no slug). Resolve `<PLANS_ROOT>` (step 4),
    then list the active efforts:
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-status.sh <PLANS_ROOT>
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-status.sh" <PLANS_ROOT>
    ```
    Present each entry of its `efforts` JSON — slug, `open` count, `frontier` —
    and let the user pick one; the pick continues into the auto-phase below for
@@ -47,7 +47,7 @@ skill owns chart/work/graduate.
 5. **Work mode** — ALWAYS run the frontier script first, before anything
    else:
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-frontier.sh <PLANS_ROOT>/<effort-slug>
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/wayfind/scripts/wayfind-frontier.sh" <PLANS_ROOT>/<effort-slug>
    ```
    Consume its JSON (`frontier`, `blocked`, `claimed`, `stale_claims`,
    `converged`) per the skill's work flow. If `converged: true`, **offer**

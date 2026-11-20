@@ -29,7 +29,7 @@ Bootstraps the SDD chain in a repository. Three idempotent steps:
 ## Usage
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/skills/onboard/scripts/goalforge-onboard.sh [<repo-dir>]
+bash "${CLAUDE_PLUGIN_ROOT}/skills/onboard/scripts/goalforge-onboard.sh" [<repo-dir>]
 ```
 
 `<repo-dir>` defaults to `git rev-parse --show-toplevel` from the current
