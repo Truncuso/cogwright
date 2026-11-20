@@ -107,7 +107,12 @@ for event, matcher, cmd in entries:
         continue
     resolved = cmd.replace("${CLAUDE_PLUGIN_ROOT}", root)
     target = None
-    for token in shlex.split(resolved):
+    try:
+        tokens = shlex.split(resolved)
+    except ValueError as exc:
+        say(False, "command is not shell-parseable (%s): %s" % (exc, cmd))
+        continue
+    for token in tokens:
         if token.endswith(".sh"):
             target = token
             break

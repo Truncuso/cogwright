@@ -98,7 +98,7 @@ check STATIC-CONTRACT "self-check: one owner, backward deps rule" "One owner, ba
 
 # STATIC-CONTRACT: Step 6 lint + validate gates
 check STATIC-CONTRACT "Step 6 runs section-lint" "goalforge-section-lint.sh"
-check STATIC-CONTRACT "Step 6 runs validate --show" "goalforge-validate.sh --feature"
+check STATIC-CONTRACT "Step 6 runs validate --show" "goalforge-validate.sh\" --feature"
 
 # STATIC-CONTRACT: Add-WP mode
 check STATIC-CONTRACT "Add-WP mode documented" "Add-WP mode"

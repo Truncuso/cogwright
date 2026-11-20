@@ -37,7 +37,7 @@ Sibling `chain.yaml` declares the step sequence; never reorder or extend it here
    whether the target satisfies it. Zero side effects — no files written, no
    subagents dispatched, no status mutated.
    ```bash
-   bash ${CLAUDE_PLUGIN_ROOT}/skills/run/scripts/goalforge-router.sh --dry-run <feature>
+   bash "${CLAUDE_PLUGIN_ROOT}/skills/run/scripts/goalforge-router.sh" --dry-run <feature>
    ```
 
 ## Workflows

@@ -167,7 +167,7 @@ approval.
   goal facet in its `## Goal Changelog` via
   `goalforge-goal-changelog.sh append <proposal>/proposed-spec.md <facet> ...`)
   and `diff.json`
-  (`bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-respec-diff.sh spec.md proposed-spec.md`).
+  (`bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-respec-diff.sh" spec.md proposed-spec.md`).
   Carry every `ambiguous` pair (a renumber) into the gate as an open question.
 
 ### Step 3 — HUMAN GATE: present and seek ratification
@@ -176,7 +176,7 @@ Before ratifying, present the proposal to the user — through the ONE human
 template (C7), never a second hand-rolled format:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh spec <feature> \
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh" spec <feature> \
   --json <report.json> --feature-dir <PLANS_ROOT>/<feature>
 ```
 
@@ -201,7 +201,7 @@ DIFF: pass the previous report as `--previous`, so a `revise` round renders
 only what changed and never re-pastes the whole draft (C7).
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh spec <feature> \
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-stage-report.sh" spec <feature> \
   --json <report.json> --previous <prev-report.json> --feature-dir <PLANS_ROOT>/<feature>
 ```
 
@@ -240,7 +240,7 @@ overview.md, not spec.md's own `status: spec`).
 - **Revision**: write `RATIFIED` in the proposal dir, one line
   (`ratified_by: human date=<proposal-dir date> sha256=<proposed-spec.md> diff_sha256=<diff.json> base_sha256=<spec.md> reply=<verbatim reply>`,
   `references/respec.md`), then run
-  `bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-respec-apply.sh <feature-dir> <proposal-dir>`.
+  `bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-respec-apply.sh" <feature-dir> <proposal-dir>`.
   It supersedes affected `verified` WPs in place, writes reharden evidence for
   affected `ready` WPs, and copies the proposal over `spec.md`. A non-zero exit
   is a refusal: report it and stop, never patch `spec.md` by hand.
@@ -250,7 +250,7 @@ overview.md, not spec.md's own `status: spec`).
 Take the gate edge through the single status writer:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh <PLANS_ROOT>/<feature> ready \
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-transition.sh" <PLANS_ROOT>/<feature> ready \
   --from spec --mode human --reason "spec ratified: <verbatim reply>"
 ```
 

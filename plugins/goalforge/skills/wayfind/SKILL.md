@@ -93,7 +93,7 @@ entry stays legal and reads as `{locator: <string>}` — legacy prose entries ca
 over LOSSILY (id/type/note/retrieved dropped), not unexecutably.
 
 Body sections: `## Destination`, `## Decisions so far` (pointers to resolved
-tickets; `validate-linkage.sh` reads every bare `ticket-NN` there as one, so name open tickets by description), `## Not yet specified` (the fog — seeded/refreshed by the blind-spot
+tickets; `validate-linkage.sh` reads every `ticket-NN` token there (links, code spans and prose included) as one, so name open tickets by description), `## Not yet specified` (the fog — seeded/refreshed by the blind-spot
 pass), `## Out of scope`, the OPTIONAL `## Learning goals` (rows
 `- <slug>: <objective>`, slug kebab-case, shape-validated; the `(why: …)` tail
 is convention), and the OPTIONAL `## Notes` — the per-effort dispatch

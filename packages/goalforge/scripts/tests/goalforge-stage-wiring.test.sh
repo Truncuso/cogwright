@@ -79,7 +79,7 @@ echo "verify/SKILL.md — gate A/B/C wiring"
 facet "$VERIFY" "gate B dispatches agents/reviewer.md"    'agents/reviewer.md'
 facet "$VERIFY" "gate B expertise bundle source"          'references/expertise-map.yaml'
 facet "$VERIFY" "gate C dispatches evaluation-expert"     'agents/evaluation-expert.md'
-facet "$VERIFY" "second-opinion pinned call"              'scripts/goalforge-second-opinion.sh <wp> --feature-dir <feature>'
+facet "$VERIFY" "second-opinion pinned call"              'scripts/goalforge-second-opinion.sh" <wp> --feature-dir <feature>'
 facet "$VERIFY" "second opinion is skip-when-absent"      'skip-when-absent'
 facet "$VERIFY" "skip row is recorded"                    'second_opinion.skipped reason=dispatcher-absent'
 facet "$VERIFY" "gate A exempts plugins/goalforge/"       'paths under `plugins/goalforge/` never BLOCK'

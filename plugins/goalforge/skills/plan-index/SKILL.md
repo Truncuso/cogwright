@@ -20,7 +20,7 @@ cross-feature dependencies", orthogonal to a WP's goal/verify/commit cycle.
 ## Mechanical core
 
 ```bash
-python3 ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-plan-index.py \
+python3 "${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-plan-index.py" \
     [--plans-root <root>] [--include-archived] [-o <file|->]
 ```
 
