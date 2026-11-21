@@ -680,11 +680,10 @@ PY
 # ZERO-NEW RATCHET, not a cleanup gate. A repo-wide `sdd-*` ban is unsatisfiable
 # and always will be: `.sdd-transitions.jsonl` is the persisted transition
 # ledger's filename (renaming it orphans every plans/ feature directory that
-# already carries one) and `# >>> sdd-pre-commit >>>` is the installed-hook
-# idempotency marker INSTALL.md pins as never-overwritten. Both are permanent by
-# decision. So every occurrence living on the tree at registration is carved out
-# in RETIRED_VOCAB_CARVEOUT_FILE with the work item that retires it, and the only
-# thing this section can catch is a NEW one.
+# already carries one), and it is permanent by decision. So every occurrence
+# living on the tree at registration is carved out in RETIRED_VOCAB_CARVEOUT_FILE
+# with the work item that retires it, and the only thing this section can catch
+# is a NEW one.
 #
 # Pattern is the case-sensitive literal `sdd-`, deliberately not `sdd[-_]` and
 # not case-insensitive: `SDD_PLANS_DIR` is a deliberate retention (spec

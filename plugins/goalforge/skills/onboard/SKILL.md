@@ -21,7 +21,8 @@ Bootstraps the SDD chain in a repository. Three idempotent steps:
    is absent; leaves it untouched if it already exists.
 2. **Install the pre-commit hook** — delegates entirely to
    `goalforge-install-hooks.sh`, which handles the chain-safe append-to-existing-hook
-   case and the idempotency marker (`# >>> sdd-pre-commit >>>`).
+   case and the idempotency marker (`# >>> goalforge-pre-commit >>>`). An
+   install that carries the legacy marker pair has its two marker lines renamed.
 3. **Stamp `## SDD` into `CLAUDE.md`** — appends a pointer block documenting
    the chain, plans root, hook, and status vocabulary. Creates a minimal
    `CLAUDE.md` if none exists; skips if a `## SDD` heading is already present.
@@ -60,7 +61,7 @@ ${CLAUDE_PLUGIN_ROOT}/scripts/goalforge-install-hooks.sh <repo-dir>
   `setup-sdd-repo` surface. `goalforge-onboard` is purely on-disk scaffolding.
 - **Idempotent everywhere.** Re-running is safe: `plans/` is not clobbered,
   the `## SDD` block is not duplicated, and the pre-commit hook marker check
-  (`# >>> sdd-pre-commit >>>`) prevents double-installation.
+  (`# >>> goalforge-pre-commit >>>`) prevents double-installation.
 - **The hook validates TOUCHED features under `--strict`, not commit hash.**
   It is a drift guard, not a verification step. Hash-based verification
   happens in `goalforge-verify` at verify-time, not in the pre-commit hook.

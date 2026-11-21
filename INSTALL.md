@@ -247,8 +247,10 @@ whatever tool invokes git can point it elsewhere or silently disable it.
 hook's own regression tests; do not set it in normal use.)
 
 It is chain-safe: an existing `pre-commit` hook is appended to inside
-`# >>> sdd-pre-commit >>>` markers, never overwritten, and it exits 0 on every
-error path so it can't break your commit flow.
+`# >>> goalforge-pre-commit >>>` markers, never overwritten, and it exits 0 on
+every error path so it can't break your commit flow. On upgrade, an older
+install's legacy marker lines are renamed to that pair; nothing else in the
+file is overwritten.
 
 ---
 
@@ -422,21 +424,31 @@ rm -rf ~/src/cogwright                                            # the clone
 
 ### Remove the git pre-commit hook
 
-The installer appends a marked block. Delete the lines between and including:
+The installer writes one marked block per hook, each between its own
+`goalforge-<id>` markers. For every such block, delete the lines between and
+including its pair, for example:
+
+```
+# >>> goalforge-pre-commit >>>
+# <<< goalforge-pre-commit <<<
+```
+
+in `<your-repo>/.git/hooks/pre-commit` (and in any other hook file under
+`.git/hooks/` that holds a `goalforge-` block). An install that was never
+upgraded carries the legacy pair instead; delete that block the same way:
 
 ```
 # >>> sdd-pre-commit >>>
 # <<< sdd-pre-commit <<<
 ```
 
-in `<your-repo>/.git/hooks/pre-commit`. If that block is the entire file, delete
-the file.
+If a block is the entire file, apart from the shebang line, delete the file.
 
 ### Leftovers to check
 
 ```bash
 ls ~/.claude/plugins/marketplaces/cogwright   # should not exist after removal
-grep -rn 'sdd-pre-commit' .git/hooks/ 2>/dev/null
+grep -rn -e 'goalforge-' -e 'sdd-pre-commit' .git/hooks/ 2>/dev/null
 ```
 
 ---
