@@ -88,7 +88,7 @@ Full package→plugin pipeline, relations map, and the daily workflow:
 | System | Status | What it is |
 |---|---|---|
 | **goalforge** | **shipped** (v4.0.0) | Goal-and-verification-driven development chain: capture → spec → decompose → harden → execute → verify. Work packages are *goal objects* — outcome, verification strategy, constraints, boundaries — so "done" is machine-decidable wherever possible. 13 skills — 11 chain stages plus `wayfind` and `prototype`. |
-| **interview** | **shipped** (v1.0.3) | Interview engine plugin (source repo: [elicitforge](https://github.com/Truncuso/elicitforge)) — grills plans, specs, and ideas before they're acted on, via typed presets (`/interview` with `preset: <name>`) or a bare grill (`/grill`); goalforge's harden stage delegates to it. |
+| **interview** | **shipped** (v1.2.0) | Interview engine plugin (source repo: [elicitforge](https://github.com/Truncuso/elicitforge)) — grills plans, specs, and ideas before they're acted on, via typed presets (`/interview` with `preset: <name>`) or a bare grill (`/grill`); goalforge's harden stage delegates to it. |
 | **project-onboard** | in development | One front door that sets up a new *or* existing project with the full agentic surface: git + guardrail hooks, intent interview, memory/doc spine, retrieval indexes — interactive for new projects, plan-only auto mode for existing ones. |
 | **agent-dispatch** | planned (next) | Route work to the right model/provider (Anthropic, DeepSeek, Z.AI, Ollama, OpenRouter) with explicit model+effort per dispatch. |
 | **agentic-memory** | planned *(working name — final name pending)* | File-backed typed memory vault with session injection, semantic recall, and distillation. |
@@ -137,6 +137,8 @@ Not everything in the suite is a Claude Code plugin, and this marketplace does n
 
 - **tangram** — a TypeScript/npm monorepo for rendering and publishing structured content (interactive lessons and other typed documents). Currently **under re-specification**; it lives in its own repository and will relate to marketplace systems via a typed content-IR contract (`emits-to`), not as a plugin.
 - **command-center** — will ship as its own application (host-with-panels), registered here for discovery; panels from marketplace systems plug into it.
+- **snapwright** — a private Python library and CLI for "System One" models (small non-generative models answering typed questions). Not a plugin and not installed from this marketplace. It ships a repo-only consumer (`consumers/cogwright`) that reads cogwright review findings and re-ranks their severity (advisory, never gating). The dependency points from snapwright to cogwright; no relation is declared in any `relations.yaml`.
+- **elicitforge** — the source repository of the `interview` plugin (a marketplace entry, pinned at `v1.2.0`) that goalforge hard-requires. It is the dependency's own source repo, not a separate adjacent system.
 
 ## How systems relate
 
