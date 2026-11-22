@@ -13,6 +13,8 @@ Date: 2026-09-22. Author: orchestrator session (cogwright), analysis by dispatch
 
 ## 1. snapwright status
 
+> **Status note (2026-11-21):** the "code effectively empty" description below is stale. It records the state on 2026-09-22. Since then snapwright wp-01 through wp-18 are verified, including wp-07 (cogwright consumer, verified 2026-10-21) with a severity re-rank consumer. The original text is kept unchanged for history.
+
 - Code effectively empty: `src/snapwright/__init__.py` one line; `tests/` only `test_version.py`; `spikes/` only `.gitkeep`. No adapters, no Pydantic contract, no CLI.
 - What exists is design: research corpus under `docs/analysis/` (TypeSafe docs, model landscape, use-case map, GLM-5.3 second opinion, fable advisor) and an 11-ticket wayfind map at `plans/snapwright/wayfind/map.md`.
 - Resolved: name; own Python repo; `Request(state, questions[])` batch shape; caller-generated `call_id`; `score` never hard-gates; raw httpx over the TypeSafe SDK.
